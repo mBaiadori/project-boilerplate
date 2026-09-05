@@ -93,7 +93,12 @@ export function initDashboardView({ onBackToRepos }) {
       prsView.loadAllPRs();
     },
     onDiscardChanges: () => {
-      editorChatView.loadDocument('index.md');
+      const cur = editorChatView.getCurrentPath ? editorChatView.getCurrentPath() : '';
+      if (cur) {
+        editorChatView.loadDocument(cur, '', true);
+      } else if (editorChatView.showEmptyState) {
+        editorChatView.showEmptyState();
+      }
       treeView.loadDocumentTree();
     }
   });
@@ -246,9 +251,11 @@ export function initDashboardView({ onBackToRepos }) {
       if (treePane) treePane.style.display = 'flex';
       if (resizerTree) resizerTree.style.display = 'block';
       treeView.loadDocumentTree();
-      const fileToLoad = queryParams.file || (editorChatView.getCurrentPath ? editorChatView.getCurrentPath() : 'index.md');
+      const fileToLoad = queryParams.file || (editorChatView.getCurrentPath ? editorChatView.getCurrentPath() : '');
       if (fileToLoad) {
         editorChatView.loadDocument(fileToLoad);
+      } else if (editorChatView.showEmptyState) {
+        editorChatView.showEmptyState();
       }
     } else if (viewKey === 'dictionary') {
       dictionaryView.loadDictionary();

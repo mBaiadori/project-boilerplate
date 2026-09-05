@@ -62,7 +62,10 @@
               <div class="p-info">
                 <span class="p-title">Google Gemini</span>
                 <span class="p-desc">Gemini 3.5 Flash / 1.5 Pro</span>
-                <div class="provider-status-badge unconfigured" data-status-provider="gemini">
+                <div
+                  class="provider-status-badge unconfigured"
+                  data-status-provider="gemini"
+                >
                   <span class="status-dot"></span>
                   <span class="status-text">Verificando...</span>
                 </div>
@@ -74,7 +77,10 @@
               <div class="p-info">
                 <span class="p-title">OpenAI</span>
                 <span class="p-desc">GPT-4o / GPT-4o-mini</span>
-                <div class="provider-status-badge unconfigured" data-status-provider="openai">
+                <div
+                  class="provider-status-badge unconfigured"
+                  data-status-provider="openai"
+                >
                   <span class="status-dot"></span>
                   <span class="status-text">Verificando...</span>
                 </div>
@@ -86,7 +92,10 @@
               <div class="p-info">
                 <span class="p-title">Anthropic Claude</span>
                 <span class="p-desc">Claude 3.5 Sonnet</span>
-                <div class="provider-status-badge unconfigured" data-status-provider="anthropic">
+                <div
+                  class="provider-status-badge unconfigured"
+                  data-status-provider="anthropic"
+                >
                   <span class="status-dot"></span>
                   <span class="status-text">Verificando...</span>
                 </div>
@@ -98,7 +107,10 @@
               <div class="p-info">
                 <span class="p-title">DeepSeek API</span>
                 <span class="p-desc">DeepSeek V3 / R1</span>
-                <div class="provider-status-badge unconfigured" data-status-provider="deepseek">
+                <div
+                  class="provider-status-badge unconfigured"
+                  data-status-provider="deepseek"
+                >
                   <span class="status-dot"></span>
                   <span class="status-text">Verificando...</span>
                 </div>
@@ -110,7 +122,10 @@
               <div class="p-info">
                 <span class="p-title">Ollama Local</span>
                 <span class="p-desc">Offline & Sem Chave</span>
-                <div class="provider-status-badge unconfigured" data-status-provider="local">
+                <div
+                  class="provider-status-badge unconfigured"
+                  data-status-provider="local"
+                >
                   <span class="status-dot"></span>
                   <span class="status-text">Verificando...</span>
                 </div>
@@ -119,25 +134,76 @@
           </div>
 
           <div class="form-group">
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
-              <label for="ai-model-select" style="margin-bottom: 0;">Modelo de IA:</label>
-              <div style="display: flex; align-items: center; gap: 6px;">
-                <button id="btn-refresh-ai-models" class="btn btn-ghost btn-xs" type="button" title="Consultar modelos disponíveis no servidor em tempo real" style="font-size: 11px; padding: 2px 8px; display: inline-flex; align-items: center; gap: 4px;">
-                  <span class="material-symbols-outlined icon-xs">refresh</span> Buscar no Servidor
+            <div
+              style="
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                margin-bottom: 6px;
+              "
+            >
+              <label for="ai-model-select" style="margin-bottom: 0"
+                >Modelo de IA:</label
+              >
+              <div style="display: flex; align-items: center; gap: 6px">
+                <button
+                  id="btn-refresh-ai-models"
+                  class="btn btn-ghost btn-xs"
+                  type="button"
+                  title="Consultar modelos disponíveis no servidor em tempo real"
+                  style="
+                    font-size: 11px;
+                    padding: 2px 8px;
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 4px;
+                  "
+                >
+                  <span class="material-symbols-outlined icon-xs">refresh</span>
+                  Buscar no Servidor
                 </button>
-                <button id="btn-toggle-custom-model" class="btn btn-ghost btn-xs" type="button" title="Digitar modelo manualmente" style="font-size: 11px; padding: 2px 8px; display: inline-flex; align-items: center; gap: 4px;">
-                  <span class="material-symbols-outlined icon-xs">edit</span> Digitar
+                <button
+                  id="btn-toggle-custom-model"
+                  class="btn btn-ghost btn-xs"
+                  type="button"
+                  title="Digitar modelo manualmente"
+                  style="
+                    font-size: 11px;
+                    padding: 2px 8px;
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 4px;
+                  "
+                >
+                  <span class="material-symbols-outlined icon-xs">edit</span>
+                  Digitar
                 </button>
               </div>
             </div>
-            <div style="display: flex; gap: 6px; width: 100%;">
-              <select id="ai-model-select" class="form-select" style="flex: 1; padding: 6px 10px; border-radius: var(--radius-sm); border: 1px solid var(--border);">
+            <div style="display: flex; gap: 6px; width: 100%">
+              <select
+                id="ai-model-select"
+                class="form-select"
+                style="
+                  flex: 1;
+                  padding: 6px 10px;
+                  border-radius: var(--radius-sm);
+                  border: 1px solid var(--border);
+                "
+              >
                 <option value="gemini-3.5-flash">gemini-3.5-flash</option>
               </select>
-              <input type="text" id="ai-model-input" value="gemini-3.5-flash" placeholder="Nome do modelo..." style="display: none; flex: 1;" />
+              <input
+                type="text"
+                id="ai-model-input"
+                value="gemini-3.5-flash"
+                placeholder="Nome do modelo..."
+                style="display: none; flex: 1"
+              />
             </div>
             <span class="form-hint" id="ai-model-hint"
-              >Selecione um modelo descoberto no servidor ou digite manualmente.</span
+              >Selecione um modelo descoberto no servidor ou digite
+              manualmente.</span
             >
           </div>
 
@@ -883,13 +949,17 @@
           <div class="repos-section-header">
             <div class="section-title">
               <h2>Seus Repositórios</h2>
-              <span class="badge badge-primary-subtle" id="repos-count-badge">0 repositório(s)</span>
+              <span class="badge badge-primary-subtle" id="repos-count-badge"
+                >0 repositório(s)</span
+              >
             </div>
 
             <!-- Toolbar: Search Bar, Org Filter & View Switcher -->
             <div class="repos-toolbar">
               <div class="repos-search-box">
-                <span class="material-symbols-outlined icon-sm search-icon">search</span>
+                <span class="material-symbols-outlined icon-sm search-icon"
+                  >search</span
+                >
                 <input
                   type="text"
                   id="repos-search-input"
@@ -897,7 +967,12 @@
                   autocomplete="off"
                   spellcheck="false"
                 />
-                <button id="btn-clear-search" class="btn-clear-search" style="display: none;" title="Limpar busca (Esc)">
+                <button
+                  id="btn-clear-search"
+                  class="btn-clear-search"
+                  style="display: none"
+                  title="Limpar busca (Esc)"
+                >
                   <span class="material-symbols-outlined icon-xs">close</span>
                 </button>
               </div>
@@ -905,13 +980,31 @@
               <div class="repos-filters-actions">
                 <div id="repos-org-dropdown-container"></div>
 
-                <div class="view-mode-segmented" role="group" aria-label="Modo de visualização">
-                  <button id="btn-view-grid" class="view-mode-btn active" title="Visualização em Grade" type="button">
-                    <span class="material-symbols-outlined icon-sm">grid_view</span>
+                <div
+                  class="view-mode-segmented"
+                  role="group"
+                  aria-label="Modo de visualização"
+                >
+                  <button
+                    id="btn-view-grid"
+                    class="view-mode-btn active"
+                    title="Visualização em Grade"
+                    type="button"
+                  >
+                    <span class="material-symbols-outlined icon-sm"
+                      >grid_view</span
+                    >
                     <span class="btn-label">Grade</span>
                   </button>
-                  <button id="btn-view-list" class="view-mode-btn" title="Visualização em Lista" type="button">
-                    <span class="material-symbols-outlined icon-sm">view_list</span>
+                  <button
+                    id="btn-view-list"
+                    class="view-mode-btn"
+                    title="Visualização em Lista"
+                    type="button"
+                  >
+                    <span class="material-symbols-outlined icon-sm"
+                      >view_list</span
+                    >
                     <span class="btn-label">Lista</span>
                   </button>
                 </div>
@@ -1531,8 +1624,8 @@
                           >
                             Defina as áreas de domínio da arquitetura e associe
                             os membros responsáveis identificados no GitHub e no
-                            repositório. O framework organiza a estrutura oficial
-                            em
+                            repositório. O framework organiza a estrutura
+                            oficial em
                             <code>domains/</code>.
                           </p>
                         </div>
@@ -1867,7 +1960,7 @@
               <aside class="workbench-tree-pane" id="workbench-tree-pane">
                 <div class="tree-pane-header">
                   <div class="tree-pane-title">
-                    <span>Domínios & Features</span>
+                    <span>Documentos</span>
                   </div>
                   <div class="tree-pane-actions">
                     <button
@@ -2012,10 +2105,10 @@
                         type="text"
                         id="doc-path-input"
                         class="doc-path-input"
-                        value="index.md"
-                        placeholder="Digite o caminho (ex: domains/...) e dê Enter"
+                        value=""
+                        placeholder="Selecione ou crie um documento..."
                         spellcheck="false"
-                        title="Caminho do documento no workspace. Digite um caminho válido e pressione Enter para navegar"
+                        title="Caminho do documento no workspace"
                       />
                       <button
                         id="btn-copy-doc-path"
@@ -2555,6 +2648,29 @@
                   </div>
                 </div>
 
+                <!-- Empty State (when no document is open) -->
+                <div id="editor-empty-state" class="editor-empty-state" style="display: none;">
+                  <div class="editor-empty-state-card">
+                    <div class="empty-icon-circle">
+                      <span class="material-symbols-outlined" style="font-size: 32px; color: var(--color-primary, #6366f1);">description</span>
+                    </div>
+                    <h3 style="margin: 14px 0 6px 0; font-size: 17px; font-weight: 600; color: var(--text-normal);">Nenhum documento selecionado</h3>
+                    <p style="margin: 0 0 20px 0; font-size: 13px; color: var(--text-muted); max-width: 440px; line-height: 1.5; text-align: center;">
+                      Selecione um documento na árvore lateral à esquerda ou inicie uma nova especificação a partir do catálogo de templates.
+                    </p>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: center;">
+                      <button id="btn-empty-state-templates" class="btn btn-primary" type="button" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 13px;">
+                        <span class="material-symbols-outlined icon-sm">auto_stories</span>
+                        <span>Explorar Templates</span>
+                      </button>
+                      <button id="btn-empty-state-new" class="btn btn-secondary" type="button" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 13px;">
+                        <span class="material-symbols-outlined icon-sm">add</span>
+                        <span>Novo Domínio / Feature</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
                 <!-- Editor Status Footer -->
                 <footer class="editor-bottom-bar">
                   <div class="editor-status-left">
@@ -3042,7 +3158,7 @@
           <div
             id="subview-wiki"
             class="dash-subview"
-            style="display: none; height: 100%; width: 100%;"
+            style="display: none; height: 100%; width: 100%"
           ></div>
 
           <!-- ================================================================= -->

@@ -110,12 +110,65 @@ export function initEditorChatView({ onWorkspaceChanged, getActiveRepo }) {
   const btnLifecyclePrev = document.getElementById("btn-lifecycle-prev");
   const btnLifecycleNext = document.getElementById("btn-lifecycle-next");
 
-  let currentFilePath = "index.md";
+  // Empty State Elements
+  const editorEmptyState = document.getElementById("editor-empty-state");
+  const notionEditorWrapper = document.getElementById("notion-editor-wrapper");
+  const docConnectivityBar = document.getElementById("doc-connectivity-bar");
+  const btnEmptyTemplates = document.getElementById("btn-empty-state-templates");
+  const btnEmptyNew = document.getElementById("btn-empty-state-new");
+
+  if (btnEmptyTemplates) {
+    btnEmptyTemplates.addEventListener("click", () => {
+      const navTemplates = document.querySelector('.dash-nav-item[data-view="templates"]');
+      if (navTemplates) navTemplates.click();
+    });
+  }
+  if (btnEmptyNew) {
+    btnEmptyNew.addEventListener("click", () => {
+      const btnNewFile = document.getElementById("btn-tree-new-file");
+      if (btnNewFile) btnNewFile.click();
+    });
+  }
+
+  let currentFilePath = "";
   let activeAssistantPrompt = "";
   let currentDocContext = null;
   let currentDocMetadata = null;
   let hasDocFrontmatter = false;
   let isMetaFormExpanded = false;
+
+  function showEmptyState() {
+    currentFilePath = "";
+    activeAssistantPrompt = "";
+    currentDocContext = null;
+    currentDocMetadata = null;
+    hasDocFrontmatter = false;
+
+    if (editorEmptyState) editorEmptyState.style.display = "flex";
+    if (notionEditorWrapper) notionEditorWrapper.style.display = "none";
+    if (docConnectivityBar) docConnectivityBar.style.display = "none";
+    if (docMetaInspector) docMetaInspector.style.display = "none";
+
+    if (docPathInput) {
+      if (docPathInput.tagName === "INPUT") docPathInput.value = "";
+      else docPathInput.textContent = "";
+      docPathInput.title = "Nenhum documento selecionado";
+    }
+    if (saveDraftStatus) {
+      saveDraftStatus.textContent = "Nenhum documento selecionado";
+      saveDraftStatus.className = "status-indicator";
+    }
+    if (docWordCount) docWordCount.textContent = "0 palavras";
+    if (docLineCount) docLineCount.textContent = "0 linhas";
+
+    const currentRoute = Router.getRoute();
+    if (
+      currentRoute.routeName === "workspace" &&
+      (!currentRoute.subview || currentRoute.subview === "editor")
+    ) {
+      Router.setQuery({}, true);
+    }
+  }
 
   function triggerDraftAutoSave() {
     if (!currentFilePath) return;
@@ -736,13 +789,23 @@ E no corpo Markdown, estruture o documento com seções claras, propostas de val
 
   // 10. Carregar Documento
   async function loadDocument(
-    path = "index.md",
+    path = "",
     customAssistantPrompt = "",
     skipDraft = false,
   ) {
+    if (!path) {
+      showEmptyState();
+      return;
+    }
+
     currentFilePath = path;
     activeAssistantPrompt = customAssistantPrompt;
     const repo = getRepoName();
+
+    if (editorEmptyState) editorEmptyState.style.display = "none";
+    if (notionEditorWrapper) notionEditorWrapper.style.display = "flex";
+    if (docConnectivityBar) docConnectivityBar.style.display = "flex";
+    if (docMetaInspector) docMetaInspector.style.display = "block";
 
     // Sincroniza query na URL se estivermos no workspace
     const currentRoute = Router.getRoute();
@@ -825,38 +888,7 @@ E no corpo Markdown, estruture o documento com seções claras, propostas de val
       }
     } catch (err) {
       console.warn("Documento não encontrado ou erro ao carregar:", err);
-      if (
-        confirm(
-          `O documento "${path}" não foi encontrado no workspace.\n\nDeseja criá-lo como um novo documento agora?`,
-        )
-      ) {
-        const defaultTitle = path
-          .split("/")
-          .pop()
-          .replace(".md", "")
-          .replace(/[-_]/g, " ");
-        const initialMetadata = {
-          id: `doc-${Date.now()}`,
-          title: defaultTitle,
-          layer: "L4_ARTIFACT",
-          status: "draft",
-          path: path,
-          version: "1.0.0",
-        };
-        currentDocMetadata = initialMetadata;
-        fillMetadataInputs(initialMetadata);
-        if (notionEditor) {
-          notionEditor.setMarkdown(
-            `# ${defaultTitle}\n\nComece a documentar aqui...`,
-          );
-        }
-        if (docPathInput) {
-          if (docPathInput.tagName === "INPUT") docPathInput.value = path;
-          else docPathInput.textContent = path;
-        }
-        await handleSaveDraft();
-        if (onWorkspaceChanged) onWorkspaceChanged();
-      }
+      showEmptyState();
     }
   }
 
@@ -1245,7 +1277,13 @@ E no corpo Markdown, estruture o documento com seções claras, propostas de val
     loadDocument,
     loadProjectTaxonomy,
     getCurrentPath: () => currentFilePath,
-    setContent(content, breadcrumb = "index.md", assistantPrompt = "") {
+    setContent(content, breadcrumb = "novo-documento.md", assistantPrompt = "") {
+      if (editorEmptyState) editorEmptyState.style.display = "none";
+      if (notionEditorWrapper) notionEditorWrapper.style.display = "flex";
+      if (docConnectivityBar) docConnectivityBar.style.display = "flex";
+      if (docMetaInspector) docMetaInspector.style.display = "block";
+      currentFilePath = breadcrumb;
+
       const parsed = parseFrontmatter(content);
       currentDocMetadata = parsed.metadata;
       fillMetadataInputs(parsed.metadata);
@@ -1260,5 +1298,6 @@ E no corpo Markdown, estruture o documento com seções claras, propostas de val
       updateStats();
       initChatGroundedContext(breadcrumb, assistantPrompt);
     },
+    showEmptyState,
   };
 }

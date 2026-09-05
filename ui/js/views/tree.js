@@ -32,7 +32,7 @@ export function initTreeView({ onOpenFile, onWorkspaceChanged }) {
   const btnConfirmRename = document.getElementById('btn-confirm-rename');
 
   let customCreationParentFolder = '';
-  let activeDocPath = 'index.md';
+  let activeDocPath = '';
   let cachedTreeNodes = [];
 
   // Sidebar Collapse / Expand
@@ -234,28 +234,6 @@ export function initTreeView({ onOpenFile, onWorkspaceChanged }) {
       });
     }
 
-    const rootDoc = nodes.find(n => n.path === 'index.md');
-    if (rootDoc) {
-      const rootItem = document.createElement('div');
-      rootItem.className = `tree-file-item root-item ${activeDocPath === 'index.md' ? 'active' : ''}`;
-      rootItem.innerHTML = `
-        <div class="tree-file-left">
-          <span class="tree-dot dot-constitution"></span>
-          <span class="tree-file-name" style="font-weight: 700;">index.md (Constituição)</span>
-        </div>
-        <div class="tree-file-right">
-          <span class="tree-badge-mini constitution">ROOT</span>
-        </div>
-      `;
-      rootItem.addEventListener('click', () => {
-        document.querySelectorAll('.tree-file-item').forEach(f => f.classList.remove('active'));
-        rootItem.classList.add('active');
-        activeDocPath = 'index.md';
-        if (onOpenFile) onOpenFile('index.md');
-      });
-      treeContainer.appendChild(rootItem);
-    }
-
     if (!domainNodes || domainNodes.length === 0) {
       treeContainer.innerHTML = `
         <div class="tree-empty-state" style="display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 28px 14px; gap: 8px; width: 100%; box-sizing: border-box;">
@@ -377,8 +355,8 @@ export function initTreeView({ onOpenFile, onWorkspaceChanged }) {
           renderTree(cachedTreeNodes);
           if (onWorkspaceChanged) onWorkspaceChanged();
           if (activeDocPath === path && onOpenFile) {
-            activeDocPath = 'index.md';
-            onOpenFile('index.md');
+            activeDocPath = '';
+            onOpenFile('');
           }
         }
       } catch (e) {
