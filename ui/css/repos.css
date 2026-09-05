@@ -1,0 +1,605 @@
+/* ========================================================================= */
+/* SCREEN 2: REPOSITORIES VIEW (GOOGLE MATERIAL DESIGN 3 / MATERIAL YOU)      */
+/* ========================================================================= */
+
+.repos-wrapper {
+  max-width: 1240px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 32px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  overflow-y: auto;
+  height: 100%;
+}
+
+/* ------------------------------------------------------------------------- */
+/* TOP USER NAVBAR                                                           */
+/* ------------------------------------------------------------------------- */
+.repos-navbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--md-sys-color-surface, #ffffff);
+  border: 1px solid var(--md-sys-color-outline-variant, #e0e2e6);
+  padding: 14px 24px;
+  border-radius: var(--md-shape-corner-lg, 16px);
+  box-shadow: var(--md-sys-elevation-1, 0 1px 3px rgba(60, 64, 67, 0.08));
+  flex-shrink: 0;
+  transition: all var(--md-sys-motion-duration-short, 150ms) var(--md-sys-motion-easing-standard, cubic-bezier(0.2, 0.0, 0, 1.0));
+}
+
+.user-badge {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.user-badge img {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--md-shape-corner-full, 9999px);
+  border: 2px solid var(--md-sys-color-primary-container, #d2e3fc);
+  box-shadow: var(--md-sys-elevation-1, 0 1px 3px rgba(0, 0, 0, 0.1));
+  object-fit: cover;
+}
+
+.user-badge h3 {
+  font-family: var(--md-sys-typescale-font-brand, 'Outfit', sans-serif);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--md-sys-color-on-surface, #202124);
+  line-height: 1.2;
+}
+
+.user-badge span {
+  font-size: 12.5px;
+  color: var(--md-sys-color-on-surface-variant, #5f6368);
+  font-family: var(--md-sys-typescale-font-plain, 'Inter', sans-serif);
+}
+
+.nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* ------------------------------------------------------------------------- */
+/* MAIN CONTENT & SECTION HEADER                                             */
+/* ------------------------------------------------------------------------- */
+.repos-content {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding-bottom: 48px;
+}
+
+.create-card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  border: 1px solid rgba(26, 115, 232, 0.35);
+  background: var(--md-sys-color-surface, #ffffff);
+  box-shadow: var(--md-sys-elevation-2, 0 2px 6px rgba(60, 64, 67, 0.12));
+  border-radius: var(--md-shape-corner-lg, 16px);
+  padding: 24px;
+}
+
+.repos-section-header {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.section-title h2 {
+  font-family: var(--md-sys-typescale-font-brand, 'Outfit', sans-serif);
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--md-sys-color-on-surface, #202124);
+  letter-spacing: -0.2px;
+}
+
+.badge-primary-subtle {
+  background: var(--md-sys-color-primary-container, #d2e3fc);
+  color: var(--md-sys-color-on-primary-container, #041e49);
+  padding: 4px 10px;
+  border-radius: var(--md-shape-corner-full, 9999px);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* ------------------------------------------------------------------------- */
+/* CONTROLS TOOLBAR: SEARCH, ORG FILTER & VIEW MODE                          */
+/* ------------------------------------------------------------------------- */
+.repos-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.repos-search-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--md-sys-color-surface-container-low, #f8f9fa);
+  border: 1px solid var(--md-sys-color-outline-variant, #dadce0);
+  border-radius: var(--md-shape-corner-full, 9999px);
+  padding: 0 16px;
+  height: 42px;
+  flex: 1;
+  min-width: 280px;
+  max-width: 540px;
+  transition: all var(--md-sys-motion-duration-short, 150ms) var(--md-sys-motion-easing-standard);
+  position: relative;
+}
+
+.repos-search-box:focus-within {
+  background: var(--md-sys-color-surface, #ffffff);
+  border-color: var(--md-sys-color-primary, #1a73e8);
+  box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.15);
+}
+
+.repos-search-box .search-icon {
+  color: var(--md-sys-color-on-surface-variant, #5f6368);
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.repos-search-box input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 13.5px;
+  color: var(--md-sys-color-on-surface, #202124);
+  font-family: var(--md-sys-typescale-font-plain, 'Inter', sans-serif);
+}
+
+.repos-search-box input::placeholder {
+  color: var(--md-sys-color-on-surface-variant, #80868b);
+}
+
+.btn-clear-search {
+  background: none;
+  border: none;
+  color: var(--md-sys-color-on-surface-variant, #5f6368);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: var(--md-shape-corner-full, 9999px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--md-sys-motion-duration-short, 150ms);
+}
+
+.btn-clear-search:hover {
+  background: var(--md-sys-color-surface-container-high, #e8eaed);
+  color: var(--md-sys-color-on-surface, #202124);
+}
+
+.repos-filters-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.filter-org-box {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--md-sys-color-surface-container-low, #f8f9fa);
+  border: 1px solid var(--md-sys-color-outline-variant, #dadce0);
+  border-radius: var(--md-shape-corner-full, 9999px);
+  padding: 0 12px 0 14px;
+  height: 42px;
+  transition: all var(--md-sys-motion-duration-short, 150ms);
+}
+
+.filter-org-box:focus-within {
+  background: var(--md-sys-color-surface, #ffffff);
+  border-color: var(--md-sys-color-primary, #1a73e8);
+  box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.15);
+}
+
+.org-filter-icon {
+  color: var(--md-sys-color-on-surface-variant, #5f6368);
+  font-size: 18px;
+}
+
+.repos-org-select {
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--md-sys-color-on-surface, #202124);
+  cursor: pointer;
+  padding-right: 4px;
+  font-family: var(--md-sys-typescale-font-plain, 'Inter', sans-serif);
+}
+
+/* Segmented Buttons for View Mode (Google M3) */
+.view-mode-segmented {
+  display: inline-flex;
+  align-items: center;
+  background: var(--md-sys-color-surface-container-low, #f8f9fa);
+  border: 1px solid var(--md-sys-color-outline-variant, #dadce0);
+  border-radius: var(--md-shape-corner-full, 9999px);
+  padding: 3px;
+  height: 42px;
+}
+
+.view-mode-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border: none;
+  background: transparent;
+  border-radius: var(--md-shape-corner-full, 9999px);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--md-sys-color-on-surface-variant, #5f6368);
+  cursor: pointer;
+  transition: all var(--md-sys-motion-duration-short, 150ms) var(--md-sys-motion-easing-standard);
+}
+
+.view-mode-btn .btn-label {
+  font-size: 12.5px;
+}
+
+.view-mode-btn:hover {
+  color: var(--md-sys-color-on-surface, #202124);
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.view-mode-btn.active {
+  background: var(--md-sys-color-surface, #ffffff);
+  color: var(--md-sys-color-primary, #1a73e8);
+  font-weight: 600;
+  box-shadow: var(--md-sys-elevation-1, 0 1px 3px rgba(60, 64, 67, 0.12));
+}
+
+/* ------------------------------------------------------------------------- */
+/* REPOSITORIES GRID VIEW (GOOGLE M3 CARDS)                                  */
+/* ------------------------------------------------------------------------- */
+.repos-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 20px;
+}
+
+.repo-card {
+  background: var(--md-sys-color-surface, #ffffff);
+  border: 1px solid var(--md-sys-color-outline-variant, #dadce0);
+  border-radius: var(--md-shape-corner-lg, 16px);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 16px;
+  cursor: pointer;
+  transition: all var(--md-sys-motion-duration-short, 150ms) var(--md-sys-motion-easing-standard);
+  position: relative;
+  box-shadow: var(--md-sys-elevation-1, 0 1px 3px rgba(60, 64, 67, 0.08));
+}
+
+.repo-card:hover {
+  border-color: var(--md-sys-color-primary, #1a73e8);
+  box-shadow: var(--md-sys-elevation-2, 0 4px 10px rgba(60, 64, 67, 0.12));
+  transform: translateY(-2px);
+  background: var(--md-sys-color-surface, #ffffff);
+}
+
+.repo-card-main {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.repo-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.repo-header-info {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+
+.repo-icon-wrap {
+  width: 38px;
+  height: 38px;
+  border-radius: var(--md-shape-corner-md, 12px);
+  background: var(--md-sys-color-primary-container, #d2e3fc);
+  color: var(--md-sys-color-primary, #1a73e8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.repo-titles-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.repo-owner-tag {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--md-sys-color-on-surface-variant, #5f6368);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  text-transform: lowercase;
+}
+
+.repo-title {
+  font-family: var(--md-sys-typescale-font-brand, 'Outfit', sans-serif);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--md-sys-color-on-surface, #202124);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: -0.1px;
+}
+
+.repo-card:hover .repo-title {
+  color: var(--md-sys-color-primary, #1a73e8);
+}
+
+/* Visibility Pills (Google M3 Chips) */
+.repo-visibility-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: var(--md-shape-corner-full, 9999px);
+  font-size: 11.5px;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.repo-visibility-pill.private {
+  background: var(--md-sys-color-surface-container-high, #e8eaed);
+  color: var(--md-sys-color-on-surface-variant, #3c4043);
+  border: 1px solid var(--md-sys-color-outline-variant, #dadce0);
+}
+
+.repo-visibility-pill.public {
+  background: #e6f4ea;
+  color: #137333;
+  border: 1px solid #ceead6;
+}
+
+.repo-desc {
+  font-size: 13px;
+  color: var(--md-sys-color-on-surface-variant, #5f6368);
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-height: 38px;
+}
+
+.repo-desc.empty {
+  font-style: italic;
+  color: var(--md-sys-color-outline, #80868b);
+}
+
+.repo-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 14px;
+  border-top: 1px solid var(--md-sys-color-surface-container-high, #f1f3f4);
+  font-size: 12px;
+}
+
+.repo-footer-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.repo-branch-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--md-sys-color-surface-container, #f1f3f4);
+  color: var(--md-sys-color-on-surface-variant, #3c4043);
+  padding: 4px 10px;
+  border-radius: var(--md-shape-corner-full, 9999px);
+  font-size: 11.5px;
+  font-family: var(--md-sys-typescale-font-code, monospace);
+}
+
+.btn-protect-repo {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--md-sys-color-surface, #ffffff);
+  border: 1px solid var(--md-sys-color-outline-variant, #dadce0);
+  color: var(--md-sys-color-primary, #1a73e8);
+  padding: 4px 10px;
+  border-radius: var(--md-shape-corner-full, 9999px);
+  font-size: 11.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--md-sys-motion-duration-short, 150ms);
+}
+
+.btn-protect-repo:hover {
+  background: var(--md-sys-color-primary-container, #d2e3fc);
+  border-color: var(--md-sys-color-primary, #1a73e8);
+  color: var(--md-sys-color-on-primary-container, #041e49);
+}
+
+.btn-open-workspace {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--md-sys-color-primary, #1a73e8);
+  transition: transform var(--md-sys-motion-duration-short, 150ms);
+  white-space: nowrap;
+}
+
+.btn-open-workspace .material-symbols-outlined {
+  transition: transform var(--md-sys-motion-duration-short, 150ms);
+}
+
+.repo-card:hover .btn-open-workspace .material-symbols-outlined {
+  transform: translateX(3px);
+}
+
+/* ------------------------------------------------------------------------- */
+/* REPOSITORIES LIST VIEW (GOOGLE M3 LIST ROWS)                              */
+/* ------------------------------------------------------------------------- */
+.repos-grid.repos-view-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.repos-view-list .repo-card {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  gap: 20px;
+}
+
+.repos-view-list .repo-card-main {
+  flex-direction: row;
+  align-items: center;
+  gap: 16px;
+  flex: 1;
+  min-width: 0;
+}
+
+.repos-view-list .repo-top {
+  align-items: center;
+  gap: 14px;
+  flex: 1;
+  min-width: 0;
+}
+
+.repos-view-list .repo-desc {
+  -webkit-line-clamp: 1;
+  min-height: auto;
+  flex: 1.5;
+  margin: 0;
+}
+
+.repos-view-list .repo-footer {
+  border-top: none;
+  padding-top: 0;
+  gap: 14px;
+  flex-shrink: 0;
+}
+
+/* ------------------------------------------------------------------------- */
+/* EMPTY STATE & LOADING STATE                                               */
+/* ------------------------------------------------------------------------- */
+.repos-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 64px 24px;
+  background: var(--md-sys-color-surface, #ffffff);
+  border: 1px dashed var(--md-sys-color-outline-variant, #dadce0);
+  border-radius: var(--md-shape-corner-lg, 16px);
+  gap: 12px;
+  grid-column: 1 / -1;
+  width: 100%;
+}
+
+.repos-empty-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--md-shape-corner-full, 9999px);
+  background: var(--md-sys-color-surface-container, #f1f3f4);
+  color: var(--md-sys-color-on-surface-variant, #5f6368);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+}
+
+.repos-empty-title {
+  font-family: var(--md-sys-typescale-font-brand, 'Outfit', sans-serif);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--md-sys-color-on-surface, #202124);
+}
+
+.repos-empty-desc {
+  font-size: 13px;
+  color: var(--md-sys-color-on-surface-variant, #5f6368);
+  max-width: 420px;
+  line-height: 1.5;
+}
+
+.btn-reset-filters {
+  margin-top: 8px;
+}
+
+/* ------------------------------------------------------------------------- */
+/* RESPONSIVE BREAKPOINTS (Google M3 Window Size Classes)                    */
+/* ------------------------------------------------------------------------- */
+@media (max-width: 840px) {
+  .repos-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .repos-search-box {
+    max-width: 100%;
+  }
+
+  .repos-filters-actions {
+    justify-content: space-between;
+  }
+
+  .repos-view-list .repo-card {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .repos-view-list .repo-card-main {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .repos-view-list .repo-footer {
+    border-top: 1px solid var(--md-sys-color-surface-container-high, #f1f3f4);
+    padding-top: 12px;
+  }
+}

@@ -1,0 +1,54 @@
+# =============================================================================
+# REPOSITÓRIOS LOCAIS & WORKSPACES DOS PROJETOS
+# =============================================================================
+# A pasta /projects/ contém os clones locais e workspaces gerenciados pelo framework.
+# Cada projeto dentro de /projects/<repo-name>/ possui seu próprio Git oficial.
+/projects/
+projects/
+/projects/config.json
+/ai-memory-main
+
+# =============================================================================
+# PYTHON & RUNTIME
+# =============================================================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# =============================================================================
+# SISTEMA OPERACIONAL & METADADOS
+# =============================================================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# =============================================================================
+# LOGS & TEMPORÁRIOS
+# =============================================================================
+*.log
+scratch/
+.system_generated/

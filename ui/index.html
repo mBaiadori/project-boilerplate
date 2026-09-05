@@ -1,0 +1,4581 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Governance Platform — Spec-Driven Context OS</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200"
+    />
+
+    <!-- Markdown & Mermaid Engines -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+
+    <!-- Modular CSS Architecture (Google Material 3 & Design Tokens) -->
+    <link rel="stylesheet" href="css/design-tokens.css" />
+    <link rel="stylesheet" href="css/main.css" />
+    <link rel="stylesheet" href="css/auth.css" />
+    <link rel="stylesheet" href="css/repos.css" />
+    <link rel="stylesheet" href="css/material-dropdown.css" />
+    <link rel="stylesheet" href="css/dashboard.css" />
+    <link rel="stylesheet" href="css/notion-editor.css" />
+  </head>
+  <body>
+    <!-- ========================================================================= -->
+    <!-- GLOBAL MODAL: CONFIGURAÇÃO DE PROVEDOR & MODELOS DE IA                   -->
+    <!-- ========================================================================= -->
+    <div id="ai-settings-modal" class="modal-backdrop" style="display: none">
+      <div class="modal-box ai-modal-box">
+        <div class="modal-header">
+          <div style="display: flex; align-items: center; gap: 8px">
+            <div>
+              <h3>Configurar Provedor de IA</h3>
+              <span class="subtitle"
+                >Escolha o modelo para parear com o Agentic Chat</span
+              >
+            </div>
+          </div>
+          <button id="btn-close-ai-modal" class="btn-close" aria-label="Fechar">
+            <span class="material-symbols-outlined icon-sm">close</span>
+          </button>
+        </div>
+
+        <div class="modal-body" style="gap: 16px">
+          <!-- Provider Visual Radio Selection -->
+          <div class="provider-grid-selector">
+            <label class="provider-card-option selected" data-provider="gemini">
+              <input
+                type="radio"
+                name="ai-provider-radio"
+                value="gemini"
+                checked
+              />
+              <div class="p-info">
+                <span class="p-title">Google Gemini</span>
+                <span class="p-desc">Gemini 3.5 Flash / 1.5 Pro</span>
+                <div class="provider-status-badge unconfigured" data-status-provider="gemini">
+                  <span class="status-dot"></span>
+                  <span class="status-text">Verificando...</span>
+                </div>
+              </div>
+            </label>
+
+            <label class="provider-card-option" data-provider="openai">
+              <input type="radio" name="ai-provider-radio" value="openai" />
+              <div class="p-info">
+                <span class="p-title">OpenAI</span>
+                <span class="p-desc">GPT-4o / GPT-4o-mini</span>
+                <div class="provider-status-badge unconfigured" data-status-provider="openai">
+                  <span class="status-dot"></span>
+                  <span class="status-text">Verificando...</span>
+                </div>
+              </div>
+            </label>
+
+            <label class="provider-card-option" data-provider="anthropic">
+              <input type="radio" name="ai-provider-radio" value="anthropic" />
+              <div class="p-info">
+                <span class="p-title">Anthropic Claude</span>
+                <span class="p-desc">Claude 3.5 Sonnet</span>
+                <div class="provider-status-badge unconfigured" data-status-provider="anthropic">
+                  <span class="status-dot"></span>
+                  <span class="status-text">Verificando...</span>
+                </div>
+              </div>
+            </label>
+
+            <label class="provider-card-option" data-provider="deepseek">
+              <input type="radio" name="ai-provider-radio" value="deepseek" />
+              <div class="p-info">
+                <span class="p-title">DeepSeek API</span>
+                <span class="p-desc">DeepSeek V3 / R1</span>
+                <div class="provider-status-badge unconfigured" data-status-provider="deepseek">
+                  <span class="status-dot"></span>
+                  <span class="status-text">Verificando...</span>
+                </div>
+              </div>
+            </label>
+
+            <label class="provider-card-option" data-provider="local">
+              <input type="radio" name="ai-provider-radio" value="local" />
+              <div class="p-info">
+                <span class="p-title">Ollama Local</span>
+                <span class="p-desc">Offline & Sem Chave</span>
+                <div class="provider-status-badge unconfigured" data-status-provider="local">
+                  <span class="status-dot"></span>
+                  <span class="status-text">Verificando...</span>
+                </div>
+              </div>
+            </label>
+          </div>
+
+          <div class="form-group">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+              <label for="ai-model-select" style="margin-bottom: 0;">Modelo de IA:</label>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <button id="btn-refresh-ai-models" class="btn btn-ghost btn-xs" type="button" title="Consultar modelos disponíveis no servidor em tempo real" style="font-size: 11px; padding: 2px 8px; display: inline-flex; align-items: center; gap: 4px;">
+                  <span class="material-symbols-outlined icon-xs">refresh</span> Buscar no Servidor
+                </button>
+                <button id="btn-toggle-custom-model" class="btn btn-ghost btn-xs" type="button" title="Digitar modelo manualmente" style="font-size: 11px; padding: 2px 8px; display: inline-flex; align-items: center; gap: 4px;">
+                  <span class="material-symbols-outlined icon-xs">edit</span> Digitar
+                </button>
+              </div>
+            </div>
+            <div style="display: flex; gap: 6px; width: 100%;">
+              <select id="ai-model-select" class="form-select" style="flex: 1; padding: 6px 10px; border-radius: var(--radius-sm); border: 1px solid var(--border);">
+                <option value="gemini-3.5-flash">gemini-3.5-flash</option>
+              </select>
+              <input type="text" id="ai-model-input" value="gemini-3.5-flash" placeholder="Nome do modelo..." style="display: none; flex: 1;" />
+            </div>
+            <span class="form-hint" id="ai-model-hint"
+              >Selecione um modelo descoberto no servidor ou digite manualmente.</span
+            >
+          </div>
+
+          <div class="form-group" id="ai-api-key-group">
+            <label for="ai-api-key-input">Chave de API (API Key):</label>
+            <input
+              type="password"
+              id="ai-api-key-input"
+              placeholder="Cole sua chave aqui..."
+            />
+            <span class="form-hint" id="ai-key-hint">
+              <a
+                href="https://aistudio.google.com/app/apikey"
+                target="_blank"
+                style="color: var(--primary); text-decoration: none"
+                >Obter chave gratuita no Google AI Studio ↗</a
+              >
+            </span>
+          </div>
+
+          <div
+            class="form-group"
+            id="ai-custom-endpoint-group"
+            style="display: none"
+          >
+            <label for="ai-custom-endpoint-input"
+              >Endpoint Local / Customizado:</label
+            >
+            <input
+              type="text"
+              id="ai-custom-endpoint-input"
+              value="http://localhost:11434/v1"
+            />
+          </div>
+
+          <div
+            class="modal-footer"
+            style="
+              display: flex;
+              justify-content: flex-end;
+              gap: 8px;
+              margin-top: 8px;
+            "
+          >
+            <button id="btn-cancel-ai-modal" class="btn btn-ghost btn-sm">
+              Cancelar
+            </button>
+            <button id="btn-save-ai-modal" class="btn btn-primary btn-sm">
+              Salvar Provedor
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- MODAL: CENTRAL DE REVISÃO, DIFF AMIGÁVEL & PROPOSTA DE PR UNIFICADO        -->
+    <!-- ========================================================================= -->
+    <div id="workspace-diff-modal" class="modal-backdrop" style="display: none">
+      <div class="modal-box" style="max-width: 860px; max-height: 90vh">
+        <div class="modal-header">
+          <div>
+            <h3>Central de Proposta de PR & Diffs</h3>
+            <span class="subtitle"
+              >Revise as alterações acumuladas e consolide em 1 Pull
+              Request</span
+            >
+          </div>
+          <button
+            id="btn-close-diff-modal"
+            class="btn-close"
+            aria-label="Fechar"
+          >
+            <span class="material-symbols-outlined icon-sm">close</span>
+          </button>
+        </div>
+
+        <div class="modal-body" style="gap: 16px">
+          <!-- Pre-Flight Conflict & Main Sync Verification Banner -->
+          <div
+            id="diff-preflight-sync-banner"
+            class="preflight-sync-banner"
+            style="display: none"
+          >
+            <div class="preflight-banner-content">
+              <span
+                class="material-symbols-outlined preflight-icon"
+                id="preflight-icon"
+                >search</span
+              >
+              <div>
+                <strong id="preflight-title"
+                  >Verificando status da branch main remota...</strong
+                >
+                <div id="preflight-desc" class="preflight-desc">
+                  Comparando com a versão mais recente do GitHub para prevenir
+                  conflitos.
+                </div>
+              </div>
+            </div>
+            <div id="preflight-banner-actions"></div>
+          </div>
+
+          <!-- Guardrail & Stats Banner -->
+          <div
+            class="card"
+            style="
+              background: var(--bg-subtle);
+              padding: 12px 16px;
+              display: flex;
+              flex-direction: row;
+              align-items: center;
+              justify-content: space-between;
+            "
+          >
+            <div style="display: flex; align-items: center; gap: 12px">
+              <span id="diff-guardrail-badge" class="pill-dot protected"
+                ><span class="dot"></span> Pequeno</span
+              >
+              <span style="font-size: 13px; color: var(--text-main)">
+                <strong id="diff-files-count">0</strong> arquivos &bull;
+                <span style="color: var(--success); font-weight: 600"
+                  >+<span id="diff-additions-count">0</span></span
+                >
+                &bull;
+                <span style="color: var(--danger); font-weight: 600"
+                  >-<span id="diff-deletions-count">0</span></span
+                >
+              </span>
+            </div>
+            <button
+              id="btn-generate-pr-summary-ai"
+              class="btn btn-secondary btn-sm"
+            >
+              Gerar Resumo com IA
+            </button>
+          </div>
+
+          <!-- Files Changed List & Diff Box -->
+          <div class="form-group">
+            <label>Arquivos com Alterações Pendentes:</label>
+            <div
+              id="diff-files-container"
+              style="
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+                overflow-y: auto;
+              "
+            >
+              <div class="loading-state">Carregando diffs do workspace...</div>
+            </div>
+          </div>
+
+          <!-- PR Metadata Form -->
+          <div class="form-group">
+            <label for="unified-pr-title-input">Título da Proposta (PR):</label>
+            <input
+              type="text"
+              id="unified-pr-title-input"
+              placeholder="ex: Evoluir Bounded Context de Pagamentos"
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="unified-pr-desc-input">Descrição Técnica:</label>
+            <textarea
+              id="unified-pr-desc-input"
+              rows="4"
+              placeholder="Descreva os objetivos e checklist das mudanças..."
+              style="font-size: 12.5px"
+            ></textarea>
+          </div>
+
+          <div
+            style="
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              margin-top: 8px;
+            "
+          >
+            <button id="btn-discard-workspace" class="btn btn-danger btn-sm">
+              Descartar Alterações
+            </button>
+            <div style="display: flex; gap: 8px">
+              <button id="btn-cancel-diff-modal" class="btn btn-ghost btn-sm">
+                Continuar Editando
+              </button>
+              <button id="btn-submit-unified-pr" class="btn btn-primary btn-sm">
+                Abrir Pull Request
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- MODAL: EDITOR & CRIADOR DE TEMPLATES COM IA                               -->
+    <!-- ========================================================================= -->
+    <div
+      id="template-editor-modal"
+      class="modal-backdrop"
+      style="display: none"
+    >
+      <div class="modal-box" style="max-width: 720px; max-height: 90vh">
+        <div class="modal-header">
+          <div>
+            <h3 id="tpl-modal-title">Novo Template</h3>
+            <span class="subtitle"
+              >Defina a estrutura Markdown e o Assistente de IA
+              especialista</span
+            >
+          </div>
+          <button
+            id="btn-close-tpl-modal"
+            class="btn-close"
+            aria-label="Fechar"
+          >
+            <span class="material-symbols-outlined icon-sm">close</span>
+          </button>
+        </div>
+
+        <div class="modal-body" style="gap: 14px">
+          <!-- AI Generator Box -->
+          <div
+            class="card"
+            style="
+              background: var(--bg-subtle);
+              border: 1px solid #b3d4ff;
+              padding: 12px;
+              gap: 8px;
+            "
+          >
+            <div
+              style="
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+              "
+            >
+              <span
+                style="font-size: 12px; font-weight: 700; color: var(--primary)"
+                >Assistente Criador de Templates (IA)</span
+              >
+            </div>
+            <div style="display: flex; gap: 8px">
+              <input
+                type="text"
+                id="tpl-ai-idea-input"
+                placeholder="Descreva a ideia (ex: Contrato de Integração de Webhooks, SLA de Mensageria, etc.)..."
+                style="flex: 1; font-size: 12.5px"
+              />
+              <button
+                id="btn-generate-tpl-ai"
+                class="btn btn-primary btn-sm"
+                style="white-space: nowrap"
+              >
+                Gerar com IA
+              </button>
+            </div>
+          </div>
+
+          <input type="hidden" id="tpl-id-input" value="" />
+
+          <div class="form-row">
+            <div class="form-group flex-2">
+              <label for="tpl-title-input">Título do Template:</label>
+              <input
+                type="text"
+                id="tpl-title-input"
+                placeholder="ex: Contratos de API & Webhooks"
+              />
+            </div>
+            <div class="form-group flex-1">
+              <label for="tpl-category-input">Categoria:</label>
+              <input
+                type="text"
+                id="tpl-category-input"
+                placeholder="ex: Integração"
+              />
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group flex-2">
+              <label for="tpl-desc-input">Descrição Resumida:</label>
+              <input
+                type="text"
+                id="tpl-desc-input"
+                placeholder="ex: Padrão formal para payloads e eventos de webhook."
+              />
+            </div>
+            <div class="form-group flex-1">
+              <label for="tpl-filename-input">Nome de Arquivo:</label>
+              <input
+                type="text"
+                id="tpl-filename-input"
+                placeholder="ex: webhooks.md"
+              />
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="tpl-assistant-input">
+              Assistente de IA Específico deste Template (Prompt de Sistema):
+            </label>
+            <textarea
+              id="tpl-assistant-input"
+              rows="3"
+              placeholder="Instrução para a IA ao lidar com este documento..."
+              style="font-family: var(--font-mono); font-size: 12px"
+            ></textarea>
+          </div>
+
+          <div class="form-group">
+            <label for="tpl-content-input"
+              >Estrutura do Template (Markdown):</label
+            >
+            <textarea
+              id="tpl-content-input"
+              rows="8"
+              placeholder="# Título do Documento..."
+              style="
+                font-family: var(--font-mono);
+                font-size: 12px;
+                line-height: 1.5;
+              "
+            ></textarea>
+          </div>
+
+          <div
+            style="
+              display: flex;
+              justify-content: flex-end;
+              gap: 8px;
+              margin-top: 6px;
+            "
+          >
+            <button id="btn-cancel-tpl-modal" class="btn btn-ghost btn-sm">
+              Cancelar
+            </button>
+            <button id="btn-save-tpl-modal" class="btn btn-primary btn-sm">
+              Salvar Template
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- MODAL: WIZARD VISUAL DE CRIAÇÃO (DOMÍNIOS, ÁREAS E FEATURES L4)            -->
+    <!-- ========================================================================= -->
+    <div
+      id="scaffold-wizard-modal"
+      class="modal-backdrop"
+      style="display: none"
+    >
+      <div class="modal-box" style="max-width: 680px">
+        <div class="modal-header">
+          <div>
+            <h3>Criador Guiado de Arquitetura & Features</h3>
+            <span class="subtitle"
+              >Gere esteiras completas com metadados e conexões oficiais
+              pré-vinculadas</span
+            >
+          </div>
+          <button
+            id="btn-close-scaffold-modal"
+            class="btn-close"
+            aria-label="Fechar"
+          >
+            <span class="material-symbols-outlined icon-sm">close</span>
+          </button>
+        </div>
+
+        <div class="modal-body" style="gap: 16px">
+          <!-- Entity Type Selector Tabs -->
+          <div class="scaffold-type-tabs">
+            <button class="scaffold-type-tab active" data-type="feature">
+              <span class="tab-badge">L4</span>
+              <div class="tab-info">
+                <strong>Nova Feature Completa</strong>
+                <span>Gera esteira com 8 documentos</span>
+              </div>
+            </button>
+            <button class="scaffold-type-tab" data-type="subdomain">
+              <span class="tab-badge">L3</span>
+              <div class="tab-info">
+                <strong>Nova Área Funcional</strong>
+                <span>Subdomínio especializado</span>
+              </div>
+            </button>
+            <button class="scaffold-type-tab" data-type="domain">
+              <span class="tab-badge">L2</span>
+              <div class="tab-info">
+                <strong>Novo Domínio</strong>
+                <span>Bounded Context central</span>
+              </div>
+            </button>
+          </div>
+
+          <!-- Domain Selection -->
+          <div class="form-group" id="scaffold-group-domain">
+            <label for="scaffold-domain-select"
+              >Domínio (Bounded Context):</label
+            >
+            <select id="scaffold-domain-select" class="form-select"></select>
+            <input
+              type="text"
+              id="scaffold-domain-custom"
+              placeholder="ex: faturamento, pagamentos"
+              style="display: none; margin-top: 6px"
+            />
+          </div>
+
+          <!-- Area Selection -->
+          <div class="form-group" id="scaffold-group-area">
+            <label for="scaffold-area-select"
+              >Área Funcional (Subdomínio):</label
+            >
+            <select id="scaffold-area-select" class="form-select"></select>
+            <input
+              type="text"
+              id="scaffold-area-custom"
+              placeholder="ex: pix, checkout, cartao"
+              style="display: none; margin-top: 6px"
+            />
+          </div>
+
+          <!-- Feature Details -->
+          <div
+            id="scaffold-group-feature"
+            style="display: flex; flex-direction: column; gap: 12px"
+          >
+            <div class="form-row">
+              <div class="form-group flex-1">
+                <label for="scaffold-feature-name"
+                  >Código da Feature (UPPER-CASE):</label
+                >
+                <input
+                  type="text"
+                  id="scaffold-feature-name"
+                  placeholder="ex: PROCESSAR-PIX, CANCELAR-ASSINATURA"
+                />
+              </div>
+              <div class="form-group flex-1">
+                <label for="scaffold-feature-title">Título Amigável:</label>
+                <input
+                  type="text"
+                  id="scaffold-feature-title"
+                  placeholder="ex: Processar Pagamento PIX"
+                />
+              </div>
+            </div>
+          </div>
+
+          <!-- Risk Tier Selector -->
+          <div class="form-group" id="scaffold-group-risk">
+            <label>Classificação de Risco da Feature:</label>
+            <div class="risk-selector-grid">
+              <label class="risk-card-option">
+                <input type="radio" name="scaffold-risk-radio" value="tier_3" />
+                <div class="r-info">
+                  <span class="r-badge tier-3">Tier 3</span>
+                  <span class="r-desc">Baixo Risco (UI / Ajustes)</span>
+                </div>
+              </label>
+              <label class="risk-card-option selected">
+                <input
+                  type="radio"
+                  name="scaffold-risk-radio"
+                  value="tier_2"
+                  checked
+                />
+                <div class="r-info">
+                  <span class="r-badge tier-2">Tier 2</span>
+                  <span class="r-desc">Padrão (Regras de Negócio)</span>
+                </div>
+              </label>
+              <label class="risk-card-option">
+                <input type="radio" name="scaffold-risk-radio" value="tier_1" />
+                <div class="r-info">
+                  <span class="r-badge tier-1">Tier 1</span>
+                  <span class="r-desc">Crítico (Financeiro / Auth)</span>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <!-- Cross-Cutting Dependencies Selector -->
+          <div class="form-group" id="scaffold-group-cross">
+            <label
+              >Dependências Cross-Cutting (Quais outros contratos esta feature
+              consome?):</label
+            >
+            <div id="scaffold-cross-container" class="cross-cutting-scrollbox">
+              <div class="loading-state-sm">
+                Carregando contratos disponíveis...
+              </div>
+            </div>
+          </div>
+
+          <!-- Live Path Preview -->
+          <div class="scaffold-preview-box">
+            <span class="preview-label">Destino no Workspace:</span>
+            <code id="scaffold-preview-path"
+              >domains/financeiro/pix/PROCESSAR-PIX/</code
+            >
+          </div>
+
+          <!-- Footer Actions -->
+          <div
+            class="modal-footer"
+            style="
+              display: flex;
+              justify-content: flex-end;
+              gap: 8px;
+              margin-top: 4px;
+            "
+          >
+            <button id="btn-cancel-scaffold" class="btn btn-ghost btn-sm">
+              Cancelar
+            </button>
+            <button id="btn-confirm-scaffold" class="btn btn-primary btn-sm">
+              Criar & Abrir Esteira
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- MODAL: RENOMEAR ARQUIVO OU PASTA                                          -->
+    <!-- ========================================================================= -->
+    <div id="rename-modal" class="modal-backdrop" style="display: none">
+      <div class="modal-box" style="max-width: 480px">
+        <div class="modal-header">
+          <div>
+            <h3>Renomear ou Mover</h3>
+            <span class="subtitle">Atualize o nome ou caminho na árvore</span>
+          </div>
+          <button
+            id="btn-close-rename-modal"
+            class="btn-close"
+            aria-label="Fechar"
+          >
+            <span class="material-symbols-outlined icon-sm">close</span>
+          </button>
+        </div>
+        <div class="modal-body" style="gap: 14px">
+          <input type="hidden" id="rename-old-path" value="" />
+          <div class="form-group">
+            <label for="rename-new-path">Novo Caminho / Nome:</label>
+            <input
+              type="text"
+              id="rename-new-path"
+              placeholder="ex: domains/billing/novo-nome.md"
+            />
+            <span class="form-hint" id="rename-path-hint"
+              >Caminho relativo a partir da raiz do repositório.</span
+            >
+          </div>
+          <div
+            style="
+              display: flex;
+              justify-content: flex-end;
+              gap: 8px;
+              margin-top: 6px;
+            "
+          >
+            <button id="btn-cancel-rename" class="btn btn-ghost btn-sm">
+              Cancelar
+            </button>
+            <button id="btn-confirm-rename" class="btn btn-primary btn-sm">
+              Salvar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- SCREEN 1: LOGIN COM GITHUB (1-CLICK TOKEN GENERATOR)                      -->
+    <!-- ========================================================================= -->
+    <div id="view-auth" class="screen-view" style="display: none">
+      <div class="auth-card">
+        <div class="logo-box">
+          <span
+            class="material-symbols-outlined icon-xl"
+            style="color: var(--md-sys-color-primary)"
+            >account_balance</span
+          >
+        </div>
+        <h1>Governance Platform</h1>
+        <p class="subtitle">
+          Conecte sua conta do GitHub para gerenciar documentos, domínios e
+          aprovações de PRs.
+        </p>
+
+        <div class="action-box">
+          <a
+            id="btn-open-github-token"
+            href="https://github.com/settings/tokens/new?scopes=repo,read:org&description=Governance+Platform"
+            target="_blank"
+            class="btn btn-github btn-large"
+          >
+            <svg height="18" width="18" viewBox="0 0 16 16" fill="currentColor">
+              <path
+                d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"
+              ></path>
+            </svg>
+            1. Abrir GitHub para Gerar Token (1-Click)
+          </a>
+          <span class="hint-text"
+            ><span class="material-symbols-outlined icon-xs">lightbulb</span> O
+            link acima já abre o GitHub com as permissões <code>repo</code> e
+            <code>read:org</code> pré-marcadas!</span
+          >
+
+          <div class="divider"><span>2. Cole o Token gerado abaixo</span></div>
+
+          <div class="form-group">
+            <input
+              type="password"
+              id="pat-token-input"
+              placeholder="ghp_xxxxxxxxxxxxxxxxxxxx ou github_pat_xxxx"
+            />
+            <button id="btn-token-login" class="btn btn-primary btn-large">
+              Conectar Conta & Acessar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- SCREEN 2: REPOSITÓRIOS DA CONTA GITHUB                                    -->
+    <!-- ========================================================================= -->
+    <div id="view-repos" class="screen-view" style="display: none">
+      <div class="repos-wrapper">
+        <!-- Top Navbar -->
+        <header class="repos-navbar">
+          <div class="user-badge">
+            <img id="user-avatar" src="" alt="Avatar" />
+            <div>
+              <h3 id="user-name">Usuário</h3>
+              <span id="user-login">@login</span>
+            </div>
+          </div>
+
+          <div class="nav-actions">
+            <button id="btn-open-create-repo" class="btn btn-primary btn-sm">
+              Novo Repositório
+            </button>
+            <button id="btn-logout" class="btn btn-ghost btn-sm">
+              Desconectar
+            </button>
+          </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="repos-content">
+          <!-- Create Repo Panel (Collapsible) -->
+          <div
+            id="create-repo-card"
+            class="card create-card"
+            style="display: none"
+          >
+            <div class="card-header">
+              <h3>Criar Repositório com Proteção de Branch (main)</h3>
+              <button id="btn-cancel-create" class="btn-close">
+                <span class="material-symbols-outlined icon-sm">close</span>
+              </button>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group flex-1">
+                <label for="create-repo-owner"
+                  >Proprietário / Organização:</label
+                >
+                <select id="create-repo-owner"></select>
+              </div>
+              <div class="form-group flex-2">
+                <label for="create-repo-name">Nome do Repositório:</label>
+                <input
+                  type="text"
+                  id="create-repo-name"
+                  placeholder="ex: fintech-billing"
+                />
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group flex-2">
+                <label for="create-repo-desc">Descrição:</label>
+                <input
+                  type="text"
+                  id="create-repo-desc"
+                  value="Repositório  com regras de Governança"
+                />
+              </div>
+              <div class="form-group flex-1">
+                <label for="create-repo-approvals"
+                  >Aprovações necessárias:</label
+                >
+                <select id="create-repo-approvals">
+                  <option value="1" selected>1 Aprovação (1-of-N)</option>
+                  <option value="2">2 Aprovações</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-group-checkbox">
+              <label>
+                <input type="checkbox" id="create-repo-protection" checked />
+                <span
+                  ><strong>Bloquear branch <code>main</code></strong> (Exige PR
+                  obrigatório antes de merge)</span
+                >
+              </label>
+            </div>
+
+            <div class="form-group-checkbox">
+              <label>
+                <input type="checkbox" id="create-repo-private" checked />
+                <span>Repositório Privado no GitHub</span>
+              </label>
+            </div>
+
+            <div class="card-footer">
+              <button
+                id="btn-submit-create-repo"
+                class="btn btn-primary btn-sm"
+              >
+                Criar Repositório
+              </button>
+            </div>
+          </div>
+
+          <!-- Repos Section Header & Toolbar (Google Material Design 3) -->
+          <div class="repos-section-header">
+            <div class="section-title">
+              <h2>Seus Repositórios</h2>
+              <span class="badge badge-primary-subtle" id="repos-count-badge">0 repositório(s)</span>
+            </div>
+
+            <!-- Toolbar: Search Bar, Org Filter & View Switcher -->
+            <div class="repos-toolbar">
+              <div class="repos-search-box">
+                <span class="material-symbols-outlined icon-sm search-icon">search</span>
+                <input
+                  type="text"
+                  id="repos-search-input"
+                  placeholder="Buscar repositório por nome ou descrição..."
+                  autocomplete="off"
+                  spellcheck="false"
+                />
+                <button id="btn-clear-search" class="btn-clear-search" style="display: none;" title="Limpar busca (Esc)">
+                  <span class="material-symbols-outlined icon-xs">close</span>
+                </button>
+              </div>
+
+              <div class="repos-filters-actions">
+                <div id="repos-org-dropdown-container"></div>
+
+                <div class="view-mode-segmented" role="group" aria-label="Modo de visualização">
+                  <button id="btn-view-grid" class="view-mode-btn active" title="Visualização em Grade" type="button">
+                    <span class="material-symbols-outlined icon-sm">grid_view</span>
+                    <span class="btn-label">Grade</span>
+                  </button>
+                  <button id="btn-view-list" class="view-mode-btn" title="Visualização em Lista" type="button">
+                    <span class="material-symbols-outlined icon-sm">view_list</span>
+                    <span class="btn-label">Lista</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div id="repos-list-grid" class="repos-grid">
+            <div class="loading-state">Carregando repositórios...</div>
+          </div>
+        </main>
+      </div>
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- SCREEN 3: DASHBOARD WORKSPACE (CONFLUENCE-GRADE UNIFIED WORKBENCH)        -->
+    <!-- ========================================================================= -->
+    <div id="view-dashboard" class="screen-view" style="display: none">
+      <!-- Top Global Header -->
+      <header class="dashboard-navbar">
+        <div class="dash-brand">
+          <div class="dash-title-wrap">
+            <div class="dash-title-row">
+              <h1 id="dash-repo-title">Projeto</h1>
+              <span class="pill-dot protected"
+                ><span class="dot"></span> main</span
+              >
+            </div>
+            <span class="dash-meta"
+              ><a id="dash-repo-link" href="#" target="_blank"
+                >Ver no GitHub ↗</a
+              ></span
+            >
+          </div>
+        </div>
+
+        <div class="dash-nav-right">
+          <button
+            id="btn-open-onboarding-tour"
+            class="btn btn-secondary btn-sm"
+            title="Guia & Onboarding do Software"
+          >
+            Tour do Projeto
+          </button>
+          <button
+            id="btn-quick-scaffold"
+            class="btn btn-primary btn-sm"
+            title="Criar novo Domínio, Área ou Feature L4 em 1-clique"
+          >
+            + Nova Feature
+          </button>
+          <button
+            id="btn-open-workspace-diff"
+            class="btn btn-warning btn-sm"
+            style="display: none"
+          >
+            <span class="dot warning-dot"></span>
+            <span id="pending-changes-badge-text">0 alterações</span> &bull;
+            Revisar PR
+          </button>
+          <button id="btn-back-to-repos" class="btn btn-ghost btn-sm">
+            Repositórios
+          </button>
+        </div>
+      </header>
+
+      <!-- Main Workspace Layout -->
+      <div class="dashboard-layout">
+        <!-- Primary Global Left Sidebar (Collapsible with Clean Icons) -->
+        <aside class="dash-sidebar-nav" id="dash-sidebar-nav">
+          <div class="dash-menu">
+            <div class="dash-menu-header-row">
+              <span class="dash-menu-header">Módulos</span>
+              <button
+                id="btn-toggle-global-sidebar"
+                class="dash-sidebar-toggle-top"
+                title="Recolher / Expandir Menu Lateral"
+              >
+                <span class="toggle-arrow">‹</span>
+              </button>
+            </div>
+            <button
+              class="dash-nav-item active"
+              data-view="project"
+              title="Visão Geral do Projeto (Porta de Entrada & Definição Oficial)"
+            >
+              <svg
+                class="nav-icon"
+                width="21"
+                height="21"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                <polyline points="9 22 9 12 15 12 15 22"></polyline>
+              </svg>
+              <span class="nav-label">Projeto</span>
+            </button>
+            <button
+              class="dash-nav-item"
+              data-view="editor"
+              title="Domínios de Negócio & Features"
+            >
+              <svg
+                class="nav-icon"
+                width="21"
+                height="21"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path
+                  d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
+                ></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+                <line x1="16" y1="13" x2="8" y2="13"></line>
+                <line x1="16" y1="17" x2="8" y2="17"></line>
+              </svg>
+              <span class="nav-label">Documentos</span>
+            </button>
+            <button
+              class="dash-nav-item"
+              data-view="dictionary"
+              title="Dicionário Ubíquo & Vocabulário Oficial de Domínio"
+            >
+              <svg
+                class="nav-icon"
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <rect width="18" height="18" x="3" y="3" rx="4"></rect>
+                <path d="m8 16 4-8 4 8"></path>
+                <path d="M9.5 13h5"></path>
+              </svg>
+              <span class="nav-label">Dicionário</span>
+            </button>
+            <button
+              class="dash-nav-item"
+              data-view="engineering"
+              title="Padrões Técnicos, ADRs e Diretrizes de Engenharia"
+            >
+              <svg
+                class="nav-icon"
+                width="21"
+                height="21"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <polyline points="16 18 22 12 16 6"></polyline>
+                <polyline points="8 6 2 12 8 18"></polyline>
+              </svg>
+              <span class="nav-label">Engenharia</span>
+            </button>
+            <button
+              class="dash-nav-item"
+              data-view="wiki"
+              title="Wiki de Conhecimento & Decisões da IA (Padrão Karpathy LLM-Wiki)"
+            >
+              <svg
+                class="nav-icon"
+                width="21"
+                height="21"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
+                <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
+              </svg>
+              <span class="nav-label">Wiki IA</span>
+            </button>
+            <button
+              class="dash-nav-item"
+              data-view="graph"
+              title="Grafo  L1-L4 & Relações Cross-Cutting"
+            >
+              <svg
+                class="nav-icon"
+                width="21"
+                height="21"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <circle cx="18" cy="5" r="3"></circle>
+                <circle cx="6" cy="12" r="3"></circle>
+                <circle cx="18" cy="19" r="3"></circle>
+                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+                <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+              </svg>
+              <span class="nav-label">Grafo & Conexões</span>
+            </button>
+            <button
+              class="dash-nav-item"
+              data-view="audit"
+              title="Auditoria de Qualidade, Segurança SAST & Feedback Loops"
+            >
+              <svg
+                class="nav-icon"
+                width="21"
+                height="21"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                <polyline points="9 12 11 14 15 10"></polyline>
+              </svg>
+              <span class="nav-label">Auditoria & QA</span>
+            </button>
+            <button
+              class="dash-nav-item"
+              data-view="templates"
+              title="Catálogo de Templates & Assistentes de IA"
+            >
+              <svg
+                class="nav-icon"
+                width="21"
+                height="21"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+                <path
+                  d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"
+                ></path>
+              </svg>
+              <span class="nav-label">Templates</span>
+            </button>
+            <button
+              class="dash-nav-item"
+              data-view="governance"
+              title="Equipe & Regras de Governança"
+            >
+              <svg
+                class="nav-icon"
+                width="21"
+                height="21"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+              </svg>
+              <span class="nav-label">Governança</span>
+            </button>
+            <button
+              class="dash-nav-item"
+              data-view="prs"
+              title="Pull Requests & Auditoria"
+            >
+              <svg
+                class="nav-icon"
+                width="21"
+                height="21"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <circle cx="18" cy="18" r="3"></circle>
+                <circle cx="6" cy="6" r="3"></circle>
+                <path d="M13 6h3a2 2 0 0 1 2 2v7"></path>
+                <line x1="6" y1="9" x2="6" y2="21"></line>
+              </svg>
+              <span class="nav-label">Pull Requests</span>
+            </button>
+            <button
+              class="dash-nav-item"
+              data-view="settings"
+              title="Configurações Sistêmicas & Prompts Mestre"
+            >
+              <svg
+                class="nav-icon"
+                width="21"
+                height="21"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <circle cx="12" cy="12" r="3"></circle>
+                <path
+                  d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"
+                ></path>
+              </svg>
+              <span class="nav-label">Configurações</span>
+            </button>
+            <button
+              class="dash-nav-item"
+              data-view="tutorials"
+              title="Guia & Tutoriais: DDD, SDD, BDD, TDD"
+            >
+              <svg
+                class="nav-icon"
+                width="21"
+                height="21"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
+                <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
+              </svg>
+              <span class="nav-label">Tutoriais</span>
+            </button>
+          </div>
+
+          <div class="dash-sidebar-footer">
+            <span
+              style="
+                font-size: 10.5px;
+                color: var(--text-dim);
+                text-align: center;
+              "
+              >Context OS</span
+            >
+          </div>
+        </aside>
+
+        <!-- Vertical Resizer: Sidebar <-> Views Container -->
+        <div
+          id="resizer-sidebar"
+          class="pane-resizer"
+          title="Arrastar para redimensionar menu lateral"
+        ></div>
+
+        <!-- Main Views Container -->
+        <main class="dash-views-container">
+          <!-- ================================================================= -->
+          <!-- SUB-VIEW 0: PROJECT HUB & SETUP COCKPIT (CONSTITUIÇÃO DO PROJETO)   -->
+          <!-- ================================================================= -->
+          <div id="subview-project" class="dash-subview" style="display: none">
+            <div class="project-dock-layout">
+              <div class="project-main-scroll-area">
+                <div class="project-view-wrapper">
+                  <!-- Project Cockpit Navigation Tabs & Persistent AI Trigger -->
+                  <div class="project-tabs-bar-container">
+                    <div class="project-tabs-nav" role="tablist">
+                      <button
+                        class="project-tab-btn active"
+                        data-tab="about"
+                        id="btn-proj-tab-about"
+                        role="tab"
+                        aria-selected="true"
+                      >
+                        Sobre
+                      </button>
+                      <button
+                        class="project-tab-btn"
+                        data-tab="domains"
+                        id="btn-proj-tab-domains"
+                        role="tab"
+                        aria-selected="false"
+                      >
+                        Domínios
+                      </button>
+                      <button
+                        class="project-tab-btn"
+                        data-tab="taxonomy"
+                        id="btn-proj-tab-taxonomy"
+                        role="tab"
+                        aria-selected="false"
+                      >
+                        Taxonomia & Tags
+                      </button>
+                      <button
+                        class="project-tab-btn"
+                        data-tab="governance"
+                        id="btn-proj-tab-governance"
+                        role="tab"
+                        aria-selected="false"
+                      >
+                        Políticas & Guardião IA
+                      </button>
+                    </div>
+                    <div
+                      class="doc-icon-actions"
+                      style="
+                        margin-left: 12px;
+                        margin-right: 4px;
+                        flex-shrink: 0;
+                      "
+                    >
+                      <button
+                        id="btn-toggle-proj-ai"
+                        class="btn-icon-action"
+                        type="button"
+                        title="Abrir Assistente de IA"
+                      >
+                        <svg
+                          width="14"
+                          height="14"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        >
+                          <path
+                            d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"
+                          ></path>
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- TAB 1: SOBRE (APRESENTAÇÃO & ESSÊNCIA DO PROJETO COM ASSISTENTE IA) -->
+                  <div class="project-tab-pane active" id="pane-proj-about">
+                    <!-- ABOUT DOCUMENT CARD -->
+                    <div class="about-document-card">
+                      <!-- 1. Nome / Título do Projeto -->
+                      <div class="about-section-block">
+                        <label for="proj-input-name" class="about-section-label"
+                          >Nome do Projeto</label
+                        >
+                        <input
+                          type="text"
+                          id="proj-input-name"
+                          class="about-title-input"
+                          placeholder="Nome do Projeto..."
+                          autocomplete="off"
+                        />
+                      </div>
+
+                      <div class="about-divider"></div>
+
+                      <!-- 2. Por que? (Propósito & Motivação) -->
+                      <div class="about-section-block">
+                        <div class="about-section-header">
+                          <span class="about-section-title"
+                            >Por que fazemos?</span
+                          >
+                          <span class="about-section-hint"
+                            >Qual a dor de negócio, oportunidade ou motivação
+                            central que impulsiona este projeto?</span
+                          >
+                        </div>
+                        <textarea
+                          id="proj-5w2h-why"
+                          class="about-clean-textarea"
+                          rows="3"
+                          placeholder="Descreva a justificativa de negócio, as dores que estamos resolvendo e o impacto esperado..."
+                        ></textarea>
+                      </div>
+
+                      <div class="about-divider"></div>
+
+                      <!-- 3. O que? (O que é o produto & Escopo) -->
+                      <div class="about-section-block">
+                        <div class="about-section-header">
+                          <span class="about-section-title"
+                            >O que é o produto?</span
+                          >
+                          <span class="about-section-hint"
+                            >Qual é o produto, seu escopo funcional e a proposta
+                            de valor central?</span
+                          >
+                        </div>
+                        <textarea
+                          id="proj-5w2h-what"
+                          class="about-clean-textarea"
+                          rows="3"
+                          placeholder="Defina o produto, seus objetivos principais, capacidades essenciais e proposta de valor..."
+                        ></textarea>
+                      </div>
+
+                      <div class="about-divider"></div>
+
+                      <!-- 4. Onde? (Onde se aplica & Ecossistema) -->
+                      <div class="about-section-block">
+                        <div class="about-section-header">
+                          <span class="about-section-title"
+                            >Onde se aplica?</span
+                          >
+                          <span class="about-section-hint"
+                            >Quais são os domínios, canais, integrações e
+                            ecossistemas de atuação?</span
+                          >
+                        </div>
+                        <textarea
+                          id="proj-5w2h-where"
+                          class="about-clean-textarea"
+                          rows="3"
+                          placeholder="Mapeie os canais de acesso, Bounded Contexts, ecossistemas envolvidos e integrações chave..."
+                        ></textarea>
+                      </div>
+
+                      <div class="about-divider"></div>
+
+                      <!-- 5. Quando? (Marcos & Prazos) -->
+                      <div class="about-section-block">
+                        <div class="about-section-header">
+                          <span class="about-section-title">Quando?</span>
+                          <span class="about-section-hint"
+                            >Quais são os marcos estratégicos, fases de entrega
+                            e prazos previstos?</span
+                          >
+                        </div>
+                        <textarea
+                          id="proj-5w2h-when"
+                          class="about-clean-textarea"
+                          rows="3"
+                          placeholder="Descreva as fases do projeto (ex: MVP, Fase 1, Fase 2), marcos de release e cronograma planejado..."
+                        ></textarea>
+                      </div>
+
+                      <div class="about-divider"></div>
+
+                      <!-- 6. Como? (Como construímos & Arquitetura) -->
+                      <div class="about-section-block">
+                        <div class="about-section-header">
+                          <span class="about-section-title"
+                            >Como construímos?</span
+                          >
+                          <span class="about-section-hint"
+                            >Quais as diretrizes técnicas, padrões arquiteturais
+                            e metodologia de construção?</span
+                          >
+                        </div>
+                        <textarea
+                          id="proj-5w2h-how"
+                          class="about-clean-textarea"
+                          rows="3"
+                          placeholder="Explique os padrões arquiteturais fundamentais, decisões técnicas e metodologia de engenharia..."
+                        ></textarea>
+                      </div>
+
+                      <!-- Step Navigation Footer -->
+                      <div class="project-step-footer">
+                        <div></div>
+                        <button
+                          id="btn-nav-about-next"
+                          class="btn btn-primary"
+                          type="button"
+                        >
+                          Salvar & Avançar para Domínios
+                          <span class="material-symbols-outlined icon-xs"
+                            >arrow_forward</span
+                          >
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- TAB 2: DOMÍNIOS & RESPONSÁVEIS -->
+                  <div class="project-tab-pane" id="pane-proj-domains">
+                    <div class="gov-card org-domains-container-card">
+                      <div
+                        class="gov-card-header"
+                        style="
+                          display: flex;
+                          justify-content: space-between;
+                          align-items: flex-start;
+                          margin-bottom: 20px;
+                        "
+                      >
+                        <div>
+                          <h3
+                            style="
+                              margin: 0;
+                              font-size: 16px;
+                              font-weight: 600;
+                              color: var(--text-main);
+                            "
+                          >
+                            Estrutura de Domínios & Responsáveis
+                          </h3>
+                          <p
+                            style="
+                              font-size: 12.5px;
+                              color: var(--text-muted);
+                              margin: 4px 0 0 0;
+                              line-height: 1.5;
+                            "
+                          >
+                            Defina as áreas de domínio da arquitetura e associe
+                            os membros responsáveis identificados no GitHub e no
+                            repositório. O framework organiza a estrutura oficial
+                            em
+                            <code>domains/</code>.
+                          </p>
+                        </div>
+                        <button
+                          id="btn-proj-add-domain"
+                          class="btn btn-secondary btn-sm"
+                          style="
+                            display: inline-flex;
+                            align-items: center;
+                            gap: 6px;
+                            flex-shrink: 0;
+                          "
+                        >
+                          <span class="material-symbols-outlined icon-xs"
+                            >add</span
+                          >
+                          Adicionar Domínio / Área
+                        </button>
+                      </div>
+
+                      <!-- Grid de Cards de Domínio -->
+                      <div class="org-domains-grid" id="proj-domains-grid">
+                        <!-- Dynamic Domain Cards rendered by project.js -->
+                      </div>
+
+                      <!-- Step Navigation Footer -->
+                      <div class="project-step-footer">
+                        <button
+                          id="btn-nav-domains-prev"
+                          class="btn btn-secondary"
+                          type="button"
+                        >
+                          <span class="material-symbols-outlined icon-xs"
+                            >arrow_back</span
+                          >
+                          Voltar para Sobre
+                        </button>
+                        <button
+                          id="btn-nav-domains-next"
+                          class="btn btn-primary"
+                          type="button"
+                        >
+                          Salvar & Avançar para Taxonomia
+                          <span class="material-symbols-outlined icon-xs"
+                            >arrow_forward</span
+                          >
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- TAB 3: TAXONOMIA, TAGS & ESTEIRA -->
+                  <div class="project-tab-pane" id="pane-proj-taxonomy">
+                    <!-- Tags Globais -->
+                    <div class="gov-card">
+                      <div class="gov-card-header">
+                        <div>
+                          <h3 style="margin: 0">Tags Oficiais do Projeto</h3>
+                          <p
+                            style="
+                              font-size: 12px;
+                              color: var(--text-muted);
+                              margin: 2px 0 0 0;
+                            "
+                          >
+                            Tags padronizadas sugeridas via auto-complete no
+                            editor de especificações e filtros do grafo.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div style="display: flex; gap: 8px; margin-bottom: 12px">
+                        <input
+                          type="text"
+                          id="proj-input-new-tag"
+                          placeholder="Nova tag (ex: core-banking, pci-dss, pix, lgpd)"
+                          style="flex: 1; padding: 6px 10px; font-size: 13px"
+                        />
+                        <button
+                          id="btn-proj-add-tag"
+                          class="btn btn-secondary btn-sm"
+                        >
+                          Adicionar Tag
+                        </button>
+                      </div>
+
+                      <div
+                        class="tags-chip-container"
+                        id="proj-tags-chips-container"
+                      >
+                        <!-- Dynamic tag chips rendered by project.js -->
+                      </div>
+                    </div>
+
+                    <!-- Status de Governança & Esteira de Artefatos -->
+                    <div class="gov-card">
+                      <div class="gov-card-header">
+                        <h3>
+                          Etapas Oficiais da Esteira de Features (Artifact
+                          Pipeline)
+                        </h3>
+                      </div>
+                      <p
+                        style="
+                          font-size: 12px;
+                          color: var(--text-muted);
+                          margin-bottom: 12px;
+                        "
+                      >
+                        Sequência padrão de evolução de uma feature suportada
+                        pelas ferramentas de IA e scaffolding.
+                      </p>
+                      <div
+                        class="pipeline-stages-grid"
+                        id="proj-stages-container"
+                      >
+                        <!-- Dynamic pipeline stages rendered by project.js -->
+                      </div>
+
+                      <!-- Step Navigation Footer -->
+                      <div class="project-step-footer">
+                        <button
+                          id="btn-nav-tax-prev"
+                          class="btn btn-secondary"
+                          type="button"
+                        >
+                          <span class="material-symbols-outlined icon-xs"
+                            >arrow_back</span
+                          >
+                          Voltar para Domínios
+                        </button>
+                        <button
+                          id="btn-nav-tax-next"
+                          class="btn btn-primary"
+                          type="button"
+                        >
+                          Salvar & Avançar para Políticas IA
+                          <span class="material-symbols-outlined icon-xs"
+                            >arrow_forward</span
+                          >
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- TAB 4: POLÍTICAS & GUARDIÃO IA -->
+                  <div class="project-tab-pane" id="pane-proj-governance">
+                    <!-- Regras de Linter -->
+                    <div class="gov-card">
+                      <div class="gov-card-header">
+                        <h3>Regras de Validação & Linter Arquitetural</h3>
+                      </div>
+                      <div
+                        style="
+                          display: flex;
+                          flex-direction: column;
+                          gap: 14px;
+                          margin-top: 8px;
+                        "
+                      >
+                        <label
+                          style="
+                            display: flex;
+                            align-items: center;
+                            gap: 10px;
+                            cursor: pointer;
+                          "
+                        >
+                          <input
+                            type="checkbox"
+                            id="proj-rule-invariants-tier1"
+                          />
+                          <span>
+                            <strong
+                              >Exigir Invariantes Explícitas em Features Tier
+                              1</strong
+                            >
+                            <span
+                              style="
+                                display: block;
+                                font-size: 12px;
+                                color: var(--text-muted);
+                              "
+                            >
+                              Bloqueia status APPROVED se não houver seção de
+                              invariantes de negócio na spec.
+                            </span>
+                          </span>
+                        </label>
+
+                        <label
+                          style="
+                            display: flex;
+                            align-items: center;
+                            gap: 10px;
+                            cursor: pointer;
+                          "
+                        >
+                          <input
+                            type="checkbox"
+                            id="proj-rule-dictionary-val"
+                          />
+                          <span>
+                            <strong
+                              >Validar Aderência ao Dicionário Ubíquo</strong
+                            >
+                            <span
+                              style="
+                                display: block;
+                                font-size: 12px;
+                                color: var(--text-muted);
+                              "
+                            >
+                              Alerta sobre entidades de domínio usadas em specs
+                              que não constam no dicionário do projeto.
+                            </span>
+                          </span>
+                        </label>
+
+                        <label
+                          style="
+                            display: flex;
+                            align-items: center;
+                            gap: 10px;
+                            cursor: pointer;
+                          "
+                        >
+                          <input
+                            type="checkbox"
+                            id="proj-rule-enforce-lifecycle"
+                          />
+                          <span>
+                            <strong>Exigir Sequência Linear de Esteira</strong>
+                            <span
+                              style="
+                                display: block;
+                                font-size: 12px;
+                                color: var(--text-muted);
+                              "
+                            >
+                              Valida que toda etapa possua
+                              <code>previous_stage</code> e
+                              <code>next_stage</code> vinculados.
+                            </span>
+                          </span>
+                        </label>
+                      </div>
+                    </div>
+
+                    <!-- Prompt do Arquiteto Guardião -->
+                    <div class="gov-card">
+                      <div class="gov-card-header">
+                        <div>
+                          <h3 style="margin: 0">
+                            Prompt Mestre do Arquiteto Guardião (AI Persona)
+                          </h3>
+                          <p
+                            style="
+                              font-size: 12px;
+                              color: var(--text-muted);
+                              margin: 2px 0 0 0;
+                            "
+                          >
+                            Personalize o tom de voz e diretrizes estritas que a
+                            IA adotará ao prestar suporte de arquitetura neste
+                            projeto.
+                          </p>
+                        </div>
+                      </div>
+                      <textarea
+                        id="proj-ai-guardian-prompt"
+                        rows="5"
+                        placeholder="Diretrizes do Arquiteto Guardião..."
+                        style="
+                          width: 100%;
+                          font-family: monospace;
+                          font-size: 12.5px;
+                          padding: 10px;
+                          line-height: 1.5;
+                        "
+                      ></textarea>
+
+                      <!-- Step Navigation Footer -->
+                      <div class="project-step-footer">
+                        <button
+                          id="btn-nav-gov-prev"
+                          class="btn btn-secondary"
+                          type="button"
+                        >
+                          <span class="material-symbols-outlined icon-xs"
+                            >arrow_back</span
+                          >
+                          Voltar para Taxonomia
+                        </button>
+                        <button
+                          id="btn-nav-gov-finish"
+                          class="btn btn-primary"
+                          type="button"
+                        >
+                          <span class="material-symbols-outlined icon-xs"
+                            >check_circle</span
+                          >
+                          Salvar & Concluir Setup
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Vertical Resizer: Project Workspace <-> AI Assistant -->
+              <div
+                id="resizer-proj-ai"
+                class="pane-resizer collapsed"
+                title="Arrastar para redimensionar chat de IA"
+              ></div>
+
+              <!-- DOCKED RIGHT WORKBENCH-STYLE AI COPILOT PANE (FULL HEIGHT) -->
+              <aside
+                id="proj-ai-pane"
+                class="workbench-ai-pane collapsed"
+              ></aside>
+            </div>
+          </div>
+
+          <!-- ================================================================= -->
+          <!-- SUB-VIEW 1: WORKBENCH (DOCUMENTOS, DOMÍNIOS & FEATURE WORKBENCH)   -->
+          <!-- ================================================================= -->
+          <div id="subview-editor" class="dash-subview" style="display: none">
+            <div class="workbench-layout">
+              <!-- PANEL 1: DOCUMENT TREE EXPLORER (DOCKABLE / RESIZABLE) -->
+              <aside class="workbench-tree-pane" id="workbench-tree-pane">
+                <div class="tree-pane-header">
+                  <div class="tree-pane-title">
+                    <span>Domínios & Features</span>
+                  </div>
+                  <div class="tree-pane-actions">
+                    <button
+                      id="btn-tree-new-file"
+                      class="btn-icon"
+                      title="Novo Domínio / Feature"
+                    >
+                      +
+                    </button>
+                    <button
+                      id="btn-tree-refresh"
+                      class="btn-icon"
+                      title="Recarregar Árvore"
+                    >
+                      ↻
+                    </button>
+                    <button
+                      id="btn-toggle-tree-pane"
+                      class="btn-icon"
+                      title="Recolher Árvore"
+                    >
+                      ‹
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Quick Search / Filter Input -->
+                <div class="tree-search-box">
+                  <input
+                    type="text"
+                    id="tree-search-input"
+                    placeholder="Filtrar domínios..."
+                    spellcheck="false"
+                  />
+                </div>
+
+                <!-- Inline Document/Folder Creator Panel -->
+                <div
+                  id="tree-create-panel"
+                  class="tree-create-box"
+                  style="display: none"
+                >
+                  <div class="tree-create-header">
+                    <span id="tree-create-title">Criar Novo Item</span>
+                    <button id="btn-cancel-tree-create" class="btn-close-sm">
+                      <span class="material-symbols-outlined icon-xs"
+                        >close</span
+                      >
+                    </button>
+                  </div>
+                  <div class="form-group">
+                    <label for="tree-item-name" style="font-size: 11px"
+                      >Nome:</label
+                    >
+                    <input
+                      type="text"
+                      id="tree-item-name"
+                      placeholder="ex: pagamentos, notificacoes"
+                    />
+                    <span
+                      style="font-size: 10.5px; color: var(--text-muted)"
+                      id="tree-item-path-preview"
+                      >Destino: <code>domains/pagamentos/ideacao.md</code></span
+                    >
+                  </div>
+                  <div class="form-group">
+                    <label for="tree-item-type" style="font-size: 11px"
+                      >Tipo de Item:</label
+                    >
+                    <select
+                      id="tree-item-type"
+                      style="font-size: 12px; padding: 5px 8px"
+                    >
+                      <option value="domain-ideacao" selected>
+                        Domínio: Ideação (T1)
+                      </option>
+                      <option value="domain-kpis">
+                        Domínio: KPIs & Invariantes
+                      </option>
+                      <option value="bdd-specs">Cenário BDD (Gherkin)</option>
+                      <option value="custom-file">
+                        Documento Avulso (.md)
+                      </option>
+                      <option value="folder">Nova Pasta / Domínio</option>
+                    </select>
+                  </div>
+                  <div
+                    style="
+                      display: flex;
+                      justify-content: flex-end;
+                      gap: 6px;
+                      margin-top: 4px;
+                    "
+                  >
+                    <button
+                      id="btn-confirm-cancel-tree"
+                      class="btn btn-ghost btn-sm"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      id="btn-confirm-create-tree"
+                      class="btn btn-primary btn-sm"
+                    >
+                      Criar
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Tree Hierarchy Container -->
+                <div class="tree-scroll-container">
+                  <div id="tree-nodes-container" class="antigravity-tree-root">
+                    <div class="loading-state">Carregando domínios...</div>
+                  </div>
+                </div>
+              </aside>
+
+              <!-- Expander Bar (shown when tree is collapsed) -->
+              <button
+                id="btn-expand-tree-pane"
+                class="btn-expand-sidebar"
+                style="display: none"
+                title="Expandir Árvore"
+              >
+                <span>›</span>
+              </button>
+
+              <!-- Vertical Resizer: Tree <-> Editor -->
+              <div
+                id="resizer-tree"
+                class="pane-resizer"
+                title="Arrastar para redimensionar árvore"
+              ></div>
+
+              <!-- PANEL 2: EDITOR & LIVE PREVIEW CANVAS -->
+              <section class="workbench-editor-pane">
+                <!-- Document Header & Toolbar -->
+                <div class="editor-top-toolbar">
+                  <div class="doc-meta-left">
+                    <div class="doc-breadcrumbs">
+                      <input
+                        type="text"
+                        id="doc-path-input"
+                        class="doc-path-input"
+                        value="index.md"
+                        placeholder="Digite o caminho (ex: domains/...) e dê Enter"
+                        spellcheck="false"
+                        title="Caminho do documento no workspace. Digite um caminho válido e pressione Enter para navegar"
+                      />
+                      <button
+                        id="btn-copy-doc-path"
+                        class="btn-icon-subtle"
+                        title="Copiar caminho do arquivo"
+                      >
+                        <svg
+                          width="12.5"
+                          height="12.5"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        >
+                          <rect
+                            x="9"
+                            y="9"
+                            width="13"
+                            height="13"
+                            rx="2"
+                            ry="2"
+                          ></rect>
+                          <path
+                            d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"
+                          ></path>
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- Editor Actions -->
+                  <div class="editor-actions-right">
+                    <div class="doc-icon-actions">
+                      <button
+                        id="btn-copy-doc-full"
+                        class="btn-icon-action"
+                        type="button"
+                        title="Copiar Markdown completo"
+                      >
+                        <svg
+                          width="14"
+                          height="14"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        >
+                          <rect
+                            x="9"
+                            y="9"
+                            width="13"
+                            height="13"
+                            rx="2"
+                            ry="2"
+                          ></rect>
+                          <path
+                            d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"
+                          ></path>
+                        </svg>
+                      </button>
+                      <button
+                        id="btn-export-md-file"
+                        class="btn-icon-action"
+                        type="button"
+                        title="Exportar arquivo .md"
+                      >
+                        <svg
+                          width="14"
+                          height="14"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        >
+                          <path
+                            d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"
+                          ></path>
+                          <polyline points="7 10 12 15 17 10"></polyline>
+                          <line x1="12" y1="15" x2="12" y2="3"></line>
+                        </svg>
+                      </button>
+                      <button
+                        id="btn-import-doc"
+                        class="btn-icon-action"
+                        type="button"
+                        title="Importar documento (.md ou colar)"
+                      >
+                        <svg
+                          width="14"
+                          height="14"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        >
+                          <path
+                            d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"
+                          ></path>
+                          <polyline points="17 8 12 3 7 8"></polyline>
+                          <line x1="12" y1="3" x2="12" y2="15"></line>
+                        </svg>
+                      </button>
+                    </div>
+                    <div class="toolbar-divider"></div>
+
+                    <!-- Botão Salvar (Ícone Disquete) -->
+                    <button
+                      id="btn-save-draft"
+                      class="btn-icon-action"
+                      type="button"
+                      title="Salvar no workspace (Ctrl+S)"
+                      style="
+                        color: var(--primary, #2563eb);
+                        border-color: #bfdbfe;
+                        background: #eff6ff;
+                      "
+                    >
+                      <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path
+                          d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"
+                        ></path>
+                        <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                        <polyline points="7 3 7 8 15 8"></polyline>
+                      </svg>
+                    </button>
+
+                    <!-- Botão Diffs & PR (Ícone Git PR) -->
+                    <button
+                      id="btn-review-diff-direct"
+                      class="btn-icon-action"
+                      type="button"
+                      title="Revisar alterações e propor PR"
+                    >
+                      <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <circle cx="18" cy="18" r="3"></circle>
+                        <circle cx="6" cy="6" r="3"></circle>
+                        <path d="M13 6h3a2 2 0 0 1 2 2v7"></path>
+                        <line x1="6" y1="9" x2="6" y2="21"></line>
+                      </svg>
+                    </button>
+
+                    <!-- Botão Modo Auditoria / GitLens -->
+                    <button
+                      id="btn-toggle-audit-mode"
+                      class="btn-icon-action"
+                      type="button"
+                      title="Modo Auditoria & GitLens (Ver autor e aprovador de cada seção)"
+                    >
+                      <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path
+                          d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"
+                        ></path>
+                        <circle cx="12" cy="12" r="3"></circle>
+                      </svg>
+                    </button>
+
+                    <!-- Botão IA -->
+                    <button
+                      id="btn-toggle-ai-pane"
+                      class="btn-icon-action"
+                      type="button"
+                      title="Abrir Assistente de IA"
+                      style="display: none"
+                    >
+                      <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path
+                          d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"
+                        ></path>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Active Bidirectional Connectivity & Breadcrumb Bar -->
+                <div class="doc-connectivity-bar" id="doc-connectivity-bar">
+                  <div class="connectivity-left">
+                    <span class="layer-pill" id="conn-layer-pill">L1</span>
+                    <span class="status-pill" id="conn-status-pill"
+                      >ACTIVE</span
+                    >
+                    <div class="breadcrumb-trail" id="conn-breadcrumb-trail">
+                      <span class="trail-item current">Projeto</span>
+                    </div>
+                  </div>
+                  <div class="connectivity-right">
+                    <div
+                      class="conn-item-badge"
+                      id="conn-consumers-badge"
+                      style="display: none"
+                    >
+                      <button
+                        class="conn-pill consumers"
+                        id="btn-toggle-consumers-pop"
+                        title="Outros documentos que dependem desta spec"
+                        style="
+                          display: inline-flex;
+                          align-items: center;
+                          gap: 4px;
+                        "
+                      >
+                        <span class="material-symbols-outlined icon-xs"
+                          >link</span
+                        >
+                        <span id="conn-consumers-count">0</span> Consumidor(es)
+                      </button>
+                      <div
+                        class="conn-dropdown-menu"
+                        id="dropdown-consumers"
+                        style="display: none"
+                      ></div>
+                    </div>
+                    <div
+                      class="conn-item-badge"
+                      id="conn-deps-badge"
+                      style="display: none"
+                    >
+                      <button
+                        class="conn-pill deps"
+                        id="btn-toggle-deps-pop"
+                        title="Contratos consumidos por esta spec"
+                        style="
+                          display: inline-flex;
+                          align-items: center;
+                          gap: 4px;
+                        "
+                      >
+                        <span class="material-symbols-outlined icon-xs"
+                          >arrow_forward</span
+                        >
+                        <span id="conn-deps-count">0</span> Dependência(s)
+                      </button>
+                      <div
+                        class="conn-dropdown-menu"
+                        id="dropdown-deps"
+                        style="display: none"
+                      ></div>
+                    </div>
+                    <div
+                      class="lifecycle-nav-group"
+                      id="conn-lifecycle-group"
+                      style="display: none"
+                    >
+                      <button
+                        class="btn-lifecycle"
+                        id="btn-lifecycle-prev"
+                        title="Etapa anterior"
+                      >
+                        ‹ Anterior
+                      </button>
+                      <button
+                        class="btn-lifecycle"
+                        id="btn-lifecycle-next"
+                        title="Próxima etapa"
+                      >
+                        Próxima ›
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Metadata Inspector / Form Card (Collapsible Structured Form) -->
+                <div class="doc-meta-inspector" id="doc-meta-inspector">
+                  <div class="meta-inspector-header" id="meta-inspector-toggle">
+                    <div class="meta-inspector-left">
+                      <span
+                        class="meta-toggle-icon material-symbols-outlined icon-sm"
+                        >tune</span
+                      >
+                      <strong id="meta-header-title"
+                        >Metadados & Governança</strong
+                      >
+                      <div class="meta-header-summary" id="meta-header-summary">
+                        <span class="pill" id="meta-summary-pill">Spec</span>
+                      </div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px">
+                      <button
+                        id="btn-ai-fill-template"
+                        class="btn btn-primary btn-xs"
+                        type="button"
+                        title="Preencher metadados e template com IA a partir de uma ideia"
+                        style="
+                          font-size: 11.5px;
+                          padding: 4px 10px;
+                          border-radius: 5px;
+                          display: inline-flex;
+                          align-items: center;
+                          gap: 4px;
+                        "
+                      >
+                        <span class="material-symbols-outlined icon-xs"
+                          >auto_awesome</span
+                        >
+                        Ideia com IA
+                      </button>
+                      <button
+                        class="btn-icon-subtle"
+                        id="btn-toggle-meta-form"
+                        type="button"
+                        title="Editar Metadados & Governança"
+                        style="
+                          width: 32px;
+                          height: 32px;
+                          font-size: 16px;
+                          border-radius: 6px;
+                          display: inline-flex;
+                          align-items: center;
+                          justify-content: center;
+                        "
+                      >
+                        <span class="material-symbols-outlined icon-xs"
+                          >edit</span
+                        >
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- Expanded Form Fields -->
+                  <div
+                    class="meta-inspector-form"
+                    id="meta-inspector-form"
+                    style="display: none"
+                  >
+                    <div class="meta-form-grid">
+                      <div class="form-group">
+                        <div
+                          style="
+                            display: flex;
+                            justify-content: space-between;
+                            align-items: center;
+                          "
+                        >
+                          <label for="meta-input-id">ID do Artefato:</label>
+                          <button
+                            id="btn-auto-gen-id"
+                            class="btn-icon-subtle"
+                            type="button"
+                            title="Gerar ID Oficial Único"
+                            style="
+                              font-size: 11px;
+                              padding: 1px 6px;
+                              color: var(--primary, #2563eb);
+                              font-weight: 600;
+                              display: inline-flex;
+                              align-items: center;
+                              gap: 2px;
+                            "
+                          >
+                            <span class="material-symbols-outlined icon-xs"
+                              >bolt</span
+                            >
+                            Auto ID
+                          </button>
+                        </div>
+                        <input
+                          type="text"
+                          id="meta-input-id"
+                          placeholder="ex: l4-billing-pix-checkout"
+                          spellcheck="false"
+                        />
+                      </div>
+                      <div class="form-group">
+                        <label for="meta-input-title"
+                          >Título do Documento:</label
+                        >
+                        <input
+                          type="text"
+                          id="meta-input-title"
+                          placeholder="ex: Modelagem de Entidades PIX"
+                        />
+                      </div>
+                      <div class="form-group">
+                        <label for="meta-input-layer">Layer:</label>
+                        <select id="meta-input-layer">
+                          <option value="L1_PROJECT">
+                            L1 — Projeto & Visão
+                          </option>
+                          <option value="L2_DOMAIN">
+                            L2 — Domínio de Negócio
+                          </option>
+                          <option value="L3_SUBDOMAIN">
+                            L3 — Subdomínio / Área
+                          </option>
+                          <option value="L4_ARTIFACT" selected>
+                            L4 — Artefato / Feature
+                          </option>
+                          <option value="L5_BEHAVIOR">
+                            L5 — Comportamento / BDD
+                          </option>
+                          <option value="L6_OBSERVABILITY">
+                            L6 — Observabilidade & QA
+                          </option>
+                        </select>
+                      </div>
+                      <div class="form-group">
+                        <label for="meta-input-status"
+                          >Status de Governança:</label
+                        >
+                        <select id="meta-input-status">
+                          <option value="draft">DRAFT (Rascunho)</option>
+                          <option value="in_review">
+                            IN_REVIEW (Em Revisão)
+                          </option>
+                          <option value="active">ACTIVE (Ativo)</option>
+                          <option value="approved">APPROVED (Aprovado)</option>
+                          <option value="deprecated">
+                            DEPRECATED (Obsoleto)
+                          </option>
+                        </select>
+                      </div>
+                      <div class="form-group">
+                        <label for="meta-input-type">Tipo de Artefato:</label>
+                        <input
+                          type="text"
+                          id="meta-input-type"
+                          placeholder="ex: entity, flow, specs, kpis, ideacao"
+                        />
+                      </div>
+                      <div class="form-group">
+                        <label for="meta-input-version">Versão:</label>
+                        <input
+                          type="text"
+                          id="meta-input-version"
+                          placeholder="1.0.0"
+                        />
+                      </div>
+                    </div>
+
+                    <!-- Graph & Connections Row -->
+                    <div class="meta-form-connections">
+                      <div class="meta-section-title">
+                        Conexões do Grafo & Esteira (Lifecycle)
+                      </div>
+                      <div class="meta-connections-grid">
+                        <div class="form-group">
+                          <label for="meta-input-parent"
+                            >Documento Pai (Parent):</label
+                          >
+                          <input
+                            type="text"
+                            id="meta-input-parent"
+                            placeholder="ex: domains/billing/pix/flow.md"
+                            spellcheck="false"
+                            list="project-files-datalist"
+                          />
+                        </div>
+                        <div class="form-group">
+                          <label for="meta-input-prev-stage"
+                            >Etapa Anterior (Previous Stage):</label
+                          >
+                          <input
+                            type="text"
+                            id="meta-input-prev-stage"
+                            placeholder="ex: domains/billing/pix/flow.md"
+                            spellcheck="false"
+                            list="project-files-datalist"
+                          />
+                        </div>
+                        <div class="form-group">
+                          <label for="meta-input-next-stage"
+                            >Próxima Etapa (Next Stage):</label
+                          >
+                          <input
+                            type="text"
+                            id="meta-input-next-stage"
+                            placeholder="ex: domains/billing/pix/specs.md"
+                            spellcheck="false"
+                            list="project-files-datalist"
+                          />
+                        </div>
+                        <div class="form-group">
+                          <label for="meta-input-feedback"
+                            >Feedback Loop:</label
+                          >
+                          <input
+                            type="text"
+                            id="meta-input-feedback"
+                            placeholder="ex: domains/billing/pix/flow.md"
+                            spellcheck="false"
+                            list="project-files-datalist"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <datalist id="project-files-datalist"></datalist>
+
+                <!-- Notion-like Canvas Body (Single Unified Canvas) -->
+                <div class="notion-editor-wrapper" id="notion-editor-wrapper">
+                  <div class="notion-editor-scroll-container">
+                    <div id="notion-editor-canvas" class="notion-canvas"></div>
+                  </div>
+                </div>
+
+                <!-- Editor Status Footer -->
+                <footer class="editor-bottom-bar">
+                  <div class="editor-status-left">
+                    <span id="save-draft-status" class="status-indicator"
+                      >Pronto</span
+                    >
+                    <span class="status-divider">&bull;</span>
+                    <span id="doc-word-count">0 palavras</span>
+                    <span class="status-divider">&bull;</span>
+                    <span id="doc-line-count">0 linhas</span>
+                  </div>
+                  <div class="editor-status-right">
+                    <span style="font-size: 11px; color: var(--text-dim)"
+                      >Atalho: <code>Ctrl+S</code> / <code>Cmd+S</code></span
+                    >
+                    <button
+                      id="btn-reload-doc"
+                      class="btn-icon-subtle"
+                      title="Recarregar do disco"
+                    >
+                      <span class="material-symbols-outlined icon-xs"
+                        >refresh</span
+                      >
+                    </button>
+                  </div>
+                </footer>
+              </section>
+
+              <!-- Vertical Resizer: Editor <-> AI Assistant -->
+              <div
+                id="resizer-ai"
+                class="pane-resizer"
+                title="Arrastar para redimensionar chat de IA"
+              ></div>
+
+              <!-- PANEL 3: AGENTIC AI PAIR ASSISTANT (COLLAPSIBLE DRAWER) -->
+              <aside id="workbench-ai-pane" class="workbench-ai-pane"></aside>
+            </div>
+          </div>
+
+          <!-- ================================================================= -->
+          <!-- SUB-VIEW: GRAFO  & CONEXÕES BIDIRECIONAIS                 -->
+          <!-- ================================================================= -->
+          <div id="subview-graph" class="dash-subview" style="display: none">
+            <div class="graph-view-wrapper">
+              <div class="graph-header">
+                <div class="graph-header-info">
+                  <h2>Grafo & Conexões Cross-Cutting</h2>
+                  <p class="subtitle">
+                    Visualização topológica da Árvore L1-L4, contratos de
+                    dependência e análise de Blast Radius.
+                  </p>
+                </div>
+                <div class="graph-header-actions">
+                  <button
+                    id="btn-refresh-graph"
+                    class="btn btn-secondary btn-sm"
+                  >
+                    ↻ Atualizar Grafo
+                  </button>
+                </div>
+              </div>
+
+              <!-- Stats Bar -->
+              <div id="graph-stats-container" class="graph-stats-bar">
+                <div class="loading-state">Carregando métricas...</div>
+              </div>
+
+              <!-- Blast Radius Interactive Simulator -->
+              <div class="graph-blast-simulator-card">
+                <div class="simulator-header">
+                  <span class="sim-title"
+                    >Simulador de Impacto (Blast Radius)</span
+                  >
+                  <span class="sim-desc"
+                    >Descubra quais features sofrem impacto caso um contrato ou
+                    documento seja alterado</span
+                  >
+                </div>
+                <div class="simulator-controls">
+                  <select id="blast-radius-select" class="form-select"></select>
+                </div>
+                <div id="blast-radius-result" class="simulator-result"></div>
+              </div>
+
+              <!-- Split View: Interactive Visual Graph + Filterable Nodes List -->
+              <div class="graph-content-layout">
+                <!-- Left: Mermaid Diagram Canvas -->
+                <div class="graph-canvas-box">
+                  <div class="graph-canvas-header">
+                    <span>Topologia da Árvore & Relações</span>
+                  </div>
+                  <div id="graph-mermaid-box" class="graph-mermaid-canvas">
+                    <div class="loading-state">Calculando grafo...</div>
+                  </div>
+                </div>
+
+                <!-- Right: Filterable Nodes Grid -->
+                <div class="graph-nodes-sidebar">
+                  <div class="graph-filter-bar">
+                    <button class="graph-filter-btn active" data-filter="all">
+                      Todos
+                    </button>
+                    <button class="graph-filter-btn" data-filter="L1">
+                      L1
+                    </button>
+                    <button class="graph-filter-btn" data-filter="L2">
+                      L2
+                    </button>
+                    <button class="graph-filter-btn" data-filter="L3">
+                      L3
+                    </button>
+                    <button class="graph-filter-btn" data-filter="L4">
+                      L4
+                    </button>
+                    <button class="graph-filter-btn" data-filter="cross">
+                      Cross-Cutting
+                    </button>
+                  </div>
+                  <div id="graph-nodes-list" class="graph-nodes-scroll-list">
+                    <div class="loading-state">Carregando lista de nós...</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ================================================================= -->
+          <!-- SUB-VIEW: AUDITORIA DE QUALIDADE, SEGURANÇA & FEEDBACK LOOPS      -->
+          <!-- ================================================================= -->
+          <div id="subview-audit" class="dash-subview" style="display: none">
+            <div class="audit-view-wrapper">
+              <div class="audit-header">
+                <div>
+                  <h2>Auditoria Contínua & Qualidade Arquitetural</h2>
+                  <p class="subtitle">
+                    Monitoramento de conformidade com DDD, integridade de
+                    contratos, testes BDD e segurança SAST.
+                  </p>
+                </div>
+                <div class="audit-header-actions">
+                  <button
+                    id="btn-refresh-audit"
+                    class="btn btn-secondary btn-sm"
+                  >
+                    ↻ Executar Auditoria
+                  </button>
+                </div>
+              </div>
+
+              <!-- Health Score & Checks Overview -->
+              <div class="audit-score-card">
+                <div class="score-main-box">
+                  <div class="score-circle">
+                    <span id="audit-score-number" class="score-number"
+                      >100%</span
+                    >
+                    <span class="score-caption">Conformidade</span>
+                  </div>
+                  <div class="score-details">
+                    <div class="score-title-row">
+                      <span
+                        id="audit-score-grade"
+                        class="audit-grade grade-A_plus"
+                        >Grade A+</span
+                      >
+                      <span id="audit-total-docs" class="score-doc-count"
+                        >0 documentos</span
+                      >
+                    </div>
+                    <p class="score-desc">
+                      Avaliação automática de integridade arquitetural, Clean
+                      Code, contratos de dados e segurança.
+                    </p>
+                  </div>
+                </div>
+
+                <!-- Checks Breakdown Progress Bars -->
+                <div class="checks-grid">
+                  <div class="check-item">
+                    <div class="check-label-row">
+                      <span>Metadados & Frontmatter</span>
+                      <strong id="audit-val-frontmatter">100%</strong>
+                    </div>
+                    <div class="progress-bar-track">
+                      <div
+                        id="audit-bar-frontmatter"
+                        class="progress-bar-fill"
+                        style="width: 100%"
+                      ></div>
+                    </div>
+                  </div>
+
+                  <div class="check-item">
+                    <div class="check-label-row">
+                      <span>Integridade de Contratos & Links</span>
+                      <strong id="audit-val-links">100%</strong>
+                    </div>
+                    <div class="progress-bar-track">
+                      <div
+                        id="audit-bar-links"
+                        class="progress-bar-fill"
+                        style="width: 100%"
+                      ></div>
+                    </div>
+                  </div>
+
+                  <div class="check-item">
+                    <div class="check-label-row">
+                      <span>Segurança SAST & Segredos</span>
+                      <strong id="audit-val-security">100%</strong>
+                    </div>
+                    <div class="progress-bar-track">
+                      <div
+                        id="audit-bar-security"
+                        class="progress-bar-fill"
+                        style="width: 100%"
+                      ></div>
+                    </div>
+                  </div>
+
+                  <div class="check-item">
+                    <div class="check-label-row">
+                      <span>Conformidade BDD (Gherkin)</span>
+                      <strong id="audit-val-bdd">100%</strong>
+                    </div>
+                    <div class="progress-bar-track">
+                      <div
+                        id="audit-bar-bdd"
+                        class="progress-bar-fill"
+                        style="width: 100%"
+                      ></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Two-Column Layout: Issues / Inconformidades + Feedback Loops Monitor -->
+              <div class="audit-content-layout">
+                <!-- Left: Inconformidades & Recomendações -->
+                <div class="audit-issues-panel">
+                  <div class="audit-panel-header">
+                    <span>Diagnóstico & Inconformidades Detectadas</span>
+                    <div class="audit-filter-chips">
+                      <button class="audit-filter-btn active" data-filter="all">
+                        Todos
+                      </button>
+                      <button class="audit-filter-btn" data-filter="danger">
+                        Críticos
+                      </button>
+                      <button class="audit-filter-btn" data-filter="warning">
+                        Avisos
+                      </button>
+                      <button class="audit-filter-btn" data-filter="info">
+                        Recomendações
+                      </button>
+                    </div>
+                  </div>
+                  <div id="audit-issues-list" class="audit-issues-scroll">
+                    <div class="loading-state">Executando auditoria...</div>
+                  </div>
+                </div>
+
+                <!-- Right: Feedback Loops Ativos -->
+                <div class="audit-loops-panel">
+                  <div class="audit-panel-header">
+                    <span>Feedback Loops do SDLC</span>
+                  </div>
+                  <div id="audit-loops-list" class="audit-loops-scroll">
+                    <div class="loading-state">Carregando loops...</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ================================================================= -->
+          <!-- SUB-VIEW: DICIONÁRIO UBÍQUO & VOCABULÁRIO OFICIAL                 -->
+          <!-- ================================================================= -->
+          <div
+            id="subview-dictionary"
+            class="dash-subview"
+            style="display: none"
+          >
+            <div class="templates-view-wrapper">
+              <div class="template-store-header">
+                <div class="templates-header" style="margin-bottom: 0">
+                  <div>
+                    <h2>Dicionário Ubíquo & Vocabulário Oficial</h2>
+                    <p class="subtitle">
+                      Termos operacionais obrigatórios, definições de negócio e
+                      codenames persistidos em
+                      <code>project/dictionary.json</code>.
+                    </p>
+                  </div>
+                  <div style="display: flex; gap: 8px">
+                    <button
+                      id="btn-copy-dict-json"
+                      class="btn btn-secondary btn-sm"
+                      title="Copiar estrutura JSON completa"
+                    >
+                      <span class="material-symbols-outlined icon-xs"
+                        >content_copy</span
+                      >
+                      Copiar JSON
+                    </button>
+                    <button
+                      id="btn-open-new-term"
+                      class="btn btn-primary btn-sm"
+                      title="Cadastrar novo termo no vocabulário"
+                    >
+                      <span class="material-symbols-outlined icon-xs">add</span>
+                      Novo Termo
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Filter Bar & Search -->
+                <div
+                  style="
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    flex-wrap: wrap;
+                    gap: 10px;
+                    margin-top: 14px;
+                  "
+                >
+                  <div class="store-filter-bar" id="dict-domain-filters">
+                    <button class="store-filter-chip active" data-domain="all">
+                      Todos
+                    </button>
+                  </div>
+
+                  <div style="display: flex; align-items: center; gap: 10px">
+                    <span
+                      id="count-dict-terms"
+                      style="font-size: 12px; color: #64748b; font-weight: 600"
+                      >0 termos</span
+                    >
+                    <div class="store-search-box">
+                      <input
+                        type="text"
+                        id="dict-search-input"
+                        placeholder="Buscar termos, sinônimos ou definições..."
+                        spellcheck="false"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Dictionary Table List -->
+              <div class="dict-table-container">
+                <table class="dict-table" id="dict-table">
+                  <thead>
+                    <tr>
+                      <th style="width: 20%">Termo / Conceito</th>
+                      <th style="width: 18%">Code Name</th>
+                      <th style="width: 15%">Domínios</th>
+                      <th style="width: 33%">Definição Inequívoca</th>
+                      <th style="width: 14%; text-align: right">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody id="dict-terms-tbody">
+                    <tr>
+                      <td
+                        colspan="5"
+                        class="loading-state"
+                        style="text-align: center; padding: 24px"
+                      >
+                        Carregando termos...
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- ================================================================= -->
+          <!-- SUB-VIEW 1.5: ENGENHARIA & PADRÕES TÉCNICOS (ADRs & CONTRATOS)    -->
+          <!-- ================================================================= -->
+          <div
+            id="subview-engineering"
+            class="dash-subview"
+            style="display: none"
+          >
+            <div class="templates-view-wrapper">
+              <div class="template-store-header">
+                <div class="templates-header" style="margin-bottom: 0">
+                  <div>
+                    <h2>Engenharia & Padrões Arquiteturais</h2>
+                    <p class="subtitle">
+                      Architecture Decision Records (ADRs), padrões de
+                      integração, convenções de mensageria e contratos técnicos
+                      da pasta <code>engenharia/</code>.
+                    </p>
+                  </div>
+                  <div style="display: flex; gap: 8px">
+                    <button
+                      id="btn-new-engineering-pattern"
+                      class="btn btn-secondary btn-sm"
+                    >
+                      <span class="material-symbols-outlined icon-xs">add</span>
+                      Novo Padrão de Engenharia
+                    </button>
+                    <button
+                      id="btn-ai-engineering-pattern"
+                      class="btn btn-primary btn-sm"
+                    >
+                      <span class="material-symbols-outlined icon-xs"
+                        >auto_awesome</span
+                      >
+                      Gerar ADR com IA
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Filter Bar & Search -->
+                <div
+                  style="
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    flex-wrap: wrap;
+                    gap: 10px;
+                    margin-top: 14px;
+                  "
+                >
+                  <div
+                    class="store-filter-bar"
+                    id="engineering-category-filters"
+                  >
+                    <button
+                      class="store-filter-chip active"
+                      data-category="all"
+                    >
+                      Todos
+                    </button>
+                    <button class="store-filter-chip" data-category="ADR">
+                      ADRs
+                    </button>
+                    <button
+                      class="store-filter-chip"
+                      data-category="Event-Driven"
+                    >
+                      Event-Driven & Mensageria
+                    </button>
+                    <button class="store-filter-chip" data-category="APIs">
+                      APIs & Contratos
+                    </button>
+                    <button class="store-filter-chip" data-category="Infra">
+                      Infra & Observabilidade
+                    </button>
+                  </div>
+
+                  <div class="store-search-box">
+                    <input
+                      type="text"
+                      id="engineering-search-input"
+                      placeholder="Buscar padrões ou ADRs..."
+                      spellcheck="false"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <!-- Engineering Grid -->
+              <div
+                class="templates-grid"
+                id="engineering-grid-container"
+                style="margin-top: 20px"
+              >
+                <div class="loading-state">
+                  Carregando padrões de engenharia...
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ================================================================= -->
+          <!-- SUB-VIEW: WIKI DE CONHECIMENTO & DECISÕES IA (KARPATHY PATTERN)   -->
+          <!-- ================================================================= -->
+          <div
+            id="subview-wiki"
+            class="dash-subview"
+            style="display: none; height: 100%; width: 100%;"
+          ></div>
+
+          <!-- ================================================================= -->
+          <!-- SUB-VIEW 2: TEMPLATE STORE & CATÁLOGO DE TEMPLATES                -->
+          <!-- ================================================================= -->
+          <div
+            id="subview-templates"
+            class="dash-subview"
+            style="display: none"
+          >
+            <div class="templates-view-wrapper">
+              <div class="template-store-header">
+                <div class="templates-header" style="margin-bottom: 0">
+                  <div>
+                    <h2>Template Store & Catálogo</h2>
+                    <p class="subtitle">
+                      Descubra packs arquiteturais da comunidade e instale
+                      templates padrão diretamente no seu projeto.
+                    </p>
+                  </div>
+                  <div style="display: flex; gap: 8px">
+                    <button
+                      id="btn-open-new-template"
+                      class="btn btn-secondary btn-sm"
+                    >
+                      <span class="material-symbols-outlined icon-xs">add</span>
+                      Criar Template
+                    </button>
+                    <button
+                      id="btn-open-tpl-ai-direct"
+                      class="btn btn-primary btn-sm"
+                    >
+                      <span class="material-symbols-outlined icon-xs"
+                        >auto_awesome</span
+                      >
+                      Gerar com IA
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Store Tabs -->
+                <div class="template-store-tabs" role="tablist">
+                  <button
+                    class="store-tab-btn active"
+                    id="tab-store-all"
+                    data-tab="store"
+                    role="tab"
+                    aria-selected="true"
+                  >
+                    Catálogo & Comunidade
+                  </button>
+                  <button
+                    class="store-tab-btn"
+                    id="tab-store-project"
+                    data-tab="project"
+                    role="tab"
+                    aria-selected="false"
+                  >
+                    Instalados no Projeto (<span id="count-installed-tpls"
+                      >0</span
+                    >)
+                  </button>
+                </div>
+
+                <!-- Filter Bar & Search -->
+                <div
+                  style="
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    flex-wrap: wrap;
+                    gap: 10px;
+                  "
+                >
+                  <div class="store-filter-bar" id="store-category-filters">
+                    <button
+                      class="store-filter-chip active"
+                      data-category="all"
+                    >
+                      Todos
+                    </button>
+                    <button
+                      class="store-filter-chip"
+                      data-category="Domain-Driven Design"
+                    >
+                      DDD & Domínio
+                    </button>
+                    <button class="store-filter-chip" data-category="BDD">
+                      BDD & Specs
+                    </button>
+                    <button class="store-filter-chip" data-category="FinTech">
+                      FinTech & PIX
+                    </button>
+                    <button
+                      class="store-filter-chip"
+                      data-category="Event-Driven"
+                    >
+                      Event-Driven / Kafka
+                    </button>
+                    <button class="store-filter-chip" data-category="Qualidade">
+                      QA & Testes
+                    </button>
+                    <button class="store-filter-chip" data-category="AI Agents">
+                      IA & Agentes
+                    </button>
+                  </div>
+                  <div style="min-width: 220px; flex: 1; max-width: 320px">
+                    <input
+                      type="text"
+                      id="store-search-input"
+                      placeholder="Buscar template ou pack..."
+                      style="
+                        font-size: 12px;
+                        padding: 5px 10px;
+                        width: 100%;
+                        border: 1px solid var(--border);
+                        border-radius: 16px;
+                      "
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <!-- Grid de Templates -->
+              <div id="templates-grid-container" class="templates-cards-grid">
+                <div class="loading-state">
+                  Carregando templates da Store...
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ================================================================= -->
+          <!-- SUB-VIEW 3: GOVERNANÇA & REVIEWERS                                -->
+          <!-- ================================================================= -->
+          <div
+            id="subview-governance"
+            class="dash-subview"
+            style="display: none"
+          >
+            <div class="gov-view-wrapper">
+              <div>
+                <h2>Regras de Governança & Equipe de Aprovação</h2>
+                <p class="subtitle">
+                  Gerencie quem tem autoridade para aprovar PRs e o mínimo de
+                  revisores necessários.
+                </p>
+              </div>
+
+              <!-- Settings Card -->
+              <div class="gov-card">
+                <div class="gov-card-header">
+                  <h3>Regras de Proteção de Branch</h3>
+                </div>
+
+                <div class="form-row">
+                  <div class="form-group flex-2">
+                    <label for="gov-min-approvals-select"
+                      >Mínimo de aprovações para merge na
+                      <code>main</code>:</label
+                    >
+                    <select id="gov-min-approvals-select">
+                      <option value="1">
+                        1 Aprovação (Modelo Ágil 1-of-N)
+                      </option>
+                      <option value="2">2 Aprovações (Dual Review)</option>
+                      <option value="3">
+                        3 Aprovações (Comitê de Arquitetura)
+                      </option>
+                    </select>
+                  </div>
+                  <div
+                    class="form-group flex-1"
+                    style="justify-content: flex-end"
+                  >
+                    <button
+                      id="btn-save-gov-settings"
+                      class="btn btn-primary btn-sm"
+                    >
+                      Salvar Regra
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Reviewers Table Card -->
+              <div class="gov-card">
+                <div class="gov-card-header">
+                  <h3>Time de Reviewers Elegíveis (1-of-N Pool)</h3>
+                  <button
+                    id="btn-open-add-reviewer"
+                    class="btn btn-secondary btn-sm"
+                  >
+                    Adicionar Revisor
+                  </button>
+                </div>
+
+                <!-- Add Reviewer Inline Panel -->
+                <div
+                  id="add-reviewer-panel"
+                  class="card"
+                  style="
+                    display: none;
+                    background: var(--bg-subtle);
+                    gap: 12px;
+                    margin-bottom: 12px;
+                  "
+                >
+                  <h4>Novo Revisor</h4>
+                  <div class="form-row" style="margin-bottom: 8px">
+                    <div class="form-group flex-1">
+                      <label for="new-rev-select-member"
+                        >Preencher a partir dos Membros do Projeto (GitHub /
+                        Git):</label
+                      >
+                      <select id="new-rev-select-member">
+                        <option value="">
+                          -- Selecione um membro identificado no projeto --
+                        </option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="form-row">
+                    <div class="form-group flex-1">
+                      <label for="new-rev-name">Nome:</label>
+                      <input
+                        type="text"
+                        id="new-rev-name"
+                        placeholder="Ex: Ana Silva"
+                      />
+                    </div>
+                    <div class="form-group flex-1">
+                      <label for="new-rev-handle">GitHub Handle:</label>
+                      <input
+                        type="text"
+                        id="new-rev-handle"
+                        placeholder="Ex: @ana-lead"
+                      />
+                    </div>
+                  </div>
+                  <div class="form-row">
+                    <div class="form-group flex-1">
+                      <label for="new-rev-role">Papel:</label>
+                      <select id="new-rev-role">
+                        <option value="Tech Lead">Tech Lead</option>
+                        <option value="Product Owner">Product Owner</option>
+                        <option value="Staff Engineer">Staff Engineer</option>
+                      </select>
+                    </div>
+                    <div class="form-group flex-1">
+                      <label for="new-rev-tier">Tier de Governança:</label>
+                      <select id="new-rev-tier">
+                        <option value="Tier 0 (Global)">
+                          Tier 0 (Global / Core)
+                        </option>
+                        <option value="Tier 1 (Domínios)">
+                          Tier 1 (Domínios)
+                        </option>
+                        <option value="Tier 2 (Squads)">Tier 2 (Squads)</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div
+                    style="display: flex; justify-content: flex-end; gap: 8px"
+                  >
+                    <button
+                      id="btn-cancel-add-reviewer"
+                      class="btn btn-ghost btn-sm"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      id="btn-confirm-add-reviewer"
+                      class="btn btn-primary btn-sm"
+                    >
+                      Adicionar Revisor
+                    </button>
+                  </div>
+                </div>
+
+                <div class="table-container">
+                  <table class="reviewers-table">
+                    <thead>
+                      <tr>
+                        <th>Nome</th>
+                        <th>GitHub Handle</th>
+                        <th>Papel</th>
+                        <th>Tier</th>
+                        <th>Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody id="reviewers-table-body">
+                      <tr>
+                        <td colspan="5" style="text-align: center">
+                          Carregando revisores...
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ================================================================= -->
+          <!-- SUB-VIEW 4: PULL REQUESTS FULL VIEW                               -->
+          <!-- ================================================================= -->
+          <div id="subview-prs" class="dash-subview" style="display: none">
+            <div class="prs-view-wrapper">
+              <div class="template-store-header">
+                <div class="templates-header" style="margin-bottom: 0">
+                  <div>
+                    <h2>Central de Pull Requests & Visão Histórica</h2>
+                    <p class="subtitle">
+                      Audite o ciclo de vida completo de propostas, aprovações
+                      de reviewers e histórico de merges na branch
+                      <code>main</code>.
+                    </p>
+                  </div>
+                  <button
+                    id="btn-refresh-prs"
+                    class="btn btn-secondary btn-sm"
+                    title="Recarregar PRs do repositório"
+                  >
+                    Atualizar
+                  </button>
+                </div>
+
+                <!-- Filter Bar & Search -->
+                <div
+                  style="
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    flex-wrap: wrap;
+                    gap: 10px;
+                    margin-top: 14px;
+                  "
+                >
+                  <div class="store-filter-bar" id="prs-status-filters">
+                    <button class="store-filter-chip active" data-status="all">
+                      Todos (<span id="count-prs-all">0</span>)
+                    </button>
+                    <button class="store-filter-chip" data-status="open">
+                      Abertos (<span id="count-prs-open">0</span>)
+                    </button>
+                    <button class="store-filter-chip" data-status="merged">
+                      Merged / Histórico (<span id="count-prs-merged">0</span>)
+                    </button>
+                    <button class="store-filter-chip" data-status="closed">
+                      Fechados (<span id="count-prs-closed">0</span>)
+                    </button>
+                  </div>
+
+                  <div class="store-search-box">
+                    <input
+                      type="text"
+                      id="prs-search-input"
+                      placeholder="Buscar por título, autor, branch ou #ID..."
+                      spellcheck="false"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div
+                id="prs-full-list"
+                class="prs-full-grid"
+                style="margin-top: 16px"
+              >
+                <div class="loading-state">Carregando PRs...</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ================================================================= -->
+          <!-- SUB-VIEW 5: CONFIGURAÇÕES SISTÊMICAS & SEÇÕES                     -->
+          <!-- ================================================================= -->
+          <div id="subview-settings" class="dash-subview" style="display: none">
+            <div class="settings-view-wrapper">
+              <div style="margin-bottom: 24px">
+                <h2>Configurações & Governança</h2>
+                <p class="subtitle">
+                  Gerencie o motor de Inteligência Artificial, prompts mestre,
+                  regras de governança e credenciais da conta.
+                </p>
+              </div>
+
+              <!-- SEÇÃO 1: MOTOR DE INTELIGÊNCIA ARTIFICIAL (IA) -->
+              <div class="gov-card" style="margin-bottom: 24px">
+                <div class="gov-card-header">
+                  <div style="display: flex; align-items: center; gap: 8px">
+                    <span
+                      class="material-symbols-outlined icon-lg"
+                      style="color: var(--md-sys-color-primary)"
+                      >smart_toy</span
+                    >
+                    <div>
+                      <h3 style="margin: 0; font-size: 15px">
+                        Provedor de Inteligência Artificial & Modelos
+                      </h3>
+                      <p
+                        style="
+                          font-size: 12px;
+                          color: var(--text-muted);
+                          margin: 2px 0 0 0;
+                        "
+                      >
+                        Escolha o provedor de LLM utilizado pelo assistente em
+                        tempo real e geradores.
+                      </p>
+                    </div>
+                  </div>
+                  <span class="pill-dot success" id="settings-ai-status-pill"
+                    ><span class="dot"></span> Ativo</span
+                  >
+                </div>
+
+                <!-- Provider Selection Cards Grid -->
+                <div
+                  class="provider-cards-grid"
+                  style="
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+                    gap: 12px;
+                    margin: 16px 0;
+                  "
+                >
+                  <div
+                    class="provider-card-option selected"
+                    data-provider="gemini"
+                    style="
+                      padding: 12px;
+                      border: 1.5px solid var(--border-color);
+                      border-radius: 8px;
+                      cursor: pointer;
+                      background: var(--bg-surface);
+                    "
+                  >
+                    <div
+                      style="
+                        display: flex;
+                        align-items: center;
+                        justify-content: space-between;
+                      "
+                    >
+                      <strong>Google Gemini</strong>
+                      <input
+                        type="radio"
+                        name="settings-ai-provider"
+                        value="gemini"
+                        checked
+                      />
+                    </div>
+                    <span
+                      style="
+                        font-size: 11px;
+                        color: var(--text-muted);
+                        display: block;
+                        margin-top: 4px;
+                      "
+                      >Flash 3.5 & Pro</span
+                    >
+                  </div>
+
+                  <div
+                    class="provider-card-option"
+                    data-provider="openai"
+                    style="
+                      padding: 12px;
+                      border: 1.5px solid var(--border-color);
+                      border-radius: 8px;
+                      cursor: pointer;
+                      background: var(--bg-surface);
+                    "
+                  >
+                    <div
+                      style="
+                        display: flex;
+                        align-items: center;
+                        justify-content: space-between;
+                      "
+                    >
+                      <strong>OpenAI</strong>
+                      <input
+                        type="radio"
+                        name="settings-ai-provider"
+                        value="openai"
+                      />
+                    </div>
+                    <span
+                      style="
+                        font-size: 11px;
+                        color: var(--text-muted);
+                        display: block;
+                        margin-top: 4px;
+                      "
+                      >GPT-4o & o3-mini</span
+                    >
+                  </div>
+
+                  <div
+                    class="provider-card-option"
+                    data-provider="anthropic"
+                    style="
+                      padding: 12px;
+                      border: 1.5px solid var(--border-color);
+                      border-radius: 8px;
+                      cursor: pointer;
+                      background: var(--bg-surface);
+                    "
+                  >
+                    <div
+                      style="
+                        display: flex;
+                        align-items: center;
+                        justify-content: space-between;
+                      "
+                    >
+                      <strong>Anthropic</strong>
+                      <input
+                        type="radio"
+                        name="settings-ai-provider"
+                        value="anthropic"
+                      />
+                    </div>
+                    <span
+                      style="
+                        font-size: 11px;
+                        color: var(--text-muted);
+                        display: block;
+                        margin-top: 4px;
+                      "
+                      >Claude 3.5 Sonnet</span
+                    >
+                  </div>
+
+                  <div
+                    class="provider-card-option"
+                    data-provider="deepseek"
+                    style="
+                      padding: 12px;
+                      border: 1.5px solid var(--border-color);
+                      border-radius: 8px;
+                      cursor: pointer;
+                      background: var(--bg-surface);
+                    "
+                  >
+                    <div
+                      style="
+                        display: flex;
+                        align-items: center;
+                        justify-content: space-between;
+                      "
+                    >
+                      <strong>DeepSeek</strong>
+                      <input
+                        type="radio"
+                        name="settings-ai-provider"
+                        value="deepseek"
+                      />
+                    </div>
+                    <span
+                      style="
+                        font-size: 11px;
+                        color: var(--text-muted);
+                        display: block;
+                        margin-top: 4px;
+                      "
+                      >V3 & R1 Reasoner</span
+                    >
+                  </div>
+
+                  <div
+                    class="provider-card-option"
+                    data-provider="local"
+                    style="
+                      padding: 12px;
+                      border: 1.5px solid var(--border-color);
+                      border-radius: 8px;
+                      cursor: pointer;
+                      background: var(--bg-surface);
+                    "
+                  >
+                    <div
+                      style="
+                        display: flex;
+                        align-items: center;
+                        justify-content: space-between;
+                      "
+                    >
+                      <strong>Ollama Local</strong>
+                      <input
+                        type="radio"
+                        name="settings-ai-provider"
+                        value="local"
+                      />
+                    </div>
+                    <span
+                      style="
+                        font-size: 11px;
+                        color: var(--text-muted);
+                        display: block;
+                        margin-top: 4px;
+                      "
+                      >Offline / Localhost</span
+                    >
+                  </div>
+                </div>
+
+                <!-- Model & API Key Inputs -->
+                <div
+                  style="
+                    display: grid;
+                    grid-template-columns: 1fr 1fr;
+                    gap: 14px;
+                    margin-top: 10px;
+                  "
+                >
+                  <div class="form-group">
+                    <label for="settings-ai-model-input"
+                      >Modelo Selecionado:</label
+                    >
+                    <input
+                      type="text"
+                      id="settings-ai-model-input"
+                      value="gemini-3.5-flash"
+                    />
+                    <span
+                      id="settings-ai-model-hint"
+                      style="
+                        font-size: 11px;
+                        color: var(--text-muted);
+                        margin-top: 3px;
+                      "
+                      >Modelos recomendados: gemini-3.5-flash,
+                      gemini-3-flash-preview</span
+                    >
+                  </div>
+
+                  <div class="form-group" id="settings-ai-key-group">
+                    <label for="settings-ai-key-input"
+                      >Chave de API (API Key):</label
+                    >
+                    <input
+                      type="password"
+                      id="settings-ai-key-input"
+                      placeholder="Cole sua chave aqui..."
+                    />
+                    <span
+                      id="settings-ai-key-hint"
+                      style="
+                        font-size: 11px;
+                        color: var(--text-muted);
+                        margin-top: 3px;
+                      "
+                    ></span>
+                  </div>
+                </div>
+
+                <!-- Custom Endpoint (Ollama / Local LLM) -->
+                <div
+                  class="form-group"
+                  id="settings-ai-endpoint-group"
+                  style="display: none; margin-top: 10px"
+                >
+                  <label for="settings-ai-endpoint-input"
+                    >Endpoint Local (Ollama / vLLM):</label
+                  >
+                  <input
+                    type="text"
+                    id="settings-ai-endpoint-input"
+                    value="http://localhost:11434/v1"
+                  />
+                  <span style="font-size: 11px; color: var(--text-muted)"
+                    >Compatível com endpoints no padrão OpenAI (Ollama, LM
+                    Studio, LocalAI).</span
+                  >
+                </div>
+
+                <div
+                  style="
+                    display: flex;
+                    justify-content: flex-end;
+                    margin-top: 14px;
+                  "
+                >
+                  <button
+                    id="btn-save-ai-settings-direct"
+                    class="btn btn-primary btn-sm"
+                  >
+                    Salvar Motor de IA
+                  </button>
+                </div>
+              </div>
+
+              <!-- SEÇÃO 2: PROMPTS MESTRE & GOVERNANÇA DA IA -->
+              <div class="gov-card" style="margin-bottom: 24px">
+                <div class="gov-card-header">
+                  <div style="display: flex; align-items: center; gap: 8px">
+                    <div>
+                      <h3 style="margin: 0; font-size: 15px">
+                        Prompts Mestre do Sistema
+                      </h3>
+                      <p
+                        style="
+                          font-size: 12px;
+                          color: var(--text-muted);
+                          margin: 2px 0 0 0;
+                        "
+                      >
+                        Defina as diretrizes oficiais injetadas nos assistentes
+                        e geradores.
+                      </p>
+                    </div>
+                  </div>
+                  <span class="pill-dot info"
+                    ><span class="dot"></span> System Prompts</span
+                  >
+                </div>
+
+                <div class="form-group" style="margin-top: 14px">
+                  <label for="sys-global-system-prompt"
+                    ><strong
+                      >Prompt Global do Antigravity Agent (Chat no
+                      Workspace):</strong
+                    ></label
+                  >
+                  <p
+                    style="
+                      font-size: 11.5px;
+                      color: var(--text-muted);
+                      margin: 2px 0 6px 0;
+                    "
+                  >
+                    Instrução base injetada em todas as conversas do Agentic
+                    Chat.
+                  </p>
+                  <textarea
+                    id="sys-global-system-prompt"
+                    rows="5"
+                    style="font-family: var(--font-mono); font-size: 12px"
+                  ></textarea>
+                </div>
+
+                <div class="form-group" style="margin-top: 14px">
+                  <label for="sys-template-creator-prompt"
+                    ><strong>Prompt do Criador de Templates s:</strong></label
+                  >
+                  <p
+                    style="
+                      font-size: 11.5px;
+                      color: var(--text-muted);
+                      margin: 2px 0 6px 0;
+                    "
+                  >
+                    Meta-prompt que orienta a IA na geração de novos templates
+                    estruturados.
+                  </p>
+                  <textarea
+                    id="sys-template-creator-prompt"
+                    rows="4"
+                    style="font-family: var(--font-mono); font-size: 12px"
+                  ></textarea>
+                </div>
+              </div>
+
+              <!-- SEÇÃO 3: REGRAS DE GOVERNANÇA & GIT -->
+              <div class="gov-card" style="margin-bottom: 24px">
+                <div class="gov-card-header">
+                  <div style="display: flex; align-items: center; gap: 8px">
+                    <div>
+                      <h3 style="margin: 0; font-size: 15px">
+                        Governança de Pull Requests & Git
+                      </h3>
+                      <p
+                        style="
+                          font-size: 12px;
+                          color: var(--text-muted);
+                          margin: 2px 0 0 0;
+                        "
+                      >
+                        Fluxo de aprovação e acúmulo de alterações no workspace.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="form-group-checkbox" style="margin-top: 14px">
+                  <label>
+                    <input type="checkbox" id="sys-auto-pr-check" />
+                    <span
+                      ><strong>Modo Ágil:</strong> Permitir edição contínua no
+                      workspace acumulando alterações em 1 único PR
+                      unificado</span
+                    >
+                  </label>
+                </div>
+              </div>
+
+              <!-- SEÇÃO 4: CONTA GITHUB & CONEXÃO -->
+              <div class="gov-card">
+                <div class="gov-card-header">
+                  <div style="display: flex; align-items: center; gap: 8px">
+                    <div>
+                      <h3 style="margin: 0; font-size: 15px">
+                        Conexão GitHub & Sessão
+                      </h3>
+                      <p
+                        style="
+                          font-size: 12px;
+                          color: var(--text-muted);
+                          margin: 2px 0 0 0;
+                        "
+                      >
+                        Credenciais e conta vinculada ao framework.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div
+                  style="
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    margin-top: 14px;
+                    padding: 12px;
+                    background: var(--bg-surface);
+                    border-radius: 8px;
+                    border: 1px solid var(--border-color);
+                  "
+                >
+                  <div style="display: flex; align-items: center; gap: 12px">
+                    <img
+                      id="settings-user-avatar"
+                      src=""
+                      alt="Avatar"
+                      style="
+                        width: 38px;
+                        height: 38px;
+                        border-radius: 50%;
+                        display: none;
+                      "
+                    />
+                    <div>
+                      <strong
+                        id="settings-user-name"
+                        style="
+                          font-size: 13.5px;
+                          color: var(--text-normal);
+                          display: block;
+                        "
+                        >Usuário Autenticado</strong
+                      >
+                      <span
+                        id="settings-user-login"
+                        style="font-size: 11.5px; color: var(--text-muted)"
+                        >@github</span
+                      >
+                    </div>
+                  </div>
+                  <button
+                    id="btn-settings-logout"
+                    class="btn btn-secondary btn-sm"
+                    style="color: #ef4444"
+                  >
+                    Desconectar Conta
+                  </button>
+                </div>
+
+                <div
+                  style="
+                    display: flex;
+                    justify-content: flex-end;
+                    margin-top: 18px;
+                  "
+                >
+                  <button id="btn-save-system-settings" class="btn btn-primary">
+                    Salvar Todas as Configurações
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ================================================================= -->
+          <!-- SUB-VIEW 6: TUTORIAIS & GUIA DE ARQUITETURA (DDD, SDD, BDD, TDD)  -->
+          <!-- ================================================================= -->
+          <div
+            id="subview-tutorials"
+            class="dash-subview"
+            style="display: none"
+          >
+            <div class="tutorials-workbench-layout">
+              <!-- Left Sidebar: Tutorials Index -->
+              <aside class="tutorials-sidebar-pane">
+                <div class="tutorials-sidebar-header">
+                  <div class="tutorials-title-wrap">
+                    <span class="tutorials-main-title">Guia & Tutoriais</span>
+                    <span
+                      class="tutorials-badge-count"
+                      id="tutorials-total-count"
+                      >6 tópicos</span
+                    >
+                  </div>
+                  <p class="tutorials-subtitle">
+                    DDD, SDD, BDD, TDD e Governança Oficial.
+                  </p>
+                  <div
+                    class="tree-search-box"
+                    style="
+                      padding: 6px 0 0 0;
+                      background: transparent;
+                      border: none;
+                    "
+                  >
+                    <input
+                      type="text"
+                      id="tutorials-search-input"
+                      placeholder="Filtrar tópicos..."
+                      spellcheck="false"
+                    />
+                  </div>
+                </div>
+                <div
+                  class="tutorials-list-scroll"
+                  id="tutorials-list-container"
+                >
+                  <div class="loading-state">Carregando tutoriais...</div>
+                </div>
+              </aside>
+
+              <!-- Right Reader Pane: Markdown + Mermaid Viewer -->
+              <main class="tutorials-reader-pane">
+                <div class="tutorials-reader-header">
+                  <div class="tutorials-breadcrumbs">
+                    <span>Tutoriais</span>
+                    <span>›</span>
+                    <span id="tutorial-current-category">Fundamentos</span>
+                    <span>›</span>
+                    <strong id="tutorial-current-title"
+                      >Guia de Navegação</strong
+                    >
+                  </div>
+                  <div class="tutorials-header-actions">
+                    <span id="tutorial-read-time" class="pill-dot info"
+                      ><span class="dot"></span> 3 min</span
+                    >
+                    <button
+                      id="btn-tutorial-open-editor"
+                      class="btn btn-secondary btn-sm"
+                      title="Praticar / Abrir modelo no Editor"
+                    >
+                      Praticar no Editor
+                    </button>
+                  </div>
+                </div>
+
+                <div class="tutorials-reader-body">
+                  <article id="tutorial-markdown-content" class="markdown-body">
+                    <!-- Rendered Markdown + Mermaid -->
+                  </article>
+
+                  <!-- Bottom Navigation (Previous / Next Topic) -->
+                  <div class="tutorials-footer-nav">
+                    <button
+                      id="btn-prev-tutorial"
+                      class="btn btn-secondary btn-sm"
+                      style="display: none"
+                    >
+                      ‹ Tópico Anterior
+                    </button>
+                    <button
+                      id="btn-next-tutorial"
+                      class="btn btn-primary btn-sm"
+                      style="margin-left: auto"
+                    >
+                      Próximo Tópico ›
+                    </button>
+                  </div>
+                </div>
+              </main>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+
+    <!-- Modal: Criador / Editor de Padrão de Engenharia -->
+    <div id="engineering-modal" class="modal-overlay" style="display: none">
+      <div class="modal-dialog modal-lg">
+        <div class="modal-header">
+          <h3 id="eng-modal-title">Novo Padrão de Engenharia / ADR</h3>
+          <button
+            id="btn-close-eng-modal"
+            class="modal-close"
+            aria-label="Fechar"
+          >
+            <span class="material-symbols-outlined icon-sm">close</span>
+          </button>
+        </div>
+
+        <div
+          class="modal-body"
+          style="display: flex; flex-direction: column; gap: 14px"
+        >
+          <!-- AI Fast Assistant Idea Box -->
+          <div
+            class="tpl-ai-assistant-card"
+            style="
+              background: rgba(139, 92, 246, 0.08);
+              border: 1px solid rgba(139, 92, 246, 0.25);
+              border-radius: 8px;
+              padding: 12px;
+            "
+          >
+            <label
+              style="
+                font-weight: 600;
+                color: var(--accent);
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                font-size: 12.5px;
+              "
+            >
+              Gerar ADR / Padrão Técnico com IA
+            </label>
+            <div style="display: flex; gap: 8px; margin-top: 6px">
+              <input
+                type="text"
+                id="eng-ai-prompt-input"
+                placeholder="Ex: Decisão de usar Transactional Outbox com Debezium e Kafka para evitar dual-write..."
+                style="flex: 1"
+              />
+              <button id="btn-eng-generate-ai" class="btn btn-primary btn-sm">
+                Gerar com IA
+              </button>
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px">
+            <div class="form-group">
+              <label for="eng-title-input">Título do Padrão / Decisão:</label>
+              <input
+                type="text"
+                id="eng-title-input"
+                placeholder="Ex: ADR 001: Transactional Outbox com Kafka"
+              />
+            </div>
+            <div class="form-group">
+              <label for="eng-category-select">Categoria Técnica:</label>
+              <select id="eng-category-select">
+                <option value="ADR" selected>
+                  Architecture Decision Record (ADR)
+                </option>
+                <option value="Event-Driven & Mensageria">
+                  Event-Driven & Mensageria
+                </option>
+                <option value="APIs & Contratos">APIs & Contratos</option>
+                <option value="Infra & Observabilidade">
+                  Infra & Observabilidade
+                </option>
+                <option value="Padrão de Engenharia">
+                  Padrão de Engenharia Geral
+                </option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="eng-filename-input"
+              >Nome do Arquivo (em <code>engenharia/</code>):</label
+            >
+            <input
+              type="text"
+              id="eng-filename-input"
+              placeholder="Ex: adr-001-outbox-kafka.md"
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="eng-content-input"
+              >Conteúdo do Documento (Markdown & Metadados):</label
+            >
+            <textarea
+              id="eng-content-input"
+              rows="12"
+              style="font-family: monospace; font-size: 12.5px"
+            ></textarea>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button id="btn-cancel-eng-modal" class="btn btn-ghost">
+            Cancelar
+          </button>
+          <button id="btn-save-eng-modal" class="btn btn-primary">
+            Salvar Padrão
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- MODAL: ONBOARDING INTERATIVO & GUIA RÁPIDO DO SOFTWARE (STEP-BY-STEP)     -->
+    <!-- ========================================================================= -->
+    <div id="onboarding-modal" class="modal-backdrop" style="display: none">
+      <div
+        class="modal-box onboarding-modal-box"
+        style="
+          max-width: 640px;
+          border-radius: 14px;
+          box-shadow: 0 24px 48px rgba(0, 0, 0, 0.22);
+          overflow: hidden;
+        "
+      >
+        <div
+          class="modal-header"
+          style="
+            border-bottom: 1px solid var(--border-color);
+            padding: 18px 24px;
+          "
+        >
+          <div style="display: flex; align-items: center; gap: 10px">
+            <div>
+              <h3
+                style="
+                  margin: 0;
+                  font-size: 16.5px;
+                  font-weight: 700;
+                  color: var(--text-normal);
+                "
+              >
+                Tour do Context OS
+              </h3>
+              <span
+                class="subtitle"
+                id="onboarding-step-counter"
+                style="font-size: 11.5px; color: var(--text-muted)"
+                >Etapa 1 de 5</span
+              >
+            </div>
+          </div>
+          <button
+            id="btn-close-onboarding"
+            class="btn-close"
+            aria-label="Fechar"
+          >
+            <span class="material-symbols-outlined icon-sm">close</span>
+          </button>
+        </div>
+
+        <div class="modal-body" style="padding: 22px 24px 16px 24px">
+          <div id="onboarding-slides-container">
+            <!-- Slide Content dynamically rendered by onboarding-modal.js -->
+          </div>
+        </div>
+
+        <div
+          class="modal-footer"
+          style="
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-top: 1px solid var(--border-color);
+            padding: 16px 24px 18px 24px;
+            background: var(--bg-surface, #fff);
+          "
+        >
+          <div
+            id="onboarding-dots-container"
+            style="display: flex; align-items: center; gap: 6px"
+          >
+            <!-- Dots dynamically rendered -->
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 10px">
+            <button
+              id="btn-skip-onboarding"
+              class="btn btn-ghost btn-sm"
+              style="color: var(--text-muted)"
+            >
+              Pular Tour
+            </button>
+            <button
+              id="btn-prev-onboarding"
+              class="btn btn-secondary btn-sm"
+              style="display: none"
+            >
+              ‹ Anterior
+            </button>
+            <button id="btn-next-onboarding" class="btn btn-primary btn-sm">
+              Próximo ›
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- MODAL: IMPORTAR DOCUMENTO (UPLOAD OU COLAR MARKDOWN)                      -->
+    <!-- ========================================================================= -->
+    <div id="import-doc-modal" class="modal-backdrop" style="display: none">
+      <div class="modal-box" style="max-width: 580px">
+        <div class="modal-header">
+          <div>
+            <h3
+              style="
+                margin: 0;
+                font-size: 15px;
+                font-weight: 600;
+                color: #0f172a;
+              "
+            >
+              Importar Documento
+            </h3>
+            <span style="font-size: 11.5px; color: #64748b">
+              Upload de arquivo .md ou colar texto
+            </span>
+          </div>
+          <button
+            id="btn-close-import-modal"
+            class="btn-close"
+            aria-label="Fechar"
+          >
+            <span class="material-symbols-outlined icon-sm">close</span>
+          </button>
+        </div>
+        <div class="modal-body" style="padding: 18px 22px; gap: 14px">
+          <div class="import-dropzone" id="import-dropzone">
+            <svg
+              width="26"
+              height="26"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#64748b"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="17 8 12 3 7 8"></polyline>
+              <line x1="12" y1="3" x2="12" y2="15"></line>
+            </svg>
+            <div
+              style="
+                margin-top: 8px;
+                font-size: 13px;
+                font-weight: 500;
+                color: #334155;
+              "
+            >
+              Arraste um arquivo
+              <code
+                style="
+                  font-size: 11.5px;
+                  background: #f1f5f9;
+                  padding: 2px 5px;
+                  border-radius: 4px;
+                "
+                >.md</code
+              >
+              aqui ou
+              <span
+                style="
+                  color: var(--primary, #2563eb);
+                  text-decoration: underline;
+                  cursor: pointer;
+                "
+                id="btn-trigger-file-input"
+                >clique para selecionar</span
+              >
+            </div>
+            <input
+              type="file"
+              id="import-file-input"
+              accept=".md,.markdown,.txt"
+              style="display: none"
+            />
+          </div>
+
+          <div
+            style="
+              display: flex;
+              align-items: center;
+              gap: 10px;
+              color: #94a3b8;
+              font-size: 11px;
+              font-weight: 600;
+            "
+          >
+            <div style="flex: 1; height: 1px; background: #e2e8f0"></div>
+            <span>OU COLE O CONTEÚDO MARKDOWN</span>
+            <div style="flex: 1; height: 1px; background: #e2e8f0"></div>
+          </div>
+
+          <textarea
+            id="import-paste-textarea"
+            class="import-paste-textarea"
+            placeholder="Cole aqui o conteúdo Markdown com ou sem metadados YAML..."
+            spellcheck="false"
+          ></textarea>
+        </div>
+        <div class="modal-footer" style="padding: 12px 22px">
+          <button
+            id="btn-cancel-import"
+            class="btn btn-ghost btn-sm"
+            type="button"
+          >
+            Cancelar
+          </button>
+          <button
+            id="btn-confirm-import"
+            class="btn btn-primary btn-sm"
+            type="button"
+          >
+            Importar para o Editor
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- MODAL: CADASTRAR / EDITAR TERMO DO DICIONÁRIO UBÍQUO                      -->
+    <!-- ========================================================================= -->
+    <div id="dict-term-modal" class="modal-backdrop" style="display: none">
+      <div class="modal-box" style="max-width: 580px">
+        <div class="modal-header">
+          <div>
+            <h3
+              id="dict-modal-title"
+              style="
+                margin: 0;
+                font-size: 15px;
+                font-weight: 600;
+                color: #0f172a;
+              "
+            >
+              Termo do Dicionário Ubíquo
+            </h3>
+            <span style="font-size: 11.5px; color: #64748b">
+              Defina o significado inequívoco e associe aos domínios
+            </span>
+          </div>
+          <button
+            id="btn-close-dict-modal"
+            class="btn-close"
+            aria-label="Fechar"
+          >
+            <span class="material-symbols-outlined icon-sm">close</span>
+          </button>
+        </div>
+        <div class="modal-body" style="padding: 18px 22px; gap: 14px">
+          <input type="hidden" id="dict-input-id" />
+
+          <div class="form-group">
+            <label for="dict-input-term">Nome do Termo / Conceito (*):</label>
+            <input
+              type="text"
+              id="dict-input-term"
+              placeholder="ex: Chave de Idempotência ou Bounded Context"
+              spellcheck="false"
+              required
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="dict-input-codename"
+              >Code Name (Identificador no Código - sem espaços/especiais)
+              (*):</label
+            >
+            <input
+              type="text"
+              id="dict-input-codename"
+              placeholder="ex: IDEMPOTENCY_KEY ou PIX_PAYMENT"
+              spellcheck="false"
+              required
+            />
+            <span style="font-size: 11px; color: #64748b; margin-top: 2px"
+              >Nome oficial usado em código-fonte, entidades e APIs (apenas
+              letras, números e underline).</span
+            >
+          </div>
+
+          <div class="form-group">
+            <label for="dict-input-aliases"
+              >Sinônimos / Aliases (separados por vírgula):</label
+            >
+            <input
+              type="text"
+              id="dict-input-aliases"
+              placeholder="ex: Idempotency Key, Chave Única"
+              spellcheck="false"
+            />
+          </div>
+
+          <div class="form-group">
+            <label>Domínios Pertencentes (Selecione um ou mais):</label>
+            <div
+              id="dict-domains-selector"
+              class="dict-domains-chips-grid"
+            ></div>
+            <span style="font-size: 11px; color: #64748b; margin-top: 4px"
+              >Domínios sincronizados dinamicamente a partir do seu
+              projeto.</span
+            >
+          </div>
+
+          <div class="form-group">
+            <label for="dict-input-definition"
+              >Definição / Significado Inequívoco (*):</label
+            >
+            <textarea
+              id="dict-input-definition"
+              class="import-paste-textarea"
+              style="height: 110px"
+              placeholder="Descreva o significado exato no contexto da arquitetura e negócio..."
+              spellcheck="false"
+              required
+            ></textarea>
+          </div>
+
+          <div class="form-group">
+            <label for="dict-input-status">Status do Termo:</label>
+            <select id="dict-input-status">
+              <option value="approved" selected>Aprovado (Oficial)</option>
+              <option value="in_review">Em Revisão</option>
+              <option value="draft">Rascunho</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer" style="padding: 12px 22px">
+          <button
+            id="btn-cancel-dict-modal"
+            class="btn btn-ghost btn-sm"
+            type="button"
+          >
+            Cancelar
+          </button>
+          <button
+            id="btn-save-dict-modal"
+            class="btn btn-primary btn-sm"
+            type="button"
+          >
+            Salvar Termo
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- MODAL: PREENCHIMENTO INTELIGENTE COM IA A PARTIR DE UMA IDEIA             -->
+    <!-- ========================================================================= -->
+    <div id="ai-idea-fill-modal" class="modal-backdrop" style="display: none">
+      <div class="modal-box" style="max-width: 540px">
+        <div class="modal-header">
+          <div>
+            <h3
+              style="
+                margin: 0;
+                font-size: 15px;
+                font-weight: 600;
+                color: #0f172a;
+              "
+            >
+              Preencher Especificação com IA
+            </h3>
+            <span style="font-size: 11.5px; color: #64748b">
+              Descreva sua ideia ou requisito para gerar o header e o template
+            </span>
+          </div>
+          <button
+            id="btn-close-ai-idea-modal"
+            class="btn-close"
+            aria-label="Fechar"
+          >
+            <span class="material-symbols-outlined icon-sm">close</span>
+          </button>
+        </div>
+        <div class="modal-body" style="padding: 18px 22px; gap: 14px">
+          <div class="form-group">
+            <label for="ai-idea-input-text"
+              >Ideia / Requisito do Documento (*):</label
+            >
+            <textarea
+              id="ai-idea-input-text"
+              class="import-paste-textarea"
+              style="height: 120px"
+              placeholder="ex: Quero criar a especificação da feature de conciliação bancária PIX em tempo real com garantia de idempotência para o domínio financeiro..."
+              spellcheck="false"
+            ></textarea>
+          </div>
+          <div class="form-group">
+            <label for="ai-idea-layer-select">Camada Pretendida:</label>
+            <select id="ai-idea-layer-select">
+              <option value="auto">Auto-detectar Camada Ideal</option>
+              <option value="L1_PROJECT">L1 — Projeto & Visão</option>
+              <option value="L2_DOMAIN">L2 — Domínio de Negócio</option>
+              <option value="L3_SUBDOMAIN">L3 — Subdomínio / Área</option>
+              <option value="L4_ARTIFACT" selected>
+                L4 — Artefato / Feature
+              </option>
+              <option value="L5_BEHAVIOR">L5 — Comportamento / BDD</option>
+              <option value="L6_OBSERVABILITY">
+                L6 — Observabilidade & QA
+              </option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer" style="padding: 12px 22px">
+          <button
+            id="btn-cancel-ai-idea-modal"
+            class="btn btn-ghost btn-sm"
+            type="button"
+          >
+            Cancelar
+          </button>
+          <button
+            id="btn-submit-ai-idea"
+            class="btn btn-primary btn-sm"
+            type="button"
+            style="display: inline-flex; align-items: center; gap: 4px"
+          >
+            <span class="material-symbols-outlined icon-xs">auto_awesome</span>
+            Gerar Especificação
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modular Scripts -->
+    <script type="module" src="js/app.js"></script>
+  </body>
+</html>

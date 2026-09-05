@@ -1,0 +1,59 @@
+Qual é o principal objetivo desse boilplate, desse framework, que tem como função organizar toda a documentação dos Do software, 
+porque o que eu vejo é sempre difícil definir isso, os projetos começam com funções básicas, and existe alguma ideia na cabeça do 
+idealizador, mas fica a pergunta se a pessoa, se o time, se a empresa não consegue descrever, organizar em texto as funcionalidades, 
+intenções da aplicação. Como é possível que software avance? Porque ainda mais com adventar inteligência artificial, esses documentos 
+valem como contexto, eles são vitais como contexto para guiar os agentes, as inteligências, de acordo no caminho correto do software. 
+Então, fica essa pergunta: não que precisamos saber todos os detalhes, mas a cada etapa, a cada decisão, cada nova entidade, cada nova 
+funcionalidade, cada nova regra de negócio, tem que considerar o que já existe, tem que ser possível ser descrita, e essa estrutura
+ deve ser organizada. Mesmo que existam campos genéricos no início, nada muito rígido, descritivos grandes, coisa que já é pouco complexa, 
+ mas isso deve existir porque sem isso o projeto a cada novo passo ele ganha uma complexidade enorme e fica. De forma quase logaritma, 
+ o crescimento exponencial, o crescimento da complexidade, porque à medida que cada etapa avança que o software ganha, de uma forma ou outra, 
+ há de se verificar se aquela nova funcionalidade, regra, seja, está de acordo, conversa com as outras areas do software. Como humanos,
+  nós também temos contextos limitados. Por isso, já existe alguma coisa criada como o domain drive design, o DDD, 
+  e junto com ele em várias outras vertentes, e que consegue trazer a divisão necessária para que as janelas de contexto não sejam tão grandes 
+  e se percam. Quanto maior a janela de contexto, mais variáveis devem ser levadas em consideração, e mais difícil fica, 
+  mais complexa fica as alterações. For this motivo, é muito mais interessante termos regras bem definidas de como a documentação funciona 
+  e descendo camada a camada com uma mistura entre humano e a gente, para poder avaliar trabalho do outro. O agente mais na parte de gerar 
+  e consumir, e o humano na parte de validar e alterar essas informações. Isso tudo tem que ser orquestrado de forma organizada e bem definida,
+   para que possa ser reutilizado, para que os domínios sejam bem definidos e não somente com a transformação, com a descrição textual, 
+   mas também, se possível, camada a camada, feature a feature, domínio a domínio, com uma pequena informação gráfica, que é dinâmica, 
+   ou seja, dentro da proposta do framework, dessa estruturação de documentação, o próprio agente indexa isso, que já é natural, 
+   dos softwares, dos editores de texto, consegue fazer perguntas semânticas, consegue seguir as regras já definidas, regras de arquitetura, 
+   regras de ferramental, regras de teste, regras de validación, de implementación. And seguir isso, ou seja, 
+   já contexto pré-elaborado que não fica solto,, faça essa feature, faça essa feature. E é exercício interessante para que não haja o retrabalho.
+   É muito mais interessante termos início, uma validação extensiva, conexão e visualização da documentação dos domínios, dicionário bico, 
+   para que os nomes façam sentido dentro dos domínios, andes que atravessam domínios também, para que o software seja gerado. Dito isso,
+    eu sei que existem dois universos: o universo da governança, o universo depois da implementação. Vamos colocar a qualidade também como 
+    sendo governante. E são parâmetros diferentes. Quem está governando não precisa saber como vai ser implementado. 
+    Quem implementa não precisa decidir as coisas, só precisa fazer aquilo acontecer, que a governança decidiu. 
+    Nesse momento, eu sugiro dois TRs aqui. A gente traz agora o Prowner, o gestor do domínio, para dentro do editor de código, 
+    que ele já tem uma estrutura perfeita para isso, são dois repositórios, o repositório de governance e o repositório de implementação. 
+    Então, a partir do momento em que o time de governança cria este repositório, ele faz PR e nós temos uma nova versão para que 
+    o time de engenharia baixe esse repositório e anexe ele dentro do repositório de código, porque a partir daí o agente, os agentes,
+     todo esse flow já tem todo o conteúdo, já tem todo o contexto para direcionar as features. E fica depois a cargo de detalhes de engenharia.
+      Não obstante, a comunicação pode voltar. Fez PR, o time de engenharia avaliou, tentou implementar a PT. mas para que isso, 
+      que o objetivo final seja atingido dessa decisão governamental, é interessante que falta essa informação, que tem essa informação, 
+      que faltou essa validação, e isso volta para a esteira de continuous development, Coontinuus Integrations faz part. 
+      This I think for not misturar, for that the time of governance fifty apart, that's detalhes technical, because sinceramente is complex. 
+      E o time de engenharia também não fique. Não obstante, existe a possibilidade, depende da confiança da empresa, 
+      de que isso fique junto num repositório só. Cada sabe a sua responsabilidade e não vai mexer no que nem se deve. 
+      E isso é bom porque também na hora de criar, já pode haver o inverso. Ou seja, o time de engenharia fez PR, injeta ele lá, 
+      para o time de governança analisar e fazer. É trabalho junto. Pode ficar no mesmo repositório, acho que não é problema. 
+      Vai saber quem tá mexendo o que essas atualizações. Novo PR, vamos lá, foi merdeado. Tem nova feature, porque é sempre uma conexão ampla,
+       né? O software é uma coisa viva, organism complete, a coisa separada. But there is a necessity of definitions, regras been defined,
+        contrats that atravess on domain, contrats domínio, features that just foram avaliadas, componentes utilizados por features,
+         objetos de valores utilizado por outras features, outras áreas que podem ser utilizados ou não. Se não for utilizado, 
+         ele deve receber nome diferente, deve ser justificado. Então, por que a gente não utiliza já esse componente? 
+         E ter tudo isso no repositório para os agentes, quando estivermos auxiliando, criar os documentos, a gente avaliar e tal, é excelente. 
+         Eu acho que a gente começa a ter realmente uma utilização válida, isso dentro de uma esteira bem definida em que há testes automatizados,
+          entra o BDD pra que a mente das specs or IBET-driven developments, que é uma mistura dos dois, estudar se são eventos, se são ações, 
+          se são comportamentos. Depois a gente passa por uma esteira de TDD para criar as especificações. Andas especificações, 
+          o agente vai começar a criar o código, que é o produto final. Empresas de software fazem tradicionais para gerar software no fim das contas.
+           Código, binário lá, que se conecta com a rede, que faz avaliações, serviços terceiros e no fim entregam a solução do problema
+            de infinitas formas, que eu acho que é aí que é o grande problema e a grande potencialidade da área é ter milhões e milhões de jeitos,
+             infinita gente fazendo a mesma coisa. E tá procurando isso. Então, essa é a intenção do software, do framework, 
+             and a partir daí é começar a modelar todas essas necessidades Padronizations, what falta, thoughts coming to estruturados, 
+             as pastas e a partir daí conseguir ter algo sustentável, reutilizável, e que sirva para N projetos, eu acho que é essa a ideia. 
+             Só criam-se as regras, estruturas necessárias, façam-se as perguntas necessárias, cria-se os espaços necessários que devem ser 
+             preenchidos de forma dinâmica, de forma específica em cada projeto. Tu desligou, meu, vai tomar no cu. Em cada projeto. 
+             Pronto. Então é isso.
