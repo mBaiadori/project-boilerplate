@@ -2,6 +2,7 @@ import unittest
 import os
 import shutil
 import json
+import copy
 import server
 
 class TestProjectConfigEngine(unittest.TestCase):
@@ -24,16 +25,28 @@ class TestProjectConfigEngine(unittest.TestCase):
     def test_default_project_config_retrieval(self):
         res = server.get_project_config(self.test_repo)
         self.assertIn("config", res)
+        self.assertIn("suggested_layers", res)
+        self.assertEqual(len(res["suggested_layers"]), 6)
+        self.assertEqual(res["suggested_layers"][0]["key"], "L0_FOUNDATION")
+        self.assertEqual(res["suggested_layers"][0]["layer_number"], 0)
+        self.assertIn("Visão Global", res["suggested_layers"][0]["name"])
+        
+        self.assertIn("suggested_importance_levels", res)
+        self.assertIn("Crítica / Raiz", res["suggested_importance_levels"])
+        self.assertIn("Operacional", res["suggested_importance_levels"])
+        
         cfg = res["config"]
         self.assertEqual(cfg["project"]["name"], "Test Project Config Repo")
-        self.assertEqual(len(cfg["layers"]), 6)
+        self.assertEqual(len(cfg["layers"]), 0)
         self.assertIn("canvas_5w2h", cfg)
-        self.assertIn("tags", cfg)
 
     def test_save_custom_project_config(self):
-        custom_cfg = server.get_project_config(self.test_repo)["config"]
+        res = server.get_project_config(self.test_repo)
+        custom_cfg = res["config"]
+        suggested = res["suggested_layers"]
         custom_cfg["project"]["name"] = "Fintech Alpha"
-        custom_cfg["tags"].append("custom-tag-123")
+        custom_cfg["layers"] = [copy.deepcopy(suggested[0])]
+        custom_cfg["layers"][0]["rules"] = "Regra de ouro: conformidade total com LGPD e auditoria contínua."
         custom_cfg["canvas_5w2h"]["what"] = "Motor de Crédito Especializado"
 
         save_res = server.save_project_config(self.test_repo, custom_cfg)
@@ -42,7 +55,8 @@ class TestProjectConfigEngine(unittest.TestCase):
         # Reload and check
         reloaded = server.get_project_config(self.test_repo)
         self.assertEqual(reloaded["config"]["project"]["name"], "Fintech Alpha")
-        self.assertIn("custom-tag-123", reloaded["config"]["tags"])
+        self.assertEqual(len(reloaded["config"]["layers"]), 1)
+        self.assertEqual(reloaded["config"]["layers"][0]["rules"], "Regra de ouro: conformidade total com LGPD e auditoria contínua.")
         self.assertEqual(reloaded["config"]["canvas_5w2h"]["what"], "Motor de Crédito Especializado")
 
     def test_reset_project_config(self):
@@ -185,6 +199,108 @@ class TestProjectConfigEngine(unittest.TestCase):
         self.assertIsNotNone(full_sdlc)
         self.assertGreaterEqual(len(full_sdlc.get("templates", [])), 10)
 
+    def test_save_project_config_syncs_domain_folders(self):
+        custom_domains = [
+            {
+                "id": "billing-custom",
+                "name": "Billing & Pagamentos",
+                "description": "Gestão financeira e faturamento.",
+                "responsibles": ["@marcos", "@andre"]
+            },
+            {
+                "id": "logistica-custom",
+                "name": "Logística e Frotas",
+                "description": "Gestão de entregas e rotas.",
+                "responsibles": ["@operacoes"]
+            }
+        ]
+        payload = {
+            "project": {"name": "Test Project", "tagline": "Sync Test"},
+            "organization_domains": custom_domains,
+            "layers": server.DEFAULT_PROJECT_CONFIG["layers"]
+        }
+        res = server.save_project_config(self.test_repo, payload)
+        self.assertTrue(res.get("success"))
+
+        # Verify physical directories and index.md files created in domains/
+        billing_idx = os.path.join(self.repo_dir, "domains", "billing-custom", "index.md")
+        logistica_idx = os.path.join(self.repo_dir, "domains", "logistica-custom", "index.md")
+
+        self.assertTrue(os.path.exists(billing_idx))
+        self.assertTrue(os.path.exists(logistica_idx))
+
+        with open(billing_idx, "r", encoding="utf-8") as f:
+            content = f.read()
+            self.assertIn("Billing & Pagamentos", content)
+            self.assertIn("@marcos", content)
+            self.assertIn("L2_DOMAIN", content)
+
+    def test_sync_domain_and_subdomain_folders(self):
+        domain_with_subs = [
+            {
+                "id": "financeiro",
+                "name": "Financeiro",
+                "description": "Domínio Financeiro Central",
+                "responsibles": ["@cfo"],
+                "subdomains": [
+                    {
+                        "id": "faturamento",
+                        "name": "Faturamento & NFe",
+                        "description": "Emissão de notas fiscais e impostos.",
+                        "responsibles": ["@fiscal"]
+                    },
+                    {
+                        "id": "contas-a-pagar",
+                        "name": "Contas a Pagar",
+                        "description": "Gestão de obrigações e pagamentos.",
+                        "responsibles": ["@tesouraria"]
+                    }
+                ]
+            }
+        ]
+        server.sync_domains_to_repo_folders(self.test_repo, domain_with_subs)
+
+        dom_index = os.path.join(self.repo_dir, "domains", "financeiro", "index.md")
+        sub1_index = os.path.join(self.repo_dir, "domains", "financeiro", "faturamento", "index.md")
+        sub2_index = os.path.join(self.repo_dir, "domains", "financeiro", "contas-a-pagar", "index.md")
+
+        self.assertTrue(os.path.exists(dom_index))
+        self.assertTrue(os.path.exists(sub1_index))
+        self.assertTrue(os.path.exists(sub2_index))
+
+        with open(sub1_index, "r", encoding="utf-8") as f:
+            content = f.read()
+            self.assertIn("Faturamento & NFe", content)
+            self.assertIn("L2_SUBDOMAIN", content)
+            self.assertIn("domains/financeiro/index.md", content)
+            self.assertIn("@fiscal", content)
+
+        with open(sub2_index, "r", encoding="utf-8") as f:
+            content = f.read()
+            self.assertIn("Contas a Pagar", content)
+            self.assertIn("L2_SUBDOMAIN", content)
+            self.assertIn("@tesouraria", content)
+
+    def test_subdomain_collision_prevention(self):
+        # Two subdomains with the same ID / name inside the same domain
+        domain_with_duplicate_subs = [
+            {
+                "id": "marketing",
+                "name": "Marketing",
+                "description": "Domínio de Marketing",
+                "subdomains": [
+                    { "id": "growth", "name": "Growth", "description": "Growth team 1" },
+                    { "id": "growth", "name": "Growth Secundário", "description": "Growth team 2" }
+                ]
+            }
+        ]
+        server.sync_domains_to_repo_folders(self.test_repo, domain_with_duplicate_subs)
+        sub1 = os.path.join(self.repo_dir, "domains", "marketing", "growth", "index.md")
+        sub2 = os.path.join(self.repo_dir, "domains", "marketing", "growth-2", "index.md")
+        self.assertTrue(os.path.exists(sub1))
+        self.assertTrue(os.path.exists(sub2))
+
 if __name__ == "__main__":
     unittest.main()
+
 

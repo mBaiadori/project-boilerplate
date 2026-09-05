@@ -532,6 +532,8 @@ def get_project_config(repo_name):
     """
     master_cfg = load_projects_master_config()
     suggested_domains = master_cfg.get("suggested_domains", [])
+    suggested_layers = master_cfg.get("suggested_layers", [])
+    suggested_importance_levels = master_cfg.get("suggested_importance_levels", [])
     repo_dir = os.path.join(PROJECTS_DIR, repo_name)
     config_file = os.path.join(repo_dir, "project", "project.config.json")
     if not os.path.exists(config_file):
@@ -548,6 +550,8 @@ def get_project_config(repo_name):
                     "is_customized": True,
                     "repo_name": repo_name,
                     "suggested_domains": suggested_domains,
+                    "suggested_layers": suggested_layers,
+                    "suggested_importance_levels": suggested_importance_levels,
                     "config_path": os.path.relpath(config_file, repo_dir).replace("\\", "/")
                 }
         except Exception as e:
@@ -561,6 +565,8 @@ def get_project_config(repo_name):
         "is_customized": False,
         "repo_name": repo_name,
         "suggested_domains": suggested_domains,
+        "suggested_layers": suggested_layers,
+        "suggested_importance_levels": suggested_importance_levels,
         "config_path": "project/project.config.json"
     }
 
@@ -592,11 +598,16 @@ def save_project_config(repo_name, post_data):
     change_type = "MODIFIED" if old_content else "ADDED"
     record_change(repo_name, rel_path, change_type, old_content, new_content)
 
+    # Sincroniza e cria as pastas oficiais em domains/ para os domínios definidos no projeto
+    org_domains = config_data.get("organization_domains", [])
+    if isinstance(org_domains, list) and len(org_domains) > 0:
+        sync_domains_to_repo_folders(repo_name, org_domains)
+
     return {
         "success": True,
         "config": config_data,
         "repo_name": repo_name,
-        "message": "Configurações oficiais do projeto salvas e registradas no workspace staging para PR!"
+        "message": "Configurações oficiais do projeto salvas e pastas de domínios sincronizadas com sucesso!"
     }
 
 def revert_single_change(repo_dir, change):
@@ -694,6 +705,73 @@ Este diretório gerencia as especificações, fluxos e regras de negócio relati
             with open(index_file, "w", encoding="utf-8") as f:
                 f.write(content)
             record_change(repo_name, f"domains/{dom_id}/index.md", "ADDED", "", content)
+
+        # Sincroniza Subdomínios físicos dentro de domains/{dom_id}/{sub_id}/
+        subdomains = d.get("subdomains") or []
+        if isinstance(subdomains, list):
+            seen_subs = set()
+            for sub in subdomains:
+                if not isinstance(sub, dict):
+                    continue
+                raw_sub_id = (sub.get("id") or sub.get("name", "").lower()).strip().replace(" ", "-").replace("_", "-")
+                sub_id = re.sub(r'[^a-zA-Z0-9\-]', '', raw_sub_id).lower().strip("-")
+                if not sub_id:
+                    continue
+
+                # Evita colisões de subpastas no mesmo domínio
+                base_sub_id = sub_id
+                counter = 2
+                while sub_id in seen_subs:
+                    sub_id = f"{base_sub_id}-{counter}"
+                    counter += 1
+                seen_subs.add(sub_id)
+
+                sub_name = sub.get("name") or sub_id.capitalize()
+                sub_desc = sub.get("description") or f"Subdomínio e capacidade funcional de {sub_name} em {dom_name}."
+                sub_resps = sub.get("responsibles") or responsibles
+                if isinstance(sub_resps, str):
+                    sub_resps = [r.strip() for r in sub_resps.split(",") if r.strip()]
+                sub_resp_str = ", ".join(sub_resps) if sub_resps else resp_str
+                sub_resp_yaml = json.dumps(sub_resps, ensure_ascii=False)
+
+                sub_path = os.path.join(dom_path, sub_id)
+                os.makedirs(sub_path, exist_ok=True)
+
+                sub_index_file = os.path.join(sub_path, "index.md")
+                if not os.path.exists(sub_index_file):
+                    sub_content = f"""---
+type: "subdomain"
+version: "1.0.0"
+status: "draft"
+layer: "L2_SUBDOMAIN"
+domain: "{dom_id}"
+subdomain: "{sub_id}"
+responsibles: {sub_resp_yaml}
+path: "domains/{dom_id}/{sub_id}/index.md"
+parent: "domains/{dom_id}/index.md"
+---
+
+# 🧩 Subdomínio: {sub_name}
+
+> {sub_desc}
+
+**Domínio Pai:** [{dom_name}](../index.md)  
+**Responsáveis pelo Subdomínio:** {sub_resp_str}
+
+---
+
+## 🎯 Capacidades & Escopo
+
+{sub_desc}
+
+## 🚀 Features & Especificações
+
+Este subdomínio organiza os módulos funcionais, regras de negócio e especificações técnicas de **{sub_name}** sob o domínio **{dom_name}**.
+"""
+                    with open(sub_index_file, "w", encoding="utf-8") as f:
+                        f.write(sub_content)
+                    record_change(repo_name, f"domains/{dom_id}/{sub_id}/index.md", "ADDED", "", sub_content)
+
 
 def get_project_team_members(repo_name):
     """

@@ -268,7 +268,23 @@ p {
   box-shadow: none;
 }
 
-.btn-close {
+.btn-danger-outline,
+.btn-outline-danger {
+  background: transparent;
+  color: var(--danger);
+  border: 1px solid rgba(217, 48, 37, 0.35);
+}
+
+.btn-danger-outline:hover:not(:disabled),
+.btn-outline-danger:hover:not(:disabled) {
+  background: var(--danger-bg);
+  border-color: var(--danger);
+  color: var(--danger-text);
+  transform: translateY(-1px);
+}
+
+.btn-close,
+.modal-close {
   background: transparent;
   border: none;
   color: var(--text-muted);
@@ -280,10 +296,12 @@ p {
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  padding: 0;
   transition: all var(--md-sys-motion-duration-short) var(--md-sys-motion-easing-standard);
 }
 
-.btn-close:hover {
+.btn-close:hover,
+.modal-close:hover {
   background: var(--bg-surface-hover);
   color: var(--text-main);
 }
@@ -500,6 +518,16 @@ textarea {
   flex-direction: column;
   overflow-y: auto;
   max-height: 75vh;
+}
+
+.modal-footer {
+  padding: 16px 24px;
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  background: var(--bg-surface);
 }
 
 /* =============================================================================

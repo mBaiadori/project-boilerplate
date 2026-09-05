@@ -1394,12 +1394,12 @@
                       </button>
                       <button
                         class="project-tab-btn"
-                        data-tab="taxonomy"
-                        id="btn-proj-tab-taxonomy"
+                        data-tab="architecture"
+                        id="btn-proj-tab-architecture"
                         role="tab"
                         aria-selected="false"
                       >
-                        Taxonomia & Tags
+                        Arquitetura
                       </button>
                       <button
                         class="project-tab-btn"
@@ -1582,28 +1582,35 @@
                   </div>
 
                   <!-- TAB 2: DOMÍNIOS & RESPONSÁVEIS -->
+                  <!-- TAB 2: DOMÍNIOS & RESPONSÁVEIS -->
                   <div class="project-tab-pane" id="pane-proj-domains">
                     <div class="gov-card org-domains-container-card">
+                      <!-- Top Header: Domínios do Projeto -->
                       <div
                         class="gov-card-header"
                         style="
                           display: flex;
                           justify-content: space-between;
                           align-items: flex-start;
-                          margin-bottom: 20px;
+                          margin-bottom: 16px;
                         "
                       >
                         <div>
-                          <h3
-                            style="
-                              margin: 0;
-                              font-size: 16px;
-                              font-weight: 600;
-                              color: var(--text-main);
-                            "
-                          >
-                            Estrutura de Domínios & Responsáveis
-                          </h3>
+                          <div style="display: flex; align-items: center; gap: 8px;">
+                            <h3
+                              style="
+                                margin: 0;
+                                font-size: 16px;
+                                font-weight: 600;
+                                color: var(--text-main);
+                              "
+                            >
+                              Domínios & Áreas do Projeto
+                            </h3>
+                            <span id="proj-domains-count-badge" class="pill-dot info" style="font-size: 11px; padding: 2px 8px;">
+                              0 domínios
+                            </span>
+                          </div>
                           <p
                             style="
                               font-size: 12.5px;
@@ -1612,33 +1619,75 @@
                               line-height: 1.5;
                             "
                           >
-                            Defina as áreas de domínio da arquitetura e associe
-                            os membros responsáveis identificados no GitHub e no
-                            repositório. O framework organiza a estrutura
-                            oficial em
-                            <code>domains/</code>.
+                            Domínios que compõem a arquitetura do seu projeto. O framework gera as pastas físicas e documentação em <code>domains/</code>.
                           </p>
                         </div>
-                        <button
-                          id="btn-proj-add-domain"
-                          class="btn btn-secondary btn-sm"
-                          style="
-                            display: inline-flex;
-                            align-items: center;
-                            gap: 6px;
-                            flex-shrink: 0;
-                          "
-                        >
-                          <span class="material-symbols-outlined icon-xs"
-                            >add</span
+                        <div style="display: flex; gap: 10px; align-items: center; flex-shrink: 0;">
+                          <div class="view-mode-segmented" role="group" aria-label="Modo de visualização dos domínios" style="height: 32px;">
+                            <button id="btn-domains-view-grid" class="view-mode-btn active" title="Visualização em Cards" type="button" style="padding: 3px 10px; font-size: 12px;">
+                              <span class="material-symbols-outlined icon-xs">grid_view</span>
+                              <span class="btn-label">Cards</span>
+                            </button>
+                            <button id="btn-domains-view-list" class="view-mode-btn" title="Visualização em Lista" type="button" style="padding: 3px 10px; font-size: 12px;">
+                              <span class="material-symbols-outlined icon-xs">view_list</span>
+                              <span class="btn-label">Lista</span>
+                            </button>
+                          </div>
+                          <button
+                            id="btn-proj-add-domain"
+                            class="btn btn-secondary btn-sm"
+                            type="button"
+                            style="
+                              display: inline-flex;
+                              align-items: center;
+                              gap: 6px;
+                            "
                           >
-                          Adicionar Domínio / Área
-                        </button>
+                            <span class="material-symbols-outlined icon-xs">add</span>
+                            Adicionar Domínio Customizado
+                          </button>
+                        </div>
                       </div>
 
-                      <!-- Grid de Cards de Domínio -->
+                      <!-- Grid de Cards de Domínio Ativos / Incluídos -->
                       <div class="org-domains-grid" id="proj-domains-grid">
                         <!-- Dynamic Domain Cards rendered by project.js -->
+                      </div>
+
+                      <!-- Divider -->
+                      <div style="margin: 28px 0 20px 0; border-top: 1px solid var(--border-color);"></div>
+
+                      <!-- Bottom Section: Sugestões do Software (Collapsible, background cinzinha mais claro) -->
+                      <div class="domains-suggestions-panel" id="proj-domains-suggestions-panel">
+                        <div class="domains-suggestions-header" id="proj-domains-suggestions-header" role="button" tabindex="0" title="Clique para expandir ou recolher as sugestões padrão">
+                          <div style="display: flex; align-items: center; gap: 10px;">
+                            <div class="domains-sug-icon-badge">
+                              <span class="material-symbols-outlined" style="font-size: 18px;">auto_awesome</span>
+                            </div>
+                            <div>
+                              <div style="display: flex; align-items: center; gap: 8px;">
+                                <strong style="font-size: 13.5px; color: var(--text-main);">Sugestões de Domínios do Software</strong>
+                                <span id="proj-suggestions-count-badge" class="badge-sug-count">6 disponíveis</span>
+                              </div>
+                              <p style="font-size: 11.5px; color: var(--text-muted); margin: 2px 0 0 0;">
+                                Catálogo de áreas e Bounded Contexts padrão para acelerar o setup
+                              </p>
+                            </div>
+                          </div>
+                          <div style="display: flex; align-items: center; gap: 6px;">
+                            <span id="proj-domains-sug-label" style="font-size: 12px; color: var(--text-muted); font-weight: 500;">Recolher</span>
+                            <span id="proj-domains-sug-chevron" class="material-symbols-outlined icon-sm" style="transition: transform 0.2s ease;">expand_less</span>
+                          </div>
+                        </div>
+
+                        <div class="domains-suggestions-body" id="proj-domains-suggestions-body">
+                          <p style="font-size: 12px; color: var(--text-muted); margin: 0 0 12px 0;">
+                            Clique em <strong>+ Adicionar ao Projeto</strong> em qualquer sugestão abaixo para incluí-la na arquitetura do seu projeto:
+                          </p>
+                          <div class="org-domains-grid" id="proj-domains-suggestions-grid">
+                            <!-- Dynamic Suggestion Cards rendered by project.js -->
+                          </div>
+                        </div>
                       </div>
 
                       <!-- Step Navigation Footer -->
@@ -1658,7 +1707,7 @@
                           class="btn btn-primary"
                           type="button"
                         >
-                          Salvar & Avançar para Taxonomia
+                          Salvar & Avançar para Arquitetura
                           <span class="material-symbols-outlined icon-xs"
                             >arrow_forward</span
                           >
@@ -1667,78 +1716,131 @@
                     </div>
                   </div>
 
-                  <!-- TAB 3: TAXONOMIA, TAGS & ESTEIRA -->
-                  <div class="project-tab-pane" id="pane-proj-taxonomy">
-                    <!-- Tags Globais -->
-                    <div class="gov-card">
-                      <div class="gov-card-header">
+                  <!-- TAB 3: CAMADAS DA ARQUITETURA & GOVERNANÇA -->
+                  <!-- TAB 3: CAMADAS DA ARQUITETURA & GOVERNANÇA -->
+                  <div class="project-tab-pane" id="pane-proj-architecture">
+                    <div class="gov-card org-domains-container-card">
+                      <!-- Top Header: Camadas da Arquitetura -->
+                      <div
+                        class="gov-card-header"
+                        style="
+                          display: flex;
+                          justify-content: space-between;
+                          align-items: flex-start;
+                          margin-bottom: 16px;
+                        "
+                      >
                         <div>
-                          <h3 style="margin: 0">Tags Oficiais do Projeto</h3>
+                          <div style="display: flex; align-items: center; gap: 8px;">
+                            <h3
+                              style="
+                                margin: 0;
+                                font-size: 16px;
+                                font-weight: 600;
+                                color: var(--text-main);
+                                display: flex;
+                                align-items: center;
+                                gap: 8px;
+                              "
+                            >
+                              <span
+                                class="material-symbols-outlined"
+                                style="
+                                  color: var(--primary, #6366f1);
+                                  font-size: 21px;
+                                "
+                                >layers</span
+                              >
+                              Camadas da Arquitetura do Projeto
+                            </h3>
+                            <span id="proj-layers-count-badge" class="pill-dot info" style="font-size: 11px; padding: 2px 8px;">
+                              6 camadas
+                            </span>
+                          </div>
                           <p
                             style="
-                              font-size: 12px;
+                              font-size: 12.5px;
                               color: var(--text-muted);
-                              margin: 2px 0 0 0;
+                              margin: 4px 0 0 0;
+                              line-height: 1.5;
+                              max-width: 820px;
                             "
                           >
-                            Tags padronizadas sugeridas via auto-complete no
-                            editor de especificações e filtros do grafo.
+                            As camadas de arquitetura definem as <strong>regras estruturais</strong>, os <strong>níveis de importância</strong> e <strong>onde cada artefato se aloca</strong> dentro dos domínios.
                           </p>
+                        </div>
+                        <div style="display: flex; gap: 10px; align-items: center; flex-shrink: 0;">
+                          <div class="view-mode-segmented" role="group" aria-label="Modo de visualização das camadas" style="height: 32px;">
+                            <button id="btn-layers-view-grid" class="view-mode-btn active" title="Visualização em Cards" type="button" style="padding: 3px 10px; font-size: 12px;">
+                              <span class="material-symbols-outlined icon-xs">grid_view</span>
+                              <span class="btn-label">Cards</span>
+                            </button>
+                            <button id="btn-layers-view-list" class="view-mode-btn" title="Visualização em Lista" type="button" style="padding: 3px 10px; font-size: 12px;">
+                              <span class="material-symbols-outlined icon-xs">view_list</span>
+                              <span class="btn-label">Lista</span>
+                            </button>
+                          </div>
+                          <button
+                            id="btn-proj-add-layer"
+                            class="btn btn-secondary btn-sm"
+                            type="button"
+                            style="
+                              display: inline-flex;
+                              align-items: center;
+                              gap: 6px;
+                            "
+                          >
+                            <span class="material-symbols-outlined icon-xs">add</span>
+                            Adicionar Camada Customizada
+                          </button>
                         </div>
                       </div>
 
-                      <div style="display: flex; gap: 8px; margin-bottom: 12px">
-                        <input
-                          type="text"
-                          id="proj-input-new-tag"
-                          placeholder="Nova tag (ex: core-banking, pci-dss, pix, lgpd)"
-                          style="flex: 1; padding: 6px 10px; font-size: 13px"
-                        />
-                        <button
-                          id="btn-proj-add-tag"
-                          class="btn btn-secondary btn-sm"
-                        >
-                          Adicionar Tag
-                        </button>
+                      <!-- Grid de Cards de Camadas Ativas / Incluídas -->
+                      <div class="arch-layers-grid" id="proj-layers-grid">
+                        <!-- Dynamic Architecture Layer Cards rendered by project.js -->
                       </div>
 
-                      <div
-                        class="tags-chip-container"
-                        id="proj-tags-chips-container"
-                      >
-                        <!-- Dynamic tag chips rendered by project.js -->
-                      </div>
-                    </div>
+                      <!-- Divider -->
+                      <div style="margin: 28px 0 20px 0; border-top: 1px solid var(--border-color);"></div>
 
-                    <!-- Status de Governança & Esteira de Artefatos -->
-                    <div class="gov-card">
-                      <div class="gov-card-header">
-                        <h3>
-                          Etapas Oficiais da Esteira de Features (Artifact
-                          Pipeline)
-                        </h3>
-                      </div>
-                      <p
-                        style="
-                          font-size: 12px;
-                          color: var(--text-muted);
-                          margin-bottom: 12px;
-                        "
-                      >
-                        Sequência padrão de evolução de uma feature suportada
-                        pelas ferramentas de IA e scaffolding.
-                      </p>
-                      <div
-                        class="pipeline-stages-grid"
-                        id="proj-stages-container"
-                      >
-                        <!-- Dynamic pipeline stages rendered by project.js -->
+                      <!-- Bottom Section: Sugestões de Camadas do Framework (Collapsible, background cinzinha mais claro) -->
+                      <div class="domains-suggestions-panel" id="proj-layers-suggestions-panel">
+                        <div class="domains-suggestions-header" id="proj-layers-suggestions-header" role="button" tabindex="0" title="Clique para expandir ou recolher as sugestões padrão">
+                          <div style="display: flex; align-items: center; gap: 10px;">
+                            <div class="domains-sug-icon-badge">
+                              <span class="material-symbols-outlined" style="font-size: 18px;">auto_awesome</span>
+                            </div>
+                            <div>
+                              <div style="display: flex; align-items: center; gap: 8px;">
+                                <strong style="font-size: 13.5px; color: var(--text-main);">Sugestões de Camadas do Framework (L0 a L5)</strong>
+                                <span id="proj-layer-sug-count-badge" class="badge-sug-count">6 disponíveis</span>
+                              </div>
+                              <p style="font-size: 11.5px; color: var(--text-muted); margin: 2px 0 0 0;">
+                                Hierarquia padrão recomendada com níveis de importância e regras de navegação entre domínios
+                              </p>
+                            </div>
+                          </div>
+                          <div style="display: flex; align-items: center; gap: 6px;">
+                            <span id="proj-layers-sug-label" style="font-size: 12px; color: var(--text-muted); font-weight: 500;">Recolher</span>
+                            <span id="proj-layers-sug-chevron" class="material-symbols-outlined icon-sm" style="transition: transform 0.2s ease;">expand_less</span>
+                          </div>
+                        </div>
+
+                        <div class="domains-suggestions-body" id="proj-layers-suggestions-body">
+                          <p style="font-size: 12px; color: var(--text-muted); margin: 0 0 12px 0;">
+                            Clique em <strong>+ Adicionar ao Projeto</strong> em qualquer camada recomendada abaixo para incluí-la na governança da arquitetura:
+                          </p>
+                          <div class="arch-layers-grid" id="proj-layers-suggestions-grid">
+                            <!-- Dynamic Suggestion Cards rendered by project.js -->
+                          </div>
+                        </div>
                       </div>
 
                       <!-- Step Navigation Footer -->
                       <div class="project-step-footer">
                         <button
-                          id="btn-nav-tax-prev"
+                          id="btn-nav-arch-prev"
                           class="btn btn-secondary"
                           type="button"
                         >
@@ -1748,7 +1850,7 @@
                           Voltar para Domínios
                         </button>
                         <button
-                          id="btn-nav-tax-next"
+                          id="btn-nav-arch-next"
                           class="btn btn-primary"
                           type="button"
                         >
@@ -1908,7 +2010,7 @@
                           <span class="material-symbols-outlined icon-xs"
                             >arrow_back</span
                           >
-                          Voltar para Taxonomia
+                          Voltar para Arquitetura
                         </button>
                         <button
                           id="btn-nav-gov-finish"
@@ -4199,6 +4301,46 @@
             </div>
           </div>
         </main>
+      </div>
+    </div>
+
+    <!-- Modal: Confirmação de Alterações Não Salvas (Cockpit do Projeto) -->
+    <div id="proj-unsaved-modal" class="modal-backdrop" style="display: none">
+      <div class="modal-box" style="max-width: 520px; border-radius: var(--radius-lg); box-shadow: 0 20px 48px rgba(0, 0, 0, 0.18);">
+        <div class="modal-header" style="padding: 20px 24px 16px 24px; border-bottom: 1px solid var(--border-subtle); display: flex; align-items: center; justify-content: space-between;">
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <div style="width: 38px; height: 38px; border-radius: 10px; background: rgba(245, 158, 11, 0.14); color: #d97706; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+              <span class="material-symbols-outlined" style="font-size: 22px;">warning</span>
+            </div>
+            <div>
+              <h3 style="margin: 0; font-size: 16px; font-weight: 600; color: var(--text-heading); line-height: 1.2;">Alterações Não Salvas</h3>
+              <span style="font-size: 12px; color: var(--text-muted);">Confirmação de sincronização Git</span>
+            </div>
+          </div>
+          <button id="btn-close-proj-unsaved" class="btn-close" aria-label="Fechar">
+            <span class="material-symbols-outlined icon-sm">close</span>
+          </button>
+        </div>
+        <div class="modal-body" style="padding: 20px 24px; display: flex; flex-direction: column; gap: 12px;">
+          <p id="proj-unsaved-modal-msg" style="font-size: 13.5px; color: var(--text-main); line-height: 1.55; margin: 0;">
+            Você possui alterações não salvas nesta etapa do projeto. O que deseja fazer antes de mudar de aba?
+          </p>
+          <div id="proj-unsaved-modal-hint" style="background: var(--bg-app); border: 1px solid var(--border-subtle); border-left: 3px solid var(--primary); border-radius: 8px; padding: 10px 14px; font-size: 12px; color: var(--text-muted); line-height: 1.5;">
+            💡 <strong>Dica:</strong> Ao salvar, suas definições são versionadas no Git e sincronizadas com a estrutura oficial do repositório.
+          </div>
+        </div>
+        <div class="modal-footer" style="padding: 16px 24px; border-top: 1px solid var(--border-subtle); background: var(--bg-surface); display: flex; align-items: center; justify-content: flex-end; gap: 10px;">
+          <button id="btn-proj-unsaved-cancel" class="btn btn-ghost btn-sm" type="button" style="margin-right: auto;">
+            Continuar Editando
+          </button>
+          <button id="btn-proj-unsaved-discard" class="btn btn-danger-outline btn-sm" type="button">
+            Descartar Alterações
+          </button>
+          <button id="btn-proj-unsaved-save" class="btn btn-primary btn-sm" type="button" style="display: inline-flex; align-items: center; gap: 6px;">
+            <span class="material-symbols-outlined icon-xs">save</span>
+            Salvar & Avançar
+          </button>
+        </div>
       </div>
     </div>
 
