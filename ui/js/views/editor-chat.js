@@ -145,13 +145,18 @@ export function initEditorChatView({ onWorkspaceChanged, getActiveRepo }) {
     });
   }
 
-  // 2. AI Pane Toggling
+  // 2. AI Pane Toggling & LocalStorage State Persistence
+  const STORAGE_KEY_EDITOR_CHAT_OPEN = "governance_editor_ai_chat_open";
+
   function updateAiPaneVisibility(show) {
     if (!workbenchAiPane) return;
     workbenchAiPane.style.display = show ? "flex" : "none";
     if (btnToggleAiPane) {
       btnToggleAiPane.style.display = show ? "none" : "inline-flex";
     }
+    try {
+      localStorage.setItem(STORAGE_KEY_EDITOR_CHAT_OPEN, show ? "true" : "false");
+    } catch (e) {}
   }
 
   if (btnToggleAiPane) {
@@ -166,11 +171,10 @@ export function initEditorChatView({ onWorkspaceChanged, getActiveRepo }) {
     });
   }
 
-  const isInitialAiOpen =
-    workbenchAiPane && workbenchAiPane.style.display !== "none";
-  if (btnToggleAiPane) {
-    btnToggleAiPane.style.display = isInitialAiOpen ? "none" : "inline-flex";
-  }
+  // Restore previous chat open/close state from localStorage
+  const savedEditorChatState = localStorage.getItem(STORAGE_KEY_EDITOR_CHAT_OPEN);
+  const isInitialAiOpen = savedEditorChatState !== null ? savedEditorChatState === "true" : (workbenchAiPane && workbenchAiPane.style.display !== "none");
+  updateAiPaneVisibility(isInitialAiOpen);
 
   // 3. Stats (Palavras & Linhas)
   function updateStats() {

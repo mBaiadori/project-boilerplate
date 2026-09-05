@@ -24,6 +24,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECTS_DIR = os.path.join(BASE_DIR, "projects")
 CONFIG_PATH = os.path.join(PROJECTS_DIR, "config.json")
 UI_DIR = os.path.join(BASE_DIR, "ui")
+TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
 SERVER_FILE = os.path.abspath(__file__)
 
 # Threading HTTP Server for Non-Blocking SSE & Multi-Requests
@@ -199,8 +200,33 @@ DEFAULT_PROJECT_CONFIG = {
     "ai_guardian_prompt": "Você é o Arquiteto Guardião da Constituição Oficial do Projeto. Ajude o time a estruturar a visão do produto, proposta de valor, objetivos estratégicos, personas, invariantes e princípios fundamentais de negócio."
 }
 
-CANONICAL_TEMPLATES = [
-    {
+def extract_frontmatter(content_str):
+    """
+    Extrai o bloco YAML de Frontmatter entre marcadores '---' no início do documento.
+    Retorna uma tupla (metadata_dict, body_markdown).
+    """
+    if not content_str:
+        return {}, ""
+    content_stripped = content_str.lstrip()
+    if not content_stripped.startswith("---"):
+        return {}, content_str
+
+    parts = content_stripped.split("---", 2)
+    if len(parts) < 3:
+        return {}, content_str
+
+    yaml_text = parts[1].strip()
+    body_text = parts[2].lstrip("\r\n")
+    try:
+        data = yaml.safe_load(yaml_text)
+        if isinstance(data, dict):
+            return data, body_text
+    except Exception:
+        pass
+    return {}, content_str
+
+TEMPLATE_METADATA_FALLBACKS = {
+    "01-project-root.md": {
         "id": "project-root",
         "title": "Visão Geral do Projeto (L1: Raiz)",
         "category": "Arquitetura Central",
@@ -208,52 +234,9 @@ CANONICAL_TEMPLATES = [
         "description": "Declaração da constituição global, proposta de valor, objetivos estratégicos e princípios fundamentais.",
         "default_filename": "index.md",
         "suggested_folder": "project",
-        "assistant_prompt": "Você é o Arquiteto Guardião da Constituição Oficial. Ajude o usuário a definir a visão do produto, formular os objetivos estratégicos e consolidar os princípios de negócio com precisão.",
-        "content": """---
-id: "core-project-root"
-title: "Visão Geral da Plataforma"
-type: "project"
-version: "1.0.0"
-status: "active"
-layer: "L1_PROJECT"
-path: "project/index.md"
-parent: null
-breadcrumb:
-  - { title: "Projeto", path: "project/index.md" }
----
-
-Navegação: **Projeto**  
-Status: `ACTIVE` | Camada: `L1_PROJECT`
-
----
-
-# Visão Geral do Projeto: [NOME-DO-PROJETO]
-
-## 1. Proposta de Valor & Visão do Produto
-Descrição executiva do propósito da aplicação, público-alvo e o problema central que a plataforma resolve de forma única.
-
----
-
-## 2. Objetivos Estratégicos de Negócio
-Resultados-chave e metas de alto nível que orientam a evolução do software:
-* **[Objetivo 1]:** [Ex: Automatizar 90% das conciliações de pagamento em tempo real]
-* **[Objetivo 2]:** [Ex: Proporcionar experiência de checkout instantânea em menos de 2 segundos]
-
----
-
-## 3. Personas & Atores Principais
-* **[Persona 1 - Ex: Cliente Final]:** [Expectativa principal e valor percebido na experiência]
-* **[Persona 2 - Ex: Administrador do Sistema]:** [Responsabilidades operacionais e controles gerenciados]
-
----
-
-## 4. Princípios & Invariantes Fundamentais de Negócio
-Regras de integridade e postura operacional inegociáveis da empresa:
-1. **[Princípio 1]:** [Ex: Toda transação de valor exige rastreabilidade e auditoria imutável]
-2. **[Princípio 2]:** [Ex: Idempotência obrigatória em qualquer chamada de integração com provedores externos]
-"""
+        "assistant_prompt": "Você é o Arquiteto Guardião da Constituição Oficial. Ajude o usuário a definir a visão do produto, formular os objetivos estratégicos e consolidar os princípios de negócio com precisão."
     },
-    {
+    "02-domain.md": {
         "id": "domain-context",
         "title": "Domínio & Bounded Context (L2: Domínio)",
         "category": "Domain-Driven Design",
@@ -261,47 +244,9 @@ Regras de integridade e postura operacional inegociáveis da empresa:
         "description": "Fronteira arquitetural de um Bounded Context, escopo, limites de dados e invariantes globais.",
         "default_filename": "index.md",
         "suggested_folder": "domains/[nome-do-dominio]",
-        "assistant_prompt": "Você é o Especialista em Domain-Driven Design (DDD). Auxilie a desenhar os limites do Bounded Context, formulando invariantes de integridade e mapeando as áreas funcionais.",
-        "content": """---
-id: "domain-[nome-do-dominio]"
-title: "Domínio: [Nome do Domínio]"
-type: "domain"
-version: "1.0.0"
-status: "active"
-layer: "L2_DOMAIN"
-path: "domains/[nome-do-dominio]/index.md"
-parent: "project/index.md"
-breadcrumb:
-  - { title: "Projeto", path: "project/index.md" }
-  - { title: "[Nome do Domínio]", path: "domains/[nome-do-dominio]/index.md" }
----
-
-Navegação: [Projeto](file://../../project/index.md) / **[Nome do Domínio]**  
-Status: `ACTIVE` | Camada: `L2_DOMAIN`
-
----
-
-# Domínio: [Nome do Domínio]
-
-## 1. Escopo e Limites de Responsabilidade
-Definição dos limites arquiteturais e fronteiras de dados deste contexto delimitado.
-
----
-
-## 2. Invariantes Globais do Domínio
-1. [Invariante Global 1 - Ex: Nenhuma transação pode ocorrer sem registro de auditoria]
-2. [Invariante Global 2 - Ex: Todas as chamadas de integração exigem chave de idempotência]
-
----
-
-## 3. Subdomínios e Áreas Funcionais
-
-| Área / Subdomínio | Escopo de Atuação | Documento |
-| :--- | :--- | :--- |
-| `[nome-da-area]` | [Descrição da área e responsabilidade] | [Acessar Área](file://./[nome-da-area]/index.md) |
-"""
+        "assistant_prompt": "Você é o Especialista em Domain-Driven Design (DDD). Auxilie a desenhar os limites do Bounded Context, formulando invariantes de integridade e mapeando as áreas funcionais."
     },
-    {
+    "03-subdomain.md": {
         "id": "subdomain-area",
         "title": "Área Funcional & Subdomínio (L3: Subdomínio)",
         "category": "Domain-Driven Design",
@@ -309,50 +254,9 @@ Definição dos limites arquiteturais e fronteiras de dados deste contexto delim
         "description": "Área funcional especializada, catálogo de features e invariantes críticas locais.",
         "default_filename": "index.md",
         "suggested_folder": "domains/[nome-do-dominio]/[nome-da-area]",
-        "assistant_prompt": "Você é o Especialista de Área Funcional e Arquitetura de Negócio. Ajude o time a listar as features da área e definir SLAs e invariantes críticas.",
-        "content": """---
-id: "subdomain-[dominio]-[area]"
-title: "Área Funcional: [Nome da Área]"
-type: "subdomain"
-version: "1.0.0"
-status: "active"
-layer: "L3_SUBDOMAIN"
-path: "domains/[dominio]/[area]/index.md"
-parent: "domains/[dominio]/index.md"
-breadcrumb:
-  - { title: "Projeto", path: "project/index.md" }
-  - { title: "[Nome do Domínio]", path: "domains/[dominio]/index.md" }
-  - { title: "[Nome da Área]", path: "domains/[dominio]/[area]/index.md" }
-critical_invariants:
-  - "max_response_time_ms: 2000"
----
-
-Navegação: [Projeto](file://../../../project/index.md) / [[Nome do Domínio]](file://../../index.md) / **[Nome da Área]**  
-Status: `ACTIVE` | Camada: `L3_SUBDOMAIN`
-
----
-
-# Área Funcional: [Nome da Área]
-
-## 1. Objetivo da Área
-Gerenciamento específico das funcionalidades e processos de negócio desta área.
-
----
-
-## 2. Invariantes Críticas da Área
-* **SLA de Resposta:** Tempo limite máximo esperado para operações críticas.
-* **Restrições de Estado:** Condições que bloqueiam transações inválidas.
-
----
-
-## 3. Catálogo de Features
-
-| Feature | Descrição | Risco | Status | Documento |
-| :--- | :--- | :--- | :--- | :--- |
-| `[NOME-DA-FEATURE]` | [Resumo da funcionalidade] | `Tier 2` | `DRAFT` | [Abrir Feature](file://./[NOME-DA-FEATURE]/index.md) |
-"""
+        "assistant_prompt": "Você é o Especialista de Área Funcional e Arquitetura de Negócio. Ajude o time a listar as features da área e definir SLAs e invariantes críticas."
     },
-    {
+    "04-ideacao.md": {
         "id": "feature-ideacao",
         "title": "01 - Ideação & Necessidade (L4: Feature)",
         "category": "Esteira SDLC",
@@ -360,65 +264,9 @@ Gerenciamento específico das funcionalidades e processos de negócio desta áre
         "description": "Definição inicial de escopo, atores, jornada do usuário e critérios de aceite.",
         "default_filename": "ideacao.md",
         "suggested_folder": "domains/[dominio]/[area]/[FEATURE]",
-        "assistant_prompt": "Você é o Especialista em Ideação e Descoberta de Produto. Auxilie a estruturar o problema de negócio, os atores e o fluxo de experiência sem acoplamento prematuro com infraestrutura.",
-        "content": """---
-id: "feature-[dominio]-[area]-[feature]-ideacao"
-title: "Ideação: [NOME-DA-FEATURE]"
-type: "ideacao"
-version: "1.0.0"
-status: "draft"
-risk_tier: "tier_2"
-layer: "L4_ARTIFACT"
-path: "domains/[dominio]/[area]/[FEATURE]/ideacao.md"
-parent: "domains/[dominio]/[area]/index.md"
-breadcrumb:
-  - { title: "Projeto", path: "project/index.md" }
-  - { title: "[Domínio]", path: "domains/[dominio]/index.md" }
-  - { title: "[Área]", path: "domains/[dominio]/[area]/index.md" }
-  - { title: "[NOME-DA-FEATURE]", path: "domains/[dominio]/[area]/[FEATURE]/index.md" }
-lifecycle:
-  stage: "ideacao"
-  previous_stage: null
-  next_stage: "domains/[dominio]/[area]/[FEATURE]/kpis.md"
----
-
-Navegação: [Projeto](file://../../../../project/index.md) / [[Domínio]](file://../../../index.md) / [[Área]](file://../../index.md) / [[NOME-DA-FEATURE]](file://./index.md) / **Ideação**  
-Status: `DRAFT` | Camada: `L4_ARTIFACT`
-
----
-
-# Ideação & Necessidade: [NOME-DA-FEATURE]
-
-## 1. Contexto de Negócio & Origem da Demanda
-Descrição clara da dor ou oportunidade. Informar se teve origem em métricas, teste A/B, solicitação de clientes ou requisito regulatório.
-
----
-
-## 2. Atores e Papéis Envolvidos
-* **[Ator Principal]:** [Ação que executa ou objetivo central]
-* **[Sistema Consumidor]:** [Impacto esperado no ecossistema]
-
----
-
-## 3. Jornada do Usuário (User Flow)
-1. **Início:** O ator inicia o processo através da interface ou chamada de API.
-2. **Processamento:** O sistema valida as regras e efetua o processamento.
-3. **Resultado:** Confirmação de conclusão e notificação aos envolvidos.
-
----
-
-## 4. Critérios de Aceite Iniciais
-- [ ] [Critério 1: Condição necessária de sucesso]
-- [ ] [Critério 2: Tratamento do principal caso de exceção]
-
----
-
-### Navegação da Esteira
-
-* **Próxima Etapa:** [02 - KPIs & Invariantes](file://./kpis.md)
-"""
+        "assistant_prompt": "Você é o Especialista em Ideação e Descoberta de Produto. Auxilie a estruturar o problema de negócio, os atores e o fluxo de experiência sem acoplamento prematuro com infraestrutura."
     },
-    {
+    "05-kpis.md": {
         "id": "feature-kpis",
         "title": "02 - KPIs & Invariantes (L4: Feature)",
         "category": "Esteira SDLC",
@@ -426,52 +274,9 @@ Descrição clara da dor ou oportunidade. Informar se teve origem em métricas, 
         "description": "Métricas de sucesso Leading/Lagging e regras imutáveis de negócio.",
         "default_filename": "kpis.md",
         "suggested_folder": "domains/[dominio]/[area]/[FEATURE]",
-        "assistant_prompt": "Você é o Auditor de Métricas e Invariantes. Ajude o usuário a formular metas quantificáveis de sucesso e regras de consistência de estado inegociáveis.",
-        "content": """---
-id: "feature-[dominio]-[area]-[feature]-kpis"
-title: "KPIs & Invariantes: [NOME-DA-FEATURE]"
-type: "kpis"
-version: "1.0.0"
-status: "draft"
-layer: "L4_ARTIFACT"
-path: "domains/[dominio]/[area]/[FEATURE]/kpis.md"
-parent: "domains/[dominio]/[area]/[FEATURE]/ideacao.md"
-lifecycle:
-  stage: "kpis"
-  previous_stage: "domains/[dominio]/[area]/[FEATURE]/ideacao.md"
-  next_stage: "domains/[dominio]/[area]/[FEATURE]/research.md"
----
-
-Navegação: [Projeto](file://../../../../project/index.md) / [[Domínio]](file://../../../index.md) / [[Área]](file://../../index.md) / [[NOME-DA-FEATURE]](file://./index.md) / **KPIs**  
-Status: `DRAFT` | Camada: `L4_ARTIFACT`
-
----
-
-# KPIs e Invariantes: [NOME-DA-FEATURE]
-
-## 1. Métricas de Sucesso
-
-### A. Indicadores Antecipadores (Leading Indicators)
-* **[Métrica 1]:** Meta: [Ex: Adoção imediata > 85%]
-
-### B. Indicadores de Resultado (Lagging Indicators)
-* **[Métrica 1]:** Meta: [Ex: Redução de 40% em retrabalho operacional]
-
----
-
-## 2. Invariantes de Negócio (Regras Imutáveis)
-1. **[Invariante 1]:** [Regra imutável de estado que não pode ser violada]
-2. **[Invariante 2]:** [Exigência estrita de integridade ou idempotência]
-
----
-
-### Navegação da Esteira
-
-* **Etapa Anterior:** [01 - Ideação](file://./ideacao.md)
-* **Próxima Etapa:** [03 - Pesquisa e RAG](file://./research.md)
-"""
+        "assistant_prompt": "Você é o Auditor de Métricas e Invariantes. Ajude o usuário a formular metas quantificáveis de sucesso e regras de consistência de estado inegociáveis."
     },
-    {
+    "06-research.md": {
         "id": "feature-research",
         "title": "03 - Pesquisa & RAG (L4: Feature)",
         "category": "Esteira SDLC",
@@ -479,60 +284,9 @@ Status: `DRAFT` | Camada: `L4_ARTIFACT`
         "description": "Auditoria de viabilidade, consulta ao Dicionário Ubíquo e detecção de conflitos.",
         "default_filename": "research.md",
         "suggested_folder": "domains/[dominio]/[area]/[FEATURE]",
-        "assistant_prompt": "Você é o Agente Researcher. Verifique se a proposta respeita os termos s do Dicionário Ubíquo e identifique sobreposições com outras features.",
-        "content": """---
-id: "feature-[dominio]-[area]-[feature]-research"
-title: "Research & RAG: [NOME-DA-FEATURE]"
-type: "research"
-version: "1.0.0"
-status: "draft"
-layer: "L4_ARTIFACT"
-path: "domains/[dominio]/[area]/[FEATURE]/research.md"
-parent: "domains/[dominio]/[area]/[FEATURE]/kpis.md"
-conflict_check:
-  has_conflicts: false
-  conflicts_description: []
-lifecycle:
-  stage: "research"
-  previous_stage: "domains/[dominio]/[area]/[FEATURE]/kpis.md"
-  next_stage: "domains/[dominio]/[area]/[FEATURE]/feature-definition.md"
-  feedback_loops:
-    on_conflict: "domains/[dominio]/[area]/[FEATURE]/ideacao.md"
----
-
-Navegação: [Projeto](file://../../../../project/index.md) / [[Domínio]](file://../../../index.md) / [[Área]](file://../../index.md) / [[NOME-DA-FEATURE]](file://./index.md) / **Research**  
-Status: `DRAFT` | Camada: `L4_ARTIFACT`
-
----
-
-# Pesquisa & Análise de Viabilidade: [NOME-DA-FEATURE]
-
-## 1. Alinhamento com o Dicionário Ubíquo
-* **Termos Validados:** `[Termo 1]`, `[Termo 2]` (alinhados com `project/index.md`)
-* **Novos Termos Sugeridos:** `[Novo Termo]` (a ser submetido para aprovação oficial)
-
----
-
-## 2. Componentes e Entidades Reutilizáveis
-* **Entidades Existentes:** `[Caminho/Nome da Entidade]`
-* **Value Objects Reutilizados:** `[Caminho/Nome do Value Object]`
-
----
-
-## 3. Avaliação de Conflitos e Invariantes
-* **Conflitos Detectados:** Nenhum / [Descrição de potenciais sobreposições]
-* **Violação de Regras de Domínio:** [Avaliação do impacto]
-
----
-
-### Navegação da Esteira
-
-* **Etapa Anterior:** [02 - KPIs & Invariantes](file://./kpis.md)
-* **Próxima Etapa:** [04 - Definição Técnica (Feature Definition)](file://./feature-definition.md)
-* **Feedback Loop:** Em caso de violação de regras de negócio, [retornar para Ideação](file://./ideacao.md).
-"""
+        "assistant_prompt": "Você é o Agente Researcher. Verifique se a proposta respeita os termos do Dicionário Ubíquo e identifique sobreposições com outras features."
     },
-    {
+    "07-feature-definition.md": {
         "id": "feature-definition",
         "title": "04 - Definição Técnica & Cross-Cutting (L4: Feature)",
         "category": "Esteira SDLC",
@@ -540,57 +294,9 @@ Status: `DRAFT` | Camada: `L4_ARTIFACT`
         "description": "Especificação técnica, dependências entre domínios e requisitos não funcionais (NFRs).",
         "default_filename": "feature-definition.md",
         "suggested_folder": "domains/[dominio]/[area]/[FEATURE]",
-        "assistant_prompt": "Você é o Arquiteto de Software Especialista em Integrações e NFRs. Estruture os contratos de dependência transversal (cross-cutting) e requisitos não funcionais.",
-        "content": """---
-id: "feature-[dominio]-[area]-[feature]-definition"
-title: "Definição Técnica: [NOME-DA-FEATURE]"
-type: "feature-definition"
-version: "1.0.0"
-status: "draft"
-layer: "L4_ARTIFACT"
-path: "domains/[dominio]/[area]/[FEATURE]/feature-definition.md"
-parent: "domains/[dominio]/[area]/[FEATURE]/research.md"
-cross_cutting_relations:
-  - target: "domains/[TARGET_DOMAIN]/[TARGET_AREA]/[TARGET_FEATURE]/feature-definition.md"
-    relation_type: "consumes_service"
-    contract_mode: "sync_rpc"
-    return_ref: "domains/[dominio]/[area]/[FEATURE]/feature-definition.md"
-lifecycle:
-  stage: "feature-definition"
-  previous_stage: "domains/[dominio]/[area]/[FEATURE]/research.md"
-  next_stage: "domains/[dominio]/[area]/[FEATURE]/docs/flow.md"
----
-
-Navegação: [Projeto](file://../../../../project/index.md) / [[Domínio]](file://../../../index.md) / [[Área]](file://../../index.md) / [[NOME-DA-FEATURE]](file://./index.md) / **Definição Técnica**  
-Status: `DRAFT` | Camada: `L4_ARTIFACT`
-
----
-
-# Definição Técnica: [NOME-DA-FEATURE]
-
-## 1. Dependências Transversais (Cross-Cutting)
-
-| Domínio / Feature Alvo | Modo de Contrato | Natureza da Relação | Documento Alvo |
-| :--- | :--- | :--- | :--- |
-| `[dominio > feature]` | `Síncrono (RPC)` | Consome autenticação/dados | [Abrir Spec](file://../../../[target]/feature-definition.md) |
-
----
-
-## 2. Requisitos Não Funcionais (NFRs)
-* **SLA de Latência:** p95 < [tempo_ms], p99 < [tempo_ms]
-* **Throughput Previsto:** [X] requisições por segundo em pico
-* **Segurança e LGPD:** [Tratamento de dados sensíveis e anonimização]
-* **Idempotência & Resiliência:** [Mecanismo de retry e consistência]
-
----
-
-### Navegação da Esteira
-
-* **Etapa Anterior:** [03 - Pesquisa e RAG](file://./research.md)
-* **Próxima Etapa:** [05 - Modelagem e Fluxo (Docs & Flow)](file://./docs/flow.md)
-"""
+        "assistant_prompt": "Você é o Arquiteto de Software Especialista em Integrações e NFRs. Estruture os contratos de dependência transversal (cross-cutting) e requisitos não funcionais."
     },
-    {
+    "08-flow.md": {
         "id": "feature-flow",
         "title": "05 - Fluxo Gráfico & Sequência (L4: Feature)",
         "category": "Esteira SDLC",
@@ -598,804 +304,102 @@ Status: `DRAFT` | Camada: `L4_ARTIFACT`
         "description": "Modelagem visual com diagramas Mermaid de sequência e máquina de estados.",
         "default_filename": "flow.md",
         "suggested_folder": "domains/[dominio]/[area]/[FEATURE]/docs",
-        "assistant_prompt": "Você é o Arquiteto Especialista em Diagramas Mermaid. Crie diagramas de sequência e de estados precisos que ilustrem a interação entre camadas e tratamento de exceções.",
-        "content": """---
-id: "feature-[dominio]-[area]-[feature]-flow"
-title: "Fluxo Gráfico: [NOME-DA-FEATURE]"
-type: "flow"
-version: "1.0.0"
-status: "draft"
-layer: "L4_ARTIFACT"
-path: "domains/[dominio]/[area]/[FEATURE]/docs/flow.md"
-parent: "domains/[dominio]/[area]/[FEATURE]/feature-definition.md"
-lifecycle:
-  stage: "flow"
-  previous_stage: "domains/[dominio]/[area]/[FEATURE]/feature-definition.md"
-  next_stage: "domains/[dominio]/[area]/[FEATURE]/docs/entity.md"
-  feedback_loops:
-    on_incomplete_flow: "domains/[dominio]/[area]/[FEATURE]/feature-definition.md"
----
-
-Navegação: [Projeto](file://../../../../../project/index.md) / [[Domínio]](file://../../../../index.md) / [[Área]](file://../../../index.md) / [[NOME-DA-FEATURE]](file://../index.md) / **Fluxo Gráfico**  
-Status: `DRAFT` | Camada: `L4_ARTIFACT`
-
----
-
-# Fluxo Lógico e Gráfico: [NOME-DA-FEATURE]
-
-## 1. Diagrama de Sequência
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor User as Ator Principal
-    participant API as Gateway / Controller
-    participant App as Application (Use Case)
-    participant Domain as Entidade de Domínio
-    participant DB as Infrastructure (Repo)
-
-    User->>API: Envia solicitação com Payload
-    API->>App: Executa Use Case (DTO)
-    App->>Domain: Aplica regras de invariantes
-    alt Regras Válidas
-        Domain-->>App: Estado atualizado
-        App->>DB: Persiste transação
-        DB-->>App: Confirmação
-        App-->>API: Resultado de sucesso
-        API-->>User: HTTP 200 OK
-    else Violação de Invariante
-        Domain-->>App: Lança DomainException
-        App-->>API: Propaga erro formatado
-        API-->>User: HTTP 400/422 Erro
-    end
-```
-
----
-
-## 2. Diagrama de Estados da Entidade
-
-```mermaid
-stateDiagram-v2
-    [*] --> CRIADO: Nova solicitação
-    CRIADO --> PROCESSANDO: Início da execução
-    PROCESSANDO --> CONCLUIDO: Sucesso
-    PROCESSANDO --> FALHA: Erro de validação
-    CONCLUIDO --> [*]
-    FALHA --> [*]
-```
-
----
-
-### Navegação da Esteira
-
-* **Etapa Anterior:** [04 - Definição Técnica](file://../feature-definition.md)
-* **Próxima Etapa:** [05 - Modelagem de Entidades (Docs/Entity)](file://./entity.md)
-* **Feedback Loop:** Se o fluxo estiver incompleto, [retornar para Feature Definition](file://../feature-definition.md).
-"""
+        "assistant_prompt": "Você é o Modelador Visual de Arquitetura. Ajude a desenhar fluxos de sequência e máquinas de estado claros em Mermaid."
     },
-    {
+    "09-entity.md": {
         "id": "feature-entity",
-        "title": "05 - Modelagem DDD & Entidades (L4: Feature)",
+        "title": "06 - Modelagem de Entidades & Agregados (L4: Feature)",
         "category": "Esteira SDLC",
         "badge": "L4",
-        "description": "Modelagem tática com agregados, entidades, value objects e domain events.",
+        "description": "Diagrama de classes Mermaid, Value Objects, eventos de domínio e regras de integridade.",
         "default_filename": "entity.md",
         "suggested_folder": "domains/[dominio]/[area]/[FEATURE]/docs",
-        "assistant_prompt": "Você é o Especialista em Modelagem Tática de Domínio (DDD). Modele Agregados, Value Objects imutáveis e Eventos de Domínio com invariantes encapsuladas.",
-        "content": """---
-id: "feature-[dominio]-[area]-[feature]-entity"
-title: "Modelagem de Entidades: [NOME-DA-FEATURE]"
-type: "entity"
-version: "1.0.0"
-status: "draft"
-layer: "L4_ARTIFACT"
-path: "domains/[dominio]/[area]/[FEATURE]/docs/entity.md"
-parent: "domains/[dominio]/[area]/[FEATURE]/docs/flow.md"
-lifecycle:
-  stage: "docs"
-  previous_stage: "domains/[dominio]/[area]/[FEATURE]/docs/flow.md"
-  next_stage: "domains/[dominio]/[area]/[FEATURE]/specs/behavior.md"
-  feedback_loops:
-    on_missing_details: "domains/[dominio]/[area]/[FEATURE]/docs/flow.md"
----
-
-Navegação: [Projeto](file://../../../../../project/index.md) / [[Domínio]](file://../../../../index.md) / [[Área]](file://../../../index.md) / [[NOME-DA-FEATURE]](file://../index.md) / **Modelagem de Entidades**  
-Status: `DRAFT` | Camada: `L4_ARTIFACT`
-
----
-
-# Modelagem Tática de Domínio (DDD): [NOME-DA-FEATURE]
-
-## 1. Aggregate Root & Entidades
-
-```typescript
-export class [NomeDoAgregado] {
-  private readonly id: [IdValueObject];
-  private status: [StatusEnum];
-
-  constructor(id: [IdValueObject], status: [StatusEnum]) {
-    this.id = id;
-    this.status = status;
-  }
-
-  public executeOperation(): void {
-    if (this.status === [StatusEnum].COMPLETED) {
-      return; // Idempotência
-    }
-    this.status = [StatusEnum].COMPLETED;
-  }
-}
-```
-
----
-
-## 2. Objetos de Valor (Value Objects)
-* **`[NomeDoValueObject]`:** [Regras de validação e imutabilidade dos dados]
-
----
-
-## 3. Eventos de Domínio (Domain Events)
-* **`[FeatureExecutadaEvent]`:** Evento emitido após a transação com sucesso.
-
----
-
-### Navegação da Esteira
-
-* **Etapa Anterior:** [05 - Fluxo Gráfico](file://./flow.md)
-* **Próxima Etapa:** [06 - Especificações BDD (Specs)](file://../specs/behavior.md)
-* **Feedback Loop:** Se faltarem detalhes de regras ou dados, [retornar para Fluxo Gráfico](file://./flow.md).
-"""
+        "assistant_prompt": "Você é o Especialista em Modelagem DDD e Agregados. Ajude a desenhar entidades, Value Objects, métodos de negócio e eventos de domínio."
     },
-    {
-        "id": "feature-specs",
-        "title": "06 - Especificações BDD (L4: Feature)",
-        "category": "Esteira SDLC",
-        "badge": "L4",
-        "description": "Cenários de teste executáveis em sintaxe Gherkin oficial (Given/When/Then).",
+    "10-behavior-specs.md": {
+        "id": "feature-behavior",
+        "title": "07 - Especificações Comportamentais BDD (L5: BDD)",
+        "category": "Comportamento BDD",
+        "badge": "L5",
+        "description": "Cenários de teste executáveis em sintaxe Gherkin (Given/When/Then).",
         "default_filename": "behavior.md",
         "suggested_folder": "domains/[dominio]/[area]/[FEATURE]/specs",
-        "assistant_prompt": "Você é o Especialista em BDD e TDD. Ajude o desenvolvedor a formular cenários Gherkin Given/When/Then cobrindo o caminho feliz, casos de borda e regressão.",
-        "content": """---
-id: "feature-[dominio]-[area]-[feature]-specs"
-title: "Especificações BDD: [NOME-DA-FEATURE]"
-type: "specs"
-version: "1.0.0"
-status: "draft"
-layer: "L4_ARTIFACT"
-path: "domains/[dominio]/[area]/[FEATURE]/specs/behavior.md"
-parent: "domains/[dominio]/[area]/[FEATURE]/docs/entity.md"
-lifecycle:
-  stage: "specs"
-  previous_stage: "domains/[dominio]/[area]/[FEATURE]/docs/entity.md"
-  next_stage: "domains/[dominio]/[area]/[FEATURE]/quality/review.md"
-  feedback_loops:
-    on_spec_gap: "domains/[dominio]/[area]/[FEATURE]/docs/entity.md"
----
-
-Navegação: [Projeto](file://../../../../../project/index.md) / [[Domínio]](file://../../../../index.md) / [[Área]](file://../../../index.md) / [[NOME-DA-FEATURE]](file://../index.md) / **Specs BDD**  
-Status: `DRAFT` | Camada: `L4_ARTIFACT`
-
----
-
-# Especificações de Comportamento (BDD): [NOME-DA-FEATURE]
-
-```gherkin
-Feature: [NOME-DA-FEATURE]
-  Como [Ator Principal]
-  Quero [Executar a Ação Principal]
-  Para [Alcançar o Objetivo de Negócio]
-
-  @happy-path @critical
-  Scenario: Execução com sucesso do fluxo principal
-    Given que os pré-requisitos de negócio estão satisfeitos
-    And as credenciais de autenticação são válidas
-    When a solicitação é processada com parâmetros corretos
-    Then o estado final deve ser "CONCLUÍDO"
-    And o evento de domínio correspondente deve ser emitido
-
-  @error-handling @regression
-  Scenario: Rejeição por violação de invariante
-    Given que uma condição impeditiva de negócio está presente
-    When o usuário tenta submeter a operação
-    Then o sistema deve rejeitar a transação com código de erro específico
-```
-
----
-
-### Navegação da Esteira
-
-* **Etapa Anterior:** [05 - Modelagem de Entidades (Docs)](file://../docs/entity.md)
-* **Próxima Etapa:** [07 - Qualidade & Review de Código](file://../quality/review.md)
-* **Feedback Loop:** Se faltarem detalhes na spec durante os testes, [retornar para Modelagem](file://../docs/entity.md).
-"""
+        "assistant_prompt": "Você é o Especialista em Behavior-Driven Development (BDD) e Automação de Testes. Auxilie a converter requisitos em cenários Given/When/Then claros e abrangentes."
     },
-    {
+    "11-quality-review.md": {
         "id": "feature-quality",
-        "title": "07 - Qualidade, SAST & Review (L4: Feature)",
-        "category": "Esteira SDLC",
-        "badge": "L4",
-        "description": "Relatório de cobertura de testes, análise SAST/Snyk, Clean Arch e checklist de aprovação.",
+        "title": "08 - Revisão de Qualidade & Arquitetura (L6: QA)",
+        "category": "Qualidade & QA",
+        "badge": "L6",
+        "description": "Checklist de auditoria de conformidade, cobertura de testes e requisitos de segurança.",
         "default_filename": "review.md",
         "suggested_folder": "domains/[dominio]/[area]/[FEATURE]/quality",
-        "assistant_prompt": "Você é o Agente Auditor de Qualidade e Segurança. Valide conformidade com Clean Architecture, SOLID, cobertura de testes unitários e segurança SAST.",
-        "content": """---
-id: "feature-[dominio]-[area]-[feature]-quality"
-title: "Qualidade & Review: [NOME-DA-FEATURE]"
-type: "quality"
-version: "1.0.0"
-status: "draft"
-layer: "L4_ARTIFACT"
-path: "domains/[dominio]/[area]/[FEATURE]/quality/review.md"
-parent: "domains/[dominio]/[area]/[FEATURE]/specs/behavior.md"
-lifecycle:
-  stage: "quality"
-  previous_stage: "domains/[dominio]/[area]/[FEATURE]/specs/behavior.md"
-  next_stage: "domains/[dominio]/[area]/[FEATURE]/quality/monitoring.md"
-  feedback_loops:
-    on_security_failure: "src/domain/"
-    on_qa_regression: "domains/[dominio]/[area]/[FEATURE]/specs/behavior.md"
----
-
-Navegação: [Projeto](file://../../../../../project/index.md) / [[Domínio]](file://../../../../index.md) / [[Área]](file://../../../index.md) / [[NOME-DA-FEATURE]](file://../index.md) / **Qualidade & Review**  
-Status: `DRAFT` | Camada: `L4_ARTIFACT`
-
----
-
-# Relatório de Qualidade & Revisão: [NOME-DA-FEATURE]
-
-## 1. Cobertura de Testes Automatizados (TDD)
-- [ ] **Testes de Unidade:** Cobertura de 100% das invariantes do Domínio.
-- [ ] **Testes de Integração:** Cobertura dos casos de uso e adaptadores.
-- [ ] **Mapeamento BDD:** 100% dos cenários de `specs/behavior.md` implementados e verdes.
-
----
-
-## 2. Auditoria de Segurança (SAST / SCA)
-- **Status do Pipeline de Segurança:** `APPROVED`
-- **Vulnerabilidades Críticas / Altas:** 0
-- **Conformidade LGPD:** Nenhum dado pessoal sensível exposto em logs.
-
----
-
-## 3. Checklist de Arquitetura & Clean Code
-- [ ] **Isolamento de Camadas:** A camada de domínio é pura (zero acoplamento externo).
-- [ ] **SOLID:** Casos de uso possuem responsabilidade única e dependem de interfaces.
-
----
-
-### Navegação da Esteira
-
-* **Etapa Anterior:** [06 - Especificações BDD (Specs)](file://../specs/behavior.md)
-* **Próxima Etapa:** [08 - Monitoramento & Produção](file://./monitoring.md)
-* **Feedback Loops:**
-  * Falhas de segurança no SAST -> [Retornar para Implementação de Código](file://../../../../src/)
-  * Falhas de integração em QA -> [Retornar para Especificações BDD](file://../specs/behavior.md)
-"""
+        "assistant_prompt": "Você é o Auditor de Qualidade e Governança de Software. Conduza revisões estritas de código, conformidade arquitetural e segurança."
     },
-    {
+    "12-monitoring.md": {
         "id": "feature-monitoring",
-        "title": "08 - Monitoramento & Insights (L4: Feature)",
-        "category": "Esteira SDLC",
-        "badge": "L4",
-        "description": "Observabilidade em produção, telemetria, resultados de A/B tests e loop de feedback.",
+        "title": "09 - Monitoramento, SLIs & Métricas (L6: QA)",
+        "category": "Qualidade & QA",
+        "badge": "L6",
+        "description": "Dashboards de produção, alertas, SLIs, SLOs e métricas de observabilidade.",
         "default_filename": "monitoring.md",
         "suggested_folder": "domains/[dominio]/[area]/[FEATURE]/quality",
-        "assistant_prompt": "Você é o Especialista em Observabilidade e Métricas de Produto. Analise os resultados de telemetria, taxa de erro e experimentos A/B para gerar insights de novas features.",
-        "content": """---
-id: "feature-[dominio]-[area]-[feature]-monitoring"
-title: "Monitoramento & Insights: [NOME-DA-FEATURE]"
-type: "monitoring"
-version: "1.0.0"
-status: "active"
-layer: "L4_ARTIFACT"
-path: "domains/[dominio]/[area]/[FEATURE]/quality/monitoring.md"
-parent: "domains/[dominio]/[area]/[FEATURE]/quality/review.md"
-lifecycle:
-  stage: "monitoring"
-  previous_stage: "domains/[dominio]/[area]/[FEATURE]/quality/review.md"
-  next_stage: "domains/[dominio]/[area]/[FEATURE]/ideacao.md"
----
-
-Navegação: [Projeto](file://../../../../../project/index.md) / [[Domínio]](file://../../../../index.md) / [[Área]](file://../../../index.md) / [[NOME-DA-FEATURE]](file://../index.md) / **Monitoramento**  
-Status: `ACTIVE` | Camada: `L4_ARTIFACT`
-
----
-
-# Monitoramento, Telemetria & Insights: [NOME-DA-FEATURE]
-
-## 1. Métricas de Produção Observadas
-
-| Métrica | Meta Definida (KPI) | Resultado Real em Produção | Status |
-| :--- | :--- | :--- | :--- |
-| **Latência p95** | < 500ms | 180ms | `CONFORME` |
-| **Taxa de Erro HTTP 5xx** | < 0.05% | 0.01% | `CONFORME` |
-
----
-
-## 2. Resultados de Testes A/B & Experimentos
-* **Variante Vencedora:** Variante B (+12% de conversão).
-* **Impacto no Negócio:** Validação da hipótese formulada na ideação.
-
----
-
-## 3. Insights & Aprendizados para Próximas Iterações
-* **Oportunidade Detectada:** [Descrição de oportunidade observada]
-* **Ação:** Iniciar nova feature no ciclo contínuo de produto através da etapa de ideação.
-
----
-
-### Navegação da Esteira (Ciclo Contínuo)
-
-* **Etapa Anterior:** [07 - Qualidade & Review](file://./review.md)
-* **Loop Contínuo de Produto:** [Iniciar Nova Iteração / Ideação](file://../ideacao.md)
-"""
-    },
-    {
-        "id": "fintech-pix-refund",
-        "title": "FinTech: Processamento de Estorno PIX (L4)",
-        "category": "FinTech",
-        "badge": "FinTech Pack",
-        "description": "Especificação oficial de fluxo de devolução e estorno PIX com regras do Banco Central (Bacen), idempotência e MED.",
-        "default_filename": "estorno-pix.md",
-        "suggested_folder": "domains/billing/pix/ESTORNO-PIX",
-        "assistant_prompt": "Você é o Especialista em Meios de Pagamento e PIX do Bacen. Auxilie o desenvolvedor a modelar regras de estorno, limites de horário e tratamento de idempotência estrita.",
-        "content": """---
-id: "feature-billing-pix-estorno-pix-entity"
-title: "Entidades: Processar Estorno PIX"
-type: "entity"
-version: "1.0.0"
-status: "draft"
-layer: "L4_ARTIFACT"
-path: "domains/billing/pix/ESTORNO-PIX/docs/entity.md"
-parent: "domains/billing/pix/ESTORNO-PIX/docs/flow.md"
-lifecycle:
-  stage: "docs"
-  previous_stage: "domains/billing/pix/ESTORNO-PIX/docs/flow.md"
-  next_stage: "domains/billing/pix/ESTORNO-PIX/specs/behavior.md"
-  feedback_loops:
-    on_missing_details: "domains/billing/pix/ESTORNO-PIX/docs/flow.md"
----
-
-# 💸 Entidades & Agregados: Processamento de Estorno PIX
-
-## 1. Aggregate Root: `PixRefundAggregate`
-
-```typescript
-export class PixRefundAggregate {
-  private readonly refundId: RefundId;
-  private readonly originalEndToEndId: EndToEndId;
-  private readonly amount: Money;
-  private status: RefundStatus;
-
-  constructor(refundId: RefundId, endToEndId: EndToEndId, amount: Money) {
-    this.refundId = refundId;
-    this.originalEndToEndId = endToEndId;
-    this.amount = amount;
-    this.status = RefundStatus.REQUESTED;
-  }
-
-  public approveRefund(bacenProtocol: string): void {
-    if (this.status !== RefundStatus.REQUESTED) {
-      throw new InvalidStateTransitionError('Estorno já processado.');
+        "assistant_prompt": "Você é o Engenheiro de Confiabilidade de Sites (SRE) e Observabilidade. Ajude a definir SLIs, SLOs, métricas e planos de resposta a incidentes."
     }
-    this.status = RefundStatus.COMPLETED;
-  }
 }
-```
 
----
-
-## 2. Invariantes de Negócio do Bacen
-1. **Janela Máxima de Devolução:** O estorno total ou parcial só pode ser solicitado até 90 dias após a transação original.
-2. **Idempotência:** A chave `Idempotency-Key` (UUIDv4) deve ser verificada no Redis antes de qualquer chamada ao SPI.
-3. **Mecanismo Especial de Devolução (MED):** Se o motivo for fraude comprovada, marcar flag `is_med = true`.
-"""
-    },
-    {
-        "id": "event-outbox-kafka",
-        "title": "Event-Driven: Transactional Outbox Pattern (L4)",
-        "category": "Event-Driven",
-        "badge": "Kafka Pack",
-        "description": "Garantia de consistência eventual At-Least-Once entre banco relacional e Kafka através de tabela Outbox.",
-        "default_filename": "outbox-pattern.md",
-        "suggested_folder": "engenharia/event-driven",
-        "assistant_prompt": "Você é o Engenheiro Especialista em Mensageria e Event-Driven Architecture. Ajude a estruturar a tabela Outbox, particionamento de tópicos e Debezium CDC.",
-        "content": """---
-id: "pattern-transactional-outbox"
-title: "Padrão Arquitetural: Transactional Outbox com Kafka"
-type: "pattern"
-version: "1.0.0"
-status: "active"
-layer: "L4_ARTIFACT"
-path: "engenharia/event-driven/outbox.md"
-parent: "project/index.md"
-lifecycle:
-  stage: "architecture"
-  previous_stage: "project/index.md"
-  next_stage: "specs/events.md"
----
-
-# 📨 Arquitetura: Transactional Outbox Pattern
-
-## 1. Diagrama de Fluxo e Publicação Confiável
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Client
-    participant App as API Service
-    participant DB as PostgreSQL (Business + Outbox)
-    participant Relay as Debezium CDC / Poller
-    participant Kafka as Apache Kafka
-
-    Client->>App: POST /orders (Criar Pedido)
-    App->>DB: BEGIN TX: Insert Order + Insert OutboxEvent
-    DB-->>App: TX COMMIT OK
-    App-->>Client: 201 Created (Pedido Aceito)
-    Relay->>DB: Tail WAL / Read Outbox table
-    Relay->>Kafka: Publish Event to "orders.v1"
-```
-
----
-
-## 2. Estrutura Oficial da Tabela Outbox
-
-```sql
-CREATE TABLE outbox_events (
-    id UUID PRIMARY KEY,
-    aggregate_type VARCHAR(64) NOT NULL,
-    aggregate_id VARCHAR(64) NOT NULL,
-    event_type VARCHAR(128) NOT NULL,
-    payload JSONB NOT NULL,
-    headers JSONB DEFAULT '{}',
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    published_at TIMESTAMP WITH TIME ZONE NULL
-);
-CREATE INDEX idx_outbox_unpublished ON outbox_events(created_at) WHERE published_at IS NULL;
-```
-"""
-    },
-    {
-        "id": "ai-agent-workflow",
-        "title": "IA & Agentes: Arquitetura de Agentes Autônomos (L4)",
-        "category": "AI Agents",
-        "badge": "AI Pack",
-        "description": "Especificação de fluxo de agentes autônomos, schema de tool calling, guardrails e avaliação de prompts.",
-        "default_filename": "agent-spec.md",
-        "suggested_folder": "domains/ai-agents",
-        "assistant_prompt": "Você é o Especialista em AI Agents e LLM Engineering. Auxilie a projetar loops ReAct, definição estrita de schemas de ferramentas e guardrails de segurança.",
-        "content": """---
-id: "feature-ai-agent-orchestrator"
-title: "Especificação: Agente Autônomo de Governança"
-type: "spec"
-version: "1.0.0"
-status: "active"
-layer: "L4_ARTIFACT"
-path: "domains/ai-agents/agent-spec.md"
-parent: "project/index.md"
----
-
-# 🤖 Arquitetura do Agente de IA & Tool Calling
-
-## 1. Loop de Decisão e Raciocínio (ReAct)
-
-```mermaid
-graph TD
-    USER_INPUT["Entrada do Usuário"] --> PLANNER["Agente Planejador (LLM)"]
-    PLANNER --> DECISION{"Necessita Ferramenta?"}
-    DECISION -- Sim --> CALL_TOOL["Executa Tool (Git / AST / DB)"]
-    CALL_TOOL --> FEEDBACK["Retorno da Tool (JSON)"]
-    FEEDBACK --> PLANNER
-    DECISION -- Não --> FINAL_ANSWER["Resposta Final Estruturada"]
-```
-
----
-
-## 2. Ferramentas Disponíveis & Contratos
-
-* **`runAstLinter(filePath: string)`**: Executa análise de sintaxe de contratos DDD.
-* **`fetchDomainInvariants(domain: string)`**: Recupera invariantes ativas no `index.md` do domínio.
-"""
-    }
-]
-
-CANONICAL_TUTORIALS = [
-    {
-        "id": "intro-context-os",
-        "title": "Guia de Navegação & Context OS",
-        "category": "Fundamentos",
-        "badge": "Guia",
-        "read_time": "3 min",
-        "description": "Aprenda a operar o workbench de governança, árvore de arquivos, editor em múltiplos modos e assistente de IA.",
-        "content": """# Guia de Navegação & Context OS
-
-Bem-vindo ao **Context OS**, a plataforma de governança arquitetural e ciclo de vida de desenvolvimento orientado a especificações (**Spec-Driven Development**).
-
----
-
-## 🗺️ 1. Estrutura do Workbench Integrado
-
-O Workbench é organizado em 3 painéis horizontais com divisores redimensionáveis:
-
-```mermaid
-graph LR
-    NAV["Menu Global<br/>(Módulos)"] --> TREE["Árvore de Docs<br/>(Busca & CRUD)"]
-    TREE --> EDITOR["Editor & Split View<br/>(Markdown + Mermaid)"]
-    EDITOR --> AI["Assistente IA<br/>(Chat Contextual)"]
-```
-
-### Funcionalidades Principais:
-1. **Árvore de Documentos (Esquerda):**
-   - Navegue por pastas (`domains/`, `specs/`) e arquivos raiz (`index.md`).
-   - Crie novos arquivos e pastas diretamente com o botão `+`.
-   - Renomeie caminhos ou exclua documentos com menus de contexto em cada item.
-   - Indicadores visuais por pontos de cor:
-     - 🔴 **T0 (Vermelho):** Arquivo raiz e Constituição Oficial (`index.md`).
-     - 🟡 **T1 (Âmbar):** Bounded Contexts e Domínios de negócio (`domains/`).
-     - 🟢 **T2 (Verde):** Cenários executáveis BDD e especificações (`specs/`).
-
-2. **Editor & Preview Canvas (Centro):**
-   - **Modo Editor:** Foco total na escrita com suporte a <kbd>Ctrl</kbd>+<kbd>Z</kbd> (Desfazer), <kbd>Ctrl</kbd>+<kbd>Y</kbd> (Refazer) e <kbd>Ctrl</kbd>+<kbd>S</kbd> (Salvar).
-   - **Modo Split:** Edição lado a lado com renderização em tempo real de Markdown e diagramas Mermaid.
-   - **Modo Preview:** Leitura limpa com estilo Confluence e exportação visual.
-
-3. **Assistente de IA Integrado (Direita):**
-   - Chat conectado ao documento aberto no momento (`grounding`).
-   - Sugere contratos DDD, diagramas Mermaid e cenários Gherkin com botão `📥 Inserir no Editor` em 1 clique.
-
-4. **Auditoria & Diffs com GitHub:**
-   - Todas as edições locais ficam registradas em rascunho de workspace.
-   - O botão **Diffs & PR** permite inspecionar as diferenças linha a linha e abrir Pull Requests auditados.
-"""
-    },
-    {
-        "id": "ddd-architecture",
-        "title": "Domain-Driven Design (DDD) na Prática",
-        "category": "Arquitetura",
-        "badge": "DDD",
-        "read_time": "6 min",
-        "description": "Entenda Bounded Contexts, Dicionário Ubíquo, Agregados, Entidades e Isolamento de Camadas.",
-        "content": """# Domain-Driven Design (DDD) na Prática
-
-O **Domain-Driven Design** é o pilar que garante que o software reflita com fidelidade os modelos mentais do negócio.
-
----
-
-## 🏛️ 1. Mapa de Contextos Delimitados (Bounded Contexts)
-
-Cada sub-domínio do negócio possui um Bounded Context isolado, com responsabilidades claras e linguagem própria:
-
-```mermaid
-graph TD
-    CORE["🏛️ Constituição Oficial (index.md)"] --> BILLING["💳 billing (Faturamento)"]
-    CORE --> IAM["🔐 iam (Identidade & Acesso)"]
-    CORE --> CATALOG["📦 catalog (Serviços & Produtos)"]
-    
-    BILLING -.->|Consome Token| IAM
-    CATALOG -.->|Notifica Pedido| BILLING
-```
-
----
-
-## 📖 2. Dicionário Ubíquo (Ubiquitous Language)
-
-Antes de escrever qualquer código, termos ambíguos devem ser catalogados formalmente em `project.md` ou `index.md`:
-
-| Termo Ubíquo | Significado  no Negócio | Bounded Context |
-| :--- | :--- | :--- |
-| `TransacaoFinanceira` | Movimentação monetária confirmada pelo gateway de pagamento. | `billing` |
-| `ContaUsuario` | Identidade autenticada com roles e permissões RBAC. | `iam` |
-| `ItemCatalogo` | Serviço ou produto elegível para contratação ativa. | `catalog` |
-
----
-
-## 🧩 3. Blocos de Construção Táticos
-
-- **Aggregate Root (Raiz de Agregação):** Entidade principal responsável por garantir a integridade transacional de todo o grupo (ex: `Pedido`).
-- **Entity (Entidade):** Objeto com identidade única que persiste ao longo do tempo (ex: `Usuario`).
-- **Value Object (Objeto de Valor):** Objeto imutável definido exclusivamente por seus atributos (ex: `CPF`, `Dinheiro`, `Endereco`).
-
----
-
-## 🛡️ 4. Isolamento Estrito de Camadas (Clean Architecture)
-
-```mermaid
-graph BT
-    INFRA["Infraestrutura (DB, HTTP, Queues)"] --> APP["Aplicação (Use Cases, DTOs)"]
-    APP --> DOMAIN["Domínio Puro (Entidades, Regras, ZERO dependências externas)"]
-```
-"""
-    },
-    {
-        "id": "sdd-governance",
-        "title": "Spec-Driven Development (SDD) & Governança",
-        "category": "Governança",
-        "badge": "SDD",
-        "read_time": "5 min",
-        "description": "A especificação oficial como fonte única da verdade antes de qualquer linha de código.",
-        "content": """# Spec-Driven Development (SDD) & Governança
-
-No **Spec-Driven Development (SDD)**, nenhuma linha de código de produção é escrita antes que a especificação arquitetural e os requisitos de negócio estejam documentados, versionados e aprovados.
-
----
-
-## 🎯 1. O Fluxo SDLC Orientado a Especificações
-
-```mermaid
-flowchart LR
-    A["1. Ideação & Bounded Context<br/>(ideacao.md)"] --> B["2. SLAs & KPIs<br/>(kpis.md)"]
-    B --> C["3. Diagramas & Entidades<br/>(docs/flow.mermaid)"]
-    C --> D["4. Cenários BDD Executáveis<br/>(specs/behavior.md)"]
-    D --> E["5. Código TDD & Testes<br/>(Fase Red -> Green)"]
-    E --> F["6. PR Auditado & Governança<br/>(Mermaid + Checklist)"]
-```
-
----
-
-## 🏷️ 2. Pirâmide de Governança em 3 Tiers
-
-1. **🔴 Tier 0 — Global / Core (`index.md`):**
-   - Constituição Oficial, Vocabulário Macro e Mapa Global de Arquitetura.
-   - Alterações exigem aprovação de Tech Leads e Arquitetos.
-2. **🟡 Tier 1 — Domínios de Negócio (`domains/[nome]/`):**
-   - Documentos de `ideacao.md` e `kpis.md` com SLAs de performance e invariantes.
-   - Aprovados por Product Owners e Leads de Squad.
-3. **🟢 Tier 2 — Especificações & Cenários BDD (`specs/`):**
-   - Critérios de aceitação executáveis escritos em Gherkin.
-   - Revisados por QAs e Engenheiros.
-
----
-
-## 🛡️ 3. Governança e Matriz de Responsabilidade
-
-A governança do projeto estabelece papéis claros para cada camada:
-- **Projeto & Fundação (`project/`):** Arquitetos e Tech Leads.
-- **Domínios & Subdomínios (`domains/`):** Product Owners e Squad Leads.
-- **Engenharia & Padrões (`engenharia/`):** Engenheiros seniores e Especialistas.
-"""
-    },
-    {
-        "id": "bdd-executable-specs",
-        "title": "Behavior-Driven Development (BDD) com Gherkin",
-        "category": "Qualidade",
-        "badge": "BDD",
-        "read_time": "5 min",
-        "description": "Como transformar regras de negócio em especificações vivas e testes executáveis com Gherkin.",
-        "content": """# Behavior-Driven Development (BDD) com Gherkin
-
-O **BDD** une desenvolvedores, QAs e Product Owners em torno de uma linguagem ubíqua comum, definindo o comportamento esperado do sistema antes da implementação.
-
----
-
-## 📝 1. Anatomia de uma Especificação Gherkin
-
-Os cenários são escritos utilizando a sintaxe oficial Gherkin com as palavras-chave `Given` (Dado que), `When` (Quando) e `Then` (Então):
-
-```gherkin
-Feature: Processamento de Pagamento via PIX
-  Como um cliente da plataforma
-  Eu quero pagar uma fatura via chave PIX
-  Para que meu serviço seja liberado instantaneamente
-
-  @critico @transacional
-  Scenario: Pagamento com saldo suficiente aprovado com sucesso
-    Given que o cliente possui uma fatura pendente no valor de "R$ 150,00"
-    And a chave PIX do destinatário é válida e ativa
-    When o cliente confirma a transferência de "R$ 150,00"
-    Then a transação deve ser liquidada em menos de 2 segundos
-    And o status da fatura deve mudar para "PAGA"
-    And um evento "FaturaPagaEvent" deve ser publicado no barramento
-
-  @excecao @resiliencia
-  Scenario: Tentativa de pagamento com chave PIX expirada
-    Given que a cobrança PIX expirou há mais de 30 minutos
-    When o cliente tenta efetuar o pagamento
-    Then a operação deve ser rejeitada com código "PIX_EXPIRADO"
-    And nenhum débito deve ocorrer na conta do cliente
-```
-
----
-
-## 🔄 2. Da Especificação ao Teste Automatizado
-
-1. **Escrita do BDD:** O arquivo `specs/behavior.md` é validado e versionado.
-2. **Assistente de IA:** O assistente embutido lê o Gherkin e gera os testes automatizados (em Jest, PyTest ou Cucumber).
-3. **Living Documentation:** A documentação nunca fica desatualizada porque reflete diretamente o suite de testes de aceitação.
-"""
-    },
-    {
-        "id": "tdd-engineering",
-        "title": "Test-Driven Development (TDD) & Red-Green-Refactor",
-        "category": "Engenharia",
-        "badge": "TDD",
-        "read_time": "4 min",
-        "description": "Domine o ciclo de testes antes do código para criar arquiteturas limpas e sem regressões.",
-        "content": """# Test-Driven Development (TDD) & Red-Green-Refactor
-
-No **TDD**, os testes automatizados guiam o design do código e garantem cobertura integral de requisitos.
-
----
-
-## 🚦 1. O Ciclo Virtuoso Red-Green-Refactor
-
-```mermaid
-graph TD
-    RED["🔴 1. RED<br/>Escreva um teste que falhe para o cenário BDD"] --> GREEN["🟢 2. GREEN<br/>Escreva o código mínimo estritamente necessário"]
-    GREEN --> REFACTOR["🔵 3. REFACTOR<br/>Limpe o código, elimine duplicações e respeite DDD"]
-    REFACTOR --> RED
-```
-
-### Regras Mandatórias:
-1. **Fase RED:** Nunca escreva código de produção sem antes ter um teste falhando que justifique sua existência.
-2. **Fase GREEN:** Escreva a solução mais simples possível para fazer o teste passar. Não adicione abstrações prematuras nesta etapa.
-3. **Fase REFACTOR:** Com a garantia dos testes verdes, renomeie variáveis para a Linguagem Ubíqua, extraia métodos e isole as entidades de domínio.
-
----
-
-## 🏗️ 2. Pirâmide de Testes no Context OS
-
-```mermaid
-graph BT
-    UNIT["🧪 Testes Unitários de Domínio (Rápidos, Isolados, 100% de Regras)"] --> INTEG["🔗 Testes de Integração de Casos de Uso (Adapters, DB, APIs)"]
-    INTEG --> E2E["🌐 Testes End-to-End BDD (Fluxos Completos do Usuário)"]
-```
-"""
-    },
-    {
-        "id": "ai-agents-pipeline",
-        "title": "Agentes de IA & Pipelines de SDLC",
-        "category": "Automação",
-        "badge": "AI SDLC",
-        "read_time": "4 min",
-        "description": "Aprenda como orquestrar assistentes autônomos para acelerar o desenvolvimento com governança.",
-        "content": """# Agentes de IA & Pipelines de SDLC
-
-O Context OS integra agentes de inteligência artificial generativa diretamente no fluxo de desenvolvimento, fornecendo assistência especializada e contextualizada.
-
----
-
-## 🤖 1. Assistência Contextual (Grounded Context)
-
-Ao interagir com o chat de IA lateral, o agente recebe automaticamente:
-- O documento atualmente aberto no editor (`caminho` + `conteúdo`).
-- As regras de governança e convenções oficiais do repositório.
-- Prompts especializados de acordo com o template ativo (ex: *Especialista em DDD*, *Auditor de SLAs*, *Especialista em BDD*).
-
-```mermaid
-sequenceDiagram
-    actor Dev as Desenvolvedor
-    participant UI as Editor & Chat
-    participant AI as Agente de IA
-    participant Repo as GitHub / Workspace
-    
-    Dev->>UI: Solicita: "Criar diagrama de contexto para Billing"
-    UI->>AI: Envia Prompt + Documento Atual Grounded
-    AI-->>UI: Retorna Diagrama Mermaid + Explicação
-    Dev->>UI: Clica em "📥 Inserir no Editor"
-    Dev->>Repo: Salva no Workspace & Abre PR
-```
-
----
-
-## 🚀 2. Melhores Práticas ao Usar a IA
-
-1. **Use os Chips de Ação Rápida:**
-   - `Diagrama Mermaid`: Gera visualizações gráficas instantâneas dos fluxos.
-   - `Dicionário Ubíquo`: Mapeia e padroniza os termos s.
-   - `Auditar DDD`: Identifica acoplamentos indevidos e sugere refatorações.
-   - `Cenário BDD`: Formula novos cenários Given/When/Then para casos de borda.
-2. **Revise Sempre Antes de Salvar:** A IA é um copiloto de engenharia; a aprovação e autoria das especificações é de responsabilidade dos autores e revisores técnicos do projeto.
-"""
-    }
-]
+def load_canonical_templates():
+    """
+    Carrega dinamicamente todos os templates Markdown da pasta templates/ do framework.
+    """
+    templates = []
+    if os.path.exists(TEMPLATES_DIR):
+        files = sorted(os.listdir(TEMPLATES_DIR))
+        for f in files:
+            if f.endswith(".md"):
+                fpath = os.path.join(TEMPLATES_DIR, f)
+                try:
+                    with open(fpath, "r", encoding="utf-8") as file:
+                        content = file.read()
+                    fm, _ = extract_frontmatter(content)
+                    fallback = TEMPLATE_METADATA_FALLBACKS.get(f, {})
+                    
+                    tpl_id = fallback.get("id") or (fm.get("id") if fm.get("id") and "{{" not in str(fm.get("id")) else f.replace(".md", ""))
+                    title = fallback.get("title") or (fm.get("title") if fm.get("title") and "{{" not in str(fm.get("title")) else f.replace(".md", "").title())
+                    category = fallback.get("category") or ("Domain-Driven Design" if "domain" in f else "Esteira SDLC")
+                    badge = fallback.get("badge") or fm.get("layer") or "Template"
+                    description = fallback.get("description") or f"Template oficial {f}"
+                    default_filename = fallback.get("default_filename") or f
+                    suggested_folder = fallback.get("suggested_folder") or "specs"
+                    assistant_prompt = fallback.get("assistant_prompt") or "Você é o assistente especialista para este documento."
+
+                    templates.append({
+                        "id": tpl_id,
+                        "title": title,
+                        "category": category,
+                        "badge": badge,
+                        "description": description,
+                        "default_filename": default_filename,
+                        "suggested_folder": suggested_folder,
+                        "assistant_prompt": assistant_prompt,
+                        "content": content,
+                        "source_file": f
+                    })
+                except Exception as e:
+                    print(f"Erro ao carregar template {f}: {e}")
+    return templates
+
+# Singleton / alias para compatibilidade com partes existentes
+CANONICAL_TEMPLATES = load_canonical_templates()
 
 def load_config():
+    canonical = load_canonical_templates()
     if os.path.exists(CONFIG_PATH):
         try:
             with open(CONFIG_PATH, "r", encoding="utf-8") as f:
                 cfg = json.load(f)
                 if "templates" not in cfg or not cfg["templates"]:
-                    cfg["templates"] = list(CANONICAL_TEMPLATES)
+                    cfg["templates"] = canonical
                 if "settings" not in cfg:
                     cfg["settings"] = {
                         "template_creator_prompt": DEFAULT_TEMPLATE_CREATOR_PROMPT,
@@ -1416,12 +420,45 @@ def load_config():
             "api_key": os.environ.get("GEMINI_API_KEY", ""),
             "custom_endpoint": "http://localhost:11434/v1"
         },
+        "mandatory_structure": {
+            "directories": [
+                "project",
+                "domains",
+                "engenharia",
+                "templates",
+                ".spec-memory/_rules",
+                ".spec-memory/concepts",
+                ".spec-memory/decisions",
+                ".spec-memory/gotchas",
+                ".spec-memory/handoffs",
+                ".spec-memory/sessions"
+            ],
+            "essential_files": [
+                {
+                    "path": ".spec-memory/_meta.yaml",
+                    "content": "version: 1.0\ninitialized: true\n"
+                }
+            ]
+        },
         "settings": {
             "template_creator_prompt": DEFAULT_TEMPLATE_CREATOR_PROMPT,
             "global_system_prompt": DEFAULT_GLOBAL_SYSTEM_PROMPT,
             "auto_pr_on_save": False
         },
-        "templates": list(CANONICAL_TEMPLATES),
+        "templates": canonical,
+        "workflows": [
+            {
+                "id": "full-sdlc",
+                "name": "Esteira SDLC Completa (L1 a L6)",
+                "description": "Conjunto completo de templates para constituição, bounded contexts, ideação, especificação técnica, BDD e observabilidade.",
+                "category": "Completo",
+                "templates": [
+                    "01-project-root.md", "02-domain.md", "03-subdomain.md", "04-ideacao.md",
+                    "05-kpis.md", "06-research.md", "07-feature-definition.md", "08-flow.md",
+                    "09-entity.md", "10-behavior-specs.md", "11-quality-review.md", "12-monitoring.md"
+                ]
+            }
+        ],
         "workspace_changes": {},
         "user": None,
         "orgs": [],
@@ -1429,11 +466,7 @@ def load_config():
         "prs": [],
         "governance": {
             "min_approvals": 1,
-            "reviewers": [
-                { "id": "1", "name": "Marcos Baiadori", "handle": "@mBaiadori", "role": "Tech Lead / Head", "tier": "Tier 0 (Global)" },
-                { "id": "2", "name": "Tech Leads Guild", "handle": "@tech-leads", "role": "Tech Leads Pool", "tier": "Tier 0 (Core)" },
-                { "id": "3", "name": "PO de Domínio", "handle": "@po-financeiro", "role": "Product Owner", "tier": "Tier 1 (Domínios)" }
-            ]
+            "reviewers": []
         }
     }
 
@@ -1516,13 +549,28 @@ def call_github_api(endpoint, token, method="GET", data=None):
 
 def ensure_default_repo_files(repo_name):
     """
-    Garante apenas a existência das pastas estruturais básicas do projeto
-    (project, domains, engenharia, templates), sem gerar arquivos de conteúdo ou index.md.
+    Garante a existência das pastas e arquivos estruturais do projeto
+    definidos na seção 'mandatory_structure' de config.json.
     """
-    if repo_name:
-        repo_dir = os.path.join(PROJECTS_DIR, repo_name)
-        for folder in ["project", "domains", "engenharia", "templates"]:
-            os.makedirs(os.path.join(repo_dir, folder), exist_ok=True)
+    if not repo_name:
+        return
+    repo_dir = os.path.join(PROJECTS_DIR, repo_name)
+    cfg = load_config()
+    mandatory = cfg.get("mandatory_structure", {})
+    directories = mandatory.get("directories", ["project", "domains", "engenharia", "templates", ".spec-memory"])
+    essential_files = mandatory.get("essential_files", [])
+
+    for folder in directories:
+        os.makedirs(os.path.join(repo_dir, folder), exist_ok=True)
+
+    for ef in essential_files:
+        ef_path = ef.get("path")
+        if ef_path:
+            target = os.path.join(repo_dir, ef_path)
+            if not os.path.exists(target):
+                os.makedirs(os.path.dirname(target), exist_ok=True)
+                with open(target, "w", encoding="utf-8") as f:
+                    f.write(ef.get("content", ""))
 
 def sync_5w2h_to_index_md(repo_name, canvas_5w2h, project_info=None):
     """
@@ -1576,6 +624,8 @@ def get_project_config(repo_name):
     """
     Retorna a configuração oficial do projeto ativo ou preset padrão.
     """
+    cfg = load_config()
+    suggested_domains = cfg.get("suggested_domains", FRAMEWORK_SUGGESTED_DOMAINS)
     repo_dir = os.path.join(PROJECTS_DIR, repo_name)
     config_file = os.path.join(repo_dir, "project", "project.config.json")
     if not os.path.exists(config_file):
@@ -1591,7 +641,7 @@ def get_project_config(repo_name):
                     "config": data,
                     "is_customized": True,
                     "repo_name": repo_name,
-                    "suggested_domains": FRAMEWORK_SUGGESTED_DOMAINS,
+                    "suggested_domains": suggested_domains,
                     "config_path": os.path.relpath(config_file, repo_dir).replace("\\", "/")
                 }
         except Exception as e:
@@ -1604,7 +654,7 @@ def get_project_config(repo_name):
         "config": default_cfg,
         "is_customized": False,
         "repo_name": repo_name,
-        "suggested_domains": FRAMEWORK_SUGGESTED_DOMAINS,
+        "suggested_domains": suggested_domains,
         "config_path": "project/project.config.json"
     }
 
@@ -2237,31 +1287,6 @@ def get_file_blame_info(repo_name, file_path):
         "pr_id": pr_id,
         "history": matching_prs
     }
-
-def extract_frontmatter(content_str):
-    """
-    Extrai o bloco YAML de Frontmatter entre marcadores '---' no início do documento.
-    Retorna uma tupla (metadata_dict, body_markdown).
-    """
-    if not content_str:
-        return {}, ""
-    content_stripped = content_str.lstrip()
-    if not content_stripped.startswith("---"):
-        return {}, content_str
-
-    parts = content_stripped.split("---", 2)
-    if len(parts) < 3:
-        return {}, content_str
-
-    yaml_text = parts[1].strip()
-    body_text = parts[2].lstrip("\r\n")
-    try:
-        data = yaml.safe_load(yaml_text)
-        if isinstance(data, dict):
-            return data, body_text
-    except Exception:
-        pass
-    return {}, content_str
 
 def build_workspace_graph(repo_name):
     """
@@ -4091,8 +3116,6 @@ author_handle: "{actor.get('handle', 'dev')}"
 """
     with open(file_path, "w", encoding="utf-8") as f:
         f.write(fm)
-    return { "success": True, "path": file_path, "slug": slug_clean, "category": category, "title": title }
-
 def delete_wiki_entry(repo_name, category, slug):
     mem_dir = get_memory_dir(repo_name)
     if category not in ["decisions", "concepts", "gotchas", "_rules", "handoffs"]:
@@ -4106,6 +3129,67 @@ def delete_wiki_entry(repo_name, category, slug):
         except Exception as e:
             return { "success": False, "error": str(e) }
     return { "success": False, "error": "Arquivo não encontrado" }
+
+def reset_memory_scope(repo_name, scope="all"):
+    mem_dir = get_memory_dir(repo_name)
+    deleted_count = 0
+    now_iso = datetime.datetime.now().isoformat()
+    
+    if scope == "all":
+        # Delete contents of all subdirectories
+        subdirs = ["sessions", "handoffs", "decisions", "concepts", "gotchas", "_rules"]
+        for s in subdirs:
+            s_path = os.path.join(mem_dir, s)
+            if os.path.exists(s_path):
+                for fname in os.listdir(s_path):
+                    fpath = os.path.join(s_path, fname)
+                    if os.path.isfile(fpath):
+                        try:
+                            os.remove(fpath)
+                            deleted_count += 1
+                        except Exception:
+                            pass
+        # Delete log files
+        for fname in os.listdir(mem_dir):
+            if fname.startswith("log-") and fname.endswith(".md"):
+                try:
+                    os.remove(os.path.join(mem_dir, fname))
+                    deleted_count += 1
+                except Exception:
+                    pass
+        # Re-initialize _meta.yaml
+        meta_path = os.path.join(mem_dir, "_meta.yaml")
+        try:
+            with open(meta_path, "w", encoding="utf-8") as f:
+                f.write(f"# AI Memory & Spec Governance Catalog\nrepo: {repo_name}\ncreated_at: {now_iso}Z\nversion: 2.0\n")
+        except Exception:
+            pass
+        return {"success": True, "scope": "all", "deleted_count": deleted_count}
+
+    elif scope == "logs":
+        for fname in os.listdir(mem_dir):
+            if fname.startswith("log-") and fname.endswith(".md"):
+                try:
+                    os.remove(os.path.join(mem_dir, fname))
+                    deleted_count += 1
+                except Exception:
+                    pass
+        return {"success": True, "scope": "logs", "deleted_count": deleted_count}
+
+    elif scope in ["sessions", "handoffs", "decisions", "concepts", "gotchas", "_rules"]:
+        s_path = os.path.join(mem_dir, scope)
+        if os.path.exists(s_path):
+            for fname in os.listdir(s_path):
+                fpath = os.path.join(s_path, fname)
+                if os.path.isfile(fpath):
+                    try:
+                        os.remove(fpath)
+                        deleted_count += 1
+                    except Exception:
+                        pass
+        return {"success": True, "scope": scope, "deleted_count": deleted_count}
+
+    return {"success": False, "error": f"Escopo de reset desconhecido: {scope}"}
 
 class ModularGovernanceHandler(SimpleHTTPRequestHandler):
     def end_headers(self):
@@ -4269,6 +3353,12 @@ class ModularGovernanceHandler(SimpleHTTPRequestHandler):
             repo_name = active_repo.get("name", "local")
             installed = get_installed_repo_templates(repo_name)
             return self.send_json({ "installed_templates": installed, "count": len(installed) })
+
+        # 4.012 Workflows Catalog
+        if path == "/api/workflows":
+            cfg = load_config()
+            workflows = cfg.get("workflows", [])
+            return self.send_json({ "workflows": workflows, "count": len(workflows) })
 
         # 4.015 Configuração Oficial do Projeto (Camadas, Níveis, Definições Estratégicas, Taxonomia, Políticas)
         if path == "/api/project/config":
@@ -5037,6 +4127,48 @@ Retorne APENAS o JSON puro válido."""
                 "message": f"Template '{tpl.get('title')}' instalado com sucesso em templates/{filename}!"
             })
 
+        # 7.15 Aplicar Workflow de Templates no Projeto Ativo
+        if path == "/api/workflows/apply":
+            workflow_id = payload.get("id") or payload.get("workflow_id")
+            cfg = load_config()
+            active_repo = cfg.get("active_repo")
+            if not active_repo:
+                return self.send_json({ "error": "Nenhum repositório ativo selecionado" }, 400)
+            repo_name = active_repo.get("name", "local")
+            workflows = cfg.get("workflows", [])
+            target_wf = next((w for w in workflows if w.get("id") == workflow_id), None)
+            if not target_wf:
+                return self.send_json({ "error": f"Workflow '{workflow_id}' não encontrado" }, 404)
+
+            tpl_dir = os.path.join(PROJECTS_DIR, repo_name, "templates")
+            os.makedirs(tpl_dir, exist_ok=True)
+            installed_files = []
+            all_tpls = load_canonical_templates()
+
+            for tpl_ref in target_wf.get("templates", []):
+                src_path = os.path.join(TEMPLATES_DIR, tpl_ref)
+                if not os.path.exists(src_path):
+                    matched = next((t for t in all_tpls if t.get("id") == tpl_ref or t.get("source_file") == tpl_ref or t.get("default_filename") == tpl_ref), None)
+                    if matched and matched.get("source_file"):
+                        src_path = os.path.join(TEMPLATES_DIR, matched["source_file"])
+
+                if os.path.exists(src_path):
+                    dest_name = os.path.basename(src_path)
+                    dest_path = os.path.join(tpl_dir, dest_name)
+                    with open(src_path, "r", encoding="utf-8") as sf:
+                        tpl_content = sf.read()
+                    with open(dest_path, "w", encoding="utf-8") as df:
+                        df.write(tpl_content)
+                    record_change(repo_name, f"templates/{dest_name}", "ADDED", "", tpl_content)
+                    installed_files.append(dest_name)
+
+            return self.send_json({
+                "success": True,
+                "workflow": target_wf.get("name"),
+                "installed_templates": installed_files,
+                "message": f"Workflow '{target_wf.get('name')}' aplicado com sucesso! {len(installed_files)} templates instalados no projeto."
+            })
+
         # 7.2 Bootstrap de Governança no Projeto Ativo (1-Click)
         if path == "/api/project/bootstrap":
             cfg = load_config()
@@ -5241,6 +4373,13 @@ Especificações, contratos, bibliotecas e regras mandatórias.
             if not slug:
                 return self.send_json({ "error": "slug é obrigatório" }, 400)
             res = delete_wiki_entry(repo_name, category, slug)
+            return self.send_json(res)
+
+        # AI Memory: Reset Granular de Memória (Dev Tools)
+        if path == "/api/chat/memory/reset":
+            repo_name = payload.get("repo", "default")
+            scope = payload.get("scope", "all")
+            res = reset_memory_scope(repo_name, scope=scope)
             return self.send_json(res)
 
         # 12. Logout

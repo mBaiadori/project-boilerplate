@@ -130,6 +130,60 @@ class ChatMemoryStore {
       localStorage.removeItem(`chat_mem_${key}`);
     } catch (e) {}
   }
+
+  async clearRepo(repo) {
+    await this.initPromise;
+    const r = (repo || "default").trim();
+
+    if (this.db) {
+      try {
+        const tx = this.db.transaction(STORE_NAME, "readwrite");
+        const store = tx.objectStore(STORE_NAME);
+        const req = store.openCursor();
+        req.onsuccess = (e) => {
+          const cursor = e.target.result;
+          if (cursor) {
+            if (cursor.value && cursor.value.repo === r) {
+              cursor.delete();
+            }
+            cursor.continue();
+          }
+        };
+      } catch (e) {
+        console.warn("IndexedDB clearRepo error:", e);
+      }
+    }
+
+    try {
+      Object.keys(localStorage).forEach((k) => {
+        if (k.startsWith(`chat_mem_${r}::`) || k.startsWith(`chat_mem_${r}`)) {
+          localStorage.removeItem(k);
+        }
+      });
+    } catch (e) {}
+  }
+
+  async clearAll() {
+    await this.initPromise;
+
+    if (this.db) {
+      try {
+        const tx = this.db.transaction(STORE_NAME, "readwrite");
+        const store = tx.objectStore(STORE_NAME);
+        store.clear();
+      } catch (e) {
+        console.warn("IndexedDB clearAll error:", e);
+      }
+    }
+
+    try {
+      Object.keys(localStorage).forEach((k) => {
+        if (k.startsWith("chat_mem_") || k.startsWith("governance_ai_") || k.startsWith("governance_chat_") || k.startsWith("ai_chat_")) {
+          localStorage.removeItem(k);
+        }
+      });
+    } catch (e) {}
+  }
 }
 
 export const ChatMemoryStoreService = new ChatMemoryStore();

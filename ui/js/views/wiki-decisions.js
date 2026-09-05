@@ -1,7 +1,5 @@
-// =============================================================================
-// VIEW MODULE: AI KNOWLEDGE WIKI & DECISIONS (KARPATHY-STYLE LLM-WIKI)
-// =============================================================================
 import { API } from '../api.js';
+import { ChatMemoryStoreService } from '../services/chat-memory-store.js';
 
 export function initWikiDecisionsView({ getActiveRepo }) {
   const container = document.getElementById('subview-wiki');
@@ -206,16 +204,25 @@ Toda chamada de cobrança exige um cabeçalho \`Idempotency-Key\` gerado no fron
               <h1 id="wiki-doc-title" style="margin: 0 0 2px 0; font-size: 16px; font-weight: 700; color: var(--text-heading); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Hub de Conhecimento & Decisões IA</h1>
               <div id="wiki-doc-meta" style="font-size: 11px; color: var(--text-muted);">Padrão Karpathy LLM-Wiki no Git (.spec-memory/)</div>
             </div>
-            <div id="wiki-header-actions" style="display: none; gap: 8px; flex-shrink: 0; align-items: center;">
-              <button id="btn-wiki-delete-entry" class="btn btn-ghost btn-sm" style="color: var(--md-sys-color-error, #ef4444); display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px;" title="Excluir página do Git">
-                <span class="material-symbols-outlined icon-xs">delete</span> Excluir
+            
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <!-- Dev Memory Reset Button (Development Mode) -->
+              <button id="btn-open-dev-memory-modal" class="btn btn-ghost btn-xs" style="color: #ea580c; border: 1px dashed rgba(234, 88, 12, 0.4); display: inline-flex; align-items: center; gap: 4px; font-size: 11px; padding: 4px 8px; border-radius: 6px;" title="Painel de desenvolvimento para resetar sessões, logs e wiki de forma granular">
+                <span class="material-symbols-outlined" style="font-size: 15px;">cleaning_services</span>
+                <span>Reset Memória (Dev)</span>
               </button>
-              <button id="btn-wiki-edit-toggle" class="btn btn-secondary btn-sm" style="display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px;">
-                <span class="material-symbols-outlined icon-xs">edit</span> Editar
-              </button>
-              <button id="btn-wiki-save-entry" class="btn btn-primary btn-sm" style="display: none; align-items: center; gap: 4px; font-size: 11.5px;">
-                <span class="material-symbols-outlined icon-xs">save</span> Salvar no Git
-              </button>
+
+              <div id="wiki-header-actions" style="display: none; gap: 8px; flex-shrink: 0; align-items: center;">
+                <button id="btn-wiki-delete-entry" class="btn btn-ghost btn-sm" style="color: var(--md-sys-color-error, #ef4444); display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px;" title="Excluir página do Git">
+                  <span class="material-symbols-outlined icon-xs">delete</span> Excluir
+                </button>
+                <button id="btn-wiki-edit-toggle" class="btn btn-secondary btn-sm" style="display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px;">
+                  <span class="material-symbols-outlined icon-xs">edit</span> Editar
+                </button>
+                <button id="btn-wiki-save-entry" class="btn btn-primary btn-sm" style="display: none; align-items: center; gap: 4px; font-size: 11.5px;">
+                  <span class="material-symbols-outlined icon-xs">save</span> Salvar no Git
+                </button>
+              </div>
             </div>
           </div>
 
@@ -224,6 +231,135 @@ Toda chamada de cobrança exige um cabeçalho \`Idempotency-Key\` gerado no fron
             <!-- Loaded dynamically by renderHubDashboard() or renderActiveEntryView() -->
           </div>
         </main>
+      </div>
+
+      <!-- Dev Memory Reset Modal (Granular Reset Panel) -->
+      <div id="modal-dev-memory-reset" class="modal-backdrop" style="display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); z-index: 9999; align-items: center; justify-content: center; padding: 16px;">
+        <div class="modal-card" style="width: 100%; max-width: 680px; max-height: 90vh; background: #ffffff; border-radius: 12px; border: 1px solid var(--border-color); display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2);">
+          
+          <div style="padding: 16px 20px; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; background: #fff7ed;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span class="material-symbols-outlined" style="color: #ea580c; font-size: 22px;">developer_mode</span>
+              <div>
+                <h3 style="margin: 0; font-size: 14.5px; font-weight: 700; color: #9a3412;">Painel de Desenvolvimento: Reset de Memória</h3>
+                <span style="font-size: 11px; color: #c2410c;">Limpeza granular das camadas de memória e persistência do Git (.spec-memory/)</span>
+              </div>
+            </div>
+            <button id="btn-close-dev-memory-modal" class="btn-icon" style="color: #9a3412; border: none; background: transparent; cursor: pointer;">
+              <span class="material-symbols-outlined">close</span>
+            </button>
+          </div>
+
+          <div style="padding: 18px 20px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 12px;">
+            <p style="margin: 0 0 6px 0; font-size: 12px; color: var(--text-muted); line-height: 1.4;">
+              Selecione exatamente qual camada de dados você deseja limpar no repositório ativo (<strong>${escapeHtml(getActiveRepo()?.name || 'default')}</strong>):
+            </p>
+
+            <!-- Option 1: Browser Chat RAM / LocalStorage -->
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: #f8fafc; border: 1px solid var(--border-color); border-radius: 8px;">
+              <div>
+                <strong style="font-size: 12.5px; color: var(--text-heading); display: block;">1. Chat RAM & LocalStorage do Navegador</strong>
+                <span style="font-size: 11px; color: var(--text-muted);">Limpa o histórico imediato de mensagens em tela e caches de pre-prompt locais.</span>
+              </div>
+              <button class="btn btn-secondary btn-xs btn-trigger-reset" data-scope="localstorage" style="color: #2563eb; font-size: 11px; padding: 4px 10px;">
+                Limpar RAM
+              </button>
+            </div>
+
+            <!-- Option 2: Sessions -->
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: #f8fafc; border: 1px solid var(--border-color); border-radius: 8px;">
+              <div>
+                <strong style="font-size: 12.5px; color: var(--text-heading); display: block;">2. Sessões Gravadas (.spec-memory/sessions/)</strong>
+                <span style="font-size: 11px; color: var(--text-muted);">Apaga as transcrições individuais de diálogos de IA salvas em Markdown.</span>
+              </div>
+              <button class="btn btn-secondary btn-xs btn-trigger-reset" data-scope="sessions" style="color: #ea580c; font-size: 11px; padding: 4px 10px;">
+                Resetar Sessões
+              </button>
+            </div>
+
+            <!-- Option 3: Logs -->
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: #f8fafc; border: 1px solid var(--border-color); border-radius: 8px;">
+              <div>
+                <strong style="font-size: 12.5px; color: var(--text-heading); display: block;">3. Logs Cronológicos de Transcrição (.spec-memory/log-*.md)</strong>
+                <span style="font-size: 11px; color: var(--text-muted);">Apaga os arquivos de log contínuo mensal de eventos do chat.</span>
+              </div>
+              <button class="btn btn-secondary btn-xs btn-trigger-reset" data-scope="logs" style="color: #ea580c; font-size: 11px; padding: 4px 10px;">
+                Resetar Logs
+              </button>
+            </div>
+
+            <!-- Option 4: Handoffs -->
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: #f8fafc; border: 1px solid var(--border-color); border-radius: 8px;">
+              <div>
+                <strong style="font-size: 12.5px; color: var(--text-heading); display: block;">4. Handoffs de Contexto (.spec-memory/handoffs/)</strong>
+                <span style="font-size: 11px; color: var(--text-muted);">Apaga os resumos de contexto de continuidade dos documentos de especificação.</span>
+              </div>
+              <button class="btn btn-secondary btn-xs btn-trigger-reset" data-scope="handoffs" style="color: #0891b2; font-size: 11px; padding: 4px 10px;">
+                Resetar Handoffs
+              </button>
+            </div>
+
+            <!-- Option 5: Decisions (ADRs) -->
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: #f8fafc; border: 1px solid var(--border-color); border-radius: 8px;">
+              <div>
+                <strong style="font-size: 12.5px; color: var(--text-heading); display: block;">5. Decisões Arquiteturais (.spec-memory/decisions/)</strong>
+                <span style="font-size: 11px; color: var(--text-muted);">Apaga todos os registros de ADRs compilados.</span>
+              </div>
+              <button class="btn btn-secondary btn-xs btn-trigger-reset" data-scope="decisions" style="color: #2563eb; font-size: 11px; padding: 4px 10px;">
+                Resetar Decisões
+              </button>
+            </div>
+
+            <!-- Option 6: Rules -->
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: #f8fafc; border: 1px solid var(--border-color); border-radius: 8px;">
+              <div>
+                <strong style="font-size: 12.5px; color: var(--text-heading); display: block;">6. Regras & Invariantes (.spec-memory/_rules/)</strong>
+                <span style="font-size: 11px; color: var(--text-muted);">Apaga as regras globais de governança do projeto.</span>
+              </div>
+              <button class="btn btn-secondary btn-xs btn-trigger-reset" data-scope="_rules" style="color: #16a34a; font-size: 11px; padding: 4px 10px;">
+                Resetar Regras
+              </button>
+            </div>
+
+            <!-- Option 7: Concepts -->
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: #f8fafc; border: 1px solid var(--border-color); border-radius: 8px;">
+              <div>
+                <strong style="font-size: 12.5px; color: var(--text-heading); display: block;">7. Conceitos de Domínio (.spec-memory/concepts/)</strong>
+                <span style="font-size: 11px; color: var(--text-muted);">Apaga os termos do glossário ubíquo e conceitos de negócio.</span>
+              </div>
+              <button class="btn btn-secondary btn-xs btn-trigger-reset" data-scope="concepts" style="color: #7c3aed; font-size: 11px; padding: 4px 10px;">
+                Resetar Conceitos
+              </button>
+            </div>
+
+            <!-- Option 8: Gotchas -->
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: #f8fafc; border: 1px solid var(--border-color); border-radius: 8px;">
+              <div>
+                <strong style="font-size: 12.5px; color: var(--text-heading); display: block;">8. Gotchas & Armadilhas (.spec-memory/gotchas/)</strong>
+                <span style="font-size: 11px; color: var(--text-muted);">Apaga os alertas e armadilhas técnicas registradas.</span>
+              </div>
+              <button class="btn btn-secondary btn-xs btn-trigger-reset" data-scope="gotchas" style="color: #ea580c; font-size: 11px; padding: 4px 10px;">
+                Resetar Gotchas
+              </button>
+            </div>
+
+            <!-- Option 9: Nuclear Reset (All) -->
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; margin-top: 4px;">
+              <div>
+                <strong style="font-size: 12.5px; color: #991b1b; display: block;">💥 Reset Total de Memória (Nuclear)</strong>
+                <span style="font-size: 11px; color: #b91c1c;">Apaga TODAS as sessões, logs, handoffs, ADRs e regras em .spec-memory/ deste repositório.</span>
+              </div>
+              <button class="btn btn-primary btn-xs btn-trigger-reset" data-scope="all" style="background: #dc2626; border-color: #dc2626; font-size: 11px; padding: 5px 12px;">
+                Resetar Tudo
+              </button>
+            </div>
+
+          </div>
+
+          <div style="padding: 12px 20px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; background: #f8fafc;">
+            <button id="btn-dismiss-dev-memory-modal" class="btn btn-secondary btn-sm" style="font-size: 12px;">Fechar</button>
+          </div>
+        </div>
       </div>
     `;
 
@@ -290,6 +426,88 @@ Toda chamada de cobrança exige um cabeçalho \`Idempotency-Key\` gerado no fron
         createNewEntry();
       });
     }
+
+    // Dev Memory Reset Modal triggers
+    const modalReset = container.querySelector('#modal-dev-memory-reset');
+    const btnOpenReset = container.querySelector('#btn-open-dev-memory-modal');
+    const btnCloseReset = container.querySelector('#btn-close-dev-memory-modal');
+    const btnDismissReset = container.querySelector('#btn-dismiss-dev-memory-modal');
+
+    const toggleResetModal = (show) => {
+      if (modalReset) {
+        modalReset.style.display = show ? 'flex' : 'none';
+      }
+    };
+
+    if (btnOpenReset) {
+      btnOpenReset.addEventListener('click', () => toggleResetModal(true));
+    }
+    if (btnCloseReset) {
+      btnCloseReset.addEventListener('click', () => toggleResetModal(false));
+    }
+    if (btnDismissReset) {
+      btnDismissReset.addEventListener('click', () => toggleResetModal(false));
+    }
+
+    // Execute Granular Reset
+    container.querySelectorAll('.btn-trigger-reset').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const scope = btn.dataset.scope;
+        const repo = getActiveRepo()?.name || 'default';
+
+        if (scope === 'localstorage') {
+          const okLocal = confirm('Deseja limpar todo o histórico de mensagens e estado do chat local no navegador?');
+          if (!okLocal) return;
+          try {
+            await ChatMemoryStoreService.clearAll();
+            window.dispatchEvent(new CustomEvent('ai-memory-cleared', { detail: { repo, scope: 'localstorage' } }));
+            alert('Histórico de chat local (RAM/IndexedDB/LocalStorage) limpo com sucesso!');
+          } catch (e) {
+            alert('Erro ao limpar localstorage: ' + e.message);
+          }
+          return;
+        }
+
+        const scopeLabels = {
+          sessions: 'as Sessões Gravadas (.spec-memory/sessions/)',
+          logs: 'os Logs de Transcrição (.spec-memory/log-*.md)',
+          handoffs: 'os Handoffs de Contexto (.spec-memory/handoffs/)',
+          decisions: 'as Decisões Arquiteturais (.spec-memory/decisions/)',
+          _rules: 'as Regras & Invariantes (.spec-memory/_rules/)',
+          concepts: 'os Conceitos de Domínio (.spec-memory/concepts/)',
+          gotchas: 'os Gotchas & Armadilhas (.spec-memory/gotchas/)',
+          all: 'TODA A MEMÓRIA GIT (.spec-memory/ completo)'
+        };
+
+        const confirmMsg = `Confirma a remoção de ${scopeLabels[scope] || scope} no repositório "${repo}"?`;
+        if (!confirm(confirmMsg)) return;
+
+        btn.disabled = true;
+        const originalText = btn.textContent;
+        btn.textContent = 'Limpando...';
+
+        try {
+          const { ok, data } = await API.resetMemoryScope({ repo, scope });
+          if (ok && data && data.success) {
+            // Also clean browser cache if sessions or all memory is reset
+            if (scope === 'sessions' || scope === 'all' || scope === 'handoffs') {
+              await ChatMemoryStoreService.clearRepo(repo);
+              window.dispatchEvent(new CustomEvent('ai-memory-cleared', { detail: { repo, scope } }));
+            }
+            alert(`Limpeza concluída! ${data.deleted_count || 0} arquivos removidos em .spec-memory/ (${scope}).`);
+            activeEntry = null;
+            await loadWiki();
+          } else {
+            alert('Falha ao resetar memória: ' + (data?.error || 'Erro desconhecido'));
+          }
+        } catch (e) {
+          alert('Erro de conexão ao resetar memória: ' + e.message);
+        } finally {
+          btn.disabled = false;
+          btn.textContent = originalText;
+        }
+      });
+    });
 
     // Edit, Save, Delete buttons
     const btnEdit = container.querySelector('#btn-wiki-edit-toggle');

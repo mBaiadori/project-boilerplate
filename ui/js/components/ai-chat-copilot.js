@@ -1142,6 +1142,20 @@ export class AIChatCopilot {
       });
     }
 
+    // React to Global Memory Reset Events (Dev Tools)
+    window.addEventListener("ai-memory-cleared", (e) => {
+      const targetRepo = e.detail && e.detail.repo;
+      const currentRepo = this.getResolvedRepoName();
+      if (!targetRepo || targetRepo === currentRepo || targetRepo === "default") {
+        this.resetChat();
+        this.currentBriefing = "";
+        this.updateHeaderUI();
+        if (this.isHistorySidebarOpen) {
+          this.loadHistorySidebarContent();
+        }
+      }
+    });
+
     // Save Custom Pre-Prompt
     if (this.domSavePromptBtn) {
       this.domSavePromptBtn.addEventListener("click", async () => {

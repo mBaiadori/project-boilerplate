@@ -282,6 +282,15 @@ export const API = {
     return { ok: res.ok, data: await res.json() };
   },
 
+  async resetMemoryScope({ repo, scope }) {
+    const res = await fetch('/api/chat/memory/reset', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ repo, scope })
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
   async finalizeMemorySession({ repo, path, session_id, summary }) {
     const res = await fetch('/api/chat/memory/finalize', {
       method: 'POST',

@@ -794,6 +794,25 @@ DIRETRIZES FUNDAMENTAIS:
   // =============================================================================
 
   const resizerProjAi = document.getElementById("resizer-proj-ai");
+  const STORAGE_KEY_PROJ_CHAT_OPEN = "governance_project_ai_chat_open";
+
+  function setProjAiVisibility(show) {
+    if (!projAiPane) return;
+    if (show) {
+      projAiPane.classList.remove("collapsed");
+      projAiPane.style.display = "flex";
+      if (resizerProjAi) resizerProjAi.classList.remove("collapsed");
+    } else {
+      projAiPane.classList.add("collapsed");
+      projAiPane.style.display = "none";
+      if (resizerProjAi) resizerProjAi.classList.add("collapsed");
+    }
+    syncProjAiTriggerVisibility();
+    try {
+      localStorage.setItem(STORAGE_KEY_PROJ_CHAT_OPEN, show ? "true" : "false");
+    } catch (e) {}
+  }
+
   function syncProjAiTriggerVisibility() {
     if (!btnToggleProjAi || !projAiPane) return;
     const isCollapsed = projAiPane.classList.contains("collapsed") || projAiPane.style.display === "none";
@@ -803,10 +822,7 @@ DIRETRIZES FUNDAMENTAIS:
 
   if (btnToggleProjAi && projAiPane) {
     btnToggleProjAi.addEventListener("click", () => {
-      projAiPane.classList.remove("collapsed");
-      projAiPane.style.display = "flex";
-      if (resizerProjAi) resizerProjAi.classList.remove("collapsed");
-      syncProjAiTriggerVisibility();
+      setProjAiVisibility(true);
     });
   }
 
@@ -876,14 +892,13 @@ ${input5w2hHow ? input5w2hHow.value.trim() : ""}
         );
       },
       onClose: () => {
-        projAiPane.classList.add("collapsed");
-        projAiPane.style.display = "none";
-        if (resizerProjAi) resizerProjAi.classList.add("collapsed");
-        syncProjAiTriggerVisibility();
+        setProjAiVisibility(false);
       },
     });
 
-    syncProjAiTriggerVisibility();
+    const savedProjChatState = localStorage.getItem(STORAGE_KEY_PROJ_CHAT_OPEN);
+    const isInitialProjAiOpen = savedProjChatState !== null ? savedProjChatState === "true" : !projAiPane.classList.contains("collapsed");
+    setProjAiVisibility(isInitialProjAiOpen);
   }
 
   // Switch to specific tab helper

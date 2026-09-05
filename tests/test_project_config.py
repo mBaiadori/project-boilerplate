@@ -141,5 +141,50 @@ class TestProjectConfigEngine(unittest.TestCase):
             content = f.read()
         self.assertEqual(content, "original")
 
+    def test_dynamic_template_loading_from_disk(self):
+        templates = server.load_canonical_templates()
+        self.assertIsInstance(templates, list)
+        self.assertGreaterEqual(len(templates), 12)
+        tpl_ids = [t["id"] for t in templates]
+        self.assertIn("project-root", tpl_ids)
+        self.assertIn("domain-context", tpl_ids)
+        self.assertIn("feature-ideacao", tpl_ids)
+        self.assertIn("feature-behavior", tpl_ids)
+        # Verify that each template has required fields
+        for t in templates:
+            self.assertIn("id", t)
+            self.assertIn("title", t)
+            self.assertIn("content", t)
+            self.assertIn("default_filename", t)
+
+    def test_mandatory_structure_directory_creation(self):
+        fresh_repo = "fresh_empty_project"
+        fresh_dir = os.path.join(server.PROJECTS_DIR, fresh_repo)
+        try:
+            if os.path.exists(fresh_dir):
+                shutil.rmtree(fresh_dir)
+            server.ensure_default_repo_files(fresh_repo)
+            
+            # Check mandatory folders exist
+            for d in ["project", "domains", "engenharia", "templates", ".spec-memory"]:
+                self.assertTrue(os.path.exists(os.path.join(fresh_dir, d)), f"Folder {d} should exist")
+            
+            # Check essential files
+            self.assertTrue(os.path.exists(os.path.join(fresh_dir, ".spec-memory", "_meta.yaml")))
+        finally:
+            if os.path.exists(fresh_dir):
+                shutil.rmtree(fresh_dir)
+
+    def test_workflows_catalog_and_application(self):
+        cfg = server.load_config()
+        workflows = cfg.get("workflows", [])
+        self.assertIsInstance(workflows, list)
+        self.assertGreater(len(workflows), 0)
+        
+        full_sdlc = next((w for w in workflows if w.get("id") == "full-sdlc"), None)
+        self.assertIsNotNone(full_sdlc)
+        self.assertGreaterEqual(len(full_sdlc.get("templates", [])), 10)
+
 if __name__ == "__main__":
     unittest.main()
+
