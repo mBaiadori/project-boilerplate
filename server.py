@@ -22,7 +22,8 @@ from urllib.parse import urlparse, parse_qs
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECTS_DIR = os.path.join(BASE_DIR, "projects")
-CONFIG_PATH = os.path.join(PROJECTS_DIR, "config.json")
+CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
+PROJECTS_CONFIG_PATH = os.path.join(PROJECTS_DIR, "project.config.json")
 UI_DIR = os.path.join(BASE_DIR, "ui")
 TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
 SERVER_FILE = os.path.abspath(__file__)
@@ -55,14 +56,15 @@ def start_file_watcher():
 
         def scan_ui_dir():
             current_mtimes = {}
-            for root, _, files in os.walk(UI_DIR):
-                for f in files:
-                    if f.endswith((".html", ".css", ".js", ".json", ".svg", ".png")):
-                        fp = os.path.join(root, f)
-                        try:
-                            current_mtimes[fp] = os.stat(fp).st_mtime
-                        except Exception:
-                            pass
+            if os.path.exists(UI_DIR):
+                for root, _, files in os.walk(UI_DIR):
+                    for f in files:
+                        if f.endswith((".html", ".css", ".js", ".svg", ".png")):
+                            fp = os.path.join(root, f)
+                            try:
+                                current_mtimes[fp] = os.stat(fp).st_mtime
+                            except Exception:
+                                pass
             return current_mtimes
 
         file_mtimes = scan_ui_dir()
@@ -75,13 +77,14 @@ def start_file_watcher():
                 if os.path.exists(SERVER_FILE):
                     current_server_mtime = os.stat(SERVER_FILE).st_mtime
                     if server_mtime and current_server_mtime > server_mtime:
-                        print("🔄 [Fast Refresh] server.py modificado! Reiniciando processo automaticamente...")
-                        time.sleep(0.2)
-                        os.execv(sys.executable, [sys.executable] + sys.argv)
+                        print("🔄 [Fast Refresh] server.py modificado! Reiniciando processo...")
+                        server_mtime = current_server_mtime
+                        time.sleep(0.3)
+                        os.execv(sys.executable, [sys.executable, SERVER_FILE] + sys.argv[1:])
             except Exception as e:
                 print("Erro ao verificar server.py:", e)
 
-            # 2. Watch ui/ files (Frontend Fast Refresh via SSE)
+            # 2. Watch ui/ static assets ONLY (Frontend Fast Refresh via SSE)
             try:
                 scanned = scan_ui_dir()
                 changed = False
@@ -91,36 +94,36 @@ def start_file_watcher():
                         break
                 if changed or len(scanned) != len(file_mtimes):
                     file_mtimes = scanned
-                    print("⚡ [Fast Refresh] Alteração detectada no front-end. Disparando Live Reload...")
+                    print("⚡ [Fast Refresh] Alteração detectada em ui/. Disparando Live Reload...")
                     broadcast_sse_event("reload", json.dumps({"timestamp": time.time()}))
-            except Exception:
-                pass
+            except Exception as e:
+                print("Erro no watcher de frontend:", e)
 
     t = threading.Thread(target=watcher_loop, daemon=True)
     t.start()
 
-DEFAULT_TEMPLATE_CREATOR_PROMPT = """Você é o Assistente Especialista Criador de Templates s do framework Context OS / DDD.
-Sua missão é receber a ideia do usuário e gerar uma estrutura de template completa em formato JSON:
-1. title: Título elegante com emoji.
-2. description: Breve resumo explicativo.
-3. category: Categoria do template (ex: Domain-Driven Design, Governança, Testes, Arquitetura).
-4. badge: Badge visual (ex: 🟡 Tier 1, 🟢 Tier 2, 🛡️ RBAC).
-5. default_filename: Nome de arquivo sugerido (ex: ideacao.md, kpis.md, behavior.md).
-6. suggested_folder: Pasta de destino sugerida (ex: domains, specs, patterns).
-7. content: O conteúdo completo do template em Markdown, com cabeçalhos, tabelas e placeholders como [NOME-DO-DOMINIO].
-8. assistant_prompt: O prompt de sistema especializado que o Agentic Chat usará para dar suporte a quem estiver preenchendo ou editando este documento!
+def extract_frontmatter(content):
+    """
+    Extrai metadados YAML (frontmatter) e corpo de arquivos Markdown.
+    Retorna tupla: (dicionario_metadados, corpo_markdown).
+    """
+    if not content or not isinstance(content, str):
+        return {}, ""
+    if content.startswith("---"):
+        parts = content.split("---", 2)
+        if len(parts) >= 3:
+            raw_yaml = parts[1]
+            body = parts[2]
+            try:
+                data = yaml.safe_load(raw_yaml)
+                if isinstance(data, dict):
+                    return data, body
+            except Exception:
+                pass
+    return {}, content
 
-Retorne APENAS o JSON puro válido, sem markdown envolvente ou explicações."""
-
-DEFAULT_GLOBAL_SYSTEM_PROMPT = """Você é o Antigravity Agent, um assistente especialista de IA para Arquitetura de Software, Domain-Driven Design (DDD), Context OS e Governança Oficial.
-Você está pareando com o desenvolvedor em tempo real.
-
-DIRETRIZES FUNDAMENTAIS:
-1. Responda em Português do Brasil de forma clara, técnica, assertiva e elegante.
-2. Quando propor modificações ou adições no documento, forneça blocos de Markdown bem formatados ou diagramas Mermaid (mermaid).
-3. Mantenha conformidade com os princípios de DDD (Bounded Contexts, Dicionário Ubíquo, Invariantes).
-4. Se o usuário pedir para gerar ou refinar um diagrama de arquitetura, forneça a sintaxe completa do Mermaid."""
-
+DEFAULT_TEMPLATE_CREATOR_PROMPT = ""
+DEFAULT_GLOBAL_SYSTEM_PROMPT = ""
 DEFAULT_PROJECT_ABOUT_PROMPT = """Você é o Arquiteto de Fundação & Setup do Framework Context OS / Agentic SDLC.
 Sua missão é ajudar o arquiteto e o líder técnico a preencher, refinar, estruturar e evoluir a constituição e identidade do projeto (Sobre o Projeto / Definições Estratégicas).
 
@@ -128,225 +131,6 @@ DIRETRIZES FUNDAMENTAIS:
 1. Auxilie na redação precisa do Nome do Projeto, 'Por que fazemos?' (dores e justificativa de negócio), 'O que é o produto?' (escopo funcional e proposta de valor), 'Onde se aplica?' (canais e ecossistema), 'Quando?' (marcos e releases) e 'Como construímos?' (padrões arquiteturais e metodologia).
 2. Seja proativo em sugerir melhorias de clareza, alinhamento aos princípios de Domain-Driven Design (DDD) e consistência técnica.
 3. Forneça respostas estruturadas e textos prontos para serem aplicados nos campos correspondentes da tela."""
-
-FRAMEWORK_SUGGESTED_DOMAINS = [
-    { "id": "financeiro", "name": "Financeiro", "icon": "payments", "color": "#10b981", "description": "Gestão de fluxo de caixa, pagamentos, faturamento, conciliação contábil, auditoria e tesouraria.", "responsibles": [] },
-    { "id": "marketing", "name": "Marketing", "icon": "campaign", "color": "#f59e0b", "description": "Aquisição de clientes, campanhas digitais, branding, funil de conversão, comunicação e growth.", "responsibles": [] },
-    { "id": "administrativo", "name": "Administrativo", "icon": "corporate_fare", "color": "#6366f1", "description": "Governança corporativa, facilities, gestão de contratos, compliance regulatório e rotinas internas.", "responsibles": [] },
-    { "id": "operacional", "name": "Operacional", "icon": "settings_suggest", "color": "#0ea5e9", "description": "Execução de processos operacionais, logística, atendimento ao cliente, suporte e controle de SLAs.", "responsibles": [] },
-    { "id": "engenharia", "name": "Engenharia", "icon": "terminal", "color": "#8b5cf6", "description": "Desenvolvimento de software, arquitetura de sistemas, infraestrutura em nuvem, DevOps e segurança.", "responsibles": [] }
-]
-
-DEFAULT_PROJECT_CONFIG = {
-    "project": {
-        "name": "",
-        "description": "",
-        "version": "1.0.0",
-        "architecture_pattern": "",
-        "repository_url": "",
-        "lead": ""
-    },
-    "canvas_5w2h": {
-        "what": "",
-        "why": "",
-        "who": "",
-        "where": "",
-        "when": "",
-        "how": "",
-        "how_much": ""
-    },
-    "organization_domains": [],
-    "layers": [
-        { "key": "L1_PROJECT", "label": "L1 — Projeto & Visão Global", "color": "#6366f1", "weight": 1, "description": "Raiz oficial, constituição do produto e mapa de domínios." },
-        { "key": "L2_DOMAIN", "label": "L2 — Domínios Bounded Context", "color": "#3b82f6", "weight": 2, "description": "Contextos delimitados e fronteiras arquiteturais de negócio." },
-        { "key": "L3_SUBDOMAIN", "label": "L3 — Áreas Funcionais", "color": "#0ea5e9", "weight": 3, "description": "Subdomínios, capacidades e agregados de funcionalidades." },
-        { "key": "L4_ARTIFACT", "label": "L4 — Artefatos de Feature", "color": "#10b981", "weight": 4, "description": "Ideação, KPIs, pesquisa, fluxos gráficos e modelagem de entidades." },
-        { "key": "L5_BEHAVIOR", "label": "L5 — Comportamento BDD", "color": "#f59e0b", "weight": 5, "description": "Especificações executáveis Gherkin e cenários de aceitação." },
-        { "key": "L6_OBSERVABILITY", "label": "L6 — Observabilidade & QA", "color": "#8b5cf6", "weight": 6, "description": "Métricas em produção, testes automatizados, telemetria e SAST." }
-    ],
-    "tags": [
-        "architecture", "backend", "frontend", "api", "database", "security"
-    ],
-    "statuses": [
-        { "key": "draft", "label": "DRAFT (Rascunho)", "badge": "badge-neutral" },
-        { "key": "in_review", "label": "IN_REVIEW (Em Revisão)", "badge": "badge-warning" },
-        { "key": "approved", "label": "APPROVED (Aprovado)", "badge": "badge-success" },
-        { "key": "active", "label": "ACTIVE (Ativo em Produção)", "badge": "badge-primary" },
-        { "key": "deprecated", "label": "DEPRECATED (Obsoleto)", "badge": "badge-danger" }
-    ],
-    "risk_tiers": [
-        { "key": "tier_1", "label": "Tier 1 — Crítico (Impacto Financeiro / Segurança)", "color": "#ef4444" },
-        { "key": "tier_2", "label": "Tier 2 — Importante (Regras de Negócio Core)", "color": "#f59e0b" },
-        { "key": "tier_3", "label": "Tier 3 — Padrão (Suporte / Auxiliar)", "color": "#10b981" }
-    ],
-    "lifecycle_stages": [
-        { "key": "ideacao", "label": "01. Ideação & Necessidade", "file": "ideacao.md" },
-        { "key": "kpis", "label": "02. KPIs & Invariantes", "file": "kpis.md" },
-        { "key": "research", "label": "03. Pesquisa & RAG", "file": "research.md" },
-        { "key": "feature-definition", "label": "04. Definição Técnica", "file": "feature-definition.md" },
-        { "key": "flow", "label": "05. Fluxo Gráfico", "file": "docs/flow.md" },
-        { "key": "entity", "label": "06. Modelagem de Entidades", "file": "docs/entity.md" },
-        { "key": "specs", "label": "07. Specs BDD", "file": "specs/behavior.md" },
-        { "key": "quality", "label": "08. Qualidade & Review", "file": "quality/review.md" },
-        { "key": "monitoring", "label": "09. Monitoramento & SLIs", "file": "quality/monitoring.md" }
-    ],
-    "governance_rules": {
-        "require_invariants_for_tier1": True,
-        "require_dictionary_validation": True,
-        "enforce_linear_lifecycle": False,
-        "min_approvals_default": 1
-    },
-    "ai_assistant_prompt": DEFAULT_PROJECT_ABOUT_PROMPT,
-    "ai_guardian_prompt": "Você é o Arquiteto Guardião da Constituição Oficial do Projeto. Ajude o time a estruturar a visão do produto, proposta de valor, objetivos estratégicos, personas, invariantes e princípios fundamentais de negócio."
-}
-
-def extract_frontmatter(content_str):
-    """
-    Extrai o bloco YAML de Frontmatter entre marcadores '---' no início do documento.
-    Retorna uma tupla (metadata_dict, body_markdown).
-    """
-    if not content_str:
-        return {}, ""
-    content_stripped = content_str.lstrip()
-    if not content_stripped.startswith("---"):
-        return {}, content_str
-
-    parts = content_stripped.split("---", 2)
-    if len(parts) < 3:
-        return {}, content_str
-
-    yaml_text = parts[1].strip()
-    body_text = parts[2].lstrip("\r\n")
-    try:
-        data = yaml.safe_load(yaml_text)
-        if isinstance(data, dict):
-            return data, body_text
-    except Exception:
-        pass
-    return {}, content_str
-
-TEMPLATE_METADATA_FALLBACKS = {
-    "01-project-root.md": {
-        "id": "project-root",
-        "title": "Visão Geral do Projeto (L1: Raiz)",
-        "category": "Arquitetura Central",
-        "badge": "L1",
-        "description": "Declaração da constituição global, proposta de valor, objetivos estratégicos e princípios fundamentais.",
-        "default_filename": "index.md",
-        "suggested_folder": "project",
-        "assistant_prompt": "Você é o Arquiteto Guardião da Constituição Oficial. Ajude o usuário a definir a visão do produto, formular os objetivos estratégicos e consolidar os princípios de negócio com precisão."
-    },
-    "02-domain.md": {
-        "id": "domain-context",
-        "title": "Domínio & Bounded Context (L2: Domínio)",
-        "category": "Domain-Driven Design",
-        "badge": "L2",
-        "description": "Fronteira arquitetural de um Bounded Context, escopo, limites de dados e invariantes globais.",
-        "default_filename": "index.md",
-        "suggested_folder": "domains/[nome-do-dominio]",
-        "assistant_prompt": "Você é o Especialista em Domain-Driven Design (DDD). Auxilie a desenhar os limites do Bounded Context, formulando invariantes de integridade e mapeando as áreas funcionais."
-    },
-    "03-subdomain.md": {
-        "id": "subdomain-area",
-        "title": "Área Funcional & Subdomínio (L3: Subdomínio)",
-        "category": "Domain-Driven Design",
-        "badge": "L3",
-        "description": "Área funcional especializada, catálogo de features e invariantes críticas locais.",
-        "default_filename": "index.md",
-        "suggested_folder": "domains/[nome-do-dominio]/[nome-da-area]",
-        "assistant_prompt": "Você é o Especialista de Área Funcional e Arquitetura de Negócio. Ajude o time a listar as features da área e definir SLAs e invariantes críticas."
-    },
-    "04-ideacao.md": {
-        "id": "feature-ideacao",
-        "title": "01 - Ideação & Necessidade (L4: Feature)",
-        "category": "Esteira SDLC",
-        "badge": "L4",
-        "description": "Definição inicial de escopo, atores, jornada do usuário e critérios de aceite.",
-        "default_filename": "ideacao.md",
-        "suggested_folder": "domains/[dominio]/[area]/[FEATURE]",
-        "assistant_prompt": "Você é o Especialista em Ideação e Descoberta de Produto. Auxilie a estruturar o problema de negócio, os atores e o fluxo de experiência sem acoplamento prematuro com infraestrutura."
-    },
-    "05-kpis.md": {
-        "id": "feature-kpis",
-        "title": "02 - KPIs & Invariantes (L4: Feature)",
-        "category": "Esteira SDLC",
-        "badge": "L4",
-        "description": "Métricas de sucesso Leading/Lagging e regras imutáveis de negócio.",
-        "default_filename": "kpis.md",
-        "suggested_folder": "domains/[dominio]/[area]/[FEATURE]",
-        "assistant_prompt": "Você é o Auditor de Métricas e Invariantes. Ajude o usuário a formular metas quantificáveis de sucesso e regras de consistência de estado inegociáveis."
-    },
-    "06-research.md": {
-        "id": "feature-research",
-        "title": "03 - Pesquisa & RAG (L4: Feature)",
-        "category": "Esteira SDLC",
-        "badge": "L4",
-        "description": "Auditoria de viabilidade, consulta ao Dicionário Ubíquo e detecção de conflitos.",
-        "default_filename": "research.md",
-        "suggested_folder": "domains/[dominio]/[area]/[FEATURE]",
-        "assistant_prompt": "Você é o Agente Researcher. Verifique se a proposta respeita os termos do Dicionário Ubíquo e identifique sobreposições com outras features."
-    },
-    "07-feature-definition.md": {
-        "id": "feature-definition",
-        "title": "04 - Definição Técnica & Cross-Cutting (L4: Feature)",
-        "category": "Esteira SDLC",
-        "badge": "L4",
-        "description": "Especificação técnica, dependências entre domínios e requisitos não funcionais (NFRs).",
-        "default_filename": "feature-definition.md",
-        "suggested_folder": "domains/[dominio]/[area]/[FEATURE]",
-        "assistant_prompt": "Você é o Arquiteto de Software Especialista em Integrações e NFRs. Estruture os contratos de dependência transversal (cross-cutting) e requisitos não funcionais."
-    },
-    "08-flow.md": {
-        "id": "feature-flow",
-        "title": "05 - Fluxo Gráfico & Sequência (L4: Feature)",
-        "category": "Esteira SDLC",
-        "badge": "L4",
-        "description": "Modelagem visual com diagramas Mermaid de sequência e máquina de estados.",
-        "default_filename": "flow.md",
-        "suggested_folder": "domains/[dominio]/[area]/[FEATURE]/docs",
-        "assistant_prompt": "Você é o Modelador Visual de Arquitetura. Ajude a desenhar fluxos de sequência e máquinas de estado claros em Mermaid."
-    },
-    "09-entity.md": {
-        "id": "feature-entity",
-        "title": "06 - Modelagem de Entidades & Agregados (L4: Feature)",
-        "category": "Esteira SDLC",
-        "badge": "L4",
-        "description": "Diagrama de classes Mermaid, Value Objects, eventos de domínio e regras de integridade.",
-        "default_filename": "entity.md",
-        "suggested_folder": "domains/[dominio]/[area]/[FEATURE]/docs",
-        "assistant_prompt": "Você é o Especialista em Modelagem DDD e Agregados. Ajude a desenhar entidades, Value Objects, métodos de negócio e eventos de domínio."
-    },
-    "10-behavior-specs.md": {
-        "id": "feature-behavior",
-        "title": "07 - Especificações Comportamentais BDD (L5: BDD)",
-        "category": "Comportamento BDD",
-        "badge": "L5",
-        "description": "Cenários de teste executáveis em sintaxe Gherkin (Given/When/Then).",
-        "default_filename": "behavior.md",
-        "suggested_folder": "domains/[dominio]/[area]/[FEATURE]/specs",
-        "assistant_prompt": "Você é o Especialista em Behavior-Driven Development (BDD) e Automação de Testes. Auxilie a converter requisitos em cenários Given/When/Then claros e abrangentes."
-    },
-    "11-quality-review.md": {
-        "id": "feature-quality",
-        "title": "08 - Revisão de Qualidade & Arquitetura (L6: QA)",
-        "category": "Qualidade & QA",
-        "badge": "L6",
-        "description": "Checklist de auditoria de conformidade, cobertura de testes e requisitos de segurança.",
-        "default_filename": "review.md",
-        "suggested_folder": "domains/[dominio]/[area]/[FEATURE]/quality",
-        "assistant_prompt": "Você é o Auditor de Qualidade e Governança de Software. Conduza revisões estritas de código, conformidade arquitetural e segurança."
-    },
-    "12-monitoring.md": {
-        "id": "feature-monitoring",
-        "title": "09 - Monitoramento, SLIs & Métricas (L6: QA)",
-        "category": "Qualidade & QA",
-        "badge": "L6",
-        "description": "Dashboards de produção, alertas, SLIs, SLOs e métricas de observabilidade.",
-        "default_filename": "monitoring.md",
-        "suggested_folder": "domains/[dominio]/[area]/[FEATURE]/quality",
-        "assistant_prompt": "Você é o Engenheiro de Confiabilidade de Sites (SRE) e Observabilidade. Ajude a definir SLIs, SLOs, métricas e planos de resposta a incidentes."
-    }
-}
 
 def load_canonical_templates():
     """
@@ -362,16 +146,26 @@ def load_canonical_templates():
                     with open(fpath, "r", encoding="utf-8") as file:
                         content = file.read()
                     fm, _ = extract_frontmatter(content)
-                    fallback = TEMPLATE_METADATA_FALLBACKS.get(f, {})
+                    clean_id = re.sub(r"^\d+-", "", f).replace(".md", "")
+                    id_aliases = {
+                        "domain": "domain-context",
+                        "ideacao": "feature-ideacao",
+                        "behavior-specs": "feature-behavior",
+                    }
+                    clean_id = id_aliases.get(clean_id, clean_id)
+                    raw_id = fm.get("id") or ""
+                    tpl_id = raw_id if (raw_id and "{{" not in str(raw_id)) else clean_id
                     
-                    tpl_id = fallback.get("id") or (fm.get("id") if fm.get("id") and "{{" not in str(fm.get("id")) else f.replace(".md", ""))
-                    title = fallback.get("title") or (fm.get("title") if fm.get("title") and "{{" not in str(fm.get("title")) else f.replace(".md", "").title())
-                    category = fallback.get("category") or ("Domain-Driven Design" if "domain" in f else "Esteira SDLC")
-                    badge = fallback.get("badge") or fm.get("layer") or "Template"
-                    description = fallback.get("description") or f"Template oficial {f}"
-                    default_filename = fallback.get("default_filename") or f
-                    suggested_folder = fallback.get("suggested_folder") or "specs"
-                    assistant_prompt = fallback.get("assistant_prompt") or "Você é o assistente especialista para este documento."
+                    title = fm.get("title")
+                    if not title or "{{" in str(title):
+                        title = clean_id.replace("-", " ").title()
+                    
+                    category = fm.get("category") or ("Domain-Driven Design" if "domain" in clean_id else "Esteira SDLC")
+                    badge = fm.get("badge") or fm.get("layer") or "Template"
+                    description = fm.get("description") or f"Template oficial {f}"
+                    default_filename = fm.get("default_filename") or f"{clean_id}.md"
+                    suggested_folder = fm.get("suggested_folder") or "domains"
+                    assistant_prompt = fm.get("assistant_prompt") or ""
 
                     templates.append({
                         "id": tpl_id,
@@ -392,46 +186,92 @@ def load_canonical_templates():
 # Singleton / alias para compatibilidade com partes existentes
 CANONICAL_TEMPLATES = load_canonical_templates()
 
-def load_config():
-    canonical = load_canonical_templates()
-    if os.path.exists(CONFIG_PATH):
+def load_canonical_tutorials():
+    """
+    Carrega dinamicamente os guias e tutoriais da base de documentação oficial.
+    """
+    tutorials = []
+    doc_files = [
+        {
+            "id": "spec-driven-governance",
+            "file": "spec-driven-governance-vision.md",
+            "title": "Governança Orientada a Especificação (Spec-Driven SDLC)",
+            "category": "Fundamentos SDLC",
+            "badge": "Arquitetura",
+            "read_time": "5 min"
+        },
+        {
+            "id": "architectural-patterns",
+            "file": "architectural-patterns.md",
+            "title": "Padrões Arquiteturais & Domain-Driven Design (DDD)",
+            "category": "Domain-Driven Design",
+            "badge": "DDD",
+            "read_time": "4 min"
+        },
+        {
+            "id": "memory-ai",
+            "file": "memory-ai.md",
+            "title": "Memória Viva, Continuidade de Contexto & IA",
+            "category": "Inteligência Artificial",
+            "badge": "AI Memory",
+            "read_time": "5 min"
+        },
+        {
+            "id": "agents-instruction",
+            "file": "agents-instruction.md",
+            "title": "Protocolos de Operação e Instruções para Agentes",
+            "category": "Agentes & Automação",
+            "badge": "Agentes",
+            "read_time": "3 min"
+        }
+    ]
+
+    for item in doc_files:
+        fpath = os.path.join(BASE_DIR, item["file"])
+        if os.path.exists(fpath):
+            try:
+                with open(fpath, "r", encoding="utf-8") as f:
+                    content = f.read()
+                tutorials.append({
+                    "id": item["id"],
+                    "title": item["title"],
+                    "category": item["category"],
+                    "badge": item["badge"],
+                    "read_time": item["read_time"],
+                    "content": content
+                })
+            except Exception as e:
+                print(f"Erro ao carregar tutorial {item['file']}: {e}")
+    return tutorials
+
+CANONICAL_TUTORIALS = load_canonical_tutorials()
+
+def load_projects_master_config():
+    """
+    Carrega as diretrizes, recomendações e estrutura padrão dos projetos (projects/project.config.json).
+    """
+    if os.path.exists(PROJECTS_CONFIG_PATH):
         try:
-            with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-                cfg = json.load(f)
-                if "templates" not in cfg or not cfg["templates"]:
-                    cfg["templates"] = canonical
-                if "settings" not in cfg:
-                    cfg["settings"] = {
-                        "template_creator_prompt": DEFAULT_TEMPLATE_CREATOR_PROMPT,
-                        "global_system_prompt": DEFAULT_GLOBAL_SYSTEM_PROMPT,
-                        "auto_pr_on_save": False
-                    }
-                if "workspace_changes" not in cfg:
-                    cfg["workspace_changes"] = {}
-                return cfg
+            with open(PROJECTS_CONFIG_PATH, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"Erro ao carregar {PROJECTS_CONFIG_PATH}: {e}")
+    
+    # Fallback de compatibilidade se ainda existir projects/config.json
+    legacy_path = os.path.join(PROJECTS_DIR, "config.json")
+    if os.path.exists(legacy_path):
+        try:
+            with open(legacy_path, "r", encoding="utf-8") as f:
+                return json.load(f)
         except Exception:
             pass
+
     return {
-        "authenticated": False,
-        "token": "",
-        "ai_settings": {
-            "provider": "gemini",
-            "model": "gemini-3.5-flash",
-            "api_key": os.environ.get("GEMINI_API_KEY", ""),
-            "custom_endpoint": "http://localhost:11434/v1"
-        },
         "mandatory_structure": {
             "directories": [
-                "project",
-                "domains",
-                "engenharia",
-                "templates",
-                ".spec-memory/_rules",
-                ".spec-memory/concepts",
-                ".spec-memory/decisions",
-                ".spec-memory/gotchas",
-                ".spec-memory/handoffs",
-                ".spec-memory/sessions"
+                "project", "domains", "engenharia", "templates",
+                ".spec-memory/_rules", ".spec-memory/concepts", ".spec-memory/decisions",
+                ".spec-memory/gotchas", ".spec-memory/handoffs", ".spec-memory/sessions"
             ],
             "essential_files": [
                 {
@@ -440,40 +280,106 @@ def load_config():
                 }
             ]
         },
-        "settings": {
-            "template_creator_prompt": DEFAULT_TEMPLATE_CREATOR_PROMPT,
-            "global_system_prompt": DEFAULT_GLOBAL_SYSTEM_PROMPT,
-            "auto_pr_on_save": False
+        "project_defaults": {
+            "version": "1.0.0",
+            "layers": [],
+            "tags": [],
+            "statuses": [],
+            "governance_rules": { "min_approvals_default": 1 },
+            "default_reviewers": []
         },
-        "templates": canonical,
-        "workflows": [
-            {
-                "id": "full-sdlc",
-                "name": "Esteira SDLC Completa (L1 a L6)",
-                "description": "Conjunto completo de templates para constituição, bounded contexts, ideação, especificação técnica, BDD e observabilidade.",
-                "category": "Completo",
-                "templates": [
-                    "01-project-root.md", "02-domain.md", "03-subdomain.md", "04-ideacao.md",
-                    "05-kpis.md", "06-research.md", "07-feature-definition.md", "08-flow.md",
-                    "09-entity.md", "10-behavior-specs.md", "11-quality-review.md", "12-monitoring.md"
-                ]
-            }
-        ],
-        "workspace_changes": {},
-        "user": None,
-        "orgs": [],
-        "active_repo": None,
-        "prs": [],
-        "governance": {
-            "min_approvals": 1,
-            "reviewers": []
-        }
+        "suggested_domains": [],
+        "workflows": [],
+        "default_project_about_prompt": DEFAULT_PROJECT_ABOUT_PROMPT
     }
 
-def save_config(cfg):
+def save_projects_master_config(cfg):
+    """
+    Salva as diretrizes e padrões de projeto em projects/project.config.json.
+    """
     os.makedirs(PROJECTS_DIR, exist_ok=True)
-    with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+    with open(PROJECTS_CONFIG_PATH, "w", encoding="utf-8") as f:
         json.dump(cfg, f, indent=2, ensure_ascii=False)
+
+def load_config():
+    """
+    Carrega a configuração global da ferramenta (config.json na raiz).
+    """
+    canonical = load_canonical_templates()
+    cfg = {}
+    if os.path.exists(CONFIG_PATH):
+        try:
+            with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+                cfg = json.load(f)
+        except Exception as e:
+            print(f"Erro ao carregar {CONFIG_PATH}: {e}")
+    
+    if not cfg:
+        cfg = {
+            "authenticated": False,
+            "token": "",
+            "ai_settings": {
+                "provider": "gemini",
+                "model": "gemini-3.5-flash",
+                "api_key": os.environ.get("GEMINI_API_KEY", ""),
+                "custom_endpoint": "http://localhost:11434/v1"
+            },
+            "settings": {
+                "auto_pr_on_save": False,
+                "template_creator_prompt": DEFAULT_TEMPLATE_CREATOR_PROMPT,
+                "global_system_prompt": DEFAULT_GLOBAL_SYSTEM_PROMPT
+            },
+            "workspace_changes": {},
+            "user": None,
+            "orgs": [],
+            "active_repo": None,
+            "prs": []
+        }
+    
+    # Injeta templates e workflows para compatibilidade com a UI
+    cfg["templates"] = canonical
+    master = load_projects_master_config()
+    if "workflows" not in cfg or not cfg["workflows"]:
+        cfg["workflows"] = master.get("workflows", [])
+    return cfg
+
+def get_default_project_config(repo_name=""):
+    master_cfg = load_projects_master_config()
+    defaults = master_cfg.get("project_defaults", {})
+    name = repo_name.replace("-", " ").replace("_", " ").title() if (repo_name and repo_name != "local") else ""
+    return {
+        "project": {
+            "name": name,
+            "description": "",
+            "version": defaults.get("version", "1.0.0"),
+            "architecture_pattern": "",
+            "repository_url": "",
+            "lead": ""
+        },
+        "canvas_5w2h": {
+            "what": "", "why": "", "who": "", "where": "", "when": "", "how": "", "how_much": ""
+        },
+        "organization_domains": [],
+        "layers": defaults.get("layers", []),
+        "tags": defaults.get("tags", []),
+        "statuses": defaults.get("statuses", []),
+        "governance_rules": defaults.get("governance_rules", { "min_approvals_default": 1 }),
+        "reviewers": defaults.get("default_reviewers", []),
+        "ai_assistant_prompt": master_cfg.get("default_project_about_prompt") or DEFAULT_PROJECT_ABOUT_PROMPT
+    }
+
+# Dynamic fallbacks derived from config
+DEFAULT_PROJECT_CONFIG = get_default_project_config()
+FRAMEWORK_SUGGESTED_DOMAINS = []
+
+def save_config(cfg):
+    """
+    Salva a configuração da ferramenta no config.json raiz (sem poluir com templates embutidos).
+    """
+    clean_cfg = copy.deepcopy(cfg)
+    clean_cfg.pop("templates", None)
+    with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+        json.dump(clean_cfg, f, indent=2, ensure_ascii=False)
 
 def record_change(repo_name, file_path, change_type, old_content="", new_content=""):
     cfg = load_config()
@@ -550,13 +456,13 @@ def call_github_api(endpoint, token, method="GET", data=None):
 def ensure_default_repo_files(repo_name):
     """
     Garante a existência das pastas e arquivos estruturais do projeto
-    definidos na seção 'mandatory_structure' de config.json.
+    definidos na seção 'mandatory_structure' de projects/project.config.json.
     """
     if not repo_name:
         return
     repo_dir = os.path.join(PROJECTS_DIR, repo_name)
-    cfg = load_config()
-    mandatory = cfg.get("mandatory_structure", {})
+    master_cfg = load_projects_master_config()
+    mandatory = master_cfg.get("mandatory_structure", {})
     directories = mandatory.get("directories", ["project", "domains", "engenharia", "templates", ".spec-memory"])
     essential_files = mandatory.get("essential_files", [])
 
@@ -624,8 +530,8 @@ def get_project_config(repo_name):
     """
     Retorna a configuração oficial do projeto ativo ou preset padrão.
     """
-    cfg = load_config()
-    suggested_domains = cfg.get("suggested_domains", FRAMEWORK_SUGGESTED_DOMAINS)
+    master_cfg = load_projects_master_config()
+    suggested_domains = master_cfg.get("suggested_domains", [])
     repo_dir = os.path.join(PROJECTS_DIR, repo_name)
     config_file = os.path.join(repo_dir, "project", "project.config.json")
     if not os.path.exists(config_file):
@@ -1072,36 +978,6 @@ def get_engineering_files(repo_name):
                     pass
     return files_list
 
-DEFAULT_DICTIONARY_TERMS = [
-    {
-        "id": "term-bounded-context",
-        "term": "Bounded Context",
-        "codename": "BOUNDED_CONTEXT",
-        "definition": "Fronteira conceitual e arquitetural explícita dentro da qual um modelo de domínio específico e seu vocabulário são estritamente válidos.",
-        "domains": ["arquitetura", "core"],
-        "aliases": ["Contexto Delimitado"],
-        "status": "approved"
-    },
-    {
-        "id": "term-invariante",
-        "term": "Invariante de Domínio",
-        "codename": "DOMAIN_INVARIANT",
-        "definition": "Condição ou regra de negócio imutável que deve permanecer verdadeira em todos os momentos durante o ciclo de vida de uma entidade.",
-        "domains": ["arquitetura", "core"],
-        "aliases": ["Business Invariant", "Regra Imutável"],
-        "status": "approved"
-    },
-    {
-        "id": "term-idempotencia",
-        "term": "Chave de Idempotência",
-        "codename": "IDEMPOTENCY_KEY",
-        "definition": "Identificador exclusivo fornecido em requisições de mutação para garantir que a operação execute no máximo uma vez, mesmo com retentativas.",
-        "domains": ["billing", "integracao", "core"],
-        "aliases": ["Idempotency Key"],
-        "status": "approved"
-    }
-]
-
 def get_project_dictionary(repo_name):
     repo_dir = os.path.join(PROJECTS_DIR, repo_name)
     dict_path = os.path.join(repo_dir, "project", "dictionary.json")
@@ -1113,17 +989,27 @@ def get_project_dictionary(repo_name):
             with open(dict_path, "r", encoding="utf-8") as f:
                 return json.load(f)
         except Exception:
-            return DEFAULT_DICTIONARY_TERMS
-    return DEFAULT_DICTIONARY_TERMS
+            pass
+    cfg = load_config()
+    return cfg.get("default_dictionary_terms", [])
 
 def save_project_dictionary(repo_name, terms):
     repo_dir = os.path.join(PROJECTS_DIR, repo_name)
     os.makedirs(os.path.join(repo_dir, "project"), exist_ok=True)
     dict_path = os.path.join(repo_dir, "project", "dictionary.json")
+    old_content = ""
+    change_type = "ADDED"
+    if os.path.exists(dict_path):
+        try:
+            with open(dict_path, "r", encoding="utf-8") as f:
+                old_content = f.read()
+            change_type = "MODIFIED"
+        except Exception:
+            pass
     formatted_json = json.dumps(terms, indent=2, ensure_ascii=False)
     with open(dict_path, "w", encoding="utf-8") as f:
         f.write(formatted_json)
-    save_file_to_workspace(repo_name, "project/dictionary.json", formatted_json)
+    record_change(repo_name, "project/dictionary.json", change_type, old_content, formatted_json)
     return True
 
 def get_project_domains_and_docs(repo_name):
@@ -3356,8 +3242,8 @@ class ModularGovernanceHandler(SimpleHTTPRequestHandler):
 
         # 4.012 Workflows Catalog
         if path == "/api/workflows":
-            cfg = load_config()
-            workflows = cfg.get("workflows", [])
+            master_cfg = load_projects_master_config()
+            workflows = master_cfg.get("workflows", [])
             return self.send_json({ "workflows": workflows, "count": len(workflows) })
 
         # 4.015 Configuração Oficial do Projeto (Camadas, Níveis, Definições Estratégicas, Taxonomia, Políticas)
@@ -3401,7 +3287,8 @@ class ModularGovernanceHandler(SimpleHTTPRequestHandler):
             cfg = load_config()
             active_repo = cfg.get("active_repo")
             if not active_repo:
-                return self.send_json({ "terms": DEFAULT_DICTIONARY_TERMS, "count": len(DEFAULT_DICTIONARY_TERMS) })
+                terms = cfg.get("default_dictionary_terms", [])
+                return self.send_json({ "terms": terms, "count": len(terms) })
             repo_name = active_repo.get("name", "local")
             terms = get_project_dictionary(repo_name)
             return self.send_json({ "terms": terms, "count": len(terms) })
@@ -4088,7 +3975,7 @@ Retorne APENAS o JSON puro válido."""
             if not active_repo:
                 return self.send_json({ "error": "Nenhum repositório ativo" }, 400)
             repo_name = active_repo.get("name", "local")
-            terms = data.get("terms", [])
+            terms = payload.get("terms", [])
             save_project_dictionary(repo_name, terms)
             return self.send_json({ "success": True, "count": len(terms) })
 
@@ -4227,7 +4114,11 @@ Descreva o contexto do problema técnico e a decisão de engenharia tomada.
 ## 2. Diretrizes Técnicas
 Especificações, contratos, bibliotecas e regras mandatórias.
 """
-            create_project_file_or_dir(repo_name, rel_path, False, content)
+            full_target = os.path.join(PROJECTS_DIR, repo_name, rel_path)
+            os.makedirs(os.path.dirname(full_target), exist_ok=True)
+            with open(full_target, "w", encoding="utf-8") as f:
+                f.write(content)
+            record_change(repo_name, rel_path, "ADDED", "", content)
             return self.send_json({ "success": True, "path": rel_path, "message": f"Padrão '{rel_path}' criado com sucesso!" })
 
         # 9. Login Token PAT
