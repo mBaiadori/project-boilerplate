@@ -99,6 +99,7 @@ export function initDashboardView({ onBackToRepos }) {
   });
 
   const projectView = initProjectView({
+    getActiveRepo: () => activeRepo,
     onConfigSaved: async () => {
       await diffModal.updateBadgeStatus();
       if (editorChatView.loadProjectTaxonomy) {

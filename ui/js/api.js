@@ -248,9 +248,18 @@ export const API = {
     return { ok: res.ok, data: await res.json() };
   },
 
-  async getMemoryWiki({ repo }) {
+  async getMemorySession({ repo, session_id }) {
     const params = new URLSearchParams();
     if (repo) params.set('repo', repo);
+    if (session_id) params.set('session_id', session_id);
+    const res = await fetch(`/api/chat/memory/session?${params.toString()}`);
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async getMemoryWiki({ repo, query } = {}) {
+    const params = new URLSearchParams();
+    if (repo) params.set('repo', repo);
+    if (query) params.set('q', query);
     const res = await fetch(`/api/chat/memory/wiki?${params.toString()}`);
     return { ok: res.ok, data: await res.json() };
   },
@@ -260,6 +269,15 @@ export const API = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ repo, category, slug, title, content })
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async deleteMemoryWikiEntry({ repo, category, slug }) {
+    const res = await fetch('/api/chat/memory/wiki/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ repo, category, slug })
     });
     return { ok: res.ok, data: await res.json() };
   },

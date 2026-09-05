@@ -17,6 +17,29 @@ import { ChatMemoryStoreService } from "../services/chat-memory-store.js";
  * - Markdown rendering with Code Copy and Direct Insert / Apply buttons.
  * - Quick suggestion chips and Draft store persistence.
  */
+const DEFAULT_COPILOT_CHIPS = [
+  {
+    label: "💡 Sugerir Melhorias",
+    prompt:
+      "Analise o contexto deste documento e sugira melhorias técnicas, funcionais e de negócio.",
+  },
+  {
+    label: "🏛️ Diretrizes DDD",
+    prompt:
+      "Audite e recomende padrões de arquitetura DDD, limites de contexto e invariantes.",
+  },
+  {
+    label: "📊 Diagrama Mermaid",
+    prompt:
+      "Gere um diagrama Mermaid visual representando o fluxo ou arquitetura deste documento.",
+  },
+  {
+    label: "📋 Revisar Seções",
+    prompt:
+      "Revise a completude do documento e aponte possíveis inconsistências ou lacunas.",
+  },
+];
+
 export class AIChatCopilot {
   constructor(options = {}) {
     this.container =
@@ -37,7 +60,10 @@ export class AIChatCopilot {
     this.defaultSystemPrompt = (options.defaultSystemPrompt || "").trim();
     this.customSystemPrompt = (options.customSystemPrompt || "").trim();
     this.getContent = options.getContent || (() => "");
-    this.chips = options.chips || [];
+    this.chips =
+      Array.isArray(options.chips) && options.chips.length > 0
+        ? options.chips
+        : DEFAULT_COPILOT_CHIPS;
     this.welcomeMessage =
       options.welcomeMessage ||
       "Pareando com você no documento ativo. Como posso ajudar na modelagem, refinamento ou especificações?";
@@ -48,6 +74,7 @@ export class AIChatCopilot {
     this.getRepoName = options.getRepoName || (() => "default");
 
     this.chatHistory = [];
+    this.rawHistory = [];
     this.sessionId = ChatMemoryStoreService.generateSessionId(this.contextPath);
     this.isPromptSidebarOpen = false;
     this.isHistorySidebarOpen = false;
@@ -62,6 +89,21 @@ export class AIChatCopilot {
       this.bindEvents();
       this.initResizer();
       this.loadMemoryForContext();
+    }
+  }
+
+  /**
+   * Safely resolves current repo name with fallback to 'default'
+   */
+  getResolvedRepoName() {
+    try {
+      if (typeof this.getRepoName === "function") {
+        return this.getRepoName() || "default";
+      }
+      return this.getRepoName || "default";
+    } catch (e) {
+      console.warn("Could not resolve repo name:", e);
+      return "default";
     }
   }
 
@@ -87,7 +129,7 @@ export class AIChatCopilot {
    */
   async setContext(opts = {}) {
     const prevContextPath = this.contextPath;
-    const prevRepo = this.getRepoName();
+    const prevRepo = this.getResolvedRepoName();
     const prevSessionId = this.sessionId;
 
     // Asynchronously finalize previous session if there were messages
@@ -108,7 +150,12 @@ export class AIChatCopilot {
     if (opts.customSystemPrompt !== undefined)
       this.customSystemPrompt = (opts.customSystemPrompt || "").trim();
     if (opts.getContent !== undefined) this.getContent = opts.getContent;
-    if (opts.chips !== undefined) this.chips = opts.chips;
+    if (opts.chips !== undefined) {
+      this.chips =
+        Array.isArray(opts.chips) && opts.chips.length > 0
+          ? opts.chips
+          : DEFAULT_COPILOT_CHIPS;
+    }
     if (opts.onPromptSaved !== undefined)
       this.onPromptSaved = opts.onPromptSaved;
     if (opts.onPromptRestored !== undefined)
@@ -148,7 +195,7 @@ export class AIChatCopilot {
    * Loads cached memory & Handoff briefing for the active document
    */
   async loadMemoryForContext() {
-    const repo = this.getRepoName();
+    const repo = this.getResolvedRepoName();
     const path = this.contextPath;
 
     try {
@@ -403,6 +450,9 @@ export class AIChatCopilot {
 
     this.domHistorySidebar = sidebar;
     this.domCloseHistorySidebarBtn = sidebar.querySelector(".ai-copilot-close-history-sidebar-btn");
+    if (this.domCloseHistorySidebarBtn) {
+      this.domCloseHistorySidebarBtn.addEventListener("click", () => this.toggleHistorySidebar(false));
+    }
     const refreshBtn = sidebar.querySelector(".ai-copilot-refresh-history-btn");
     if (refreshBtn) {
       refreshBtn.addEventListener("click", () => this.loadHistorySidebarContent());
@@ -448,11 +498,14 @@ export class AIChatCopilot {
       if (briefing) {
         html += `
           <div style="padding: 10px 12px; background: rgba(37, 99, 235, 0.04); border: 1px solid rgba(37, 99, 235, 0.2); border-radius: 8px;">
-            <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
-              <span class="material-symbols-outlined icon-xs" style="color: var(--primary);">psychology</span>
-              <strong style="font-size: 12px; color: var(--primary);">Handoff Pregresso Carregado</strong>
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <span class="material-symbols-outlined icon-xs" style="color: var(--primary);">psychology</span>
+                <strong style="font-size: 12px; color: var(--primary);">Handoff Consolidado Ativo</strong>
+              </div>
+              <span class="ai-copilot-status-badge custom" style="font-size: 9px; padding: 1px 6px;">MEMÓRIA GIT</span>
             </div>
-            <div style="font-size: 11px; line-height: 1.4; color: var(--text-body); max-height: 120px; overflow-y: auto; white-space: pre-wrap; font-family: monospace; background: #fff; padding: 6px 8px; border-radius: 4px; border: 1px solid var(--border-color);">${this.escapeHtml(briefing)}</div>
+            <div style="font-size: 11px; line-height: 1.4; color: var(--text-body); max-height: 130px; overflow-y: auto; white-space: pre-wrap; font-family: monospace; background: #fff; padding: 6px 8px; border-radius: 4px; border: 1px solid var(--border-color);">${this.escapeHtml(briefing)}</div>
           </div>
         `;
       }
@@ -461,27 +514,54 @@ export class AIChatCopilot {
       if (ok && data && Array.isArray(data.sessions) && data.sessions.length > 0) {
         html += `
           <div>
-            <div style="font-size: 11.5px; font-weight: 600; color: var(--text-heading); margin-bottom: 8px;">Sessões Gravadas no Git (.spec-memory/):</div>
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+              <span style="font-size: 11.5px; font-weight: 600; color: var(--text-heading);">Sessões Gravadas (.spec-memory/):</span>
+              <span style="font-size: 10.5px; color: var(--text-muted);">${data.sessions.length} arquivada${data.sessions.length > 1 ? 's' : ''}</span>
+            </div>
             <div style="display: flex; flex-direction: column; gap: 8px;">
         `;
         data.sessions.forEach((s) => {
           const author = s.author || { name: "Developer", handle: "dev" };
           const dateStr = s.created_at ? new Date(s.created_at).toLocaleString("pt-BR") : "Data não disponível";
           const isCurrent = s.session_id === this.sessionId;
+          const m = s.metrics || {};
+          const totalTokens = m.total_tokens || 0;
+          const promptTokens = m.prompt_tokens || 0;
+          const compTokens = m.completion_tokens || 0;
+          const totalSecs = ((m.total_latency_ms || 0) / 1000).toFixed(1);
+          const rounds = m.rounds || 1;
+
+          const metricsBadge = totalTokens > 0 || m.total_latency_ms > 0
+            ? `<div style="margin-top: 6px; font-size: 10px; color: var(--text-muted); background: #f1f5f9; padding: 4px 6px; border-radius: 4px; display: flex; flex-direction: column; gap: 3px; width: 100%;">
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                  <span title="Tokens totais consumidos">🏷️ Total: <strong>${totalTokens.toLocaleString()}</strong> tok</span>
+                  <span title="Tempo total de resposta">⏱️ ${totalSecs}s</span>
+                  <span title="Interações">💬 ${rounds} round${rounds > 1 ? 's' : ''}</span>
+                </div>
+                ${(promptTokens > 0 || compTokens > 0) ? `
+                  <div style="display: flex; align-items: center; gap: 8px; font-size: 9.5px; color: #475569; border-top: 1px dashed #cbd5e1; padding-top: 2px;">
+                    <span title="Tokens enviados na entrada (Prompt)"><strong style="color: #2563eb;">↑ ${promptTokens.toLocaleString()}</strong> enviad.</span>
+                    <span>&bull;</span>
+                    <span title="Tokens gerados na resposta (Completion)"><strong style="color: #059669;">↓ ${compTokens.toLocaleString()}</strong> receb.</span>
+                  </div>
+                ` : ''}
+              </div>`
+            : '';
 
           html += `
-            <div style="border: 1px solid ${isCurrent ? 'var(--primary)' : 'var(--border-color)'}; border-radius: 8px; padding: 10px 12px; background: ${isCurrent ? 'rgba(37, 99, 235, 0.04)' : 'var(--bg-card)'};">
+            <div class="ai-history-session-card" data-session-id="${this.escapeHtml(s.session_id)}" style="border: 1px solid ${isCurrent ? 'var(--primary)' : 'var(--border-color)'}; border-radius: 8px; padding: 10px 12px; background: ${isCurrent ? 'rgba(37, 99, 235, 0.04)' : 'var(--bg-card)'}; cursor: pointer; transition: all 0.15s ease;">
               <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
-                <div style="display: flex; align-items: center; gap: 6px;">
-                  <img src="${author.avatar_url || 'https://ui-avatars.com/api/?name=Dev'}" style="width: 20px; height: 20px; border-radius: 50%;" />
-                  <strong style="font-size: 12px; color: var(--text-heading);">${this.escapeHtml(author.name)}</strong>
+                <div style="display: flex; align-items: center; gap: 6px; min-width: 0;">
+                  ${this.renderAuthorAvatar(author, 20)}
+                  <strong style="font-size: 12px; color: var(--text-heading); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${this.escapeHtml(author.name || author.handle || "Dev")}</strong>
                 </div>
-                <span style="font-size: 10.5px; color: var(--text-muted);">${dateStr}</span>
+                <span style="font-size: 10px; color: var(--text-muted); flex-shrink: 0;">${dateStr}</span>
               </div>
               <div style="font-size: 11px; color: var(--text-muted); display: flex; align-items: center; justify-content: space-between; margin-top: 4px;">
-                <span>🤖 ${this.escapeHtml(s.agent_model || 'IA')}</span>
-                ${isCurrent ? '<span class="ai-copilot-status-badge custom" style="font-size: 9px; padding: 1px 6px;">ATIVA</span>' : ''}
+                <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">🤖 ${this.escapeHtml(s.agent_model || 'IA')}</span>
+                ${isCurrent ? '<span class="ai-copilot-status-badge custom" style="font-size: 9px; padding: 1px 6px; flex-shrink: 0;">ATIVA</span>' : '<span style="font-size: 10px; color: var(--primary); display: flex; align-items: center; gap: 2px;">Consultar <span class="material-symbols-outlined" style="font-size: 12px;">arrow_forward</span></span>'}
               </div>
+              ${metricsBadge}
             </div>
           `;
         });
@@ -504,6 +584,14 @@ export class AIChatCopilot {
       }
 
       contentEl.innerHTML = html;
+
+      // Bind click on session cards to view full details
+      contentEl.querySelectorAll(".ai-history-session-card").forEach((card) => {
+        card.addEventListener("click", () => {
+          const sid = card.dataset.sessionId;
+          if (sid) this.showSessionDetailsView(sid);
+        });
+      });
     } catch (e) {
       contentEl.innerHTML = `
         <div style="text-align: center; padding: 20px; color: var(--text-muted); font-size: 12px;">
@@ -512,6 +600,132 @@ export class AIChatCopilot {
         </div>
       `;
     }
+  }
+
+  /**
+   * Displays modal/drawer with full session details, dialog and handoff
+   */
+  async showSessionDetailsView(sessionId) {
+    if (!this.domHistorySidebar) return;
+    const contentEl = this.domHistorySidebar.querySelector(".ai-history-sidebar-body");
+    if (!contentEl) return;
+
+    const repo = this.getResolvedRepoName();
+    contentEl.innerHTML = `
+      <div style="text-align: center; padding: 30px; color: var(--text-muted);">
+        <span class="material-symbols-outlined icon-sm animate-spin" style="color: var(--primary);">progress_activity</span>
+        <p style="font-size: 12px; margin-top: 8px;">Carregando detalhes da sessão...</p>
+      </div>
+    `;
+
+    try {
+      const { ok, data } = await API.getMemorySession({ repo, session_id: sessionId });
+      if (!ok || !data?.session) {
+        throw new Error("Sessão não encontrada no servidor");
+      }
+
+      const s = data.session;
+      const author = s.author || { name: "Developer", handle: "dev" };
+      const m = s.metrics || {};
+      const dateStr = s.frontmatter?.created_at ? new Date(s.frontmatter.created_at).toLocaleString("pt-BR") : "";
+
+      contentEl.innerHTML = `
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+          <!-- Back button header -->
+          <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">
+            <button class="btn btn-ghost btn-xs ai-back-to-history-btn" style="display: inline-flex; align-items: center; gap: 4px; font-size: 11px;">
+              <span class="material-symbols-outlined" style="font-size: 14px;">arrow_back</span> Voltar à Lista
+            </button>
+            <span style="font-size: 10px; color: var(--text-muted); font-family: monospace;">${this.escapeHtml(sessionId.slice(-14))}</span>
+          </div>
+
+          <!-- Session Metadata Header -->
+          <div style="background: #f8fafc; border: 1px solid var(--border-color); border-radius: 8px; padding: 10px 12px;">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+              ${this.renderAuthorAvatar(author, 24)}
+              <div>
+                <strong style="font-size: 12px; color: var(--text-heading); display: block;">${this.escapeHtml(author.name || "Developer")}</strong>
+                <span style="font-size: 10.5px; color: var(--text-muted);">${dateStr} &bull; 🤖 ${this.escapeHtml(s.frontmatter?.agent_model || 'IA')}</span>
+              </div>
+            </div>
+            ${m.total_tokens ? `
+              <div style="font-size: 10.5px; color: var(--text-muted); display: flex; flex-direction: column; gap: 4px; margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--border-color);">
+                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                  <span>🏷️ <strong>${Number(m.total_tokens).toLocaleString()}</strong> tokens totais</span>
+                  <span>&bull;</span>
+                  <span>⏱️ ${(Number(m.total_latency_ms || 0)/1000).toFixed(2)}s total</span>
+                  <span>&bull;</span>
+                  <span>💬 ${m.rounds || 1} round${(m.rounds || 1) > 1 ? 's' : ''}</span>
+                </div>
+                ${(m.prompt_tokens || m.completion_tokens) ? `
+                  <div style="display: flex; align-items: center; gap: 10px; font-size: 10px; color: #475569; background: #ffffff; padding: 4px 8px; border-radius: 4px; border: 1px solid #e2e8f0;">
+                    <span title="Tokens de entrada enviados"><strong style="color: #2563eb;">↑ ${Number(m.prompt_tokens || 0).toLocaleString()}</strong> enviados (prompt)</span>
+                    <span>&bull;</span>
+                    <span title="Tokens de saída gerados"><strong style="color: #059669;">↓ ${Number(m.completion_tokens || 0).toLocaleString()}</strong> recebidos (completion)</span>
+                    ${m.cached_tokens ? `<span>&bull;</span> <span style="color: #7c3aed;">⚡ ${Number(m.cached_tokens).toLocaleString()} cache</span>` : ''}
+                  </div>
+                ` : ''}
+              </div>
+            ` : ''}
+          </div>
+
+          ${s.handoff ? `
+            <!-- Consolidated Handoff for this doc -->
+            <div style="background: rgba(37, 99, 235, 0.04); border: 1px solid rgba(37, 99, 235, 0.2); border-radius: 8px; padding: 10px 12px;">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+                <div style="display: flex; align-items: center; gap: 6px;">
+                  <span class="material-symbols-outlined icon-xs" style="color: var(--primary);">psychology</span>
+                  <strong style="font-size: 11.5px; color: var(--primary);">Handoff Consolidado Vinculado</strong>
+                </div>
+              </div>
+              <div style="font-size: 11px; line-height: 1.4; color: var(--text-body); max-height: 140px; overflow-y: auto; white-space: pre-wrap; font-family: monospace; background: #fff; padding: 6px 8px; border-radius: 4px; border: 1px solid var(--border-color);">${this.escapeHtml(s.handoff.replace(/^---[\s\S]*?---\n*/, '').trim())}</div>
+            </div>
+          ` : ''}
+
+          <!-- Dialog Transcript -->
+          <div>
+            <strong style="font-size: 11.5px; color: var(--text-heading); display: block; margin-bottom: 6px;">Transcrição do Diálogo Gravado no Git:</strong>
+            <div style="background: #ffffff; border: 1px solid var(--border-color); border-radius: 8px; padding: 10px 12px; font-size: 11.5px; line-height: 1.5; color: var(--text-main); max-height: 280px; overflow-y: auto; white-space: pre-wrap;">${this.escapeHtml(s.body || "(Sem mensagens registradas)")}</div>
+          </div>
+        </div>
+      `;
+
+      const backBtn = contentEl.querySelector(".ai-back-to-history-btn");
+      if (backBtn) {
+        backBtn.addEventListener("click", () => this.loadHistorySidebarContent());
+      }
+    } catch (err) {
+      contentEl.innerHTML = `
+        <div style="text-align: center; padding: 20px; color: var(--text-muted); font-size: 12px;">
+          <p style="color: var(--md-sys-color-error, #ef4444); margin-bottom: 8px;">Falha ao carregar detalhes da sessão.</p>
+          <button class="btn btn-ghost btn-xs ai-back-to-history-btn">Voltar à Lista</button>
+        </div>
+      `;
+      const backBtn = contentEl.querySelector(".ai-back-to-history-btn");
+      if (backBtn) {
+        backBtn.addEventListener("click", () => this.loadHistorySidebarContent());
+      }
+    }
+  }
+
+  /**
+   * Helper to render user avatar with stylish initials fallback
+   */
+  renderAuthorAvatar(author, size = 20) {
+    let name = "Dev";
+    let avatarUrl = "";
+    if (author && typeof author === "object") {
+      name = author.name || author.handle || "Dev";
+      avatarUrl = author.avatar_url || "";
+    } else if (typeof author === "string") {
+      name = author;
+    }
+    const initials = name.split(" ").map(w => w[0]).filter(Boolean).slice(0, 2).join("").toUpperCase() || "DV";
+
+    if (avatarUrl && !avatarUrl.includes("ui-avatars.com")) {
+      return `<img src="${this.escapeHtml(avatarUrl)}" alt="${this.escapeHtml(name)}" style="width: ${size}px; height: ${size}px; border-radius: 50%; object-fit: cover; border: 1px solid rgba(0,0,0,0.08); flex-shrink: 0;" onerror="this.outerHTML='<span style=\\'display:inline-flex;align-items:center;justify-content:center;width:${size}px;height:${size}px;border-radius:50%;background:#2563eb;color:#fff;font-size:${Math.round(size*0.45)}px;font-weight:700;flex-shrink:0;\\'>${initials}</span>'" />`;
+    }
+    return `<span style="display:inline-flex;align-items:center;justify-content:center;width:${size}px;height:${size}px;border-radius:50%;background:#2563eb;color:#fff;font-size:${Math.round(size*0.45)}px;font-weight:700;flex-shrink:0;">${initials}</span>`;
   }
 
   /**
@@ -545,6 +759,9 @@ export class AIChatCopilot {
           </div>
         </div>
         <div style="display: flex; align-items: center; gap: 4px;">
+          <button class="btn btn-ghost btn-xs ai-copilot-export-raw-btn" type="button" title="Exportar histórico RAW para arquivo JSON" style="font-size: 10.5px; padding: 2px 6px; display: inline-flex; align-items: center; gap: 3px;">
+            <span class="material-symbols-outlined" style="font-size: 13px;">download</span> Exportar
+          </button>
           <button class="btn-icon ai-copilot-refresh-raw-btn" type="button" title="Recarregar telemetria RAW">
             <span class="material-symbols-outlined icon-xs">refresh</span>
           </button>
@@ -565,11 +782,58 @@ export class AIChatCopilot {
       refreshBtn.addEventListener("click", () => this.loadRawSidebarContent());
     }
 
+    const exportBtn = sidebar.querySelector(".ai-copilot-export-raw-btn");
+    if (exportBtn) {
+      exportBtn.addEventListener("click", () => {
+        const payloadStr = JSON.stringify(this.rawHistory || [], null, 2);
+        const blob = new Blob([payloadStr], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `telemetry-${this.sessionId || 'session'}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      });
+    }
+
     this.loadRawSidebarContent();
   }
 
   /**
-   * Populates the RAW Inspector sidebar with current effective prompts, injected memory, and last request/response payloads
+   * Formats author object or string into a clean display name
+   */
+  formatAuthorName(author) {
+    if (!author) return "Você";
+    if (typeof author === "string") return author;
+    if (typeof author === "object") {
+      return author.name || author.handle || author.login || "Você";
+    }
+    return String(author);
+  }
+
+  /**
+   * Formats ISO timestamp to DD/MM/YYYY HH:MM:SS
+   */
+  formatTimestamp(isoString) {
+    if (!isoString) return "";
+    try {
+      const d = new Date(isoString);
+      const day = String(d.getDate()).padStart(2, "0");
+      const month = String(d.getMonth() + 1).padStart(2, "0");
+      const year = d.getFullYear();
+      const hours = String(d.getHours()).padStart(2, "0");
+      const mins = String(d.getMinutes()).padStart(2, "0");
+      const secs = String(d.getSeconds()).padStart(2, "0");
+      return `${day}/${month}/${year} ${hours}:${mins}:${secs}`;
+    } catch (e) {
+      return String(isoString);
+    }
+  }
+
+  /**
+   * Populates the RAW Inspector sidebar with expandable turn-by-turn entries (User > Date, prompt snippet, and scrollable Enviado/Recebido views)
    */
   loadRawSidebarContent() {
     if (!this.domRawSidebar) {
@@ -583,72 +847,125 @@ export class AIChatCopilot {
     const contentEl = this.domRawSidebar.querySelector(".ai-raw-sidebar-body");
     if (!contentEl) return;
 
-    let docContext = "";
-    try {
-      docContext = typeof this.getContent === "function" ? this.getContent() : String(this.getContent || "");
-    } catch (e) {
-      docContext = "";
+    if (!Array.isArray(this.rawHistory) || this.rawHistory.length === 0) {
+      contentEl.innerHTML = `
+        <div style="text-align: center; padding: 48px 16px; background: #ffffff; border: 1px dashed var(--border-color, #cbd5e1); border-radius: 12px; margin: 4px 0;">
+          <div style="width: 48px; height: 48px; margin: 0 auto 12px auto; border-radius: 50%; background: rgba(37, 99, 235, 0.08); display: flex; align-items: center; justify-content: center; color: var(--primary, #2563eb);">
+            <span class="material-symbols-outlined icon-md">data_object</span>
+          </div>
+          <strong style="display: block; font-size: 13px; color: var(--text-heading, #0f172a); margin-bottom: 6px;">Nenhuma interação RAW registrada</strong>
+          <p style="margin: 0; font-size: 11.5px; line-height: 1.5; color: var(--text-muted, #64748b);">
+            A cada nova mensagem enviada no chat, uma entrada expansível será adicionada aqui com o payload puro (Enviado e Recebido) e telemetria de tokens.
+          </p>
+        </div>
+      `;
+      return;
     }
 
-    const basePrompt = this.getActivePrompt();
-    const briefing = this.currentBriefing || "(Nenhum handoff prévio gerado ainda para este documento)";
-    const effectiveSystemPrompt = this.currentBriefing ? `${basePrompt}\n\n${this.currentBriefing}` : basePrompt;
-    
-    const lastReqJson = this.lastRawPayload ? JSON.stringify(this.lastRawPayload, null, 2) : "Nenhuma requisição enviada nesta sessão ainda.";
-    const lastResJson = this.lastRawResponse ? JSON.stringify(this.lastRawResponse, null, 2) : "Nenhuma resposta recebida ainda.";
+    let html = "";
+    this.rawHistory.forEach((item) => {
+      const isExpanded = Boolean(item.expanded);
+      const authorName = this.formatAuthorName(item.author);
+      const sentJson = item.sentPayload ? JSON.stringify(item.sentPayload, null, 2) : "Nenhum payload enviado.";
+      const recvJson = item.receivedPayload ? JSON.stringify(item.receivedPayload, null, 2) : "Aguardando resposta da LLM...";
 
-    contentEl.innerHTML = `
-      <!-- Section 1: Effective System Prompt & Memory -->
-      <div>
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
-          <div style="display: flex; align-items: center; gap: 6px;">
-            <span class="material-symbols-outlined icon-xs" style="color: var(--primary, #2563eb);">psychology</span>
-            <strong style="font-size: 12px; color: var(--text-heading);">1. System Prompt + Memória Injetada</strong>
+      // Telemetria do turno
+      const usage = item.receivedPayload?.usage;
+      const latency = item.receivedPayload?.latency_ms;
+      const prov = item.receivedPayload?.provider;
+      const mod = item.receivedPayload?.model;
+
+      let telemetryBadge = "";
+      if (usage || latency) {
+        const parts = [];
+        if (latency) parts.push(`⏱️ ${latency}ms`);
+        if (usage) {
+          const totalTok = (usage.total_tokens || 0).toLocaleString();
+          const inTok = (usage.prompt_tokens || 0).toLocaleString();
+          const outTok = (usage.completion_tokens || 0).toLocaleString();
+          const cachedTok = usage.cached_tokens ? ` | ⚡ ${(usage.cached_tokens).toLocaleString()} cache` : '';
+          const estTag = usage.estimated ? ' (est.)' : '';
+          parts.push(`🏷️ ${totalTok} tokens (📥 ${inTok} | 📤 ${outTok}${cachedTok})${estTag}`);
+        }
+        telemetryBadge = `
+          <div style="font-size: 10px; color: var(--text-muted, #64748b); margin-top: 4px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+            <span style="background: rgba(37, 99, 235, 0.08); color: var(--primary, #2563eb); padding: 1px 6px; border-radius: 4px; font-weight: 600;">${parts.join(' &bull; ')}</span>
+            ${prov ? `<span style="color: #64748b;">🤖 ${this.escapeHtml(prov)} ${mod ? `(${this.escapeHtml(mod)})` : ''}</span>` : ''}
           </div>
-          <button class="btn btn-ghost btn-xs ai-copy-raw-btn" data-target="sys-prompt" style="font-size: 10px; padding: 1px 6px;">Copiar</button>
-        </div>
-        <pre class="ai-raw-code-block" id="raw-sys-prompt">${this.escapeHtml(effectiveSystemPrompt)}</pre>
-      </div>
+        `;
+      }
 
-      <!-- Section 2: Grounding Document Context -->
-      <div>
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
-          <div style="display: flex; align-items: center; gap: 6px;">
-            <span class="material-symbols-outlined icon-xs" style="color: #10b981;">description</span>
-            <strong style="font-size: 12px; color: var(--text-heading);">2. Grounding do Documento (${this.escapeHtml(this.contextPath)})</strong>
+      html += `
+        <div class="ai-raw-entry-card" style="border: 1px solid var(--border-color, #e2e8f0); border-radius: 10px; background: #ffffff; overflow: hidden; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
+          <!-- Header (Click to expand/collapse) -->
+          <div class="ai-raw-entry-header" data-raw-id="${item.id}" style="padding: 10px 12px; cursor: pointer; background: var(--bg-hover, #f8fafc); border-bottom: ${isExpanded ? '1px solid var(--border-color, #e2e8f0)' : 'none'}; display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; user-select: none;">
+            <div style="min-width: 0; flex: 1;">
+              <div style="display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-muted, #64748b); margin-bottom: 4px;">
+                ${this.renderAuthorAvatar(item.author, 18)}
+                <strong style="color: var(--text-heading, #0f172a); font-size: 11.5px;">${this.escapeHtml(authorName)}</strong>
+                <span style="color: #94a3b8;">&rsaquo;</span>
+                <span style="color: var(--text-muted, #64748b);">${this.escapeHtml(this.formatTimestamp(item.timestamp))}</span>
+              </div>
+              <div style="font-size: 12px; font-weight: 600; color: var(--text-main, #0f172a); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                ${this.escapeHtml(item.promptText || "(Mensagem vazia)")}
+              </div>
+              ${telemetryBadge}
+            </div>
+            <div style="display: flex; align-items: center; gap: 4px; flex-shrink: 0; padding-top: 2px;">
+              <span class="material-symbols-outlined icon-sm" style="color: var(--text-muted, #64748b); transition: transform 0.15s ease; transform: ${isExpanded ? 'rotate(180deg)' : 'rotate(0deg)'}">expand_more</span>
+            </div>
           </div>
-          <button class="btn btn-ghost btn-xs ai-copy-raw-btn" data-target="doc-context" style="font-size: 10px; padding: 1px 6px;">Copiar</button>
-        </div>
-        <pre class="ai-raw-code-block" id="raw-doc-context">${this.escapeHtml(docContext || "(Documento vazio)")}</pre>
-      </div>
 
-      <!-- Section 3: Last Sent Request JSON -->
-      <div>
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
-          <div style="display: flex; align-items: center; gap: 6px;">
-            <span class="material-symbols-outlined icon-xs" style="color: #f59e0b;">upload</span>
-            <strong style="font-size: 12px; color: var(--text-heading);">3. Último Payload Enviado (Request JSON)</strong>
-          </div>
-          <button class="btn btn-ghost btn-xs ai-copy-raw-btn" data-target="req-json" style="font-size: 10px; padding: 1px 6px;">Copiar</button>
-        </div>
-        <pre class="ai-raw-code-block" id="raw-req-json">${this.escapeHtml(lastReqJson)}</pre>
-      </div>
+          <!-- Expanded Body: 2 Scrollable RAW Views with Height Limit -->
+          ${isExpanded ? `
+            <div class="ai-raw-entry-body" style="padding: 12px; display: flex; flex-direction: column; gap: 12px; background: #ffffff;">
+              <!-- View 1: Enviado (Request RAW) -->
+              <div>
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px;">
+                  <div style="display: flex; align-items: center; gap: 6px;">
+                    <span class="material-symbols-outlined icon-xs" style="color: #f59e0b;">upload</span>
+                    <strong style="font-size: 11.5px; color: var(--text-heading, #0f172a);">1. Enviado (Request RAW)</strong>
+                  </div>
+                  <button class="btn btn-ghost btn-xs ai-copy-raw-btn" data-target="sent-${item.id}" style="font-size: 10px; padding: 1px 6px;">Copiar</button>
+                </div>
+                <pre class="ai-raw-code-block" id="raw-sent-${item.id}" style="max-height: 240px; overflow-y: auto; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11px; padding: 10px 12px; background: #0f172a; color: #f8fafc; border-radius: 6px; margin: 0; white-space: pre-wrap; word-break: break-word;">${this.escapeHtml(sentJson)}</pre>
+              </div>
 
-      <!-- Section 4: Last Received Response JSON -->
-      <div>
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
-          <div style="display: flex; align-items: center; gap: 6px;">
-            <span class="material-symbols-outlined icon-xs" style="color: #8b5cf6;">download</span>
-            <strong style="font-size: 12px; color: var(--text-heading);">4. Última Resposta da LLM (Response JSON)</strong>
-          </div>
-          <button class="btn btn-ghost btn-xs ai-copy-raw-btn" data-target="res-json" style="font-size: 10px; padding: 1px 6px;">Copiar</button>
+              <!-- View 2: Recebido (Response RAW) -->
+              <div>
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px;">
+                  <div style="display: flex; align-items: center; gap: 6px;">
+                    <span class="material-symbols-outlined icon-xs" style="color: #10b981;">download</span>
+                    <strong style="font-size: 11.5px; color: var(--text-heading, #0f172a);">2. Recebido (Response RAW)</strong>
+                  </div>
+                  <button class="btn btn-ghost btn-xs ai-copy-raw-btn" data-target="recv-${item.id}" style="font-size: 10px; padding: 1px 6px;">Copiar</button>
+                </div>
+                <pre class="ai-raw-code-block" id="raw-recv-${item.id}" style="max-height: 240px; overflow-y: auto; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11px; padding: 10px 12px; background: #0f172a; color: #f8fafc; border-radius: 6px; margin: 0; white-space: pre-wrap; word-break: break-word;">${this.escapeHtml(recvJson)}</pre>
+              </div>
+            </div>
+          ` : ''}
         </div>
-        <pre class="ai-raw-code-block" id="raw-res-json">${this.escapeHtml(lastResJson)}</pre>
-      </div>
-    `;
+      `;
+    });
 
+    contentEl.innerHTML = html;
+
+    // Bind Accordion Click Events
+    contentEl.querySelectorAll(".ai-raw-entry-header").forEach((hdr) => {
+      hdr.addEventListener("click", () => {
+        const rawId = hdr.dataset.rawId;
+        const targetItem = this.rawHistory.find((x) => x.id === rawId);
+        if (targetItem) {
+          targetItem.expanded = !targetItem.expanded;
+          this.loadRawSidebarContent();
+        }
+      });
+    });
+
+    // Bind Copy Buttons
     contentEl.querySelectorAll(".ai-copy-raw-btn").forEach((btn) => {
-      btn.addEventListener("click", () => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
         const targetId = btn.dataset.target;
         const targetEl = contentEl.querySelector(`#raw-${targetId}`);
         if (targetEl) {
@@ -681,6 +998,8 @@ export class AIChatCopilot {
       ".ai-copilot-input-field",
     );
     this.domSendBtn = this.container.querySelector(".ai-copilot-send-btn");
+
+    this.renderChips();
 
     // Toggle Parameters & System Prompt Sidebar
     if (this.domAgentBtn) {
@@ -1079,57 +1398,77 @@ export class AIChatCopilot {
       (this.domInputField ? this.domInputField.value.trim() : "");
     if (!promptText) return;
 
-    if (DraftStoreService && DraftStoreService.clearChatDraft) {
-      DraftStoreService.clearChatDraft(this.getRepoName(), this.contextPath);
-    }
-
-    if (this.domInputField) this.domInputField.value = "";
-
-    // Append User Bubble
-    this.appendBubble("user", promptText);
-
-    // Get Active Document Content
-    let docContext = "";
-    try {
-      docContext =
-        typeof this.getContent === "function"
-          ? this.getContent()
-          : String(this.getContent || "");
-    } catch (e) {
-      docContext = "";
-    }
-
-    const activePrompt = this.getActivePrompt();
-
-    // Append Loading AI Bubble
-    const loadingBubble = this.appendBubble(
-      "ai",
-      '<div style="display: flex; align-items: center; gap: 6px; color: var(--text-muted);"><span class="material-symbols-outlined icon-xs spin">progress_activity</span> Pensando e analisando com o documento ativo...</div>',
-      true,
-    );
-
     if (this.domSendBtn) this.domSendBtn.disabled = true;
 
-    const repo = this.getRepoName();
-    const requestPayload = {
-      prompt: promptText,
-      content: docContext,
-      path: this.contextPath,
-      history: this.chatHistory.slice(),
-      assistant_prompt: activePrompt,
-      session_id: this.sessionId,
-      repo: repo,
-      briefing: this.currentBriefing,
-      timestamp: new Date().toISOString(),
-    };
-    this.lastRawPayload = requestPayload;
-    if (this.isRawSidebarOpen) {
-      this.loadRawSidebarContent();
-    }
-
     try {
+      const repo = this.getResolvedRepoName();
+
+      if (DraftStoreService && DraftStoreService.clearChatDraft) {
+        DraftStoreService.clearChatDraft(repo, this.contextPath);
+      }
+
+      if (this.domInputField) this.domInputField.value = "";
+
+      // Append User Bubble
+      this.appendBubble("user", promptText);
+
+      // Get Active Document Content
+      let docContext = "";
+      try {
+        docContext =
+          typeof this.getContent === "function"
+            ? this.getContent()
+            : String(this.getContent || "");
+      } catch (e) {
+        docContext = "";
+      }
+
+      const activePrompt = this.getActivePrompt();
+
+      // Append Loading AI Bubble
+      const loadingBubble = this.appendBubble(
+        "ai",
+        '<div style="display: flex; align-items: center; gap: 6px; color: var(--text-muted);"><span class="material-symbols-outlined icon-xs spin">progress_activity</span> Pensando e analisando com o documento ativo...</div>',
+        true,
+      );
+
+      const effectiveSystemPrompt = this.currentBriefing
+        ? `${activePrompt}\n\n${this.currentBriefing}`
+        : activePrompt;
+
+      const requestPayload = {
+        prompt: promptText,
+        content: docContext,
+        path: this.contextPath,
+        history: this.chatHistory.slice(),
+        assistant_prompt: activePrompt,
+        effective_system_prompt: effectiveSystemPrompt,
+        session_id: this.sessionId,
+        repo: repo,
+        briefing: this.currentBriefing,
+        timestamp: new Date().toISOString(),
+      };
+      this.lastRawPayload = requestPayload;
+
+      const rawItem = {
+        id: `raw-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+        author: this.currentAuthor || "Você",
+        timestamp: new Date().toISOString(),
+        promptText: promptText,
+        sentPayload: requestPayload,
+        receivedPayload: null,
+        expanded: true,
+      };
+      if (!this.rawHistory) this.rawHistory = [];
+      this.rawHistory.unshift(rawItem);
+
+      if (this.isRawSidebarOpen) {
+        this.loadRawSidebarContent();
+      }
+
       const { ok, data } = await API.sendChatMessage(requestPayload);
       this.lastRawResponse = data;
+      rawItem.receivedPayload = data;
       if (this.isRawSidebarOpen) {
         this.loadRawSidebarContent();
       }
@@ -1184,23 +1523,32 @@ export class AIChatCopilot {
         `;
       }
     } catch (err) {
-      this.lastRawResponse = {
+      const errObj = {
         error: err.message || String(err),
         timestamp: new Date().toISOString(),
       };
+      this.lastRawResponse = errObj;
+      if (this.rawHistory && this.rawHistory[0]) {
+        this.rawHistory[0].receivedPayload = errObj;
+      }
       if (this.isRawSidebarOpen) {
         this.loadRawSidebarContent();
       }
-      loadingBubble.innerHTML = `
+      this.appendBubble(
+        "ai",
+        `
         <div class="chat-bubble-sender" style="color: var(--md-sys-color-error, #ef4444);">
           <span class="material-symbols-outlined icon-xs">error</span>
           <strong>Erro de Comunicação</strong>
         </div>
         <p style="color: var(--md-sys-color-error, #ef4444); margin: 0;">Falha de comunicação com o servidor local.</p>
-      `;
+        `,
+        true,
+      );
     } finally {
       if (this.domSendBtn) this.domSendBtn.disabled = false;
       this.scrollToBottom();
+      if (this.domInputField) this.domInputField.focus();
     }
   }
 

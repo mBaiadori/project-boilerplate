@@ -4336,9 +4336,46 @@ span[title] {
   border-radius: 8px;
   white-space: pre-wrap;
   word-break: break-word;
-  max-height: 280px;
+  max-height: 240px;
   overflow-y: auto;
   border: 1px solid #1e293b;
+}
+
+.ai-raw-entry-card {
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 10px;
+  background: #ffffff;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.ai-raw-entry-card:hover {
+  border-color: #cbd5e1;
+}
+
+.ai-raw-entry-header {
+  padding: 10px 12px;
+  cursor: pointer;
+  background: var(--bg-hover, #f8fafc);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  user-select: none;
+  transition: background 0.12s ease;
+}
+
+.ai-raw-entry-header:hover {
+  background: #f1f5f9;
+}
+
+.ai-raw-entry-body {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: #ffffff;
 }
 
 .ai-copilot-close-prompt-sidebar-btn,

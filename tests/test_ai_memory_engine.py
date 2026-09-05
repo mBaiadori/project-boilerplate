@@ -80,17 +80,30 @@ def test_memory_lifecycle_and_handoff():
     assert sessions[0]["session_id"] == session_id
 
 def test_wiki_entries():
+    from server import delete_wiki_entry
     # 1. Save an ADR
     save_wiki_entry(TEST_REPO, "decisions", "0001-jwt-auth", "0001: Autenticação Stateless com JWT", "Decidimos adotar JWT assinado com RSA-256.")
     
     # 2. Save a Rule
     save_wiki_entry(TEST_REPO, "_rules", "lgpd-rule", "Conformidade LGPD", "Nenhum dado sensível em logs abertos.")
 
+    # 3. Retrieve all
     wiki = get_project_wiki(TEST_REPO)
     assert len(wiki["decisions"]) == 1
     assert wiki["decisions"][0]["slug"] == "0001-jwt-auth"
     assert "JWT" in wiki["decisions"][0]["title"]
     assert len(wiki["_rules"]) == 1
+
+    # 4. Search query
+    search_res = get_project_wiki(TEST_REPO, query="RSA-256")
+    assert len(search_res["decisions"]) == 1
+    assert len(search_res["_rules"]) == 0
+
+    # 5. Delete entry
+    del_res = delete_wiki_entry(TEST_REPO, "decisions", "0001-jwt-auth")
+    assert del_res["success"] is True
+    wiki_after = get_project_wiki(TEST_REPO)
+    assert len(wiki_after["decisions"]) == 0
 
 def test_multi_provider_discovery_and_status():
     from server import fetch_provider_models, get_all_ai_providers_status

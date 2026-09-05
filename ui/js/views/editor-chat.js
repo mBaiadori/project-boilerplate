@@ -1132,13 +1132,34 @@ E no corpo Markdown, estruture o documento com seções claras, propostas de val
         agentName: isSpecialized
           ? "Assistente Especialista"
           : "Antigravity Agent",
-        agentIcon: "",
+        agentIcon: isSpecialized ? "psychology" : "smart_toy",
         defaultSystemPrompt: assistantPrompt || "",
         customSystemPrompt: (currentDocMetadata && currentDocMetadata.assistant_prompt) || "",
+        chips: [
+          {
+            label: "📊 Diagrama Mermaid",
+            prompt:
+              "Gere um diagrama Mermaid para a arquitetura deste documento.",
+          },
+          {
+            label: "📖 Dicionário Ubíquo",
+            prompt:
+              "Refine o Dicionário Ubíquo adicionando novas entidades com escopo e regras.",
+          },
+          {
+            label: "🛡️ Auditar DDD",
+            prompt:
+              "Audite a aderência deste documento aos princípios de DDD e padrões de arquitetura.",
+          },
+          {
+            label: "🧪 Cenário BDD",
+            prompt:
+              "Proponha um cenário BDD em Gherkin com base nas invariantes deste documento.",
+          },
+        ],
         welcomeMessage: isSpecialized
-          ? `Assistente Especialista ativo no template <code>${path}</code>. Como posso ajudar no preenchimento e refinamento das seções?`
+          ? `Assistente Especialista ativo no documento <code>${path}</code>. Como posso ajudar no preenchimento e refinamento das seções?`
           : `Pareando com você no documento ativo: <code>${path}</code>. Como posso ajudar na modelagem, invariantes ou diagramas?`,
-        resetHistory: true,
       });
     }
   }

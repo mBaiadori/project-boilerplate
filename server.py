@@ -3090,10 +3090,64 @@ def build_tree(current_dir, base_dir):
 
     return items
 
+def extract_tokens_defensively(raw_response, provider, prompt_text="", reply_text=""):
+    prompt_tokens = 0
+    completion_tokens = 0
+    total_tokens = 0
+    cached_tokens = 0
+    estimated = False
+
+    if isinstance(raw_response, dict):
+        # 1. Procura em usageMetadata (Google Gemini)
+        um = raw_response.get("usageMetadata")
+        if isinstance(um, dict):
+            prompt_tokens = um.get("promptTokenCount") or um.get("prompt_tokens") or 0
+            completion_tokens = um.get("candidatesTokenCount") or um.get("completion_tokens") or 0
+            total_tokens = um.get("totalTokenCount") or um.get("total_tokens") or 0
+            cached_tokens = um.get("cachedContentTokenCount") or um.get("cached_tokens") or 0
+
+        # 2. Procura em usage (OpenAI, DeepSeek, Groq, OpenRouter, Anthropic)
+        if total_tokens == 0:
+            us = raw_response.get("usage")
+            if isinstance(us, dict):
+                prompt_tokens = us.get("prompt_tokens") or us.get("input_tokens") or 0
+                completion_tokens = us.get("completion_tokens") or us.get("output_tokens") or 0
+                total_tokens = us.get("total_tokens") or (prompt_tokens + completion_tokens)
+                cached_tokens = (
+                    us.get("cache_read_input_tokens") or
+                    (us.get("prompt_tokens_details") or {}).get("cached_tokens") or
+                    us.get("cached_tokens") or 0
+                )
+
+        # 3. Procura em Ollama / Local
+        if total_tokens == 0:
+            p_eval = raw_response.get("prompt_eval_count") or 0
+            c_eval = raw_response.get("eval_count") or 0
+            if p_eval or c_eval:
+                prompt_tokens = p_eval
+                completion_tokens = c_eval
+                total_tokens = prompt_tokens + completion_tokens
+
+    # Fallback heurístico defensivo caso o provedor omita metadados ou altere schema
+    if total_tokens == 0 and (prompt_text or reply_text):
+        prompt_tokens = max(1, len(prompt_text) // 4)
+        completion_tokens = max(1, len(reply_text) // 4)
+        total_tokens = prompt_tokens + completion_tokens
+        estimated = True
+
+    return {
+        "prompt_tokens": int(prompt_tokens),
+        "completion_tokens": int(completion_tokens),
+        "total_tokens": int(total_tokens),
+        "cached_tokens": int(cached_tokens),
+        "estimated": estimated
+    }
+
 # =============================================================================
 # MULTI-MODEL LLM ENGINE (GEMINI, OPENAI, ANTHROPIC, OLLAMA/LOCAL)
 # =============================================================================
 def call_universal_llm(ai_settings, prompt, document_context="", file_path="index.md", history=None, custom_system_prompt=None):
+    start_time = time.perf_counter()
     provider = ai_settings.get("provider", "gemini").lower()
     model = ai_settings.get("model", "gemini-3.5-flash")
     api_key = ai_settings.get("api_key", "").strip()
@@ -3173,7 +3227,15 @@ DIRETRIZES FUNDAMENTAIS:
                     candidates = data.get("candidates", [])
                     if candidates:
                         reply = "".join(p.get("text", "") for p in candidates[0].get("content", {}).get("parts", []))
-                        return 200, { "reply": reply, "provider": "Google Gemini", "model": m }
+                        latency_ms = int((time.perf_counter() - start_time) * 1000)
+                        usage = extract_tokens_defensively(data, "gemini", prompt_text=prompt, reply_text=reply)
+                        return 200, {
+                            "reply": reply,
+                            "provider": "Google Gemini",
+                            "model": m,
+                            "usage": usage,
+                            "latency_ms": latency_ms
+                        }
             except urllib.error.HTTPError as e:
                 last_error = e.read().decode("utf-8")
             except Exception as e:
@@ -3206,7 +3268,15 @@ DIRETRIZES FUNDAMENTAIS:
                 choices = data.get("choices", [])
                 if choices:
                     reply = choices[0].get("message", {}).get("content", "")
-                    return 200, { "reply": reply, "provider": provider.upper(), "model": model }
+                    latency_ms = int((time.perf_counter() - start_time) * 1000)
+                    usage = extract_tokens_defensively(data, provider, prompt_text=prompt, reply_text=reply)
+                    return 200, {
+                        "reply": reply,
+                        "provider": provider.upper(),
+                        "model": model,
+                        "usage": usage,
+                        "latency_ms": latency_ms
+                    }
         except Exception as e:
             return 500, { "error": f"Erro no provedor {provider}: {str(e)}" }
 
@@ -3231,7 +3301,15 @@ DIRETRIZES FUNDAMENTAIS:
                 content = data.get("content", [])
                 if content:
                     reply = "".join(c.get("text", "") for c in content if c.get("type") == "text")
-                    return 200, { "reply": reply, "provider": "Anthropic", "model": model }
+                    latency_ms = int((time.perf_counter() - start_time) * 1000)
+                    usage = extract_tokens_defensively(data, "anthropic", prompt_text=prompt, reply_text=reply)
+                    return 200, {
+                        "reply": reply,
+                        "provider": "Anthropic",
+                        "model": model,
+                        "usage": usage,
+                        "latency_ms": latency_ms
+                    }
         except Exception as e:
             return 500, { "error": f"Erro na Anthropic: {str(e)}" }
 
@@ -3251,7 +3329,15 @@ DIRETRIZES FUNDAMENTAIS:
                 choices = data.get("choices", [])
                 if choices:
                     reply = choices[0].get("message", {}).get("content", "")
-                    return 200, { "reply": reply, "provider": "Ollama Local", "model": model }
+                    latency_ms = int((time.perf_counter() - start_time) * 1000)
+                    usage = extract_tokens_defensively(data, "ollama", prompt_text=prompt, reply_text=reply)
+                    return 200, {
+                        "reply": reply,
+                        "provider": "Ollama Local",
+                        "model": model,
+                        "usage": usage,
+                        "latency_ms": latency_ms
+                    }
         except Exception as e:
             return 500, { "error": f"Não foi possível conectar ao Ollama local em {url}: {str(e)}" }
 
@@ -3607,7 +3693,7 @@ def doc_path_to_slug(doc_path):
     clean = doc_path.replace("/", "_").replace("\\", "_").replace(".", "_")
     return re.sub(r'[^a-zA-Z0-9_-]', '', clean).strip("_") or "root"
 
-def append_chat_event(repo_name, doc_path, session_id, role, text, model_info=None, author_info=None):
+def append_chat_event(repo_name, doc_path, session_id, role, text, model_info=None, author_info=None, telemetry_info=None):
     mem_dir = get_memory_dir(repo_name)
     sanitized_text = sanitize_memory_text(text)
     now_iso = datetime.datetime.now().isoformat()
@@ -3624,37 +3710,84 @@ def append_chat_event(repo_name, doc_path, session_id, role, text, model_info=No
     except Exception as e:
         print(f"Error appending to memory log: {e}")
 
-    # 2. Session File
+    # 2. Session File & Acumulação de Métricas no Frontmatter
     session_file = os.path.join(mem_dir, "sessions", f"{session_id}.md")
-    if not os.path.exists(session_file):
-        author_yaml = f"author:\n  name: \"{actor.get('name', 'Developer')}\"\n  handle: \"{actor.get('handle', 'dev')}\"\n  email: \"{actor.get('email', '')}\"\n  avatar_url: \"{actor.get('avatar_url', '')}\"\n"
-        frontmatter = f"""---
+    
+    existing_fm = {}
+    session_body = ""
+    if os.path.exists(session_file):
+        try:
+            with open(session_file, "r", encoding="utf-8") as f:
+                content = f.read()
+            existing_fm, session_body = extract_frontmatter(content)
+        except Exception:
+            existing_fm, session_body = {}, ""
+
+    metrics = existing_fm.get("metrics") or {
+        "total_tokens": 0,
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "cached_tokens": 0,
+        "total_latency_ms": 0,
+        "rounds": 0
+    }
+    if telemetry_info and isinstance(telemetry_info, dict):
+        usage = telemetry_info.get("usage") or {}
+        metrics["total_tokens"] = int(metrics.get("total_tokens", 0)) + int(usage.get("total_tokens", 0))
+        metrics["prompt_tokens"] = int(metrics.get("prompt_tokens", 0)) + int(usage.get("prompt_tokens", 0))
+        metrics["completion_tokens"] = int(metrics.get("completion_tokens", 0)) + int(usage.get("completion_tokens", 0))
+        metrics["cached_tokens"] = int(metrics.get("cached_tokens", 0)) + int(usage.get("cached_tokens", 0))
+        metrics["total_latency_ms"] = int(metrics.get("total_latency_ms", 0)) + int(telemetry_info.get("latency_ms", 0))
+        if role == "model":
+            metrics["rounds"] = int(metrics.get("rounds", 0)) + 1
+
+    created_at_val = existing_fm.get("created_at") or now_iso
+    agent_model_val = model_info or existing_fm.get("agent_model", "ai-assistant")
+    status_val = existing_fm.get("status", "active")
+
+    metrics_yaml = f"""metrics:
+  total_tokens: {metrics['total_tokens']}
+  prompt_tokens: {metrics['prompt_tokens']}
+  completion_tokens: {metrics['completion_tokens']}
+  cached_tokens: {metrics['cached_tokens']}
+  total_latency_ms: {metrics['total_latency_ms']}
+  rounds: {metrics['rounds']}"""
+
+    author_yaml = f"""author:
+  name: "{actor.get('name', 'Developer')}"
+  handle: "{actor.get('handle', 'dev')}"
+  email: "{actor.get('email', '')}"
+  avatar_url: "{actor.get('avatar_url', '')}" """
+
+    frontmatter_text = f"""---
 session_id: "{session_id}"
 target_document: "{doc_path}"
-created_at: "{now_iso}"
+created_at: "{created_at_val}"
 updated_at: "{now_iso}"
-agent_model: "{model_info or 'ai-assistant'}"
-status: "active"
-{author_yaml}---
+agent_model: "{agent_model_val}"
+status: "{status_val}"
+{author_yaml}
+{metrics_yaml}
+---"""
 
-# Sessão de IA: {doc_path}
+    role_icon = "👤 **" + actor_name + "**" if role == "user" else "🤖 **Assistente IA**"
+    msg_block = f"\n### {role_icon} ({datetime.datetime.now().strftime('%H:%M:%S')})\n\n{sanitized_text}\n"
+
+    if not os.path.exists(session_file) or not session_body:
+        header_text = f"""# Sessão de IA: {doc_path}
 *Iniciada em {now_iso} por {actor_name} utilizando {model_info or 'AI'}*
 
 ## Diálogo da Sessão
 """
-        try:
-            with open(session_file, "w", encoding="utf-8") as f:
-                f.write(frontmatter)
-        except Exception:
-            pass
+        full_session_text = frontmatter_text + "\n\n" + header_text + msg_block
+    else:
+        full_session_text = frontmatter_text + "\n\n" + session_body.strip() + "\n" + msg_block
 
-    role_icon = "👤 **" + actor_name + "**" if role == "user" else "🤖 **Assistente IA**"
-    msg_block = f"\n### {role_icon} ({datetime.datetime.now().strftime('%H:%M:%S')})\n\n{sanitized_text}\n"
     try:
-        with open(session_file, "a", encoding="utf-8") as f:
-            f.write(msg_block)
+        with open(session_file, "w", encoding="utf-8") as f:
+            f.write(full_session_text)
     except Exception as e:
-        print(f"Error appending to session file: {e}")
+        print(f"Error saving session file: {e}")
 
 def finalize_chat_session(repo_name, doc_path, session_id, custom_summary=None):
     mem_dir = get_memory_dir(repo_name)
@@ -3665,10 +3798,14 @@ def finalize_chat_session(repo_name, doc_path, session_id, custom_summary=None):
     actor = get_current_actor()
 
     session_content = ""
+    metrics = {"total_tokens": 0, "prompt_tokens": 0, "completion_tokens": 0, "cached_tokens": 0, "total_latency_ms": 0, "rounds": 0}
     if os.path.exists(session_file):
         try:
             with open(session_file, "r", encoding="utf-8") as f:
                 session_content = f.read()
+            fm, _ = extract_frontmatter(session_content)
+            if fm.get("metrics"):
+                metrics = fm.get("metrics")
             session_content = session_content.replace('status: "active"', 'status: "completed"')
             with open(session_file, "w", encoding="utf-8") as f:
                 f.write(session_content)
@@ -3691,6 +3828,13 @@ last_author: "{actor.get('name', 'Developer')}"
 last_author_handle: "{actor.get('handle', 'dev')}"
 last_author_avatar: "{actor.get('avatar_url', '')}"
 updated_at: "{now_iso}"
+metrics:
+  total_tokens: {metrics.get('total_tokens', 0)}
+  prompt_tokens: {metrics.get('prompt_tokens', 0)}
+  completion_tokens: {metrics.get('completion_tokens', 0)}
+  cached_tokens: {metrics.get('cached_tokens', 0)}
+  total_latency_ms: {metrics.get('total_latency_ms', 0)}
+  rounds: {metrics.get('rounds', 0)}
 ---
 
 # Handoff de Contexto: {doc_path}
@@ -3703,6 +3847,11 @@ updated_at: "{now_iso}"
 ## 🎯 Decisões Tomadas & Regras Estabelecidas
 - Modelagem e refinamento das especificações do documento `{doc_path}`.
 - Continuidade preservada para as próximas interações do time.
+
+## 📊 Telemetria Consolidada da Sessão
+- **Interações (Rounds):** {metrics.get('rounds', 0)}
+- **Tokens Totais:** {metrics.get('total_tokens', 0):,} (Entrada: {metrics.get('prompt_tokens', 0):,} | Saída: {metrics.get('completion_tokens', 0):,} | Cache: {metrics.get('cached_tokens', 0):,})
+- **Tempo Total de Processamento:** {(metrics.get('total_latency_ms', 0) / 1000.0):.2f}s
 """
     try:
         with open(handoff_file, "w", encoding="utf-8") as f:
@@ -3715,7 +3864,8 @@ updated_at: "{now_iso}"
         "session_id": session_id,
         "doc_path": doc_path,
         "handoff_file": handoff_file,
-        "updated_at": now_iso
+        "updated_at": now_iso,
+        "metrics": metrics
     }
 
 def get_context_briefing(repo_name, doc_path):
@@ -3799,6 +3949,14 @@ def list_chat_sessions(repo_name, doc_path=None):
                 "agent_model": fm.get("agent_model", ""),
                 "status": fm.get("status", "completed"),
                 "author": fm.get("author", { "name": "Developer", "handle": "dev" }),
+                "metrics": fm.get("metrics", {
+                    "total_tokens": 0,
+                    "prompt_tokens": 0,
+                    "completion_tokens": 0,
+                    "cached_tokens": 0,
+                    "total_latency_ms": 0,
+                    "rounds": 0
+                }),
                 "file_name": fname
             })
         except Exception:
@@ -3807,10 +3965,68 @@ def list_chat_sessions(repo_name, doc_path=None):
     sessions.sort(key=lambda s: s.get("created_at", ""), reverse=True)
     return sessions
 
-def get_project_wiki(repo_name):
+def get_chat_session_details(repo_name, session_id):
+    mem_dir = get_memory_dir(repo_name)
+    sessions_dir = os.path.join(mem_dir, "sessions")
+    if not os.path.exists(sessions_dir):
+        return None
+    
+    clean_id = (session_id or "").replace(".md", "")
+    session_file = os.path.join(sessions_dir, f"{clean_id}.md")
+    if not os.path.exists(session_file):
+        for fname in os.listdir(sessions_dir):
+            if fname.endswith(".md"):
+                fp = os.path.join(sessions_dir, fname)
+                try:
+                    with open(fp, "r", encoding="utf-8") as f:
+                        c = f.read()
+                    fm, _ = extract_frontmatter(c)
+                    if fm.get("session_id") == session_id or fname.replace(".md", "") == clean_id:
+                        session_file = fp
+                        break
+                except Exception:
+                    pass
+
+    if not os.path.exists(session_file):
+        return None
+    try:
+        with open(session_file, "r", encoding="utf-8") as f:
+            content = f.read()
+        fm, body = extract_frontmatter(content)
+        target_doc = fm.get("target_document", "")
+        doc_slug = doc_path_to_slug(target_doc)
+        handoff_file = os.path.join(mem_dir, "handoffs", f"{doc_slug}.md")
+        handoff_content = ""
+        if os.path.exists(handoff_file):
+            with open(handoff_file, "r", encoding="utf-8") as hf:
+                handoff_content = hf.read()
+
+        return {
+            "session_id": session_id,
+            "target_document": target_doc,
+            "frontmatter": fm,
+            "body": body,
+            "author": fm.get("author", {}),
+            "metrics": fm.get("metrics", {
+                "total_tokens": 0,
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "cached_tokens": 0,
+                "total_latency_ms": 0,
+                "rounds": 0
+            }),
+            "handoff": handoff_content
+        }
+    except Exception as e:
+        print(f"Error getting session details: {e}")
+        return None
+
+def get_project_wiki(repo_name, query=None):
     mem_dir = get_memory_dir(repo_name)
     categories = ["decisions", "concepts", "gotchas", "_rules", "handoffs"]
     wiki_data = {}
+    query_str = (query or "").strip().lower()
+
     for cat in categories:
         cat_dir = os.path.join(mem_dir, cat)
         items = []
@@ -3824,12 +4040,22 @@ def get_project_wiki(repo_name):
                         content = f.read()
                     fm, body = extract_frontmatter(content)
                     title = fm.get("title") or fname.replace(".md", "").replace("-", " ").title()
+                    slug = fname.replace(".md", "")
+                    body_clean = body.strip()
+
+                    # Filtering by query if provided
+                    if query_str:
+                        searchable = f"{slug} {title} {body_clean} {cat}".lower()
+                        if query_str not in searchable:
+                            continue
+
                     items.append({
                         "file_name": fname,
-                        "slug": fname.replace(".md", ""),
+                        "slug": slug,
                         "title": title,
+                        "category": cat,
                         "frontmatter": fm,
-                        "content": body.strip(),
+                        "content": body_clean,
                         "updated_at": fm.get("updated_at") or fm.get("created_at") or ""
                     })
                 except Exception:
@@ -3839,7 +4065,7 @@ def get_project_wiki(repo_name):
 
 def save_wiki_entry(repo_name, category, slug, title, content, author_info=None):
     mem_dir = get_memory_dir(repo_name)
-    if category not in ["decisions", "concepts", "gotchas", "_rules"]:
+    if category not in ["decisions", "concepts", "gotchas", "_rules", "handoffs"]:
         category = "decisions"
     cat_dir = os.path.join(mem_dir, category)
     os.makedirs(cat_dir, exist_ok=True)
@@ -3865,7 +4091,21 @@ author_handle: "{actor.get('handle', 'dev')}"
 """
     with open(file_path, "w", encoding="utf-8") as f:
         f.write(fm)
-    return { "success": True, "path": file_path, "slug": slug_clean }
+    return { "success": True, "path": file_path, "slug": slug_clean, "category": category, "title": title }
+
+def delete_wiki_entry(repo_name, category, slug):
+    mem_dir = get_memory_dir(repo_name)
+    if category not in ["decisions", "concepts", "gotchas", "_rules", "handoffs"]:
+        return { "success": False, "error": "Categoria inválida" }
+    slug_clean = (slug or "").replace(".md", "").strip()
+    file_path = os.path.join(mem_dir, category, f"{slug_clean}.md")
+    if os.path.exists(file_path):
+        try:
+            os.remove(file_path)
+            return { "success": True, "deleted": slug_clean, "category": category }
+        except Exception as e:
+            return { "success": False, "error": str(e) }
+    return { "success": False, "error": "Arquivo não encontrado" }
 
 class ModularGovernanceHandler(SimpleHTTPRequestHandler):
     def end_headers(self):
@@ -4328,14 +4568,32 @@ class ModularGovernanceHandler(SimpleHTTPRequestHandler):
                 "sessions": sessions
             })
 
+        # AI Memory: Detalhes de uma Sessão Específica
+        if path == "/api/chat/memory/session":
+            cfg = load_config()
+            active_repo = cfg.get("active_repo")
+            repo_name = query.get("repo", [active_repo.get("name", "default") if active_repo else "default"])[0]
+            session_id = query.get("session_id", [None])[0]
+            if not session_id:
+                return self.send_json({ "error": "session_id é obrigatório" }, 400)
+            session_data = get_chat_session_details(repo_name, session_id)
+            if not session_data:
+                return self.send_json({ "error": "Sessão não encontrada" }, 404)
+            return self.send_json({
+                "repo": repo_name,
+                "session": session_data
+            })
+
         # AI Memory: Wiki de Conhecimento e Decisões
         if path == "/api/chat/memory/wiki":
             cfg = load_config()
             active_repo = cfg.get("active_repo")
             repo_name = query.get("repo", [active_repo.get("name", "default") if active_repo else "default"])[0]
-            wiki_data = get_project_wiki(repo_name)
+            search_query = query.get("q", query.get("query", query.get("search", [""])))[0]
+            wiki_data = get_project_wiki(repo_name, query=search_query)
             return self.send_json({
                 "repo": repo_name,
+                "query": search_query,
                 "wiki": wiki_data
             })
 
@@ -4932,7 +5190,7 @@ Especificações, contratos, bibliotecas e regras mandatórias.
                 reply_text = result.get("reply") or result.get("response", "")
                 model_used = f"{result.get('provider', 'AI')} ({result.get('model', ai_settings.get('model', ''))})"
                 append_chat_event(repo_name, file_path, session_id, "user", prompt, model_info=model_used, author_info=actor)
-                append_chat_event(repo_name, file_path, session_id, "model", reply_text, model_info=model_used, author_info=actor)
+                append_chat_event(repo_name, file_path, session_id, "model", reply_text, model_info=model_used, author_info=actor, telemetry_info=result)
                 result["session_id"] = session_id
                 result["actor"] = actor
                 result["repo"] = repo_name
@@ -4973,6 +5231,16 @@ Especificações, contratos, bibliotecas e regras mandatórias.
             content = payload.get("content", "")
             actor = get_current_actor()
             res = save_wiki_entry(repo_name, category, slug, title, content, author_info=actor)
+            return self.send_json(res)
+
+        # AI Memory: Deletar entrada da Wiki
+        if path == "/api/chat/memory/wiki/delete":
+            repo_name = payload.get("repo", "default")
+            category = payload.get("category", "decisions")
+            slug = payload.get("slug", "")
+            if not slug:
+                return self.send_json({ "error": "slug é obrigatório" }, 400)
+            res = delete_wiki_entry(repo_name, category, slug)
             return self.send_json(res)
 
         # 12. Logout

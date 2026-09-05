@@ -4,7 +4,7 @@
 import { API } from "../api.js";
 import { AIChatCopilot } from "../components/ai-chat-copilot.js";
 
-export function initProjectView({ onConfigSaved, onNotify }) {
+export function initProjectView({ onConfigSaved, onNotify, getActiveRepo }) {
   // Navigation Tabs
   const tabBtns = document.querySelectorAll(".project-tab-btn");
   const tabPanes = document.querySelectorAll(".project-tab-pane");
@@ -246,6 +246,28 @@ DIRETRIZES FUNDAMENTAIS:
     if (projCopilot) {
       projCopilot.setContext({
         customSystemPrompt: activePrompt,
+        chips: [
+          {
+            label: "💡 Proposta de Valor",
+            prompt:
+              "Sugira uma Proposta de Valor e escopo funcional para o campo 'O que é o produto?' com base no nome e contexto do projeto.",
+          },
+          {
+            label: "🎯 Por que fazemos?",
+            prompt:
+              "Ajude a articular o campo 'Por que fazemos?', destacando dores de negócio, ROI e motivação central.",
+          },
+          {
+            label: "🏛️ Arquitetura (Como?)",
+            prompt:
+              "Quais diretrizes arquiteturais, padrões DDD e tecnologias você sugere para 'Como construímos?'?",
+          },
+          {
+            label: "📋 Revisar Preenchimento",
+            prompt:
+              "Analise todos os campos preenchidos do About e forneça sugestões de melhoria e polimento executivo.",
+          },
+        ],
       });
     }
 
@@ -800,7 +822,7 @@ DIRETRIZES FUNDAMENTAIS:
       modelName: "gemini-3.5-flash",
       defaultSystemPrompt: DEFAULT_ABOUT_AGENT_PROMPT,
       customSystemPrompt: currentConfig?.ai_assistant_prompt || "",
-      getRepoName: () => (activeRepo ? activeRepo.name : "default"),
+      getRepoName: () => (getActiveRepo && getActiveRepo() ? getActiveRepo().name : "default"),
       getContent: () =>
         `
 # Nome do Projeto: ${inputName ? inputName.value.trim() : ""}
