@@ -5090,6 +5090,225 @@ body.ai-inspecting-mode .ai-inspectable-block:hover::after {
 }
 
 /* =============================================================================
+   AI AGENT STEP RUNNER & DIRECT APPLIED DIFF CARDS (GOOGLE MATERIAL 3)
+   ============================================================================= */
+.ai-agent-step-runner,
+.ai-agent-steps-card {
+  background: var(--bg-hover, #f8fafc);
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 8px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.ai-agent-steps-card .agent-steps-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  user-select: none;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #065f46;
+}
+
+.ai-agent-steps-card .steps-header-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ai-agent-steps-card .steps-chevron {
+  transition: transform 0.2s ease;
+}
+
+.ai-agent-steps-card.collapsed .steps-chevron {
+  transform: rotate(-90deg);
+}
+
+.ai-agent-steps-card.collapsed .agent-steps-list {
+  display: none;
+}
+
+.ai-agent-steps-card .agent-steps-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed rgba(5, 150, 105, 0.18);
+}
+
+.agent-step-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  color: var(--text-muted, #64748b);
+  transition: all 0.2s ease;
+}
+
+.agent-step-item code {
+  font-family: var(--font-mono, monospace);
+  font-size: 10.5px;
+  background: rgba(0, 0, 0, 0.05);
+  padding: 1px 4px;
+  border-radius: 4px;
+}
+
+.agent-step-item.active {
+  color: var(--primary, #2563eb);
+  font-weight: 600;
+}
+
+.agent-step-item.done {
+  color: #059669;
+}
+
+.diff-sign {
+  font-weight: 700;
+  margin-right: 4px;
+  user-select: none;
+}
+
+.notion-inline-diff-card,
+.ai-diff-proposal-card,
+.ai-agent-applied-diff-card {
+  margin: 12px 0;
+  border: 1.5px solid #059669;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #ffffff;
+  box-shadow: 0 4px 16px rgba(5, 150, 105, 0.12);
+  position: relative;
+  font-family: inherit;
+  user-select: text;
+}
+
+.inline-diff-header,
+.ai-diff-proposal-header,
+.applied-diff-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: rgba(5, 150, 105, 0.08);
+  border-bottom: 1px solid rgba(5, 150, 105, 0.18);
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.inline-diff-title,
+.ai-diff-proposal-title,
+.applied-diff-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #065f46;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.inline-diff-actions,
+.ai-diff-proposal-actions,
+.applied-diff-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-diff-accept {
+  background: #059669 !important;
+  color: #ffffff !important;
+  border: none !important;
+  border-radius: 6px !important;
+  padding: 4px 12px !important;
+  font-size: 11.5px !important;
+  font-weight: 600 !important;
+  cursor: pointer !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  transition: all 0.15s ease !important;
+}
+
+.btn-diff-accept:hover {
+  background: #047857 !important;
+}
+
+.btn-diff-reject {
+  background: #f1f5f9 !important;
+  color: #475569 !important;
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 6px !important;
+  padding: 4px 12px !important;
+  font-size: 11.5px !important;
+  font-weight: 500 !important;
+  cursor: pointer !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  transition: all 0.15s ease !important;
+}
+
+.btn-diff-reject:hover {
+  background: #fee2e2 !important;
+  color: #b91c1c !important;
+  border-color: #fca5a5 !important;
+}
+
+.inline-diff-body,
+.ai-diff-proposal-body {
+  font-family: var(--font-mono, monospace);
+  font-size: 11.5px;
+  line-height: 1.5;
+  display: flex;
+  flex-direction: column;
+}
+
+.diff-del {
+  background: rgba(239, 68, 68, 0.08);
+  color: #991b1b;
+  padding: 6px 12px;
+  border-left: 3.5px solid #ef4444;
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  text-decoration: line-through;
+  text-decoration-color: rgba(153, 27, 27, 0.5);
+}
+
+.diff-ins {
+  background: rgba(16, 185, 129, 0.08);
+  color: #065f46;
+  padding: 6px 12px;
+  border-left: 3.5px solid #10b981;
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.diff-status-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.diff-status-badge.accepted {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.diff-status-badge.rejected {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+/* =============================================================================
    ABOUT DOCUMENT PRESENTATION CARD (GOOGLE MATERIAL DESIGN 3 / EDITORIAL)
    ============================================================================= */
 .about-document-card {

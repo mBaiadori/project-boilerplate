@@ -329,7 +329,17 @@ export function initDashboardView({ onBackToRepos }) {
           ? `Assistente Especialista ativo no documento <code>${activeFilePath}</code>. Como posso ajudar no preenchimento e refinamento das seções?`
           : `Pareando com você no documento ativo: <code>${activeFilePath}</code>. Como posso ajudar na modelagem, invariantes ou diagramas?`,
         onApplyContent: (codeText) => {
-          if (editorChatView.insertIntoEditor) editorChatView.insertIntoEditor(codeText);
+          if (editorChatView.setEditorMarkdown) {
+            editorChatView.setEditorMarkdown(codeText);
+          } else if (editorChatView.insertIntoEditor) {
+            editorChatView.insertIntoEditor(codeText);
+          }
+        },
+        onApplyDiff: (diffData) => {
+          if (editorChatView.showInlineDiff) {
+            return editorChatView.showInlineDiff(diffData);
+          }
+          return false;
         },
         onPromptSaved: async (newPrompt) => {
           if (editorChatView.saveAssistantPrompt) await editorChatView.saveAssistantPrompt(newPrompt);

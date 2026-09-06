@@ -70,6 +70,7 @@ export class AIChatCopilot {
     this.onPromptSaved = options.onPromptSaved || null;
     this.onPromptRestored = options.onPromptRestored || null;
     this.onApplyContent = options.onApplyContent || null;
+    this.onApplyDiff = options.onApplyDiff || null;
     this.onClose = options.onClose || null;
     this.getRepoName = options.getRepoName || (() => "default");
 
@@ -173,6 +174,8 @@ export class AIChatCopilot {
       this.onPromptRestored = opts.onPromptRestored;
     if (opts.onApplyContent !== undefined)
       this.onApplyContent = opts.onApplyContent;
+    if (opts.onApplyDiff !== undefined)
+      this.onApplyDiff = opts.onApplyDiff;
     if (opts.welcomeMessage !== undefined)
       this.welcomeMessage = opts.welcomeMessage;
 
@@ -983,6 +986,12 @@ export class AIChatCopilot {
         `;
       }
 
+      let diffBadge = "";
+      if (item.diffStatus) {
+        const isAcc = item.diffStatus === "ACCEPTED";
+        diffBadge = `<span style="font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 4px; background: ${isAcc ? '#d1fae5' : '#fee2e2'}; color: ${isAcc ? '#065f46' : '#991b1b'}; display: inline-flex; align-items: center; gap: 2px;"><span class="material-symbols-outlined" style="font-size: 12px;">${isAcc ? 'check' : 'close'}</span> ${isAcc ? 'Diff Aceito' : 'Diff Rejeitado'}</span>`;
+      }
+
       html += `
         <div class="ai-raw-entry-card" style="border: 1px solid var(--border-color, #e2e8f0); border-radius: 10px; background: #ffffff; overflow: hidden; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
           <!-- Header (Click to expand/collapse) -->
@@ -993,6 +1002,7 @@ export class AIChatCopilot {
                 <strong style="color: var(--text-heading, #0f172a); font-size: 11.5px;">${this.escapeHtml(authorName)}</strong>
                 <span style="color: #94a3b8;">&rsaquo;</span>
                 <span style="color: var(--text-muted, #64748b);">${this.escapeHtml(this.formatTimestamp(item.timestamp))}</span>
+                ${diffBadge ? `<span style="margin-left: 4px;">${diffBadge}</span>` : ''}
               </div>
               <div style="font-size: 12px; font-weight: 600; color: var(--text-main, #0f172a); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
                 ${this.escapeHtml(item.promptText || "(Mensagem vazia)")}
@@ -1912,12 +1922,58 @@ export class AIChatCopilot {
 
       const activePrompt = this.getActivePrompt();
 
-      // Append Loading AI Bubble
+      // Append Live Agent Step Runner Bubble
+      const reqId = Date.now();
       const loadingBubble = this.appendBubble(
         "ai",
-        '<div style="display: flex; align-items: center; gap: 6px; color: var(--text-muted);"><span class="material-symbols-outlined icon-xs spin">progress_activity</span> Pensando e analisando com o documento ativo...</div>',
-        true,
+        `
+        <div class="chat-bubble-sender">
+          <span class="material-symbols-outlined icon-xs">${this.escapeHtml(this.agentIcon || "psychology")}</span>
+          <strong>${this.escapeHtml(this.agentName)}</strong>
+        </div>
+        <div class="ai-agent-step-runner" id="step-runner-${reqId}">
+          <div class="agent-step-item active" id="st-1-${reqId}">
+            <span class="material-symbols-outlined icon-xs spin">progress_activity</span>
+            <span>Varrendo contexto do documento <code>${this.escapeHtml(this.contextPath)}</code>...</span>
+          </div>
+          <div class="agent-step-item" id="st-2-${reqId}">
+            <span class="material-symbols-outlined icon-xs">psychology</span>
+            <span>Analisando regras de governança e invariantes...</span>
+          </div>
+          <div class="agent-step-item" id="st-3-${reqId}">
+            <span class="material-symbols-outlined icon-xs">edit_note</span>
+            <span>Editando diretamente no documento ativo...</span>
+          </div>
+        </div>
+        `,
+        true
       );
+
+      const stepTimer1 = setTimeout(() => {
+        const st1 = document.getElementById(`st-1-${reqId}`);
+        const st2 = document.getElementById(`st-2-${reqId}`);
+        if (st1) {
+          st1.className = "agent-step-item done";
+          st1.innerHTML = `<span class="material-symbols-outlined icon-xs" style="color:#059669;">check_circle</span> <span>Contexto de <code>${this.escapeHtml(this.contextPath)}</code> carregado.</span>`;
+        }
+        if (st2) {
+          st2.className = "agent-step-item active";
+          st2.innerHTML = `<span class="material-symbols-outlined icon-xs spin">progress_activity</span> <span>Raciocinando e calculando alterações...</span>`;
+        }
+      }, 600);
+
+      const stepTimer2 = setTimeout(() => {
+        const st2 = document.getElementById(`st-2-${reqId}`);
+        const st3 = document.getElementById(`st-3-${reqId}`);
+        if (st2) {
+          st2.className = "agent-step-item done";
+          st2.innerHTML = `<span class="material-symbols-outlined icon-xs" style="color:#059669;">check_circle</span> <span>Raciocínio concluído.</span>`;
+        }
+        if (st3) {
+          st3.className = "agent-step-item active";
+          st3.innerHTML = `<span class="material-symbols-outlined icon-xs spin">progress_activity</span> <span>Aplicando alterações no documento...</span>`;
+        }
+      }, 1400);
 
       const effectiveSystemPrompt = this.currentBriefing
         ? `${activePrompt}\n\n${this.currentBriefing}`
@@ -1957,6 +2013,9 @@ export class AIChatCopilot {
       }
 
       const { ok, data } = await API.sendChatMessage(requestPayload);
+      clearTimeout(stepTimer1);
+      clearTimeout(stepTimer2);
+
       this.lastRawResponse = data;
       rawItem.receivedPayload = data;
       if (this.isRawSidebarOpen) {
@@ -1976,19 +2035,107 @@ export class AIChatCopilot {
           model: data.model || this.modelName,
         });
 
-        const parsedHtml = this.renderMarkdown(replyText);
+        // 1. Check for SEARCH/REPLACE diff and trigger in-editor inline diff
+        let diffNoticeHtml = "";
+        let diffAppliedSuccessfully = false;
+        const diffMatch = replyText.match(/<<<< SEARCH\s*([\s\S]*?)\s*====\s*([\s\S]*?)\s*>>>>/);
+        
+        if (diffMatch && docContext !== undefined) {
+          const searchSnippet = diffMatch[1].trim();
+          const replaceSnippet = diffMatch[2].trim();
+
+          if (this.onApplyDiff) {
+            const shown = this.onApplyDiff({
+              search: searchSnippet,
+              replace: replaceSnippet,
+              explanation: "Revise e confirme as alterações no documento",
+              onAccept: () => {
+                if (this.rawHistory && this.rawHistory[0]) {
+                  this.rawHistory[0].diffStatus = "ACCEPTED";
+                  if (this.isRawSidebarOpen) this.loadRawSidebarContent();
+                }
+              },
+              onReject: () => {
+                if (this.rawHistory && this.rawHistory[0]) {
+                  this.rawHistory[0].diffStatus = "REJECTED";
+                  if (this.isRawSidebarOpen) this.loadRawSidebarContent();
+                }
+              }
+            });
+
+            if (shown) {
+              diffAppliedSuccessfully = true;
+              diffNoticeHtml = `
+                <div class="ai-editor-diff-notice not-prose" style="display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: #065f46; background: rgba(5, 150, 105, 0.08); border: 1px solid rgba(5, 150, 105, 0.2); padding: 6px 12px; border-radius: 6px; margin: 8px 0;">
+                  <span class="material-symbols-outlined icon-xs" style="color: #059669; font-size: 16px;">edit_note</span>
+                  <span>Alteração inserida diretamente no documento ativo. Revise e clique em <strong>Aceitar</strong> ou <strong>Desfazer</strong> no editor.</span>
+                </div>
+              `;
+            }
+          } else if (this.onApplyContent) {
+            let updatedDoc = docContext;
+            if (searchSnippet === "*" || searchSnippet === "") {
+              updatedDoc = searchSnippet === "*" ? replaceSnippet : (docContext ? `${docContext}\n\n${replaceSnippet}` : replaceSnippet);
+            } else if (docContext.includes(searchSnippet)) {
+              updatedDoc = docContext.replace(searchSnippet, replaceSnippet);
+            }
+            this.onApplyContent(updatedDoc);
+            diffAppliedSuccessfully = true;
+          }
+        }
+
+        // Clean out raw SEARCH/REPLACE from reply markdown text
+        const cleanReplyText = replyText
+          .replace(/```diff\s*<<<< SEARCH[\s\S]*?>>>>\s*```/g, "")
+          .replace(/<<<< SEARCH[\s\S]*?>>>>/g, "")
+          .trim();
+        const parsedHtml = this.renderMarkdown(cleanReplyText);
 
         let metaTag = "";
         if (data.provider || data.model) {
           metaTag = `<div style="font-size: 10.5px; color: var(--text-muted); margin-bottom: 4px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;"><span class="material-symbols-outlined icon-xs">bolt</span> ${data.provider || "AI"} (${data.model || this.modelName})</div>`;
         }
 
+        // Persistent Step-by-Step Reasoning Card
+        const stepsCardHtml = `
+          <div class="ai-agent-steps-card not-prose">
+            <div class="agent-steps-header" onclick="this.parentElement.classList.toggle('collapsed')">
+              <div class="steps-header-left">
+                <span class="material-symbols-outlined icon-xs" style="color: #059669;">task_alt</span>
+                <span>Passo a Passo do Agente (${diffAppliedSuccessfully ? '4 etapas concluídas' : '3 etapas concluídas'})</span>
+              </div>
+              <span class="material-symbols-outlined icon-xs steps-chevron">expand_more</span>
+            </div>
+            <div class="agent-steps-list">
+              <div class="agent-step-item done">
+                <span class="material-symbols-outlined icon-xs" style="color: #059669;">check</span>
+                <span>Leitura e varredura do contexto de <code>${this.escapeHtml(this.contextPath)}</code></span>
+              </div>
+              <div class="agent-step-item done">
+                <span class="material-symbols-outlined icon-xs" style="color: #059669;">check</span>
+                <span>Análise de regras de governança, invariantes e instruções</span>
+              </div>
+              <div class="agent-step-item done">
+                <span class="material-symbols-outlined icon-xs" style="color: #059669;">check</span>
+                <span>${diffAppliedSuccessfully ? 'Alteração inserida diretamente no documento ativo' : 'Raciocínio e formulação de resposta'}</span>
+              </div>
+              ${diffAppliedSuccessfully ? `
+              <div class="agent-step-item done">
+                <span class="material-symbols-outlined icon-xs" style="color: #059669;">check</span>
+                <span>Card de revisão exibido no documento (Aceitar / Desfazer)</span>
+              </div>` : ''}
+            </div>
+          </div>
+        `;
+
         loadingBubble.innerHTML = `
           <div class="chat-bubble-sender">
-            <span class="material-symbols-outlined icon-xs">${this.escapeHtml(this.agentIcon)}</span>
+            <span class="material-symbols-outlined icon-xs">${this.escapeHtml(this.agentIcon || "psychology")}</span>
             <strong>${this.escapeHtml(this.agentName)}</strong>
           </div>
           ${metaTag}
+          ${stepsCardHtml}
+          ${diffNoticeHtml}
           <div class="ai-reply-content">${parsedHtml}</div>
         `;
 
@@ -2086,7 +2233,6 @@ export class AIChatCopilot {
         }
       }
     }
-
     this.attachCodeBlockActions(bubbleEl);
   }
 

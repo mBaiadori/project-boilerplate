@@ -553,6 +553,10 @@ export class NotionEditor {
     const children = Array.from(this.canvas.children);
 
     for (const node of children) {
+      if (node.classList && (node.classList.contains('notion-inline-diff-card') || node.classList.contains('not-prose'))) {
+        continue;
+      }
+
       const tag = node.tagName ? node.tagName.toLowerCase() : '';
 
       if (tag === 'h1') {
@@ -1258,6 +1262,134 @@ export class NotionEditor {
 
   insertTextAtCursor(text) {
     this.insertBlockHtml(`<p>${escapeHtml(text)}</p>`);
+  }
+
+  /**
+   * Renders in-editor visual diff card marking the exact section to be modified
+   */
+  showInlineDiff({ search = '', replace = '', explanation = '', onAccept = null, onReject = null } = {}) {
+    this.clearInlineDiff();
+
+    const cleanSearch = (search || '').trim();
+    const cleanReplace = (replace || '').trim();
+
+    if (!cleanSearch && !cleanReplace) return false;
+
+    const diffCard = document.createElement('div');
+    diffCard.className = 'notion-inline-diff-card not-prose';
+    diffCard.setAttribute('contenteditable', 'false');
+
+    diffCard.innerHTML = `
+      <div class="inline-diff-header">
+        <div class="inline-diff-title">
+          <span class="material-symbols-outlined icon-xs" style="color: #059669;">difference</span>
+          <strong>Alteração Proposta pela IA ${explanation ? `&bull; <span style="font-weight: 400; color: var(--text-muted);">${escapeHtml(explanation)}</span>` : ''}</strong>
+        </div>
+        <div class="inline-diff-actions">
+          <button type="button" class="btn-diff-accept" title="Aceitar e aplicar esta alteração no documento">
+            <span class="material-symbols-outlined icon-xs">check</span> Aceitar
+          </button>
+          <button type="button" class="btn-diff-reject" title="Descartar esta alteração e manter original">
+            <span class="material-symbols-outlined icon-xs">undo</span> Desfazer
+          </button>
+        </div>
+      </div>
+      <div class="inline-diff-body">
+        ${cleanSearch && cleanSearch !== '*' ? `<div class="diff-del"><span class="diff-sign">-</span> ${escapeHtml(cleanSearch)}</div>` : ''}
+        ${cleanReplace ? `<div class="diff-ins"><span class="diff-sign">+</span> ${escapeHtml(cleanReplace)}</div>` : ''}
+      </div>
+    `;
+
+    // Handle Accept
+    const btnAccept = diffCard.querySelector('.btn-diff-accept');
+    btnAccept.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.applyInlineDiff(cleanSearch, cleanReplace);
+      if (onAccept) onAccept();
+    });
+
+    // Handle Reject / Undo
+    const btnReject = diffCard.querySelector('.btn-diff-reject');
+    btnReject.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.clearInlineDiff();
+      if (onReject) onReject();
+    });
+
+    // Try to position near matching node
+    let targetNode = null;
+    if (cleanSearch && cleanSearch !== '*') {
+      const searchFirstLine = cleanSearch.split('\n')[0].replace(/^#+\s*/, '').trim();
+      if (searchFirstLine) {
+        for (const child of Array.from(this.canvas.children)) {
+          if (child.textContent.includes(searchFirstLine)) {
+            targetNode = child;
+            break;
+          }
+        }
+      }
+    }
+
+    if (targetNode) {
+      this.canvas.insertBefore(diffCard, targetNode);
+      diffCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } else if (cleanSearch === '*' || !cleanSearch) {
+      this.canvas.appendChild(diffCard);
+      diffCard.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    } else {
+      this.canvas.prepend(diffCard);
+      diffCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    this._activeDiffCard = diffCard;
+    this._activeDiffData = { search: cleanSearch, replace: cleanReplace };
+    return true;
+  }
+
+  /**
+   * Removes active inline diff card without modifying document
+   */
+  clearInlineDiff() {
+    const existing = this.canvas.querySelector('.notion-inline-diff-card');
+    if (existing) {
+      existing.remove();
+    }
+    this._activeDiffCard = null;
+    this._activeDiffData = null;
+  }
+
+  /**
+   * Applies inline diff permanently into the document
+   */
+  applyInlineDiff(search, replace) {
+    this.clearInlineDiff();
+    const currentMd = this.getMarkdown();
+    let newMd = currentMd;
+
+    if (search && currentMd.includes(search)) {
+      newMd = currentMd.replace(search, replace);
+    } else if (search) {
+      const lines = currentMd.split('\n');
+      const searchLines = search.split('\n').map(l => l.trim()).filter(Boolean);
+      if (searchLines.length > 0) {
+        const firstSearch = searchLines[0];
+        const matchIdx = lines.findIndex(l => l.trim() === firstSearch);
+        if (matchIdx !== -1) {
+          lines.splice(matchIdx, searchLines.length, replace);
+          newMd = lines.join('\n');
+        } else {
+          newMd = `${currentMd}\n\n${replace}`;
+        }
+      } else {
+        newMd = `${currentMd}\n\n${replace}`;
+      }
+    } else {
+      newMd = `${currentMd}\n\n${replace}`;
+    }
+
+    this.setMarkdown(newMd);
+    this.recordChange();
+    this.onChange(newMd);
   }
 
   destroy() {

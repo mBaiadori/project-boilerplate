@@ -2227,16 +2227,42 @@ def call_universal_llm(ai_settings, prompt, document_context="", file_path="inde
     if provider == "gemini" and not api_key:
         api_key = os.environ.get("GEMINI_API_KEY", "")
 
-    system_prompt = custom_system_prompt or f"""Você é o Antigravity Agent, um assistente especialista de IA para Arquitetura de Software, Domain-Driven Design (DDD), Context OS e Governança Oficial.
-Você está pareando com o desenvolvedor em tempo real.
-O usuário está atualmente trabalhando no arquivo: `{file_path}`.
+    agent_rules = f"""Você é o Antigravity Agent, um assistente especialista autônomo de IA para Arquitetura de Software, Domain-Driven Design (DDD), Context OS e Governança Técnica.
+Você está pareando com o desenvolvedor em tempo real e possui autorização para EDITAR DIRETAMENTE o documento ativo.
+Arquivo ativo atual: `{file_path}`.
 
-DIRETRIZES FUNDAMENTAIS:
-1. Responda em Português do Brasil de forma clara, técnica, assertiva e elegante.
-2. Quando propor modificações ou adições no documento, forneça blocos de Markdown bem formatados ou diagramas Mermaid (`mermaid`).
-3. Mantenha conformidade com os princípios de DDD (Bounded Contexts, Dicionário Ubíquo, Invariantes).
-4. Se o usuário pedir para gerar ou refinar um diagrama de arquitetura, forneça a sintaxe completa do Mermaid.
+PROTOCOLO DE EDIÇÃO DIRETA NO DOCUMENTO (OBRIGATÓRIO):
+Sempre que a mensagem do usuário pedir para adicionar, alterar, melhorar, corrigir, refatorar, estruturar, criar seções ou modificar o documento atual, você DEVE fornecer a alteração pronta para aplicação direta no documento.
+Forneça uma explicação concisa e em seguida o bloco de Diff estruturado exatamente assim:
+
+```diff
+<<<< SEARCH
+[trecho original exato presente no documento que será substituído]
+====
+[trecho novo/modificado que entrará no lugar]
+>>>>
+```
+
+REGRAS DO DIFF:
+1. O bloco SEARCH deve conter exatamente as linhas existentes no documento atual (ou estar vazio caso seja inserção de nova seção ao final do documento).
+2. O bloco REPLACE deve conter a nova versão completa e pronta.
+3. Se o usuário pedir para criar um documento novo do zero ou substituir o documento inteiro, use:
+```diff
+<<<< SEARCH
+*
+====
+[novo conteúdo completo em markdown]
+>>>>
+```
+4. Se for apenas uma dúvida conceitual sem alteração de arquivo, responda diretamente em markdown sem o bloco diff.
+5. Mantenha conformidade rigorosa com os princípios de DDD (Bounded Contexts, Dicionário Ubíquo, Invariantes).
+6. Se o usuário pedir diagramas, forneça o bloco Mermaid (`mermaid`).
 """
+
+    if custom_system_prompt and custom_system_prompt.strip():
+        system_prompt = f"{agent_rules}\n\nINSTRUÇÕES COMPLEMENTARES:\n{custom_system_prompt.strip()}"
+    else:
+        system_prompt = agent_rules
 
     grounding_message = f"CONTEÚDO ATUAL DO ARQUIVO `{file_path}`:\n```markdown\n{document_context}\n```\n\nPergunta / Instrução: {prompt}"
 
@@ -3662,6 +3688,7 @@ class ModularGovernanceHandler(SimpleHTTPRequestHandler):
                                 "is_remote": True
                             })
                         filtered = filtered + gh_formatted
+            return self.send_json({ "prs": filtered })
 
         # AI Memory: Briefing e Contexto
         if path == "/api/chat/memory/brief":

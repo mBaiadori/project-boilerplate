@@ -1158,9 +1158,20 @@ E no corpo Markdown, estruture o documento com seções claras, propostas de val
     loadDocument,
     loadProjectTaxonomy,
     getCurrentPath: () => currentFilePath,
-    getCurrentMetadata: () => currentDocMetadata,
     getEditorContent: () => (notionEditor ? notionEditor.getMarkdown() : ""),
+    setEditorMarkdown: (markdown) => {
+      if (!notionEditor) return;
+      notionEditor.setMarkdown(markdown || "");
+      updateStats();
+      if (saveDraftStatus) {
+        saveDraftStatus.textContent = "● Alterações não salvas (Agente IA)";
+        saveDraftStatus.className = "status-indicator unsaved";
+      }
+    },
     insertIntoEditor: (text) => insertIntoEditor(text),
+    showInlineDiff: (diffData) => (notionEditor ? notionEditor.showInlineDiff(diffData) : false),
+    applyInlineDiff: (search, replace) => (notionEditor ? notionEditor.applyInlineDiff(search, replace) : false),
+    clearInlineDiff: () => (notionEditor ? notionEditor.clearInlineDiff() : false),
     saveAssistantPrompt: async (newPrompt) => {
       if (!currentDocMetadata) currentDocMetadata = {};
       currentDocMetadata.assistant_prompt = newPrompt;
