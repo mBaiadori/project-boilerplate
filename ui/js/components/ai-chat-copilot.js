@@ -245,13 +245,6 @@ export class AIChatCopilot {
         </div>
 
         <div class="ai-copilot-header-right" style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
-          <button 
-            class="ai-copilot-memory-dot-btn" 
-            type="button" 
-            title="Memória Contínua no Git Ativa (.spec-memory/)&#10;Clique para ver a linha de raciocínio, sessões e handoffs gravados."
-          >
-            <span class="ai-copilot-memory-dot"></span>
-          </button>
           <button class="ai-copilot-raw-btn" title="Inspetor RAW (Ver Prompts, Memória e Payloads na Íntegra)" type="button">
             RAW
           </button>
@@ -984,7 +977,6 @@ export class AIChatCopilot {
    */
   bindEvents() {
     this.domAgentBtn = this.container.querySelector(".ai-copilot-agent-btn");
-    this.domMemoryDot = this.container.querySelector(".ai-copilot-memory-dot-btn") || this.container.querySelector(".ai-copilot-memory-dot");
     this.domRawBtn = this.container.querySelector(".ai-copilot-raw-btn");
     this.domHistoryBtn = this.container.querySelector(".ai-copilot-history-btn");
     this.domCloseBtn = this.container.querySelector(".ai-copilot-close-btn");
@@ -1027,7 +1019,7 @@ export class AIChatCopilot {
       });
     }
 
-    // Toggle Reasoning & History Sidebar (via History Button or Memory Dot)
+    // Toggle Reasoning & History Sidebar (via History Button)
     const toggleHistorySidebar = () => {
       this.isHistorySidebarOpen = !this.isHistorySidebarOpen;
       if (this.isHistorySidebarOpen) {
@@ -1052,9 +1044,6 @@ export class AIChatCopilot {
 
     if (this.domHistoryBtn) {
       this.domHistoryBtn.addEventListener("click", toggleHistorySidebar);
-    }
-    if (this.domMemoryDot) {
-      this.domMemoryDot.addEventListener("click", toggleHistorySidebar);
     }
 
     // Toggle RAW Inspector Sidebar

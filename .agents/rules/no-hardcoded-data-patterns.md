@@ -49,8 +49,17 @@ Ao criar ou estender qualquer nova aba, modal ou formulário:
 
 ## 4. Validação de Identificadores (Slugs) & Prevenção de Conflitos
 
-Para todos os identificadores de Domínios (`#dominio`) e Subdomínios (`#sub-dominio`):
+Para todos os identificadores de Domínios (`#dominio`) e Subdomínios (`#dominio/subdominio`):
 1. **Formato Padrão (`kebab-case`)**: Devem conter apenas caracteres alfanuméricos minúsculos e hífens (`^[a-z0-9]+(-[a-z0-9]+)*$`), sem acentos ou caracteres especiais.
-2. **Unicidade e Prevenção de Conflitos**:
-   - Subdomínios pertencentes ao mesmo domínio **não podem ter slugs idênticos** para evitar conflitos de rotas e sobreposições de diretórios (`domains/<dominio>/<subdominio>/index.md`).
+2. **Nomespacing Hierárquico de Subdomínios**:
+   - Subdomínios devem ser sempre referenciados com o prefixo de seu domínio pai (ex: `#financeiro/faturamento`, `#engenharia/backend`), refletindo sua hierarquia física de diretórios (`domains/<dominio>/<subdominio>/index.md`).
+3. **Unicidade e Prevenção de Conflitos**:
+   - Domínios e subdomínios não podem ter slugs conflitantes.
    - O frontend e o backend aplicam validação em tempo real e resolução automática de conflitos (sufixos `-2`, `-3`), informando o usuário visualmente sobre a validade do slug.
+
+---
+
+## 5. Padrão Global de Ícones & Componente `IconPicker`
+
+- Toda seleção de ícones na interface do software deve utilizar o componente padrão [`IconPicker`](file:///Users/MarcosBaiadori/Desktop/project-boilerplate/ui/js/components/icon-picker.js) (`window.IconPicker`).
+- O seletor oferece busca em tempo real e categorização temática de Google Material Symbols (Negócios & Finanças, Engenharia, Governança, Operações, Marketing, Arquitetura, Qualidade & QA).

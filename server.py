@@ -570,10 +570,60 @@ def get_project_config(repo_name):
         "config_path": "project/project.config.json"
     }
 
+def generate_policies_markdown(policies_data, project_name=""):
+    """
+    Gera o documento compilado project/policies.md com frontmatter e seções de regulação/conformidade.
+    """
+    if not isinstance(policies_data, dict):
+        return ""
+    if policies_data.get("markdown_content") and policies_data.get("markdown_content").strip():
+        return policies_data.get("markdown_content").strip()
+    
+    regulators = policies_data.get("regulators", [])
+    regulators_str = ", ".join(regulators) if isinstance(regulators, list) and regulators else "Conformidade Geral"
+    
+    md = f"""---
+type: "policies"
+version: "1.0.0"
+status: "approved"
+layer: "L0_FOUNDATION"
+path: "project/policies.md"
+dpo_contact: "{policies_data.get('dpo_contact', '')}"
+regulators: {json.dumps(regulators, ensure_ascii=False) if isinstance(regulators, list) else '[]'}
+---
+
+# 📜 Políticas de Negócio, Regulação & Leis Mandatórias
+
+> Este documento define os órgãos reguladores, marcos legais e restrições inegociáveis que o projeto **{project_name or 'do Sistema'}** deve obedecer.
+
+---
+
+## 🏛️ 1. Órgãos Reguladores & Marco Legal
+- **Órgãos Fiscalizadores:** {regulators_str}
+- **Leis & Normas Mandatórias:**
+{policies_data.get('laws', 'Não especificado.')}
+
+---
+
+## ⚖️ 2. Regras Mandatórias de Negócio (Hard Rules)
+- **Direito de Arrependimento & Cancelamento:** {policies_data.get('cancellation_policy', 'Conforme legislação aplicável.')}
+- **Política de Estorno & Devolução Financeira:** {policies_data.get('refund_policy', 'Conforme termos de serviço.')}
+- **Retenção Legal de Dados & Documentos:** {policies_data.get('retention_policy', 'Conforme prazos legais.')}
+- **SLA & Atendimento ao Consumidor:** {policies_data.get('sla_support', 'Conforme padrão de atendimento.')}
+
+---
+
+## 🔒 3. Privacidade, Dados Pessoais & LGPD / GDPR
+- **Encarregado de Dados (DPO):** {policies_data.get('dpo_contact', 'dpo@empresa.com')}
+- **Consentimento & Opt-in:** {policies_data.get('consent_policy', 'Consentimento explícito e granular.')}
+- **Tratamento de Dados Sensíveis & Logs:**
+{policies_data.get('sensitive_data_policy', 'Proibição de dados sensíveis em logs e telemetria aberta.')}
+"""
+    return md.strip()
+
 def save_project_config(repo_name, post_data):
     """
-    Grava project/project.config.json e registra MODIFIED no workspace staging para PR.
-    Não força a criação de index.md ou pastas de domínio.
+    Grava project/project.config.json e project/policies.md e registra MODIFIED no workspace staging para PR.
     """
     repo_dir = os.path.join(PROJECTS_DIR, repo_name)
     project_dir = os.path.join(repo_dir, "project")
@@ -598,6 +648,24 @@ def save_project_config(repo_name, post_data):
     change_type = "MODIFIED" if old_content else "ADDED"
     record_change(repo_name, rel_path, change_type, old_content, new_content)
 
+    # Sincroniza o documento project/policies.md se houver políticas preenchidas
+    policies_data = config_data.get("policies")
+    if isinstance(policies_data, dict):
+        proj_name = (config_data.get("project") or {}).get("name", "")
+        policies_md_content = generate_policies_markdown(policies_data, proj_name)
+        policies_file = os.path.join(project_dir, "policies.md")
+        old_pol_content = ""
+        if os.path.exists(policies_file):
+            try:
+                with open(policies_file, "r", encoding="utf-8") as pf:
+                    old_pol_content = pf.read()
+            except Exception:
+                pass
+        with open(policies_file, "w", encoding="utf-8") as pf:
+            pf.write(policies_md_content)
+        pol_change_type = "MODIFIED" if old_pol_content else "ADDED"
+        record_change(repo_name, "project/policies.md", pol_change_type, old_pol_content, policies_md_content)
+
     # Sincroniza e cria as pastas oficiais em domains/ para os domínios definidos no projeto
     org_domains = config_data.get("organization_domains", [])
     if isinstance(org_domains, list) and len(org_domains) > 0:
@@ -607,7 +675,7 @@ def save_project_config(repo_name, post_data):
         "success": True,
         "config": config_data,
         "repo_name": repo_name,
-        "message": "Configurações oficiais do projeto salvas e pastas de domínios sincronizadas com sucesso!"
+        "message": "Configurações oficiais do projeto salvas e políticas sincronizadas com sucesso!"
     }
 
 def revert_single_change(repo_dir, change):
@@ -2061,11 +2129,11 @@ def build_tree(current_dir, base_dir):
         full_f = os.path.join(current_dir, f)
         rel_f = os.path.relpath(full_f, base_dir).replace("\\", "/")
         
-        # Badge inteligente baseado em L1-L4
-        badge = "L1" if rel_f in ["index.md", "project/index.md"] else (
-            "L2" if rel_f.startswith("domains/") and rel_f.count("/") == 1 else (
-                "L3" if rel_f.startswith("domains/") and rel_f.count("/") == 2 else (
-                    "L4" if "domains" in rel_f or "specs" in rel_f else "DOC"
+        # Badge inteligente baseado em L0-L4
+        badge = "L0" if (rel_f.startswith("project/") or rel_f in ["index.md", "project/index.md"]) else (
+            "L1" if rel_f.startswith("domains/") and rel_f.count("/") == 1 else (
+                "L2" if rel_f.startswith("domains/") and rel_f.count("/") == 2 else (
+                    "L3" if "domains" in rel_f or "specs" in rel_f else "DOC"
                 )
             )
         )

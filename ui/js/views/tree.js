@@ -245,32 +245,55 @@ export function initTreeView({ onOpenFile, onWorkspaceChanged }) {
   function renderTree(nodes = []) {
     treeContainer.innerHTML = "";
 
-    // Filtrar para exibir APENAS a estrutura de domínios (removendo templates, engenharia, .github e index.md)
-    let domainNodes = [];
+    // Estrutura de documentos da árvore:
+    // 1. Incluir pasta 'project' (para policies.md, index.md, etc.)
+    // 2. Incluir domínios corporativos (filhos de domains/)
+    let treeDisplayNodes = [];
+
+    const projectFolder = nodes.find(
+      (n) => (n.name === "project" || n.path === "project") && n.type === "dir",
+    );
+    if (projectFolder) {
+      // Filtrar para exibir os documentos markdown de project (ex: policies.md, index.md, etc.)
+      const cleanProjChildren = (projectFolder.children || []).filter((child) => {
+        return !child.name.endsWith(".json") && !child.name.startsWith(".");
+      });
+      treeDisplayNodes.push({
+        ...projectFolder,
+        children: cleanProjChildren,
+      });
+    }
+
     const domainFolder = nodes.find(
       (n) => (n.name === "domains" || n.path === "domains") && n.type === "dir",
     );
-    if (domainFolder && domainFolder.children) {
-      domainNodes = domainFolder.children;
-    } else {
-      domainNodes = nodes.filter((n) => {
+    if (domainFolder && domainFolder.children && domainFolder.children.length > 0) {
+      domainFolder.children.forEach((d) => treeDisplayNodes.push(d));
+    } else if (domainFolder) {
+      treeDisplayNodes.push(domainFolder);
+    }
+
+    // Fallback caso não encontre estrutura padrão
+    if (treeDisplayNodes.length === 0) {
+      treeDisplayNodes = nodes.filter((n) => {
         const p = (n.path || n.name || "").toLowerCase();
         return (
           !p.startsWith("templates") &&
           !p.startsWith("engenharia") &&
           !p.startsWith("patterns") &&
           !p.startsWith(".github") &&
+          !p.startsWith(".git") &&
           p !== "index.md"
         );
       });
     }
 
-    if (!domainNodes || domainNodes.length === 0) {
+    if (!treeDisplayNodes || treeDisplayNodes.length === 0) {
       treeContainer.innerHTML = `
         <div class="tree-empty-state" style="display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 28px 14px; gap: 8px; width: 100%; box-sizing: border-box;">
           <div style="margin-bottom: 4px;"><span class="material-symbols-outlined icon-xl" style="color: var(--md-sys-color-outline);">account_tree</span></div>
           <strong style="font-size: 13px; font-weight: 600; color: var(--text-normal); margin: 0;">Nenhum documento cadastrado</strong>
-          <p style="font-size: 11px; color: var(--text-muted); line-height: 1.4; margin: 0;">Crie bounded contexts e especificações em <code>domains/</code>.</p>
+          <p style="font-size: 11px; color: var(--text-muted); line-height: 1.4; margin: 0;">Crie bounded contexts e especificações em <code>domains/</code> ou <code>project/</code>.</p>
           <button class="btn btn-primary btn-sm" style="margin-top: 6px; width: 100%; font-size: 11.5px; padding: 6px 10px; display: inline-flex; align-items: center; justify-content: center; gap: 4px;" onclick="document.getElementById('btn-tree-new-file').click()">
             <span>+ Novo Documento</span>
           </button>
@@ -279,7 +302,7 @@ export function initTreeView({ onOpenFile, onWorkspaceChanged }) {
       return;
     }
 
-    domainNodes.forEach((node) => {
+    treeDisplayNodes.forEach((node) => {
       treeContainer.appendChild(createTreeNode(node));
     });
   }
@@ -289,17 +312,24 @@ export function initTreeView({ onOpenFile, onWorkspaceChanged }) {
     el.className = "tree-node";
 
     if (node.type === "dir") {
+      const isProjectFolder = node.name === "project" || node.path === "project";
       const folderHeader = document.createElement("div");
       folderHeader.className = "tree-folder";
       folderHeader.innerHTML = `
         <div class="tree-folder-left">
           <span class="tree-caret expanded">›</span>
-          <span class="tree-folder-name">${escapeHtml(node.name)}</span>
+          <span class="tree-folder-name">${isProjectFolder ? "📁 project (Fundação)" : escapeHtml(node.name)}</span>
         </div>
         <div class="tree-folder-actions">
           <button class="btn-tree-action" title="Novo arquivo" onclick="window.treeAddInside('${node.path}')"><span class="material-symbols-outlined icon-xs">add</span></button>
-          <button class="btn-tree-action" title="Renomear pasta" onclick="window.treeRenamePath('${node.path}')"><span class="material-symbols-outlined icon-xs">edit</span></button>
-          <button class="btn-tree-action delete" title="Excluir pasta" onclick="window.treeDeletePath('${node.path}')"><span class="material-symbols-outlined icon-xs">delete</span></button>
+          ${
+            !isProjectFolder
+              ? `
+            <button class="btn-tree-action" title="Renomear pasta" onclick="window.treeRenamePath('${node.path}')"><span class="material-symbols-outlined icon-xs">edit</span></button>
+            <button class="btn-tree-action delete" title="Excluir pasta" onclick="window.treeDeletePath('${node.path}')"><span class="material-symbols-outlined icon-xs">delete</span></button>
+          `
+              : ""
+          }
         </div>
       `;
 

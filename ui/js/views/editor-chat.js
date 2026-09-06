@@ -12,7 +12,7 @@ import { NotionEditor } from "../components/notion-editor.js";
 import { DraftStoreService } from "../draft-store.js";
 import { Router } from "../router.js";
 
-export function initEditorChatView({ onWorkspaceChanged, getActiveRepo }) {
+export function initEditorChatView({ onWorkspaceChanged, getActiveRepo, onDocumentLoaded }) {
   const getRepoName = () => {
     if (getActiveRepo && getActiveRepo()) return getActiveRepo().name;
     const r = Router.getRoute();
@@ -879,7 +879,14 @@ E no corpo Markdown, estruture o documento com seções claras, propostas de val
       }
       updateStats();
 
-      initChatGroundedContext(doc.path, customAssistantPrompt);
+      if (onDocumentLoaded) {
+        onDocumentLoaded({
+          path: doc.path,
+          content: parsed.body,
+          metadata: currentDocMetadata,
+          assistantPrompt: customAssistantPrompt,
+        });
+      }
       await updateConnectivityBar(doc.path);
       await updateProjectFilesDatalist();
 
@@ -1072,133 +1079,7 @@ E no corpo Markdown, estruture o documento com seções claras, propostas de val
     if (targetPath) loadDocument(targetPath);
   };
 
-  // 12. Universal Agentic AI Chat Copilot Integration
-  let workbenchCopilot = null;
-  if (workbenchAiPane) {
-    workbenchCopilot = new AIChatCopilot({
-      container: workbenchAiPane,
-      resizer: "#resizer-ai",
-      storageKey: "governance_workbench_ai_width",
-      contextPath: currentFilePath,
-      agentName: "Antigravity Agent",
-      agentIcon: "",
-      modelName: "gemini-3.5-flash",
-      defaultSystemPrompt: "",
-      getRepoName: () => (getActiveRepo && getActiveRepo() ? getActiveRepo().name : "default"),
-      getContent: () => (notionEditor ? notionEditor.getMarkdown() : ""),
-      chips: [
-        {
-          label: "Diagrama Mermaid",
-          prompt:
-            "Gere um diagrama Mermaid para a arquitetura deste documento.",
-        },
-        {
-          label: "Dicionário Ubíquo",
-          prompt:
-            "Refine o Dicionário Ubíquo adicionando novas entidades com escopo e regras.",
-        },
-        {
-          label: "Auditar DDD",
-          prompt:
-            "Audite a aderência deste documento aos princípios de DDD e padrões de arquitetura.",
-        },
-        {
-          label: "Cenário BDD",
-          prompt:
-            "Proponha um cenário BDD em Gherkin com base nas invariantes deste documento.",
-        },
-      ],
-      onApplyContent: (codeText) => {
-        insertIntoEditor(codeText);
-      },
-      onPromptSaved: async (newPrompt) => {
-        if (!currentDocMetadata) currentDocMetadata = {};
-        currentDocMetadata.assistant_prompt = newPrompt;
-        const body = notionEditor ? notionEditor.getMarkdown() : "";
-        const fullContent = serializeFrontmatter(currentDocMetadata, body);
-        const { ok, data } = await API.saveWorkspaceFile({
-          path: currentFilePath,
-          content: fullContent,
-        });
-        if (ok && data.success) {
-          if (saveDraftStatus) {
-            saveDraftStatus.textContent = "Salvo no workspace (com prompt)";
-            saveDraftStatus.className = "status-indicator saved";
-          }
-          if (onWorkspaceChanged) onWorkspaceChanged();
-        }
-      },
-      onPromptRestored: async (defaultPrompt) => {
-        if (!currentDocMetadata) currentDocMetadata = {};
-        if (defaultPrompt) {
-          currentDocMetadata.assistant_prompt = defaultPrompt;
-        } else {
-          delete currentDocMetadata.assistant_prompt;
-        }
-        const body = notionEditor ? notionEditor.getMarkdown() : "";
-        const fullContent = serializeFrontmatter(currentDocMetadata, body);
-        const { ok, data } = await API.saveWorkspaceFile({
-          path: currentFilePath,
-          content: fullContent,
-        });
-        if (ok && data.success) {
-          if (saveDraftStatus) {
-            saveDraftStatus.textContent = "Prompt padrão restaurado";
-            saveDraftStatus.className = "status-indicator saved";
-          }
-          if (onWorkspaceChanged) onWorkspaceChanged();
-        }
-      },
-      onClose: () => {
-        updateAiPaneVisibility(false);
-      },
-      getRepoName: () => getRepoName(),
-    });
-  }
 
-  function initChatGroundedContext(path, assistantPrompt = "") {
-    const activePrompt =
-      (currentDocMetadata && currentDocMetadata.assistant_prompt) ||
-      assistantPrompt ||
-      "";
-    const isSpecialized = Boolean(activePrompt);
-    if (workbenchCopilot) {
-      workbenchCopilot.setContext({
-        contextPath: path,
-        agentName: isSpecialized
-          ? "Assistente Especialista"
-          : "Antigravity Agent",
-        agentIcon: isSpecialized ? "psychology" : "smart_toy",
-        defaultSystemPrompt: assistantPrompt || "",
-        customSystemPrompt: (currentDocMetadata && currentDocMetadata.assistant_prompt) || "",
-        chips: [
-          {
-            label: "📊 Diagrama Mermaid",
-            prompt:
-              "Gere um diagrama Mermaid para a arquitetura deste documento.",
-          },
-          {
-            label: "📖 Dicionário Ubíquo",
-            prompt:
-              "Refine o Dicionário Ubíquo adicionando novas entidades com escopo e regras.",
-          },
-          {
-            label: "🛡️ Auditar DDD",
-            prompt:
-              "Audite a aderência deste documento aos princípios de DDD e padrões de arquitetura.",
-          },
-          {
-            label: "🧪 Cenário BDD",
-            prompt:
-              "Proponha um cenário BDD em Gherkin com base nas invariantes deste documento.",
-          },
-        ],
-        welcomeMessage: isSpecialized
-          ? `Assistente Especialista ativo no documento <code>${path}</code>. Como posso ajudar no preenchimento e refinamento das seções?`
-          : `Pareando com você no documento ativo: <code>${path}</code>. Como posso ajudar na modelagem, invariantes ou diagramas?`,
-      });
-    }
-  }
 
   function insertIntoEditor(text) {
     if (!notionEditor) return;
@@ -1277,6 +1158,47 @@ E no corpo Markdown, estruture o documento com seções claras, propostas de val
     loadDocument,
     loadProjectTaxonomy,
     getCurrentPath: () => currentFilePath,
+    getCurrentMetadata: () => currentDocMetadata,
+    getEditorContent: () => (notionEditor ? notionEditor.getMarkdown() : ""),
+    insertIntoEditor: (text) => insertIntoEditor(text),
+    saveAssistantPrompt: async (newPrompt) => {
+      if (!currentDocMetadata) currentDocMetadata = {};
+      currentDocMetadata.assistant_prompt = newPrompt;
+      const body = notionEditor ? notionEditor.getMarkdown() : "";
+      const fullContent = serializeFrontmatter(currentDocMetadata, body);
+      const { ok, data } = await API.saveWorkspaceFile({
+        path: currentFilePath,
+        content: fullContent,
+      });
+      if (ok && data.success) {
+        if (saveDraftStatus) {
+          saveDraftStatus.textContent = "Salvo no workspace (com prompt)";
+          saveDraftStatus.className = "status-indicator saved";
+        }
+        if (onWorkspaceChanged) onWorkspaceChanged();
+      }
+    },
+    restoreAssistantPrompt: async (defaultPrompt) => {
+      if (!currentDocMetadata) currentDocMetadata = {};
+      if (defaultPrompt) {
+        currentDocMetadata.assistant_prompt = defaultPrompt;
+      } else {
+        delete currentDocMetadata.assistant_prompt;
+      }
+      const body = notionEditor ? notionEditor.getMarkdown() : "";
+      const fullContent = serializeFrontmatter(currentDocMetadata, body);
+      const { ok, data } = await API.saveWorkspaceFile({
+        path: currentFilePath,
+        content: fullContent,
+      });
+      if (ok && data.success) {
+        if (saveDraftStatus) {
+          saveDraftStatus.textContent = "Prompt padrão restaurado";
+          saveDraftStatus.className = "status-indicator saved";
+        }
+        if (onWorkspaceChanged) onWorkspaceChanged();
+      }
+    },
     setContent(content, breadcrumb = "novo-documento.md", assistantPrompt = "") {
       if (editorEmptyState) editorEmptyState.style.display = "none";
       if (notionEditorWrapper) notionEditorWrapper.style.display = "flex";
@@ -1296,7 +1218,14 @@ E no corpo Markdown, estruture o documento com seções claras, propostas de val
       }
       activeAssistantPrompt = assistantPrompt;
       updateStats();
-      initChatGroundedContext(breadcrumb, assistantPrompt);
+      if (onDocumentLoaded) {
+        onDocumentLoaded({
+          path: breadcrumb,
+          content: parsed.body,
+          metadata: currentDocMetadata,
+          assistantPrompt,
+        });
+      }
     },
     showEmptyState,
   };

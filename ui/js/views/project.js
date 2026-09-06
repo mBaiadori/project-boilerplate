@@ -3,6 +3,7 @@
 // =============================================================================
 import { API } from "../api.js";
 import { AIChatCopilot } from "../components/ai-chat-copilot.js";
+import { IconPicker } from "../components/icon-picker.js";
 
 export function initProjectView({ onConfigSaved, onNotify, getActiveRepo }) {
   // Navigation Tabs
@@ -58,10 +59,30 @@ export function initProjectView({ onConfigSaved, onNotify, getActiveRepo }) {
         "Gestão de fluxo de caixa, pagamentos, faturamento, conciliação contábil, auditoria e tesouraria.",
       responsibles: [],
       suggested_subdomains: [
-        { id: "contas-a-pagar", name: "Contas a Pagar", description: "Gestão de obrigações, parceiros e controle de vencimentos." },
-        { id: "contas-a-receber", name: "Contas a Receber", description: "Gestão de recebíveis, cobrança e conciliação bancária de entradas." },
-        { id: "faturamento", name: "Faturamento & NFe", description: "Emissão de notas fiscais, impostos e conformidade fiscal." },
-        { id: "tesouraria", name: "Tesouraria & Conciliação", description: "Controle de saldos bancários, liquidez diária e transferências." },
+        {
+          id: "contas-a-pagar",
+          name: "Contas a Pagar",
+          description:
+            "Gestão de obrigações, parceiros e controle de vencimentos.",
+        },
+        {
+          id: "contas-a-receber",
+          name: "Contas a Receber",
+          description:
+            "Gestão de recebíveis, cobrança e conciliação bancária de entradas.",
+        },
+        {
+          id: "faturamento",
+          name: "Faturamento & NFe",
+          description:
+            "Emissão de notas fiscais, impostos e conformidade fiscal.",
+        },
+        {
+          id: "tesouraria",
+          name: "Tesouraria & Conciliação",
+          description:
+            "Controle de saldos bancários, liquidez diária e transferências.",
+        },
       ],
     },
     {
@@ -73,10 +94,30 @@ export function initProjectView({ onConfigSaved, onNotify, getActiveRepo }) {
         "Aquisição de clientes, campanhas digitais, branding, funil de conversão, comunicação e growth.",
       responsibles: [],
       suggested_subdomains: [
-        { id: "aquisicao", name: "Aquisição & Mídia", description: "Campanhas de tráfego pago, anúncios em redes e canais digitais." },
-        { id: "branding", name: "Branding & Posicionamento", description: "Identidade corporativa, tom de voz, design de marca e reputação." },
-        { id: "growth", name: "Growth & Experimentação", description: "Otimização de conversão (CRO), testes A/B e funis de retenção." },
-        { id: "conteudo", name: "Conteúdo & Inbound", description: "Produção de conteúdo editorial, artigos técnicos, SEO e newsletters." },
+        {
+          id: "aquisicao",
+          name: "Aquisição & Mídia",
+          description:
+            "Campanhas de tráfego pago, anúncios em redes e canais digitais.",
+        },
+        {
+          id: "branding",
+          name: "Branding & Posicionamento",
+          description:
+            "Identidade corporativa, tom de voz, design de marca e reputação.",
+        },
+        {
+          id: "growth",
+          name: "Growth & Experimentação",
+          description:
+            "Otimização de conversão (CRO), testes A/B e funis de retenção.",
+        },
+        {
+          id: "conteudo",
+          name: "Conteúdo & Inbound",
+          description:
+            "Produção de conteúdo editorial, artigos técnicos, SEO e newsletters.",
+        },
       ],
     },
     {
@@ -88,10 +129,30 @@ export function initProjectView({ onConfigSaved, onNotify, getActiveRepo }) {
         "Governança corporativa, facilities, gestão de contratos, compliance regulatório e rotinas internas.",
       responsibles: [],
       suggested_subdomains: [
-        { id: "rh-dp", name: "Recursos Humanos & DP", description: "Gestão de colaboradores, folha, benefícios e recrutamento." },
-        { id: "facilities", name: "Facilities & Patrimônio", description: "Gestão de infraestrutura física, suprimentos e escritórios." },
-        { id: "juridico-compliance", name: "Jurídico & Compliance", description: "Gestão contratual, LGPD, riscos regulatórios e governança." },
-        { id: "compras", name: "Compras & Suprimentos", description: "Cotações, negociações com fornecedores e requisições internas." },
+        {
+          id: "rh-dp",
+          name: "Recursos Humanos & DP",
+          description:
+            "Gestão de colaboradores, folha, benefícios e recrutamento.",
+        },
+        {
+          id: "facilities",
+          name: "Facilities & Patrimônio",
+          description:
+            "Gestão de infraestrutura física, suprimentos e escritórios.",
+        },
+        {
+          id: "juridico-compliance",
+          name: "Jurídico & Compliance",
+          description:
+            "Gestão contratual, LGPD, riscos regulatórios e governança.",
+        },
+        {
+          id: "compras",
+          name: "Compras & Suprimentos",
+          description:
+            "Cotações, negociações com fornecedores e requisições internas.",
+        },
       ],
     },
     {
@@ -103,10 +164,30 @@ export function initProjectView({ onConfigSaved, onNotify, getActiveRepo }) {
         "Execução de processos operacionais, logística, atendimento ao cliente, suporte e controle de SLAs.",
       responsibles: [],
       suggested_subdomains: [
-        { id: "logistica", name: "Logística & Fulfillment", description: "Controle de estoque, expedição, despacho e rastreamento de entregas." },
-        { id: "atendimento", name: "Atendimento & Suporte (SAC)", description: "Central de ajuda, triagem de tickets e atendimento ao cliente final." },
-        { id: "qualidade", name: "Qualidade & SLA", description: "Auditoria de processos operacionais e garantia de cumprimento de prazos." },
-        { id: "pos-venda", name: "Pós-Venda & Retenção", description: "Sucesso do cliente, acompanhamento de satisfação (NPS) e onboarding." },
+        {
+          id: "logistica",
+          name: "Logística & Fulfillment",
+          description:
+            "Controle de estoque, expedição, despacho e rastreamento de entregas.",
+        },
+        {
+          id: "atendimento",
+          name: "Atendimento & Suporte (SAC)",
+          description:
+            "Central de ajuda, triagem de tickets e atendimento ao cliente final.",
+        },
+        {
+          id: "qualidade",
+          name: "Qualidade & SLA",
+          description:
+            "Auditoria de processos operacionais e garantia de cumprimento de prazos.",
+        },
+        {
+          id: "pos-venda",
+          name: "Pós-Venda & Retenção",
+          description:
+            "Sucesso do cliente, acompanhamento de satisfação (NPS) e onboarding.",
+        },
       ],
     },
     {
@@ -118,37 +199,78 @@ export function initProjectView({ onConfigSaved, onNotify, getActiveRepo }) {
         "Desenvolvimento de software, arquitetura de sistemas, infraestrutura em nuvem, DevOps e segurança.",
       responsibles: [],
       suggested_subdomains: [
-        { id: "backend", name: "Backend & APIs", description: "Microsserviços, banco de dados, regras de negócio e integrações REST/gRPC." },
-        { id: "frontend", name: "Frontend & Web Apps", description: "Interfaces web, aplicações mobile, componentes de UI e experiência do usuário." },
-        { id: "infra-devops", name: "Infraestrutura & DevOps", description: "Pipelines de CI/CD, clusters Kubernetes, Docker e automação de deploy." },
-        { id: "seguranca", name: "Segurança & SecOps", description: "Gestão de vulnerabilidades, IAM, criptografia e proteção de dados sensíveis." },
+        {
+          id: "backend",
+          name: "Backend & APIs",
+          description:
+            "Microsserviços, banco de dados, regras de negócio e integrações REST/gRPC.",
+        },
+        {
+          id: "frontend",
+          name: "Frontend & Web Apps",
+          description:
+            "Interfaces web, aplicações mobile, componentes de UI e experiência do usuário.",
+        },
+        {
+          id: "infra-devops",
+          name: "Infraestrutura & DevOps",
+          description:
+            "Pipelines de CI/CD, clusters Kubernetes, Docker e automação de deploy.",
+        },
+        {
+          id: "seguranca",
+          name: "Segurança & SecOps",
+          description:
+            "Gestão de vulnerabilidades, IAM, criptografia e proteção de dados sensíveis.",
+        },
       ],
     },
   ];
 
+  // 7 Rainbow Hues x 3 Tonal Variations (Pastel/Light, Vibrant/Primary, Deep/Dark) = 21 Curated Colors
   const DOMAIN_COLOR_PALETTE = [
-    "#10b981",
-    "#3b82f6",
-    "#8b5cf6",
-    "#f59e0b",
-    "#ec4899",
-    "#06b6d4",
-    "#6366f1",
-    "#14b8a6",
+    // Row 1: Tons Suaves / Claros (Light)
+    "#f87171", // 1. Vermelho Claro
+    "#fb923c", // 2. Laranja Claro
+    "#fde047", // 3. Amarelo Claro
+    "#4ade80", // 4. Verde Claro
+    "#38bdf8", // 5. Ciano Claro
+    "#818cf8", // 6. Azul/Índigo Claro
+    "#c084fc", // 7. Violeta Claro
+
+    // Row 2: Tons Vibrantes / Primários (Vibrant)
+    "#ef4444", // 1. Vermelho Vivo
+    "#f97316", // 2. Laranja Vivo
+    "#eab308", // 3. Amarelo Dourado
+    "#10b981", // 4. Verde Esmeralda
+    "#06b6d4", // 5. Ciano Vivo
+    "#3b82f6", // 6. Azul Real
+    "#8b5cf6", // 7. Violeta Vivo
+
+    // Row 3: Tons Profundos / Escuros (Deep)
+    "#b91c1c", // 1. Vermelho Escuro
+    "#c2410c", // 2. Laranja Queimado
+    "#a16207", // 3. Âmbar / Bronze
+    "#15803d", // 4. Verde Floresta
+    "#0e7490", // 5. Petróleo / Azul Petróleo
+    "#1d4ed8", // 6. Azul Marinho
+    "#6b21a8", // 7. Roxo Profundo
   ];
 
   // Form Fields: Camadas de Arquitetura & Governança (L0 - L5)
   const layersGrid = document.getElementById("proj-layers-grid");
   const btnAddLayer = document.getElementById("btn-proj-add-layer");
-  const layersCountBadge = document.getElementById("proj-layers-count-badge");
   const btnLayersViewGrid = document.getElementById("btn-layers-view-grid");
   const btnLayersViewList = document.getElementById("btn-layers-view-list");
-  const layerSugPanel = document.getElementById("proj-layers-suggestions-panel");
-  const layerSugHeader = document.getElementById("proj-layers-suggestions-header");
+  const layerSugPanel = document.getElementById(
+    "proj-layers-suggestions-panel",
+  );
+  const layerSugHeader = document.getElementById(
+    "proj-layers-suggestions-header",
+  );
   const layerSugChevron = document.getElementById("proj-layers-sug-chevron");
   const layerSugLabel = document.getElementById("proj-layers-sug-label");
   const layerSugGrid = document.getElementById("proj-layers-suggestions-grid");
-  const layerSugCountBadge = document.getElementById("proj-layer-sug-count-badge");
   const STORAGE_KEY_LAYER_SUG_COLLAPSED = "proj_layers_suggestions_collapsed";
   const STORAGE_KEY_LAYERS_VIEW_MODE = "proj_layers_view_mode";
 
@@ -248,19 +370,25 @@ export function initProjectView({ onConfigSaved, onNotify, getActiveRepo }) {
   let suggestedLayers = [...DEFAULT_PROJECT_LAYERS];
   let suggestedImportanceLevels = [...DEFAULT_LAYER_IMPORTANCE_LEVELS];
 
-  // Form Fields: Políticas & Guardião
-  const checkRuleInvariants = document.getElementById(
-    "proj-rule-invariants-tier1",
-  );
-  const checkRuleDictionary = document.getElementById(
-    "proj-rule-dictionary-val",
-  );
-  const checkRuleLifecycle = document.getElementById(
-    "proj-rule-enforce-lifecycle",
-  );
-  const inputAiGuardianPrompt = document.getElementById(
-    "proj-ai-guardian-prompt",
-  );
+  // Form Fields: Políticas, Regulação & Leis Mandatórias
+  const regulatorsTagsList = document.getElementById("proj-regulators-tags-list");
+  const inputAddRegulator = document.getElementById("proj-input-add-regulator");
+  const btnAddRegulator = document.getElementById("btn-add-regulator");
+  const inputPoliciesLaws = document.getElementById("proj-policies-laws");
+  const inputPoliciesCancellation = document.getElementById("proj-policies-cancellation");
+  const inputPoliciesRefund = document.getElementById("proj-policies-refund");
+  const inputPoliciesRetention = document.getElementById("proj-policies-retention");
+  const inputPoliciesSla = document.getElementById("proj-policies-sla");
+  const inputPoliciesDpo = document.getElementById("proj-policies-dpo");
+  const inputPoliciesConsent = document.getElementById("proj-policies-consent");
+  const inputPoliciesSensitiveData = document.getElementById("proj-policies-sensitive-data");
+  const inputPoliciesMarkdownPreview = document.getElementById("proj-policies-markdown-preview");
+  const btnSyncPoliciesMd = document.getElementById("btn-sync-policies-md");
+  const btnOpenPoliciesEditor = document.getElementById("btn-open-policies-editor");
+  const btnPolicyPresetClear = document.getElementById("btn-policy-preset-clear");
+  const policyPresetBtns = document.querySelectorAll(".btn-policy-preset");
+
+  let currentRegulators = [];
 
   // AI Copilot & Pre-Prompt Elements (Tab 1: About)
   const DEFAULT_ABOUT_AGENT_PROMPT = `Você é o Arquiteto de Fundação & Setup do Framework Context OS / Agentic SDLC.
@@ -312,10 +440,12 @@ DIRETRIZES FUNDAMENTAIS:
     if (syncBadge) {
       if (isCustomized) {
         syncBadge.className = "pill-dot success";
-        syncBadge.innerHTML = '<span class="dot"></span> Configuração Oficial Ativa';
+        syncBadge.innerHTML =
+          '<span class="dot"></span> Configuração Oficial Ativa';
       } else {
         syncBadge.className = "pill-dot info";
-        syncBadge.innerHTML = '<span class="dot"></span> Setup Inicial (Sugestões Padrão)';
+        syncBadge.innerHTML =
+          '<span class="dot"></span> Setup Inicial (Sugestões Padrão)';
       }
     }
   }
@@ -335,14 +465,29 @@ DIRETRIZES FUNDAMENTAIS:
     input5w2hWhen,
     input5w2hHow,
     input5w2hHowMuch,
-    checkRuleInvariants,
-    checkRuleDictionary,
-    checkRuleLifecycle,
-    inputAiGuardianPrompt,
+    inputPoliciesLaws,
+    inputPoliciesCancellation,
+    inputPoliciesRefund,
+    inputPoliciesRetention,
+    inputPoliciesSla,
+    inputPoliciesDpo,
+    inputPoliciesConsent,
+    inputPoliciesSensitiveData,
+    inputPoliciesMarkdownPreview,
   ].forEach((el) => {
     if (el) {
-      el.addEventListener("input", markDirty);
-      el.addEventListener("change", markDirty);
+      el.addEventListener("input", () => {
+        markDirty();
+        if (el !== inputPoliciesMarkdownPreview) {
+          compilePoliciesMarkdown();
+        }
+      });
+      el.addEventListener("change", () => {
+        markDirty();
+        if (el !== inputPoliciesMarkdownPreview) {
+          compilePoliciesMarkdown();
+        }
+      });
     }
   });
 
@@ -359,25 +504,48 @@ DIRETRIZES FUNDAMENTAIS:
   }
 
   // Load project configuration from backend
-  async function loadProjectConfig() {
+  async function loadProjectConfig(initialTab = null) {
     try {
       await loadTeamMembers();
       const { ok, data } = await API.getProjectConfig();
       if (!ok || !data || !data.config) return;
 
-      if (data.suggested_domains && Array.isArray(data.suggested_domains) && data.suggested_domains.length > 0) {
+      if (
+        data.suggested_domains &&
+        Array.isArray(data.suggested_domains) &&
+        data.suggested_domains.length > 0
+      ) {
         suggestedDomains = data.suggested_domains;
       }
-      if (data.suggested_layers && Array.isArray(data.suggested_layers) && data.suggested_layers.length > 0) {
+      if (
+        data.suggested_layers &&
+        Array.isArray(data.suggested_layers) &&
+        data.suggested_layers.length > 0
+      ) {
         suggestedLayers = data.suggested_layers;
       }
-      if (data.suggested_importance_levels && Array.isArray(data.suggested_importance_levels) && data.suggested_importance_levels.length > 0) {
+      if (
+        data.suggested_importance_levels &&
+        Array.isArray(data.suggested_importance_levels) &&
+        data.suggested_importance_levels.length > 0
+      ) {
         suggestedImportanceLevels = data.suggested_importance_levels;
       }
 
       currentConfig = data.config;
       renderFormFields(currentConfig);
       markClean(Boolean(data.is_customized));
+
+      // Activate tab from URL query if specified
+      const urlParams = new URLSearchParams(
+        (window.location.hash || "").split("?")[1] || "",
+      );
+      const activeTabFromUrl = initialTab || urlParams.get("tab");
+      if (activeTabFromUrl) {
+        const canonicalTab =
+          activeTabFromUrl === "taxonomy" ? "architecture" : activeTabFromUrl;
+        switchToTab(canonicalTab, false);
+      }
     } catch (e) {
       console.error("Erro ao carregar configuração do projeto:", e);
     }
@@ -458,16 +626,24 @@ DIRETRIZES FUNDAMENTAIS:
     initLayerSuggestionsPanel(cfg.layers.length);
     renderLayers();
 
-    // Políticas & Guardião
-    const gov = cfg.governance_rules || {};
-    if (checkRuleInvariants)
-      checkRuleInvariants.checked = !!gov.require_invariants_for_tier1;
-    if (checkRuleDictionary)
-      checkRuleDictionary.checked = !!gov.require_dictionary_validation;
-    if (checkRuleLifecycle)
-      checkRuleLifecycle.checked = !!gov.enforce_linear_lifecycle;
-    if (inputAiGuardianPrompt)
-      inputAiGuardianPrompt.value = cfg.ai_guardian_prompt || "";
+    // Políticas, Regulação & Leis Mandatórias do Negócio
+    const pol = cfg.policies || {};
+    currentRegulators = Array.isArray(pol.regulators) ? [...pol.regulators] : [];
+    renderRegulatorsTags();
+    if (inputPoliciesLaws) inputPoliciesLaws.value = pol.laws || "";
+    if (inputPoliciesCancellation) inputPoliciesCancellation.value = pol.cancellation_policy || "";
+    if (inputPoliciesRefund) inputPoliciesRefund.value = pol.refund_policy || "";
+    if (inputPoliciesRetention) inputPoliciesRetention.value = pol.retention_policy || "";
+    if (inputPoliciesSla) inputPoliciesSla.value = pol.sla_support || "";
+    if (inputPoliciesDpo) inputPoliciesDpo.value = pol.dpo_contact || "";
+    if (inputPoliciesConsent) inputPoliciesConsent.value = pol.consent_policy || "";
+    if (inputPoliciesSensitiveData) inputPoliciesSensitiveData.value = pol.sensitive_data_policy || "";
+    if (inputPoliciesMarkdownPreview) {
+      inputPoliciesMarkdownPreview.value = pol.markdown_content || "";
+      if (!inputPoliciesMarkdownPreview.value.trim()) {
+        compilePoliciesMarkdown();
+      }
+    }
   }
 
   // View Mode: Cards (Grid) vs Lista (Domains)
@@ -475,10 +651,15 @@ DIRETRIZES FUNDAMENTAIS:
     const isList = mode === "list";
     if (domainsGrid) domainsGrid.classList.toggle("view-list", isList);
     if (sugGrid) sugGrid.classList.toggle("view-list", isList);
-    if (btnDomainsViewList) btnDomainsViewList.classList.toggle("active", isList);
-    if (btnDomainsViewGrid) btnDomainsViewGrid.classList.toggle("active", !isList);
+    if (btnDomainsViewList)
+      btnDomainsViewList.classList.toggle("active", isList);
+    if (btnDomainsViewGrid)
+      btnDomainsViewGrid.classList.toggle("active", !isList);
     try {
-      localStorage.setItem(STORAGE_KEY_DOMAINS_VIEW_MODE, isList ? "list" : "grid");
+      localStorage.setItem(
+        STORAGE_KEY_DOMAINS_VIEW_MODE,
+        isList ? "list" : "grid",
+      );
     } catch (e) {}
   }
 
@@ -489,7 +670,8 @@ DIRETRIZES FUNDAMENTAIS:
     if (btnDomainsViewList) {
       btnDomainsViewList.onclick = () => setDomainsViewMode("list");
     }
-    const savedMode = localStorage.getItem(STORAGE_KEY_DOMAINS_VIEW_MODE) || "grid";
+    const savedMode =
+      localStorage.getItem(STORAGE_KEY_DOMAINS_VIEW_MODE) || "grid";
     setDomainsViewMode(savedMode);
   }
 
@@ -523,8 +705,11 @@ DIRETRIZES FUNDAMENTAIS:
     setSuggestionsCollapsed(savedState === "true");
   }
 
+  // Track user expand/collapse preference for subdomains per domain card
+  const domainSubdomainsExpandedState = new Map();
+
   // ===========================================================================
-  // SUBDOMAIN SLUG VALIDATION & CONFLICT PREVENTION HELPERS
+  // DOMAIN & SUBDOMAIN SLUG VALIDATION & CONFLICT PREVENTION HELPERS
   // ===========================================================================
 
   function sanitizeSlug(text) {
@@ -533,25 +718,64 @@ DIRETRIZES FUNDAMENTAIS:
       .trim()
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "") // remove accents
-      .replace(/[^a-z0-9]+/g, "-")      // replace non-alphanumeric with hyphen
-      .replace(/^-+|-+$/g, "")          // trim leading/trailing hyphens
-      .replace(/-+/g, "-");             // collapse consecutive hyphens
+      .replace(/[^a-z0-9]+/g, "-") // replace non-alphanumeric with hyphen
+      .replace(/^-+|-+$/g, "") // trim leading/trailing hyphens
+      .replace(/-+/g, "-"); // collapse consecutive hyphens
+  }
+
+  function isDomainSlugConflict(slug, excludeIndex = -1) {
+    const cleanSlug = sanitizeSlug(slug);
+    if (!cleanSlug) return false;
+    const domains = Array.isArray(currentConfig.organization_domains)
+      ? currentConfig.organization_domains
+      : [];
+    return domains.some(
+      (d, idx) =>
+        idx !== excludeIndex &&
+        (sanitizeSlug(d.id) === cleanSlug ||
+          sanitizeSlug(d.name) === cleanSlug),
+    );
+  }
+
+  function generateUniqueDomainSlug(baseText, excludeIndex = -1) {
+    let clean = sanitizeSlug(baseText) || "dominio";
+    const domains = Array.isArray(currentConfig.organization_domains)
+      ? currentConfig.organization_domains
+      : [];
+    const existingSlugs = domains
+      .map((d, idx) =>
+        idx === excludeIndex ? null : sanitizeSlug(d.id || d.name),
+      )
+      .filter(Boolean);
+
+    if (!existingSlugs.includes(clean)) return clean;
+
+    let counter = 2;
+    while (existingSlugs.includes(`${clean}-${counter}`)) {
+      counter++;
+    }
+    return `${clean}-${counter}`;
   }
 
   function isSubdomainSlugConflict(domain, slug, excludeIndex = -1) {
     const cleanSlug = sanitizeSlug(slug);
     if (!cleanSlug) return false;
-    const subdomains = Array.isArray(domain.subdomains) ? domain.subdomains : [];
+    const subdomains = Array.isArray(domain.subdomains)
+      ? domain.subdomains
+      : [];
     return subdomains.some(
       (s, idx) =>
         idx !== excludeIndex &&
-        (sanitizeSlug(s.id) === cleanSlug || sanitizeSlug(s.name) === cleanSlug),
+        (sanitizeSlug(s.id) === cleanSlug ||
+          sanitizeSlug(s.name) === cleanSlug),
     );
   }
 
   function generateUniqueSubdomainSlug(domain, baseText, excludeIndex = -1) {
     let clean = sanitizeSlug(baseText) || "subdominio";
-    const subdomains = Array.isArray(domain.subdomains) ? domain.subdomains : [];
+    const subdomains = Array.isArray(domain.subdomains)
+      ? domain.subdomains
+      : [];
     const existingSlugs = subdomains
       .map((s, idx) =>
         idx === excludeIndex ? null : sanitizeSlug(s.id || s.name),
@@ -613,13 +837,24 @@ DIRETRIZES FUNDAMENTAIS:
           card.dataset.index = index;
 
           const domainColor =
-            d.color || DOMAIN_COLOR_PALETTE[index % DOMAIN_COLOR_PALETTE.length];
+            d.color ||
+            DOMAIN_COLOR_PALETTE[index % DOMAIN_COLOR_PALETTE.length];
+          d.color = domainColor;
           const domainIcon = d.icon || "domain";
-          const responsibles = Array.isArray(d.responsibles) ? d.responsibles : [];
+          d.icon = domainIcon;
+          const domainSlug =
+            d.id || sanitizeSlug(d.name) || `dominio-${index + 1}`;
+          d.id = domainSlug;
+          const responsibles = Array.isArray(d.responsibles)
+            ? d.responsibles
+            : [];
 
           // Render subdomains items
           const subdomains = Array.isArray(d.subdomains) ? d.subdomains : [];
           if (!Array.isArray(d.subdomains)) d.subdomains = subdomains;
+
+          const isSubdomainsExpanded =
+            domainSubdomainsExpandedState.get(domainSlug) === true;
 
           let subdomainsListHtml = "";
           if (subdomains.length === 0) {
@@ -627,16 +862,21 @@ DIRETRIZES FUNDAMENTAIS:
               '<span style="font-size: 11px; color: var(--text-muted); font-style: italic; padding: 4px 0;">Nenhum subdomínio configurado</span>';
           } else {
             subdomains.forEach((sub, sIdx) => {
-              const subId = sanitizeSlug(sub.id || sub.name || `sub-${sIdx + 1}`);
-              const subName = sub.name || subId;
+              const isBlankOrNew = Boolean(sub._isNew || (!sub.name && !sub.description));
+              const subId = sanitizeSlug(
+                sub.id || sub.name || `sub-${sIdx + 1}`,
+              );
+              const subName = sub.name || (isBlankOrNew ? "Novo Subdomínio" : subId);
               const subDesc = sub.description || "";
+              const namespacedSlug = `#${domainSlug}/${subId}`;
+
               subdomainsListHtml += `
-                <div class="org-subdomain-item" data-sidx="${sIdx}">
+                <div class="org-subdomain-item ${isBlankOrNew ? "is-editing" : ""}" data-sidx="${sIdx}">
                   <div class="org-subdomain-item-header">
                     <div class="org-subdomain-item-left">
                       <span class="material-symbols-outlined" style="font-size: 14px; color: ${domainColor}; flex-shrink: 0;">category</span>
                       <span class="org-subdomain-item-name" title="${escapeHtml(subName)}">${escapeHtml(subName)}</span>
-                      <span class="org-subdomain-item-slug">#${escapeHtml(subId)}</span>
+                      <span class="org-subdomain-item-slug" title="Identificador hierárquico">${escapeHtml(namespacedSlug)}</span>
                     </div>
                     <div class="org-subdomain-item-actions">
                       <button class="org-subdomain-item-btn org-subdomain-btn-edit" data-sidx="${sIdx}" type="button" title="Editar nome, slug e descrição">
@@ -650,15 +890,18 @@ DIRETRIZES FUNDAMENTAIS:
                   ${subDesc ? `<div class="org-subdomain-item-desc-preview" title="${escapeHtml(subDesc)}">${escapeHtml(subDesc)}</div>` : ""}
                   
                   <!-- Expandable Edit Body -->
-                  <div class="org-subdomain-item-edit-body" style="display: none;">
+                  <div class="org-subdomain-item-edit-body" style="display: ${isBlankOrNew ? "flex" : "none"};">
                     <div class="org-subdomain-edit-field">
                       <label class="org-subdomain-edit-label">Nome do Subdomínio</label>
-                      <input type="text" class="org-subdomain-edit-name" value="${escapeHtml(subName)}" placeholder="Nome do subdomínio..." />
+                      <input type="text" class="org-subdomain-edit-name" value="${escapeHtml(sub.name || "")}" placeholder="Nome do subdomínio..." />
                     </div>
                     <div class="org-subdomain-edit-field">
                       <label class="org-subdomain-edit-label">Identificador (#slug)</label>
-                      <input type="text" class="org-subdomain-edit-slug" value="${escapeHtml(subId)}" placeholder="slug-unico" />
-                      <div class="org-subdomain-slug-feedback valid">✓ Slug único e válido</div>
+                      <div style="display: flex; align-items: center; gap: 4px;">
+                        <span style="font-size: 11px; color: var(--text-muted); font-family: monospace;">#${escapeHtml(domainSlug)}/</span>
+                        <input type="text" class="org-subdomain-edit-slug" value="${escapeHtml(subId)}" placeholder="slug-unico" />
+                      </div>
+                      <div class="org-subdomain-slug-feedback conflict" style="display: none;"></div>
                     </div>
                     <div class="org-subdomain-edit-field">
                       <label class="org-subdomain-edit-label">Descrição & Escopo</label>
@@ -683,13 +926,17 @@ DIRETRIZES FUNDAMENTAIS:
               t.id === d.id ||
               (t.name && t.name.toLowerCase() === (d.name || "").toLowerCase()),
           );
-          const rawSuggestions = domainTemplate?.suggested_subdomains || d.suggested_subdomains || [];
+          const rawSuggestions =
+            domainTemplate?.suggested_subdomains ||
+            d.suggested_subdomains ||
+            [];
           const availableSubSuggestions = rawSuggestions.filter(
             (sugSub) =>
               !subdomains.some(
                 (existing) =>
                   sanitizeSlug(existing.id) === sanitizeSlug(sugSub.id) ||
-                  (existing.name && existing.name.toLowerCase() === sugSub.name.toLowerCase()),
+                  (existing.name &&
+                    existing.name.toLowerCase() === sugSub.name.toLowerCase()),
               ),
           );
 
@@ -698,9 +945,9 @@ DIRETRIZES FUNDAMENTAIS:
             suggestedSubdomainsHtml = availableSubSuggestions
               .map(
                 (sugSub) => `
-                <button class="org-subdomain-sug-chip" data-sug-id="${escapeHtml(sugSub.id)}" type="button" title="${escapeHtml(sugSub.description || '')}">
+                <button class="org-subdomain-sug-chip" data-sug-id="${escapeHtml(sugSub.id)}" type="button" title="${escapeHtml(sugSub.description || "")}">
                   <span class="material-symbols-outlined" style="font-size: 11px;">add</span>
-                  ${escapeHtml(sugSub.name)}
+                  #${escapeHtml(domainSlug)}/${escapeHtml(sugSub.id || sanitizeSlug(sugSub.name))}
                 </button>
               `,
               )
@@ -709,36 +956,32 @@ DIRETRIZES FUNDAMENTAIS:
 
           // Render responsibles chips
           let membersChipsHtml = "";
-          if (responsibles.length === 0) {
-            membersChipsHtml =
-              '<span style="font-size: 11px; color: var(--text-muted); font-style: italic;">Nenhum responsável atribuído</span>';
-          } else {
-            responsibles.forEach((handle, rIdx) => {
-              const cleanHandle = String(handle).trim();
-              const matchedMember = cachedMembers.find(
-                (m) =>
-                  (m.handle &&
-                    m.handle.toLowerCase() === cleanHandle.toLowerCase()) ||
-                  (m.login &&
-                    m.login.toLowerCase() ===
-                      cleanHandle.replace(/^@/, "").toLowerCase()),
-              );
-              const avatarUrl = matchedMember
-                ? matchedMember.avatar_url
-                : `https://ui-avatars.com/api/?name=${encodeURIComponent(cleanHandle.replace(/^@/, ""))}&background=6366f1&color=fff`;
-              const displayName = matchedMember
-                ? matchedMember.name || matchedMember.handle
-                : cleanHandle;
 
-              membersChipsHtml += `
+          responsibles.forEach((handle, rIdx) => {
+            const cleanHandle = String(handle).trim();
+            const matchedMember = cachedMembers.find(
+              (m) =>
+                (m.handle &&
+                  m.handle.toLowerCase() === cleanHandle.toLowerCase()) ||
+                (m.login &&
+                  m.login.toLowerCase() ===
+                    cleanHandle.replace(/^@/, "").toLowerCase()),
+            );
+            const avatarUrl = matchedMember
+              ? matchedMember.avatar_url
+              : `https://ui-avatars.com/api/?name=${encodeURIComponent(cleanHandle.replace(/^@/, ""))}&background=6366f1&color=fff`;
+            const displayName = matchedMember
+              ? matchedMember.name || matchedMember.handle
+              : cleanHandle;
+
+            membersChipsHtml += `
                 <span class="org-domain-member-chip" title="${escapeHtml(displayName)}">
                   <img src="${escapeHtml(avatarUrl)}" class="org-domain-member-avatar" alt="${escapeHtml(cleanHandle)}" onerror="this.src='https://ui-avatars.com/api/?name=U&background=6366f1&color=fff'" />
                   <span>${escapeHtml(cleanHandle)}</span>
                   <button class="org-domain-member-remove" data-ridx="${rIdx}" type="button" title="Remover responsável">&times;</button>
                 </span>
               `;
-            });
-          }
+          });
 
           // Populate assignable member options from cached GitHub/Git members
           let memberOptionsHtml =
@@ -759,14 +1002,19 @@ DIRETRIZES FUNDAMENTAIS:
 
           card.innerHTML = `
             <div class="org-domain-card-header">
-              <div style="display: flex; align-items: center; gap: 8px;">
-                <div class="org-domain-icon-badge" style="background: ${domainColor}18; color: ${domainColor};">
+              <div class="org-domain-icon-wrap">
+                <div class="org-domain-icon-badge" style="background: ${domainColor}18; color: ${domainColor};" title="Clique para escolher outro ícone na Biblioteca">
                   <span class="material-symbols-outlined">${domainIcon}</span>
+                  <span class="icon-edit-hint material-symbols-outlined">edit</span>
                 </div>
-                <span class="org-domain-included-pill">
-                  <span class="material-symbols-outlined" style="font-size: 13px;">check_circle</span>
-                  Incluso no Projeto
-                </span>
+                <button class="org-domain-color-btn" style="background: ${domainColor};" type="button" title="Alterar cor do domínio"></button>
+                <div class="color-palette-popover" style="display: none;">
+                  ${DOMAIN_COLOR_PALETTE.map(
+                    (c) => `
+                    <div class="color-swatch ${c === domainColor ? "active" : ""}" data-color="${c}" style="background: ${c};" title="${c}"></div>
+                  `,
+                  ).join("")}
+                </div>
               </div>
               <button class="org-domain-delete-btn" title="Remover este domínio do projeto" type="button">
                 <span class="material-symbols-outlined icon-xs">close</span>
@@ -786,36 +1034,48 @@ DIRETRIZES FUNDAMENTAIS:
               placeholder="O que este domínio cuida e quais são suas responsabilidades?"
             >${escapeHtml(d.description || "")}</textarea>
 
-            <!-- Subdomains / Capabilities Section -->
-            <div class="org-domain-subdomains-section">
-              <div class="org-domain-subdomains-header">
-                <div style="display: flex; align-items: center; gap: 5px;">
-                  <span class="material-symbols-outlined" style="font-size: 15px; color: var(--md-sys-color-primary, #1a73e8);">category</span>
-                  <span>Subdomínios & Capacidades</span>
+            <!-- Subdomains / Capabilities Section (Collapsible Accordion) -->
+            <div class="org-domain-subdomains-section ${isSubdomainsExpanded ? "" : "collapsed"}">
+              <div class="org-domain-subdomains-header" title="Clique para expandir/recolher subdomínios">
+                <div style="display: flex; align-items: center; gap: 6px;">
+                  <span class="material-symbols-outlined org-domain-subdomains-toggle-chevron">expand_more</span>
+                  <span class="material-symbols-outlined" style="font-size: 15px; color: ${domainColor};">category</span>
+                  <span style="font-size: 12px; font-weight: 600;">Subdomínios & Capacidades</span>
                 </div>
-                <span class="pill-dot info" style="font-size: 10.5px; padding: 1px 6px;">
-                  ${subdomains.length} ${subdomains.length === 1 ? 'subdomínio' : 'subdomínios'}
-                </span>
               </div>
-              <div class="org-subdomains-list">
-                ${subdomainsListHtml}
+
+              <!-- Collapsed Preview Row -->
+              <div class="org-domain-subdomains-preview-row">
+                ${subdomains.length === 0 ? '<span style="font-size: 11px; color: var(--text-muted); font-style: italic;">Nenhum subdomínio configurado</span>' : ""}
+                ${subdomains
+                  .map((sub) => {
+                    const subId = sanitizeSlug(sub.id || sub.name);
+                    return `<span class="org-subdomain-preview-pill" title="${escapeHtml(sub.name || subId)}">#${escapeHtml(domainSlug)}/${escapeHtml(subId)}</span>`;
+                  })
+                  .join("")}
               </div>
-              ${suggestedSubdomainsHtml ? `
-                <div class="org-subdomain-sug-wrap">
-                  <span class="org-subdomain-sug-label">Sugestões rápidas:</span>
-                  ${suggestedSubdomainsHtml}
+
+              <!-- Expanded Body -->
+              <div class="org-domain-subdomains-body">
+                <div class="org-subdomains-list">
+                  ${subdomainsListHtml}
                 </div>
-              ` : ''}
-              <div class="org-subdomain-quick-add-wrap">
-                <input
-                  type="text"
-                  class="org-subdomain-quick-input"
-                  placeholder="+ Digitar novo subdomínio (ex: Faturamento)..."
-                />
-                <button class="org-subdomain-quick-btn" type="button">
-                  <span class="material-symbols-outlined" style="font-size: 13px;">add</span>
-                  Adicionar
-                </button>
+                ${
+                  suggestedSubdomainsHtml
+                    ? `
+                  <div class="org-subdomain-sug-wrap">
+                    <span class="org-subdomain-sug-label">Sugestões rápidas:</span>
+                    ${suggestedSubdomainsHtml}
+                  </div>
+                `
+                    : ""
+                }
+                <div class="org-subdomain-quick-add-wrap">
+                  <button class="org-subdomain-add-blank-btn" type="button">
+                    <span class="material-symbols-outlined" style="font-size: 14px;">add</span>
+                    Adicionar Subdomínio
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -823,8 +1083,7 @@ DIRETRIZES FUNDAMENTAIS:
             <div class="org-domain-responsibles-section">
               <div class="org-domain-responsibles-header">
                 <div style="display: flex; align-items: center; gap: 5px;">
-                  <span class="material-symbols-outlined" style="font-size: 15px; color: var(--text-muted);">group</span>
-                  <span>Responsáveis & Liderança</span>
+                  <span class="material-symbols-outlined" style="font-size: 15px; color: var(--text-muted);">group</span
                 </div>
                 <select class="org-domain-assign-dropdown">
                   ${memberOptionsHtml}
@@ -836,26 +1095,125 @@ DIRETRIZES FUNDAMENTAIS:
             </div>
 
             <div class="org-domain-card-footer">
-              <span class="org-domain-slug-pill">#${escapeHtml(d.id || sanitizeSlug(d.name))}</span>
-              <span style="font-size: 11px; color: var(--text-muted); font-family: monospace;">domains/${escapeHtml(d.id || sanitizeSlug(d.name))}/</span>
+              <div class="org-domain-slug-row">
+                <div style="display: flex; align-items: center; gap: 4px;">
+                  <span style="font-size: 11px; color: var(--text-muted); font-weight: 600;">#</span>
+                  <input
+                    type="text"
+                    class="org-domain-slug-input"
+                    value="${escapeHtml(domainSlug)}"
+                    placeholder="slug-do-dominio"
+                    title="Identificador único (#slug) do domínio"
+                  />
+                </div>
+                <span style="font-size: 11px; color: var(--text-muted); font-family: monospace;">domains/${escapeHtml(domainSlug)}/</span>
+              </div>
             </div>
           `;
 
           const nameInput = card.querySelector(".org-domain-name-input");
           const descInput = card.querySelector(".org-domain-desc-input");
           const deleteBtn = card.querySelector(".org-domain-delete-btn");
-          const slugPill = card.querySelector(".org-domain-slug-pill");
-          const assignDropdown = card.querySelector(".org-domain-assign-dropdown");
+          const domainSlugInput = card.querySelector(".org-domain-slug-input");
+          const assignDropdown = card.querySelector(
+            ".org-domain-assign-dropdown",
+          );
+          const iconBadge = card.querySelector(".org-domain-icon-badge");
+          const colorBtn = card.querySelector(".org-domain-color-btn");
+          const colorPopover = card.querySelector(".color-palette-popover");
+          const subdomainsHeader = card.querySelector(
+            ".org-domain-subdomains-header",
+          );
 
+          // Icon Picker Trigger
+          if (iconBadge) {
+            iconBadge.onclick = (e) => {
+              e.stopPropagation();
+              IconPicker.open({
+                currentIcon: d.icon || "domain",
+                onSelect: (newIcon) => {
+                  d.icon = newIcon;
+                  renderDomains();
+                  markDirty();
+                },
+              });
+            };
+          }
+
+          // Color Palette Popover Trigger
+          if (colorBtn && colorPopover) {
+            colorBtn.onclick = (e) => {
+              e.stopPropagation();
+              const isShown = colorPopover.style.display === "grid";
+              document
+                .querySelectorAll(".color-palette-popover")
+                .forEach((p) => {
+                  p.style.display = "none";
+                });
+              colorPopover.style.display = isShown ? "none" : "grid";
+            };
+
+            colorPopover.querySelectorAll(".color-swatch").forEach((swatch) => {
+              swatch.onclick = (e) => {
+                e.stopPropagation();
+                d.color = swatch.dataset.color;
+                colorPopover.style.display = "none";
+                renderDomains();
+                markDirty();
+              };
+            });
+          }
+
+          // Subdomains Accordion Toggle
+          if (subdomainsHeader) {
+            subdomainsHeader.onclick = (e) => {
+              e.stopPropagation();
+              const currentExpanded =
+                domainSubdomainsExpandedState.get(domainSlug) === true;
+              domainSubdomainsExpandedState.set(domainSlug, !currentExpanded);
+              renderDomains();
+            };
+          }
+
+          // Domain Name Live Input
           nameInput.addEventListener("input", () => {
             d.name = nameInput.value;
-            const autoId = sanitizeSlug(d.name);
-            if (autoId) {
+            const autoId = generateUniqueDomainSlug(d.name, index);
+            if (autoId && !domainSlugInput.dataset.manuallyEdited) {
               d.id = autoId;
-              slugPill.textContent = `#${autoId}`;
+              if (domainSlugInput) domainSlugInput.value = autoId;
             }
             markDirty();
           });
+
+          // Domain Slug Manual Input & Live Uniqueness Validation
+          if (domainSlugInput) {
+            domainSlugInput.addEventListener("input", () => {
+              domainSlugInput.dataset.manuallyEdited = "true";
+              const clean = sanitizeSlug(domainSlugInput.value);
+              domainSlugInput.value = clean;
+              const conflict = isDomainSlugConflict(clean, index);
+              if (conflict || !clean) {
+                domainSlugInput.classList.add("conflict");
+              } else {
+                domainSlugInput.classList.remove("conflict");
+                d.id = clean;
+              }
+              markDirty();
+            });
+
+            domainSlugInput.addEventListener("blur", () => {
+              let clean = sanitizeSlug(domainSlugInput.value);
+              if (!clean || isDomainSlugConflict(clean, index)) {
+                clean = generateUniqueDomainSlug(clean || d.name, index);
+              }
+              d.id = clean;
+              domainSlugInput.value = clean;
+              domainSlugInput.classList.remove("conflict");
+              renderDomains();
+              markDirty();
+            });
+          }
 
           descInput.addEventListener("input", () => {
             d.description = descInput.value;
@@ -868,7 +1226,9 @@ DIRETRIZES FUNDAMENTAIS:
               e.stopPropagation();
               const item = btn.closest(".org-subdomain-item");
               if (!item) return;
-              const editBody = item.querySelector(".org-subdomain-item-edit-body");
+              const editBody = item.querySelector(
+                ".org-subdomain-item-edit-body",
+              );
               const isEditing = item.classList.contains("is-editing");
               if (isEditing) {
                 item.classList.remove("is-editing");
@@ -893,8 +1253,12 @@ DIRETRIZES FUNDAMENTAIS:
             const descInp = item.querySelector(".org-subdomain-edit-desc");
             const feedback = item.querySelector(".org-subdomain-slug-feedback");
             const saveBtn = item.querySelector(".org-subdomain-edit-save-btn");
-            const cancelBtn = item.querySelector(".org-subdomain-edit-cancel-btn");
-            const editBody = item.querySelector(".org-subdomain-item-edit-body");
+            const cancelBtn = item.querySelector(
+              ".org-subdomain-edit-cancel-btn",
+            );
+            const editBody = item.querySelector(
+              ".org-subdomain-item-edit-body",
+            );
 
             let slugManuallyEdited = false;
 
@@ -903,17 +1267,20 @@ DIRETRIZES FUNDAMENTAIS:
               const clean = sanitizeSlug(slugInp.value);
               if (!clean) {
                 feedback.className = "org-subdomain-slug-feedback conflict";
-                feedback.textContent = "⚠️ O identificador (#slug) não pode ser vazio";
+                feedback.style.display = "block";
+                feedback.textContent =
+                  "⚠️ O identificador (#slug) não pode ser vazio";
                 return false;
               }
               const conflict = isSubdomainSlugConflict(d, clean, sIdx);
               if (conflict) {
                 feedback.className = "org-subdomain-slug-feedback conflict";
-                feedback.textContent = "⚠️ Este identificador já existe neste domínio";
+                feedback.style.display = "block";
+                feedback.textContent = `⚠️ #${domainSlug}/${clean} já existe neste domínio`;
                 return false;
               } else {
-                feedback.className = "org-subdomain-slug-feedback valid";
-                feedback.textContent = "✓ Slug único e válido";
+                feedback.style.display = "none";
+                feedback.textContent = "";
                 return true;
               }
             };
@@ -921,7 +1288,11 @@ DIRETRIZES FUNDAMENTAIS:
             if (nameInp) {
               nameInp.addEventListener("input", () => {
                 if (!slugManuallyEdited && slugInp) {
-                  slugInp.value = generateUniqueSubdomainSlug(d, nameInp.value, sIdx);
+                  slugInp.value = generateUniqueSubdomainSlug(
+                    d,
+                    nameInp.value,
+                    sIdx,
+                  );
                   validateSlug();
                 }
               });
@@ -937,14 +1308,16 @@ DIRETRIZES FUNDAMENTAIS:
 
             const applySubdomainEdit = () => {
               if (!nameInp || !slugInp) return;
-              const newName = nameInp.value.trim() || sub.name;
-              let newSlug = sanitizeSlug(slugInp.value) || sanitizeSlug(newName);
+              const newName = nameInp.value.trim() || sub.name || "Novo Subdomínio";
+              let newSlug =
+                sanitizeSlug(slugInp.value) || sanitizeSlug(newName) || generateUniqueSubdomainSlug(d, "subdominio", sIdx);
               if (isSubdomainSlugConflict(d, newSlug, sIdx)) {
                 newSlug = generateUniqueSubdomainSlug(d, newSlug, sIdx);
               }
               sub.name = newName;
               sub.id = newSlug;
               if (descInp) sub.description = descInp.value.trim();
+              delete sub._isNew;
               renderDomains();
               markDirty();
             };
@@ -959,8 +1332,15 @@ DIRETRIZES FUNDAMENTAIS:
             if (cancelBtn) {
               cancelBtn.addEventListener("click", (e) => {
                 e.stopPropagation();
-                item.classList.remove("is-editing");
-                if (editBody) editBody.style.display = "none";
+                if (!sub.name || !sub.name.trim()) {
+                  d.subdomains.splice(sIdx, 1);
+                  renderDomains();
+                  markDirty();
+                } else {
+                  delete sub._isNew;
+                  item.classList.remove("is-editing");
+                  if (editBody) editBody.style.display = "none";
+                }
               });
             }
 
@@ -1004,45 +1384,49 @@ DIRETRIZES FUNDAMENTAIS:
                   description: foundSug.description || "",
                   responsibles: [],
                 });
+                domainSubdomainsExpandedState.set(domainSlug, true);
                 renderDomains();
                 markDirty();
               }
             });
           });
 
-          // Quick Custom Subdomain Add
-          const subInput = card.querySelector(".org-subdomain-quick-input");
-          const subBtn = card.querySelector(".org-subdomain-quick-btn");
-          const handleAddCustomSubdomain = () => {
-            if (!subInput) return;
-            const val = subInput.value.trim();
-            if (!val) return;
-            const uniqueSlug = generateUniqueSubdomainSlug(d, val);
-            if (!Array.isArray(d.subdomains)) d.subdomains = [];
-            d.subdomains.push({
-              id: uniqueSlug,
-              name: val,
-              description: `Subdomínio e capacidade funcional de ${val}.`,
-              responsibles: [],
-            });
-            subInput.value = "";
-            renderDomains();
-            markDirty();
-          };
-
-          if (subBtn) {
-            subBtn.addEventListener("click", (e) => {
+          // Add Blank Subdomain
+          const addBlankBtn = card.querySelector(".org-subdomain-add-blank-btn");
+          if (addBlankBtn) {
+            addBlankBtn.addEventListener("click", (e) => {
               e.stopPropagation();
-              handleAddCustomSubdomain();
-            });
-          }
-          if (subInput) {
-            subInput.addEventListener("keydown", (e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                e.stopPropagation();
-                handleAddCustomSubdomain();
-              }
+              if (!Array.isArray(d.subdomains)) d.subdomains = [];
+              const uniqueSlug = generateUniqueSubdomainSlug(d, "novo-subdominio");
+              d.subdomains.push({
+                id: uniqueSlug,
+                name: "",
+                description: "",
+                responsibles: [],
+                _isNew: true,
+              });
+              domainSubdomainsExpandedState.set(domainSlug, true);
+              renderDomains();
+              markDirty();
+
+              // Auto-focus the newly created subdomain input
+              setTimeout(() => {
+                const newlyRenderedCard = domainCardsContainer.querySelector(
+                  `.org-domain-card[data-didx="${idx}"]`,
+                );
+                if (newlyRenderedCard) {
+                  const lastSubItem = newlyRenderedCard.querySelector(
+                    `.org-subdomain-item[data-sidx="${d.subdomains.length - 1}"]`,
+                  );
+                  if (lastSubItem) {
+                    const nameInp = lastSubItem.querySelector(".org-subdomain-edit-name");
+                    if (nameInp) {
+                      nameInp.focus();
+                      nameInp.select();
+                    }
+                  }
+                }
+              }, 30);
             });
           }
 
@@ -1163,7 +1547,9 @@ DIRETRIZES FUNDAMENTAIS:
       const domainColor =
         sug.color || DOMAIN_COLOR_PALETTE[index % DOMAIN_COLOR_PALETTE.length];
       const domainIcon = sug.icon || "domain";
-      const sugSubdomains = Array.isArray(sug.suggested_subdomains) ? sug.suggested_subdomains : [];
+      const sugSubdomains = Array.isArray(sug.suggested_subdomains)
+        ? sug.suggested_subdomains
+        : [];
 
       card.innerHTML = `
         <div class="sug-card-main-col">
@@ -1184,11 +1570,15 @@ DIRETRIZES FUNDAMENTAIS:
           <!-- Preview of subdomains included -->
           <div class="sug-subdomains-preview" style="display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-top: 4px;">
             <span style="font-size: 11px; color: var(--text-muted); font-weight: 500;">Subdomínios inclusos:</span>
-            ${sugSubdomains.map(s => `
+            ${sugSubdomains
+              .map(
+                (s) => `
               <span style="font-size: 11px; background: rgba(0,0,0,0.04); color: var(--text-main); padding: 1px 7px; border-radius: 4px; border: 1px solid var(--border-color);">
                 ${escapeHtml(s.name)}
               </span>
-            `).join('')}
+            `,
+              )
+              .join("")}
           </div>
         </div>
         <div class="sug-card-action-col" style="margin-top: 10px; display: flex; align-items: center; justify-content: flex-end;">
@@ -1206,11 +1596,17 @@ DIRETRIZES FUNDAMENTAIS:
           currentConfig.organization_domains = [];
         }
         const domainToAdd = JSON.parse(JSON.stringify(sug));
+        domainToAdd.id = generateUniqueDomainSlug(
+          domainToAdd.id || domainToAdd.name,
+        );
         if (Array.isArray(sug.suggested_subdomains)) {
-          domainToAdd.subdomains = JSON.parse(JSON.stringify(sug.suggested_subdomains));
+          domainToAdd.subdomains = JSON.parse(
+            JSON.stringify(sug.suggested_subdomains),
+          );
         } else {
           domainToAdd.subdomains = [];
         }
+        domainSubdomainsExpandedState.set(domainToAdd.id, false);
         currentConfig.organization_domains.push(domainToAdd);
         renderDomains();
         markDirty();
@@ -1227,8 +1623,9 @@ DIRETRIZES FUNDAMENTAIS:
     }
     const idx = currentConfig.organization_domains.length + 1;
     const color = DOMAIN_COLOR_PALETTE[(idx - 1) % DOMAIN_COLOR_PALETTE.length];
+    const uniqueSlug = generateUniqueDomainSlug(`dominio-${idx}`);
     currentConfig.organization_domains.push({
-      id: `area-${idx}`,
+      id: uniqueSlug,
       name: `Novo Domínio ${idx}`,
       icon: "domain",
       color: color,
@@ -1259,6 +1656,18 @@ DIRETRIZES FUNDAMENTAIS:
     });
   }
 
+  // Dismiss open color popovers when clicking outside
+  document.addEventListener("click", (e) => {
+    if (
+      !e.target.closest(".org-domain-color-btn") &&
+      !e.target.closest(".color-palette-popover")
+    ) {
+      document.querySelectorAll(".color-palette-popover").forEach((p) => {
+        p.style.display = "none";
+      });
+    }
+  });
+
   // Layer Suggestions Panel Collapse / Expand Handling
   function setLayerSuggestionsCollapsed(collapsed) {
     if (!layerSugPanel) return;
@@ -1283,9 +1692,13 @@ DIRETRIZES FUNDAMENTAIS:
     if (layersGrid) layersGrid.classList.toggle("view-list", isList);
     if (layerSugGrid) layerSugGrid.classList.toggle("view-list", isList);
     if (btnLayersViewList) btnLayersViewList.classList.toggle("active", isList);
-    if (btnLayersViewGrid) btnLayersViewGrid.classList.toggle("active", !isList);
+    if (btnLayersViewGrid)
+      btnLayersViewGrid.classList.toggle("active", !isList);
     try {
-      localStorage.setItem(STORAGE_KEY_LAYERS_VIEW_MODE, isList ? "list" : "grid");
+      localStorage.setItem(
+        STORAGE_KEY_LAYERS_VIEW_MODE,
+        isList ? "list" : "grid",
+      );
     } catch (e) {}
   }
 
@@ -1296,7 +1709,8 @@ DIRETRIZES FUNDAMENTAIS:
     if (btnLayersViewList) {
       btnLayersViewList.onclick = () => setLayersViewMode("list");
     }
-    const savedMode = localStorage.getItem(STORAGE_KEY_LAYERS_VIEW_MODE) || "grid";
+    const savedMode =
+      localStorage.getItem(STORAGE_KEY_LAYERS_VIEW_MODE) || "grid";
     setLayersViewMode(savedMode);
   }
 
@@ -1321,15 +1735,7 @@ DIRETRIZES FUNDAMENTAIS:
     }
     const currentLayers = currentConfig.layers;
 
-    // 1. Update Architecture Layers Count Badge
-    if (layersCountBadge) {
-      layersCountBadge.textContent =
-        currentLayers.length === 0
-          ? "Nenhuma camada"
-          : `${currentLayers.length} camada${currentLayers.length > 1 ? "s" : ""}`;
-    }
-
-    // 2. Render Top Area (Selected Layers Grid)
+    // 1. Render Top Area (Selected Layers Grid)
     if (layersGrid) {
       layersGrid.innerHTML = "";
 
@@ -1343,7 +1749,7 @@ DIRETRIZES FUNDAMENTAIS:
             Selecione uma ou mais camadas padrão do framework abaixo para incluir na governança do projeto, ou crie uma camada customizada.
           </p>
           <button class="btn btn-secondary btn-sm btn-empty-add-layer" type="button" style="display: inline-flex; align-items: center; gap: 6px;">
-            <span class="material-symbols-outlined icon-xs">add</span> Criar Camada Customizada
+            <span class="material-symbols-outlined icon-xs">add</span> Adicionar Camada
           </button>
         `;
         emptyBox
@@ -1359,48 +1765,47 @@ DIRETRIZES FUNDAMENTAIS:
           card.dataset.index = index;
 
           const layerColor =
-            layer.color || DOMAIN_COLOR_PALETTE[index % DOMAIN_COLOR_PALETTE.length];
+            layer.color ||
+            DOMAIN_COLOR_PALETTE[index % DOMAIN_COLOR_PALETTE.length];
+          layer.color = layerColor;
           const layerIcon = layer.icon || "layers";
+          layer.icon = layerIcon;
           const layerNum =
             layer.layer_number !== undefined
               ? layer.layer_number
-              : (layer.weight !== undefined ? layer.weight - 1 : index);
+              : layer.weight !== undefined
+                ? layer.weight - 1
+                : index;
           const layerKey = layer.key || `L${layerNum}_LAYER`;
-          const layerImportance = layer.importance || "Operacional";
-
-          const allImportanceOptions = [...suggestedImportanceLevels];
-          if (layerImportance && !allImportanceOptions.includes(layerImportance)) {
-            allImportanceOptions.push(layerImportance);
-          }
-
-          let importanceOptionsHtml = "";
-          allImportanceOptions.forEach((lvl) => {
-            const selected = lvl === layerImportance ? "selected" : "";
-            importanceOptionsHtml += `<option value="${escapeHtml(lvl)}" ${selected}>${escapeHtml(lvl)}</option>`;
-          });
+          layer.key = layerKey;
 
           card.innerHTML = `
             <div class="arch-layer-card-header">
               <div class="arch-layer-badge-wrap">
-                <div class="arch-layer-icon-badge" style="background: ${layerColor}18; color: ${layerColor};">
-                  <span class="material-symbols-outlined">${layerIcon}</span>
+                <div class="arch-layer-drag-handle" title="Arraste para reorganizar o nível desta camada">
+                  <span class="material-symbols-outlined">drag_indicator</span>
+                </div>
+                <div class="arch-layer-icon-wrap">
+                  <div class="arch-layer-icon-badge" style="background: ${layerColor}18; color: ${layerColor};" title="Clique para escolher outro ícone na Biblioteca">
+                    <span class="material-symbols-outlined">${layerIcon}</span>
+                    <span class="icon-edit-hint material-symbols-outlined">edit</span>
+                  </div>
+                  <button class="arch-layer-color-btn" style="background: ${layerColor};" type="button" title="Alterar cor da camada"></button>
+                  <div class="color-palette-popover" style="display: none;">
+                    ${DOMAIN_COLOR_PALETTE.map(
+                      (c) => `
+                      <div class="color-swatch ${c === layerColor ? "active" : ""}" data-color="${c}" style="background: ${c};" title="${c}"></div>
+                    `,
+                    ).join("")}
+                  </div>
                 </div>
                 <span class="arch-layer-number-pill" style="background: ${layerColor}22; color: ${layerColor};">
                   Camada ${layerNum}
                 </span>
-                <span class="org-domain-included-pill" style="margin-left: 4px;">
-                  <span class="material-symbols-outlined" style="font-size: 13px;">check_circle</span>
-                  Inclusa no Projeto
-                </span>
               </div>
-              <div style="display: flex; align-items: center; gap: 8px;">
-                <select class="arch-layer-importance-select" title="Nível de importância e criticidade desta camada">
-                  ${importanceOptionsHtml}
-                </select>
-                <button class="arch-layer-delete-btn" title="Remover esta camada do projeto" type="button">
-                  <span class="material-symbols-outlined icon-xs">close</span>
-                </button>
-              </div>
+              <button class="arch-layer-delete-btn" title="Remover esta camada do projeto" type="button">
+                <span class="material-symbols-outlined icon-xs">close</span>
+              </button>
             </div>
 
             <div style="display: flex; flex-direction: column; gap: 4px;">
@@ -1437,18 +1842,135 @@ DIRETRIZES FUNDAMENTAIS:
             </div>
 
             <div class="arch-layer-card-footer">
-              <span class="arch-layer-slug-pill">#${escapeHtml(layerKey)}</span>
-              <span style="font-size: 11px; color: var(--text-muted); font-weight: 500;">
-                Hierarquia: Nível ${layerNum}
-              </span>
+              <div class="org-domain-slug-row">
+                <div style="display: flex; align-items: center; gap: 4px;">
+                  <span style="font-size: 11px; color: var(--text-muted); font-weight: 600;">#</span>
+                  <input
+                    type="text"
+                    class="arch-layer-slug-input"
+                    value="${escapeHtml(layerKey)}"
+                    placeholder="L${layerNum}_LAYER"
+                    title="Identificador único (#slug/key) da camada"
+                  />
+                </div>
+                <span style="font-size: 11px; color: var(--text-muted); font-weight: 500;">
+                  Nível ${layerNum}
+                </span>
+              </div>
             </div>
           `;
+
+          // Drag and Drop support for reordering layers with mouse
+          card.setAttribute("draggable", "true");
+
+          card.addEventListener("dragstart", (e) => {
+            if (
+              e.target.closest(
+                "input, textarea, button, .color-palette-popover",
+              )
+            ) {
+              e.preventDefault();
+              return;
+            }
+            e.dataTransfer.setData("text/plain", index.toString());
+            e.dataTransfer.effectAllowed = "move";
+            card.classList.add("is-dragging");
+          });
+
+          card.addEventListener("dragend", () => {
+            if (layersGrid) {
+              layersGrid.querySelectorAll(".arch-layer-card").forEach((c) => {
+                c.classList.remove("is-dragging", "drag-over");
+              });
+            }
+          });
+
+          card.addEventListener("dragover", (e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = "move";
+          });
+
+          card.addEventListener("dragenter", (e) => {
+            e.preventDefault();
+            if (!card.classList.contains("is-dragging")) {
+              card.classList.add("drag-over");
+            }
+          });
+
+          card.addEventListener("dragleave", (e) => {
+            if (!card.contains(e.relatedTarget)) {
+              card.classList.remove("drag-over");
+            }
+          });
+
+          card.addEventListener("drop", (e) => {
+            e.preventDefault();
+            card.classList.remove("drag-over");
+            const rawFrom = e.dataTransfer.getData("text/plain");
+            const fromIdx = parseInt(rawFrom, 10);
+            if (!isNaN(fromIdx) && fromIdx !== index) {
+              reorderLayers(fromIdx, index);
+            }
+          });
 
           const nameInput = card.querySelector(".arch-layer-name-input");
           const descInput = card.querySelector(".arch-layer-desc-input");
           const rulesInput = card.querySelector(".arch-layer-rules-input");
-          const importanceSelect = card.querySelector(".arch-layer-importance-select");
           const deleteBtn = card.querySelector(".arch-layer-delete-btn");
+          const slugInput = card.querySelector(".arch-layer-slug-input");
+          const iconBadge = card.querySelector(".arch-layer-icon-badge");
+          const colorBtn = card.querySelector(".arch-layer-color-btn");
+          const colorPopover = card.querySelector(".color-palette-popover");
+
+          // Icon Picker Trigger
+          if (iconBadge) {
+            iconBadge.onclick = (e) => {
+              e.stopPropagation();
+              IconPicker.open({
+                currentIcon: layer.icon || "layers",
+                onSelect: (newIcon) => {
+                  layer.icon = newIcon;
+                  renderLayers();
+                  markDirty();
+                },
+              });
+            };
+          }
+
+          // Color Picker Trigger
+          if (colorBtn && colorPopover) {
+            colorBtn.onclick = (e) => {
+              e.stopPropagation();
+              const isShown = colorPopover.style.display === "grid";
+              document
+                .querySelectorAll(".color-palette-popover")
+                .forEach((p) => (p.style.display = "none"));
+              colorPopover.style.display = isShown ? "none" : "grid";
+            };
+
+            colorPopover.querySelectorAll(".color-swatch").forEach((swatch) => {
+              swatch.onclick = (e) => {
+                e.stopPropagation();
+                const chosen = swatch.dataset.color;
+                if (chosen) {
+                  layer.color = chosen;
+                  renderLayers();
+                  markDirty();
+                }
+              };
+            });
+          }
+
+          // Slug / Key Input
+          if (slugInput) {
+            slugInput.addEventListener("input", () => {
+              const clean = sanitizeSlug(slugInput.value)
+                .toUpperCase()
+                .replace(/-/g, "_");
+              layer.key = clean;
+              markDirty();
+            });
+          }
 
           nameInput.addEventListener("input", () => {
             layer.name = nameInput.value;
@@ -1466,11 +1988,6 @@ DIRETRIZES FUNDAMENTAIS:
             markDirty();
           });
 
-          importanceSelect.addEventListener("change", () => {
-            layer.importance = importanceSelect.value;
-            markDirty();
-          });
-
           deleteBtn.addEventListener("click", (e) => {
             e.stopPropagation();
             currentLayers.splice(index, 1);
@@ -1484,17 +2001,46 @@ DIRETRIZES FUNDAMENTAIS:
         // Add Layer dashed card at the end of the grid
         const addCard = document.createElement("div");
         addCard.className = "arch-layer-card arch-layer-card-add";
-        addCard.title = "Clique para adicionar uma nova camada customizada";
+        addCard.title = "Clique para adicionar uma nova camada";
         addCard.innerHTML = `
           <div class="arch-layer-add-icon">
             <span class="material-symbols-outlined">add</span>
           </div>
-          <span class="arch-layer-add-label">Adicionar Camada Customizada</span>
-          <span class="arch-layer-add-hint">Ex: Camada 6 — Auditoria Regulatória, FinOps...</span>
+          <span class="arch-layer-add-label">Adicionar Camada</span>
+          <span class="arch-layer-add-hint">Ex: Camada 6 — Auditoria, FinOps, IA...</span>
         `;
         addCard.addEventListener("click", () => {
           addNewLayer();
         });
+
+        // Drag target on addCard to move layer to the last position
+        addCard.addEventListener("dragover", (e) => {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "move";
+        });
+        addCard.addEventListener("dragenter", (e) => {
+          e.preventDefault();
+          addCard.classList.add("drag-over");
+        });
+        addCard.addEventListener("dragleave", (e) => {
+          if (!addCard.contains(e.relatedTarget)) {
+            addCard.classList.remove("drag-over");
+          }
+        });
+        addCard.addEventListener("drop", (e) => {
+          e.preventDefault();
+          addCard.classList.remove("drag-over");
+          const rawFrom = e.dataTransfer.getData("text/plain");
+          const fromIdx = parseInt(rawFrom, 10);
+          if (
+            !isNaN(fromIdx) &&
+            currentLayers.length > 0 &&
+            fromIdx !== currentLayers.length - 1
+          ) {
+            reorderLayers(fromIdx, currentLayers.length - 1);
+          }
+        });
+
         layersGrid.appendChild(addCard);
       }
     }
@@ -1517,16 +2063,6 @@ DIRETRIZES FUNDAMENTAIS:
             l.layer_number === sug.layer_number,
         ),
     );
-
-    if (layerSugCountBadge) {
-      if (availableSuggestions.length === 0) {
-        layerSugCountBadge.textContent = "✓ Todas adicionadas";
-        layerSugCountBadge.className = "badge-sug-count all-added";
-      } else {
-        layerSugCountBadge.textContent = `${availableSuggestions.length} disponível${availableSuggestions.length > 1 ? "is" : ""}`;
-        layerSugCountBadge.className = "badge-sug-count";
-      }
-    }
 
     if (availableSuggestions.length === 0) {
       const allAddedMsg = document.createElement("div");
@@ -1561,20 +2097,19 @@ DIRETRIZES FUNDAMENTAIS:
                 Camada ${sug.layer_number}
               </span>
               <strong style="font-size: 14px; color: var(--text-main);">${escapeHtml(sug.name || sug.label)}</strong>
-              <span class="pill-dot info" style="font-size: 10.5px; padding: 1px 6px;">${escapeHtml(sug.importance || 'Operacional')}</span>
             </div>
           </div>
           <p class="sug-card-desc" style="font-size: 12px; color: var(--text-muted); line-height: 1.4; margin: 4px 0 2px 0;">
             <strong>O que inclui:</strong> ${escapeHtml(sug.description)}
           </p>
           <p class="sug-card-rules" style="font-size: 11.5px; color: var(--text-muted); line-height: 1.4; margin: 2px 0 0 0;">
-            <strong>Regras:</strong> ${escapeHtml(sug.rules || '')}
+            <strong>Regras:</strong> ${escapeHtml(sug.rules || "")}
           </p>
         </div>
         <div class="sug-card-action-col" style="margin-top: 10px; display: flex; align-items: center; justify-content: flex-end;">
           <button class="btn btn-sm btn-primary arch-layer-add-sug-btn" type="button" style="display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;">
             <span class="material-symbols-outlined icon-xs">add</span>
-            Adicionar ao Projeto
+            Adicionar
           </button>
         </div>
       `;
@@ -1595,6 +2130,33 @@ DIRETRIZES FUNDAMENTAIS:
 
       layerSugGrid.appendChild(card);
     });
+  }
+
+  // Reorder architecture layers via mouse drag and drop
+  function reorderLayers(fromIndex, toIndex) {
+    if (!currentConfig || !Array.isArray(currentConfig.layers)) return;
+    const layers = currentConfig.layers;
+    if (fromIndex < 0 || fromIndex >= layers.length) return;
+    if (toIndex < 0 || toIndex >= layers.length) return;
+    if (fromIndex === toIndex) return;
+
+    const [movedLayer] = layers.splice(fromIndex, 1);
+    layers.splice(toIndex, 0, movedLayer);
+
+    // Recalculate layer_number sequentially so array order represents hierarchy (0=foundation, 1=next, ...)
+    layers.forEach((layer, i) => {
+      const oldNum = layer.layer_number !== undefined ? layer.layer_number : i;
+      layer.layer_number = i;
+      if (layer.key && layer.key.match(/^L\d+_/)) {
+        layer.key = layer.key.replace(/^L\d+_/, `L${i}_`);
+      }
+      if (layer.label && layer.label.startsWith("Camada ")) {
+        layer.label = `Camada ${i} — ${layer.name || ""}`;
+      }
+    });
+
+    renderLayers();
+    markDirty();
   }
 
   function addNewLayer() {
@@ -1635,6 +2197,249 @@ DIRETRIZES FUNDAMENTAIS:
   if (btnAddLayer) {
     btnAddLayer.addEventListener("click", () => {
       addNewLayer();
+    });
+  }
+
+  // =============================================================================
+  // POLÍTICAS, REGULAÇÃO & LEIS MANDATÓRIAS DO NEGÓCIO
+  // =============================================================================
+  const POLICY_PRESETS = {
+    ecommerce: {
+      regulators: ["ANPD (LGPD)", "Procon / CDC", "Sefaz (NFe / Tributário)", "Conar"],
+      laws: "• Lei Geral de Proteção de Dados (Lei 13.709/2018)\n• Decreto do Comércio Eletrônico (Decreto 7.962/2013)\n• Código de Defesa do Consumidor (Lei 8.078/1990 - Art. 49)\n• Marco Civil da Internet (Lei 12.965/2014)",
+      cancellation: "7 dias corridos a partir da entrega sem custos com devolução integral (CDC Art. 49)",
+      refund: "Estorno imediato via Pix ou até 2 faturas no Cartão de Crédito",
+      retention: "Notas Fiscais por 5 anos; Logs de acesso a aplicações por 6 meses (Marco Civil)",
+      sla: "Atendimento em horário comercial (seg a sex) com resposta máxima em 24h úteis",
+      dpo: "dpo@empresa.com",
+      consent: "Opt-in explícito e desmarcado por padrão para envio de comunicações e marketing",
+      sensitive_data: "Proibição estrita de armazenar CVV ou dados de cartão em texto puro (PCI-DSS); CPF e telefones mascarados em logs operacionais."
+    },
+    health: {
+      regulators: ["CFM (Conselho Federal de Medicina)", "ANPD (LGPD Saúde)", "ANS (Saúde Suplementar)", "Anvisa"],
+      laws: "• Resolução CFM nº 2.314/2022 (Regulamentação da Telemedicina no Brasil)\n• Lei Geral de Proteção de Dados (Lei 13.709/2018 - Tratamento de Dados Sensíveis de Saúde)\n• Lei de Digitalização e Guarda de Prontuários (Lei 13.787/2018)\n• Código de Ética Médica (Sigilo Profissional)",
+      cancellation: "Cancelamento de teleconsulta com reembolso integral até 2h antes do horário agendado",
+      refund: "Estorno via Pix em até 24h ou crédito imediato na plataforma",
+      retention: "Guarda obrigatória de prontuários eletrônicos por no mínimo 20 anos (Lei 13.787/2018)",
+      sla: "Suporte clínico e técnico disponível 24/7 com tempo de resposta máximo de 15 minutos em emergências",
+      dpo: "dpo.saude@empresa.com",
+      consent: "Termo de Consentimento Livre e Esclarecido (TCLE) obrigatório antes de qualquer teleatendimento",
+      sensitive_data: "Dados de saúde, diagnósticos, receitas e exames são estritamente confidenciais; criptografia de ponta a ponta e proibição de exposição em logs."
+    },
+    fintech: {
+      regulators: ["Bacen (Banco Central do Brasil)", "CVM", "ANPD", "COAF (Prevenção a Lavagem de Dinheiro)"],
+      laws: "• Resoluções Bacen para Arranjos de Pagamento e Pix\n• Lei nº 9.613/1998 (Prevenção e Combate à Lavagem de Dinheiro - AML)\n• Padrão Internacional PCI-DSS (Segurança de Cartões)\n• Lei Geral de Proteção de Dados (Lei 13.709/2018)",
+      cancellation: "Estorno de cobrança indevida em até 24h; Mecanismo Especial de Devolução (MED Pix)",
+      refund: "Liquidado em D+0 para Pix e D+1 para liquidação bancária autorizada",
+      retention: "Registros de transações financeiras e KYC arquivados por no mínimo 5 a 10 anos (Bacen/COAF)",
+      sla: "Disponibilidade de autorização 99.99% com suporte a chargebacks em até 48h",
+      dpo: "dpo.compliance@empresa.com",
+      consent: "Autorização explícita de consulta ao SCR (Sistema de Informações de Crédito) e termos de uso bancário",
+      sensitive_data: "Tokenização mandatória de PAN e credenciais bancárias; zero secrets em logs ou analytics."
+    },
+    saas: {
+      regulators: ["ANPD (LGPD)", "GDPR (União Europeia)", "Marco Civil da Internet"],
+      laws: "• Lei Geral de Proteção de Dados (Lei 13.709/2018)\n• General Data Protection Regulation (GDPR - EU 2016/679)\n• Normas ISO/IEC 27001 e SOC 2 Type II\n• Marco Civil da Internet (Lei 12.965/2014)",
+      cancellation: "Cancelamento da assinatura a qualquer momento com vigência até o fim do ciclo faturado",
+      refund: "Garantia de reembolso incondicional de 30 dias para novos clientes",
+      retention: "Dados do cliente mantidos durante o contrato e expurgados 30 dias após encerramento definitivo",
+      sla: "Disponibilidade de plataforma contratual de 99.9% com status page pública em tempo real",
+      dpo: "privacy@empresa.com",
+      consent: "Termos de Serviço e Acordo de Processamento de Dados (DPA) assinados digitalmente",
+      sensitive_data: "Criptografia TLS 1.3 em trânsito e AES-256 em repouso; isolamento multi-tenant rígido."
+    }
+  };
+
+  function updatePoliciesSummaryBadges() {
+    const badgeRegulators = document.getElementById("badge-summary-regulators");
+    if (badgeRegulators) {
+      const count = currentRegulators.length;
+      badgeRegulators.textContent = count === 1 ? "1 órgão" : `${count} órgãos`;
+    }
+  }
+
+  function renderRegulatorsTags() {
+    if (!regulatorsTagsList) return;
+    regulatorsTagsList.innerHTML = "";
+    updatePoliciesSummaryBadges();
+    if (currentRegulators.length === 0) {
+      regulatorsTagsList.innerHTML = '<span style="font-size: 11.5px; color: var(--text-muted); font-style: italic;">Nenhum órgão regulador adicionado. Adicione acima ou selecione uma minuta rápida.</span>';
+      return;
+    }
+    currentRegulators.forEach((reg, idx) => {
+      const chip = document.createElement("div");
+      chip.className = "policy-tag-chip";
+      chip.innerHTML = `
+        <span>${escapeHtml(reg)}</span>
+        <span class="material-symbols-outlined policy-tag-remove" data-index="${idx}" title="Remover órgão">close</span>
+      `;
+      chip.querySelector(".policy-tag-remove").addEventListener("click", () => {
+        removeRegulatorTag(idx);
+      });
+      regulatorsTagsList.appendChild(chip);
+    });
+  }
+
+  function addRegulatorTag(name) {
+    const trimmed = (name || "").trim();
+    if (!trimmed) return;
+    if (!currentRegulators.includes(trimmed)) {
+      currentRegulators.push(trimmed);
+      renderRegulatorsTags();
+      compilePoliciesMarkdown();
+      markDirty();
+    }
+    if (inputAddRegulator) inputAddRegulator.value = "";
+  }
+
+  function removeRegulatorTag(idx) {
+    if (idx >= 0 && idx < currentRegulators.length) {
+      currentRegulators.splice(idx, 1);
+      renderRegulatorsTags();
+      compilePoliciesMarkdown();
+      markDirty();
+    }
+  }
+
+  function compilePoliciesMarkdown() {
+    if (!inputPoliciesMarkdownPreview) return;
+    const projName = inputName ? inputName.value.trim() : "Sistema";
+    const regList = currentRegulators.length > 0 ? currentRegulators.join(", ") : "Conformidade Geral";
+    const laws = inputPoliciesLaws ? inputPoliciesLaws.value.trim() : "";
+    const canc = inputPoliciesCancellation ? inputPoliciesCancellation.value.trim() : "";
+    const ref = inputPoliciesRefund ? inputPoliciesRefund.value.trim() : "";
+    const ret = inputPoliciesRetention ? inputPoliciesRetention.value.trim() : "";
+    const sla = inputPoliciesSla ? inputPoliciesSla.value.trim() : "";
+    const dpo = inputPoliciesDpo ? inputPoliciesDpo.value.trim() : "";
+    const cons = inputPoliciesConsent ? inputPoliciesConsent.value.trim() : "";
+    const sens = inputPoliciesSensitiveData ? inputPoliciesSensitiveData.value.trim() : "";
+
+    const md = `---
+type: "policies"
+version: "1.0.0"
+status: "approved"
+layer: "L0_FOUNDATION"
+path: "project/policies.md"
+dpo_contact: "${dpo}"
+regulators: ${JSON.stringify(currentRegulators)}
+---
+
+# 📜 Políticas de Negócio, Regulação & Leis Mandatórias
+
+> Este documento define os órgãos reguladores, marcos legais e restrições inegociáveis que o projeto **${projName}** deve obedecer.
+
+---
+
+## 🏛️ 1. Órgãos Reguladores & Marco Legal
+- **Órgãos Fiscalizadores:** ${regList}
+- **Leis & Normas Mandatórias:**
+${laws || "Não especificado."}
+
+---
+
+## ⚖️ 2. Regras Mandatórias de Negócio (Hard Rules)
+- **Direito de Arrependimento & Cancelamento:** ${canc || "Conforme legislação aplicável."}
+- **Política de Estorno & Devolução Financeira:** ${ref || "Conforme termos de serviço."}
+- **Retenção Legal de Dados & Documentos:** ${ret || "Conforme prazos legais."}
+- **SLA & Atendimento ao Consumidor:** ${sla || "Conforme padrão de atendimento."}
+
+---
+
+## 🔒 3. Privacidade, Dados Pessoais & LGPD / GDPR
+- **Encarregado de Dados (DPO):** ${dpo || "dpo@empresa.com"}
+- **Consentimento & Opt-in:** ${cons || "Consentimento explícito e granular."}
+- **Tratamento de Dados Sensíveis & Logs:**
+${sens || "Proibição de dados sensíveis em logs e telemetria aberta."}
+`.trim();
+
+    inputPoliciesMarkdownPreview.value = md;
+  }
+
+  function applyPolicyPreset(key) {
+    const preset = POLICY_PRESETS[key];
+    if (!preset) return;
+    currentRegulators = [...preset.regulators];
+    renderRegulatorsTags();
+    if (inputPoliciesLaws) inputPoliciesLaws.value = preset.laws;
+    if (inputPoliciesCancellation) inputPoliciesCancellation.value = preset.cancellation;
+    if (inputPoliciesRefund) inputPoliciesRefund.value = preset.refund;
+    if (inputPoliciesRetention) inputPoliciesRetention.value = preset.retention;
+    if (inputPoliciesSla) inputPoliciesSla.value = preset.sla;
+    if (inputPoliciesDpo) inputPoliciesDpo.value = preset.dpo;
+    if (inputPoliciesConsent) inputPoliciesConsent.value = preset.consent;
+    if (inputPoliciesSensitiveData) inputPoliciesSensitiveData.value = preset.sensitive_data;
+    compilePoliciesMarkdown();
+    markDirty();
+    if (onNotify) {
+      onNotify(`Minuta de políticas para ${key.toUpperCase()} aplicada!`, "info");
+    }
+  }
+
+  function clearPolicyPreset() {
+    currentRegulators = [];
+    renderRegulatorsTags();
+    if (inputPoliciesLaws) inputPoliciesLaws.value = "";
+    if (inputPoliciesCancellation) inputPoliciesCancellation.value = "";
+    if (inputPoliciesRefund) inputPoliciesRefund.value = "";
+    if (inputPoliciesRetention) inputPoliciesRetention.value = "";
+    if (inputPoliciesSla) inputPoliciesSla.value = "";
+    if (inputPoliciesDpo) inputPoliciesDpo.value = "";
+    if (inputPoliciesConsent) inputPoliciesConsent.value = "";
+    if (inputPoliciesSensitiveData) inputPoliciesSensitiveData.value = "";
+    compilePoliciesMarkdown();
+    markDirty();
+  }
+
+  // Bind Policies Action Buttons & Collapsible Headers
+  const policyCollapsibleCards = document.querySelectorAll(".policy-collapsible-card");
+  policyCollapsibleCards.forEach((card) => {
+    const toggleHeader = card.querySelector(".policy-card-toggle-header");
+    if (toggleHeader) {
+      toggleHeader.addEventListener("click", () => {
+        card.classList.toggle("collapsed");
+      });
+    }
+  });
+
+  if (btnAddRegulator && inputAddRegulator) {
+    btnAddRegulator.addEventListener("click", () => {
+      addRegulatorTag(inputAddRegulator.value);
+    });
+    inputAddRegulator.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        addRegulatorTag(inputAddRegulator.value);
+      }
+    });
+  }
+
+  if (policyPresetBtns) {
+    policyPresetBtns.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        applyPolicyPreset(btn.dataset.preset);
+      });
+    });
+  }
+
+  if (btnPolicyPresetClear) {
+    btnPolicyPresetClear.addEventListener("click", () => {
+      clearPolicyPreset();
+    });
+  }
+
+  if (btnSyncPoliciesMd) {
+    btnSyncPoliciesMd.addEventListener("click", () => {
+      compilePoliciesMarkdown();
+      markDirty();
+      if (onNotify) {
+        onNotify("Documento Markdown de políticas recompilado com sucesso!", "success");
+      }
+    });
+  }
+
+  if (btnOpenPoliciesEditor) {
+    btnOpenPoliciesEditor.addEventListener("click", () => {
+      window.location.hash = "#subview-editor";
     });
   }
 
@@ -1689,151 +2494,93 @@ DIRETRIZES FUNDAMENTAIS:
       currentConfig.layers = [];
     }
 
-    currentConfig.governance_rules = {
-      require_invariants_for_tier1: checkRuleInvariants
-        ? checkRuleInvariants.checked
-        : true,
-      require_dictionary_validation: checkRuleDictionary
-        ? checkRuleDictionary.checked
-        : true,
-      enforce_linear_lifecycle: checkRuleLifecycle
-        ? checkRuleLifecycle.checked
-        : false,
+    // Políticas & Regulação
+    currentConfig.policies = {
+      regulators: currentRegulators,
+      laws: inputPoliciesLaws ? inputPoliciesLaws.value.trim() : "",
+      cancellation_policy: inputPoliciesCancellation
+        ? inputPoliciesCancellation.value.trim()
+        : "",
+      refund_policy: inputPoliciesRefund ? inputPoliciesRefund.value.trim() : "",
+      retention_policy: inputPoliciesRetention
+        ? inputPoliciesRetention.value.trim()
+        : "",
+      sla_support: inputPoliciesSla ? inputPoliciesSla.value.trim() : "",
+      dpo_contact: inputPoliciesDpo ? inputPoliciesDpo.value.trim() : "",
+      consent_policy: inputPoliciesConsent
+        ? inputPoliciesConsent.value.trim()
+        : "",
+      sensitive_data_policy: inputPoliciesSensitiveData
+        ? inputPoliciesSensitiveData.value.trim()
+        : "",
+      markdown_content: inputPoliciesMarkdownPreview
+        ? inputPoliciesMarkdownPreview.value.trim()
+        : "",
     };
 
     currentConfig.ai_assistant_prompt = projCopilot
       ? projCopilot.getActivePrompt()
       : currentConfig.ai_assistant_prompt || DEFAULT_ABOUT_AGENT_PROMPT;
 
-    currentConfig.ai_guardian_prompt = inputAiGuardianPrompt
-      ? inputAiGuardianPrompt.value.trim()
-      : "";
-
     return currentConfig;
   }
 
-  // =============================================================================
-  // AI COPILOT & AGENT PRE-PROMPT CONTROLLER (TAB 1: ABOUT)
-  // =============================================================================
-
-  const resizerProjAi = document.getElementById("resizer-proj-ai");
-  const STORAGE_KEY_PROJ_CHAT_OPEN = "governance_project_ai_chat_open";
-
-  function setProjAiVisibility(show) {
-    if (!projAiPane) return;
-    if (show) {
-      projAiPane.classList.remove("collapsed");
-      projAiPane.style.display = "flex";
-      if (resizerProjAi) resizerProjAi.classList.remove("collapsed");
-    } else {
-      projAiPane.classList.add("collapsed");
-      projAiPane.style.display = "none";
-      if (resizerProjAi) resizerProjAi.classList.add("collapsed");
-    }
-    syncProjAiTriggerVisibility();
-    try {
-      localStorage.setItem(STORAGE_KEY_PROJ_CHAT_OPEN, show ? "true" : "false");
-    } catch (e) {}
-  }
-
-  function syncProjAiTriggerVisibility() {
-    if (!btnToggleProjAi || !projAiPane) return;
-    const isCollapsed = projAiPane.classList.contains("collapsed") || projAiPane.style.display === "none";
-    btnToggleProjAi.style.display = isCollapsed ? "inline-flex" : "none";
-    btnToggleProjAi.classList.toggle("active", !isCollapsed);
-  }
-
-  if (btnToggleProjAi && projAiPane) {
-    btnToggleProjAi.addEventListener("click", () => {
-      setProjAiVisibility(true);
-    });
-  }
-
-  // Initialize Reusable AI Chat Copilot for Tab 1 About
-  if (projAiPane) {
-    projCopilot = new AIChatCopilot({
-      container: projAiPane,
-      resizer: "#resizer-proj-ai",
-      storageKey: "governance_project_ai_width",
-      contextPath: "project/index.md",
-      agentName: "Arquiteto de Fundação",
-      agentIcon: "psychology",
-      modelName: "gemini-3.5-flash",
-      defaultSystemPrompt: DEFAULT_ABOUT_AGENT_PROMPT,
-      customSystemPrompt: currentConfig?.ai_assistant_prompt || "",
-      getRepoName: () => (getActiveRepo && getActiveRepo() ? getActiveRepo().name : "default"),
-      getContent: () =>
-        `
-# Nome do Projeto: ${inputName ? inputName.value.trim() : ""}
-## Por que fazemos?
-${input5w2hWhy ? input5w2hWhy.value.trim() : ""}
-## O que é o produto?
-${input5w2hWhat ? input5w2hWhat.value.trim() : ""}
-## Onde se aplica?
-${input5w2hWhere ? input5w2hWhere.value.trim() : ""}
-## Quando?
-${input5w2hWhen ? input5w2hWhen.value.trim() : ""}
-## Como construímos?
-${input5w2hHow ? input5w2hHow.value.trim() : ""}
-      `.trim(),
-      chips: [
-        {
-          label: "💡 Proposta de Valor",
-          prompt:
-            "Sugira uma Proposta de Valor e escopo funcional para o campo 'O que é o produto?' com base no nome e contexto do projeto.",
-        },
-        {
-          label: "🎯 Por que fazemos?",
-          prompt:
-            "Ajude a articular o campo 'Por que fazemos?', destacando dores de negócio, ROI e motivação central.",
-        },
-        {
-          label: "🏛️ Arquitetura (Como?)",
-          prompt:
-            "Quais diretrizes arquiteturais, padrões DDD e tecnologias você sugere para 'Como construímos?'?",
-        },
-        {
-          label: "📋 Revisar Preenchimento",
-          prompt:
-            "Analise todos os campos preenchidos do About e forneça sugestões de melhoria e polimento executivo.",
-        },
-      ],
-      onPromptSaved: async (newPrompt) => {
-        if (!currentConfig) currentConfig = {};
-        currentConfig.ai_assistant_prompt = newPrompt;
-        markDirty();
-        await saveConfigInternal(
-          "Pré-prompt do agente atualizado e salvo no projeto!",
-        );
-      },
-      onPromptRestored: async (defaultPrompt) => {
-        if (!currentConfig) currentConfig = {};
-        currentConfig.ai_assistant_prompt = defaultPrompt;
-        markDirty();
-        await saveConfigInternal(
-          "Pré-prompt restaurado para o padrão do framework!",
-        );
-      },
-      onClose: () => {
-        setProjAiVisibility(false);
-      },
+  // Helper to generate real-time markdown summary of Project configuration for Global AI Copilot
+  function getProjectSummaryContent() {
+    const domains = (currentConfig?.organization_domains || []).map((d) => {
+      const subs = (d.subdomains || [])
+        .map((s) => `#${d.id}/${s.id} (${s.name})`)
+        .join(", ");
+      return `- **#${d.id}** (${d.name}): ${d.description || ""}${subs ? ` [Subdomínios: ${subs}]` : ""}`;
     });
 
-    const savedProjChatState = localStorage.getItem(STORAGE_KEY_PROJ_CHAT_OPEN);
-    const isInitialProjAiOpen = savedProjChatState !== null ? savedProjChatState === "true" : !projAiPane.classList.contains("collapsed");
-    setProjAiVisibility(isInitialProjAiOpen);
+    const layers = (currentConfig?.layers || []).map((l) => {
+      return `- **Camada ${l.layer_number}** (${l.name || l.key}): ${l.description || ""} ${l.rules ? `(Regras: ${l.rules})` : ""}`;
+    });
+
+    return `
+# Projeto: ${inputName ? inputName.value.trim() : "Sem nome"}
+- **Padrão Arquitetural:** ${inputArchPattern ? inputArchPattern.value.trim() : "Clean Architecture & DDD"}
+- **Versão:** ${inputVersion ? inputVersion.value.trim() : "1.0.0"}
+- **Líder Técnico:** ${inputLead ? inputLead.value.trim() : "Não atribuído"}
+
+## Canvas 5W2H de Fundação:
+- **Por que fazemos? (Why):** ${input5w2hWhy ? input5w2hWhy.value.trim() : "Não preenchido"}
+- **O que é o produto? (What):** ${input5w2hWhat ? input5w2hWhat.value.trim() : "Não preenchido"}
+- **Onde se aplica? (Where):** ${input5w2hWhere ? input5w2hWhere.value.trim() : "Não preenchido"}
+- **Quando? (When):** ${input5w2hWhen ? input5w2hWhen.value.trim() : "Não preenchido"}
+- **Quem são os responsáveis? (Who):** ${input5w2hWho ? input5w2hWho.value.trim() : "Não preenchido"}
+- **Como construímos? (How):** ${input5w2hHow ? input5w2hHow.value.trim() : "Não preenchido"}
+- **Quanto custa / Métricas? (How Much):** ${input5w2hHowMuch ? input5w2hHowMuch.value.trim() : "Não preenchido"}
+
+## Domínios & Bounded Contexts (${domains.length}):
+${domains.length > 0 ? domains.join("\n") : "- Nenhum domínio configurado ainda."}
+
+## Camadas de Arquitetura & Governança (${layers.length}):
+${layers.length > 0 ? layers.join("\n") : "- Nenhuma camada configurada ainda."}
+
+## Políticas & Regulação do Negócio:
+- **Órgãos Fiscalizadores:** ${currentRegulators.length > 0 ? currentRegulators.join(", ") : "Não informado"}
+- **Leis & Normas:** ${inputPoliciesLaws ? inputPoliciesLaws.value.trim() : "Não informado"}
+- **Arrependimento / Cancelamento:** ${inputPoliciesCancellation ? inputPoliciesCancellation.value.trim() : "Não informado"}
+- **Retenção de Dados:** ${inputPoliciesRetention ? inputPoliciesRetention.value.trim() : "Não informado"}
+- **DPO / Privacidade:** ${inputPoliciesDpo ? inputPoliciesDpo.value.trim() : "Não informado"}
+    `.trim();
   }
 
   // Helper to get currently active tab key
   function getCurrentActiveTab() {
     const activeBtn = document.querySelector(".project-tab-btn.active");
     if (!activeBtn) return "about";
-    return activeBtn.dataset.tab === "taxonomy" ? "architecture" : activeBtn.dataset.tab;
+    return activeBtn.dataset.tab === "taxonomy"
+      ? "architecture"
+      : activeBtn.dataset.tab;
   }
 
   // Request tab switch with unsaved changes prompt
   function requestTabSwitch(targetTab) {
-    const canonicalTarget = targetTab === "taxonomy" ? "architecture" : targetTab;
+    const canonicalTarget =
+      targetTab === "taxonomy" ? "architecture" : targetTab;
     const currentTab = getCurrentActiveTab();
 
     if (canonicalTarget === currentTab) return;
@@ -1881,11 +2628,11 @@ ${input5w2hHow ? input5w2hHow.value.trim() : ""}
           "Você personalizou as <strong>Camadas da Arquitetura (L0–L5)</strong> do projeto. Deseja salvar as regras e importância antes de mudar de aba?";
         modalUnsavedHint.innerHTML =
           "🏛️ <strong>Dica:</strong> Salve agora para definir a hierarquia oficial e as regras de navegação entre domínios.";
-      } else if (fromTab === "governance") {
+      } else if (fromTab === "governance" || fromTab === "policies") {
         modalUnsavedMsg.innerHTML =
-          "Você alterou as <strong>Políticas de Linter Arquitetural ou Prompt do Guardião IA</strong>. Deseja salvar antes de mudar de aba?";
+          "Você alterou as <strong>Políticas de Negócio, Órgãos Reguladores e Marcos Legais</strong>. Deseja salvar o documento <code>project/policies.md</code> no Git antes de mudar de aba?";
         modalUnsavedHint.innerHTML =
-          "🛡️ <strong>Dica:</strong> Salve agora para ativar o linter e o assistente de IA oficial no repositório.";
+          "📜 <strong>Dica:</strong> Salve agora para sincronizar as regras mandatórias do negócio e guardrails para a IA no repositório.";
       } else {
         modalUnsavedMsg.innerHTML =
           "Você possui alterações não salvas nesta etapa do projeto. O que deseja fazer antes de mudar de aba?";
@@ -1932,9 +2679,12 @@ ${input5w2hHow ? input5w2hHow.value.trim() : ""}
       const target = pendingTargetTab;
       btnUnsavedSave.disabled = true;
       btnUnsavedSave.textContent = "Salvando no Git...";
-      const ok = await saveConfigInternal("Alterações salvas com sucesso no Git!");
+      const ok = await saveConfigInternal(
+        "Alterações salvas com sucesso no Git!",
+      );
       btnUnsavedSave.disabled = false;
-      btnUnsavedSave.innerHTML = '<span class="material-symbols-outlined icon-xs">save</span> Salvar & Avançar';
+      btnUnsavedSave.innerHTML =
+        '<span class="material-symbols-outlined icon-xs">save</span> Salvar & Avançar';
       closeUnsavedModal();
       if (ok && target) {
         switchToTab(target);
@@ -1942,8 +2692,23 @@ ${input5w2hHow ? input5w2hHow.value.trim() : ""}
     });
   }
 
+  // Helper to silently sync tab in the URL address bar without triggering SPA route reloads
+  function updateUrlTab(tabKey) {
+    try {
+      const hash = window.location.hash || "";
+      const qIdx = hash.indexOf("?");
+      const basePath = qIdx !== -1 ? hash.substring(0, qIdx) : hash;
+      const newHash = `${basePath}?tab=${encodeURIComponent(tabKey)}`;
+      if (window.location.hash !== newHash) {
+        window.history.replaceState(null, "", newHash);
+      }
+    } catch (e) {
+      // silent fallback
+    }
+  }
+
   // Switch to specific tab helper
-  function switchToTab(targetTab) {
+  function switchToTab(targetTab, updateUrl = true) {
     const canonicalTab = targetTab === "taxonomy" ? "architecture" : targetTab;
     tabBtns.forEach((b) => b.classList.remove("active"));
     tabPanes.forEach((p) => p.classList.remove("active"));
@@ -1957,6 +2722,10 @@ ${input5w2hHow ? input5w2hHow.value.trim() : ""}
       document.getElementById(`pane-proj-${canonicalTab}`) ||
       document.getElementById(`pane-proj-${targetTab}`);
     if (activePane) activePane.classList.add("active");
+
+    if (updateUrl) {
+      updateUrlTab(canonicalTab);
+    }
 
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -2029,7 +2798,9 @@ ${input5w2hHow ? input5w2hHow.value.trim() : ""}
   }
 
   if (btnNavDomainsPrev) {
-    btnNavDomainsPrev.addEventListener("click", () => requestTabSwitch("about"));
+    btnNavDomainsPrev.addEventListener("click", () =>
+      requestTabSwitch("about"),
+    );
   }
 
   if (btnNavDomainsNext) {
@@ -2055,17 +2826,19 @@ ${input5w2hHow ? input5w2hHow.value.trim() : ""}
       btnNavArchNext.disabled = true;
       btnNavArchNext.innerHTML = "Salvando no Git...";
       const ok = await saveConfigInternal(
-        "Camadas de Arquitetura salvas no Git! Avançando para Políticas IA...",
+        "Camadas de Arquitetura salvas no Git! Avançando para Políticas & Regulação...",
       );
       btnNavArchNext.disabled = false;
       btnNavArchNext.innerHTML =
-        'Salvar & Avançar para Políticas IA <span class="material-symbols-outlined icon-xs">arrow_forward</span>';
+        'Salvar & Avançar para Políticas & Regulação <span class="material-symbols-outlined icon-xs">arrow_forward</span>';
       if (ok) switchToTab("governance");
     });
   }
 
   if (btnNavGovPrev) {
-    btnNavGovPrev.addEventListener("click", () => requestTabSwitch("architecture"));
+    btnNavGovPrev.addEventListener("click", () =>
+      requestTabSwitch("architecture"),
+    );
   }
 
   if (btnNavGovFinish) {
@@ -2147,5 +2920,7 @@ ${input5w2hHow ? input5w2hHow.value.trim() : ""}
   return {
     loadProjectConfig,
     getConfig: () => currentConfig,
+    getProjectSummaryContent,
+    DEFAULT_ABOUT_AGENT_PROMPT,
   };
 }

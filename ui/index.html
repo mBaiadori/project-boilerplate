@@ -1026,6 +1026,17 @@
       <!-- Top Global Header -->
       <header class="dashboard-navbar">
         <div class="dash-brand">
+          <button
+            id="btn-back-to-repos"
+            class="btn-dash-back"
+            type="button"
+            title="Voltar para a lista de Repositórios"
+          >
+            <span class="material-symbols-outlined" style="font-size: 20px"
+              >arrow_back</span
+            >
+          </button>
+          <div class="dash-brand-divider"></div>
           <div class="dash-title-wrap">
             <div class="dash-title-row">
               <h1 id="dash-repo-title">Projeto</h1>
@@ -1044,17 +1055,13 @@
         <div class="dash-nav-right">
           <button
             id="btn-open-onboarding-tour"
-            class="btn btn-secondary btn-sm"
-            title="Guia & Onboarding do Software"
+            class="btn-dash-tour"
+            type="button"
+            title="Guia Interativo & Tour do Projeto"
           >
-            Tour do Projeto
-          </button>
-          <button
-            id="btn-quick-scaffold"
-            class="btn btn-primary btn-sm"
-            title="Criar novo Domínio, Área ou Feature L4 em 1-clique"
-          >
-            + Nova Feature
+            <span class="material-symbols-outlined" style="font-size: 16px"
+              >explore</span
+            >
           </button>
           <button
             id="btn-open-workspace-diff"
@@ -1065,8 +1072,16 @@
             <span id="pending-changes-badge-text">0 alterações</span> &bull;
             Revisar PR
           </button>
-          <button id="btn-back-to-repos" class="btn btn-ghost btn-sm">
-            Repositórios
+          <button
+            id="btn-global-ai-copilot"
+            class="btn-dash-ai-copilot"
+            type="button"
+            title="Abrir Assistente & Copilot IA em Qualquer Tela"
+          >
+            <span class="material-symbols-outlined ai-sparkle-icon"
+              >auto_awesome</span
+            >
+            <span class="ai-copilot-label">Copilot IA</span>
           </button>
         </div>
       </header>
@@ -1408,37 +1423,7 @@
                         role="tab"
                         aria-selected="false"
                       >
-                        Políticas & Guardião IA
-                      </button>
-                    </div>
-                    <div
-                      class="doc-icon-actions"
-                      style="
-                        margin-left: 12px;
-                        margin-right: 4px;
-                        flex-shrink: 0;
-                      "
-                    >
-                      <button
-                        id="btn-toggle-proj-ai"
-                        class="btn-icon-action"
-                        type="button"
-                        title="Abrir Assistente de IA"
-                      >
-                        <svg
-                          width="14"
-                          height="14"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="2"
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                        >
-                          <path
-                            d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"
-                          ></path>
-                        </svg>
+                        Políticas & Regulação
                       </button>
                     </div>
                   </div>
@@ -1596,7 +1581,9 @@
                         "
                       >
                         <div>
-                          <div style="display: flex; align-items: center; gap: 8px;">
+                          <div
+                            style="display: flex; align-items: center; gap: 8px"
+                          >
                             <h3
                               style="
                                 margin: 0;
@@ -1607,7 +1594,11 @@
                             >
                               Domínios & Áreas do Projeto
                             </h3>
-                            <span id="proj-domains-count-badge" class="pill-dot info" style="font-size: 11px; padding: 2px 8px;">
+                            <span
+                              id="proj-domains-count-badge"
+                              class="pill-dot info"
+                              style="font-size: 11px; padding: 2px 8px"
+                            >
                               0 domínios
                             </span>
                           </div>
@@ -1619,17 +1610,47 @@
                               line-height: 1.5;
                             "
                           >
-                            Domínios que compõem a arquitetura do seu projeto. O framework gera as pastas físicas e documentação em <code>domains/</code>.
+                            Domínios que compõem a arquitetura do seu projeto. O
+                            framework gera as pastas físicas e documentação em
+                            <code>domains/</code>.
                           </p>
                         </div>
-                        <div style="display: flex; gap: 10px; align-items: center; flex-shrink: 0;">
-                          <div class="view-mode-segmented" role="group" aria-label="Modo de visualização dos domínios" style="height: 32px;">
-                            <button id="btn-domains-view-grid" class="view-mode-btn active" title="Visualização em Cards" type="button" style="padding: 3px 10px; font-size: 12px;">
-                              <span class="material-symbols-outlined icon-xs">grid_view</span>
+                        <div
+                          style="
+                            display: flex;
+                            gap: 10px;
+                            align-items: center;
+                            flex-shrink: 0;
+                          "
+                        >
+                          <div
+                            class="view-mode-segmented"
+                            role="group"
+                            aria-label="Modo de visualização dos domínios"
+                            style="height: 32px"
+                          >
+                            <button
+                              id="btn-domains-view-grid"
+                              class="view-mode-btn active"
+                              title="Visualização em Cards"
+                              type="button"
+                              style="padding: 3px 10px; font-size: 12px"
+                            >
+                              <span class="material-symbols-outlined icon-xs"
+                                >grid_view</span
+                              >
                               <span class="btn-label">Cards</span>
                             </button>
-                            <button id="btn-domains-view-list" class="view-mode-btn" title="Visualização em Lista" type="button" style="padding: 3px 10px; font-size: 12px;">
-                              <span class="material-symbols-outlined icon-xs">view_list</span>
+                            <button
+                              id="btn-domains-view-list"
+                              class="view-mode-btn"
+                              title="Visualização em Lista"
+                              type="button"
+                              style="padding: 3px 10px; font-size: 12px"
+                            >
+                              <span class="material-symbols-outlined icon-xs"
+                                >view_list</span
+                              >
                               <span class="btn-label">Lista</span>
                             </button>
                           </div>
@@ -1643,8 +1664,10 @@
                               gap: 6px;
                             "
                           >
-                            <span class="material-symbols-outlined icon-xs">add</span>
-                            Adicionar Domínio Customizado
+                            <span class="material-symbols-outlined icon-xs"
+                              >add</span
+                            >
+                            Adicionar
                           </button>
                         </div>
                       </div>
@@ -1655,36 +1678,112 @@
                       </div>
 
                       <!-- Divider -->
-                      <div style="margin: 28px 0 20px 0; border-top: 1px solid var(--border-color);"></div>
+                      <div
+                        style="
+                          margin: 28px 0 20px 0;
+                          border-top: 1px solid var(--border-color);
+                        "
+                      ></div>
 
                       <!-- Bottom Section: Sugestões do Software (Collapsible, background cinzinha mais claro) -->
-                      <div class="domains-suggestions-panel" id="proj-domains-suggestions-panel">
-                        <div class="domains-suggestions-header" id="proj-domains-suggestions-header" role="button" tabindex="0" title="Clique para expandir ou recolher as sugestões padrão">
-                          <div style="display: flex; align-items: center; gap: 10px;">
+                      <div
+                        class="domains-suggestions-panel"
+                        id="proj-domains-suggestions-panel"
+                      >
+                        <div
+                          class="domains-suggestions-header"
+                          id="proj-domains-suggestions-header"
+                          role="button"
+                          tabindex="0"
+                          title="Clique para expandir ou recolher as sugestões padrão"
+                        >
+                          <div
+                            style="
+                              display: flex;
+                              align-items: center;
+                              gap: 10px;
+                            "
+                          >
                             <div class="domains-sug-icon-badge">
-                              <span class="material-symbols-outlined" style="font-size: 18px;">auto_awesome</span>
+                              <span
+                                class="material-symbols-outlined"
+                                style="font-size: 18px"
+                                >auto_awesome</span
+                              >
                             </div>
                             <div>
-                              <div style="display: flex; align-items: center; gap: 8px;">
-                                <strong style="font-size: 13.5px; color: var(--text-main);">Sugestões de Domínios do Software</strong>
-                                <span id="proj-suggestions-count-badge" class="badge-sug-count">6 disponíveis</span>
+                              <div
+                                style="
+                                  display: flex;
+                                  align-items: center;
+                                  gap: 8px;
+                                "
+                              >
+                                <strong
+                                  style="
+                                    font-size: 13.5px;
+                                    color: var(--text-main);
+                                  "
+                                  >Sugestões de Domínios do Software</strong
+                                >
+                                <span
+                                  id="proj-suggestions-count-badge"
+                                  class="badge-sug-count"
+                                  >6 disponíveis</span
+                                >
                               </div>
-                              <p style="font-size: 11.5px; color: var(--text-muted); margin: 2px 0 0 0;">
-                                Catálogo de áreas e Bounded Contexts padrão para acelerar o setup
+                              <p
+                                style="
+                                  font-size: 11.5px;
+                                  color: var(--text-muted);
+                                  margin: 2px 0 0 0;
+                                "
+                              >
+                                Catálogo de áreas e Bounded Contexts padrão para
+                                acelerar o setup
                               </p>
                             </div>
                           </div>
-                          <div style="display: flex; align-items: center; gap: 6px;">
-                            <span id="proj-domains-sug-label" style="font-size: 12px; color: var(--text-muted); font-weight: 500;">Recolher</span>
-                            <span id="proj-domains-sug-chevron" class="material-symbols-outlined icon-sm" style="transition: transform 0.2s ease;">expand_less</span>
+                          <div
+                            style="display: flex; align-items: center; gap: 6px"
+                          >
+                            <span
+                              id="proj-domains-sug-label"
+                              style="
+                                font-size: 12px;
+                                color: var(--text-muted);
+                                font-weight: 500;
+                              "
+                              >Recolher</span
+                            >
+                            <span
+                              id="proj-domains-sug-chevron"
+                              class="material-symbols-outlined icon-sm"
+                              style="transition: transform 0.2s ease"
+                              >expand_less</span
+                            >
                           </div>
                         </div>
 
-                        <div class="domains-suggestions-body" id="proj-domains-suggestions-body">
-                          <p style="font-size: 12px; color: var(--text-muted); margin: 0 0 12px 0;">
-                            Clique em <strong>+ Adicionar ao Projeto</strong> em qualquer sugestão abaixo para incluí-la na arquitetura do seu projeto:
+                        <div
+                          class="domains-suggestions-body"
+                          id="proj-domains-suggestions-body"
+                        >
+                          <p
+                            style="
+                              font-size: 12px;
+                              color: var(--text-muted);
+                              margin: 0 0 12px 0;
+                            "
+                          >
+                            Clique em <strong>+ Adicionar ao Projeto</strong> em
+                            qualquer sugestão abaixo para incluí-la na
+                            arquitetura do seu projeto:
                           </p>
-                          <div class="org-domains-grid" id="proj-domains-suggestions-grid">
+                          <div
+                            class="org-domains-grid"
+                            id="proj-domains-suggestions-grid"
+                          >
                             <!-- Dynamic Suggestion Cards rendered by project.js -->
                           </div>
                         </div>
@@ -1731,7 +1830,9 @@
                         "
                       >
                         <div>
-                          <div style="display: flex; align-items: center; gap: 8px;">
+                          <div
+                            style="display: flex; align-items: center; gap: 8px"
+                          >
                             <h3
                               style="
                                 margin: 0;
@@ -1753,9 +1854,6 @@
                               >
                               Camadas da Arquitetura do Projeto
                             </h3>
-                            <span id="proj-layers-count-badge" class="pill-dot info" style="font-size: 11px; padding: 2px 8px;">
-                              6 camadas
-                            </span>
                           </div>
                           <p
                             style="
@@ -1766,17 +1864,49 @@
                               max-width: 820px;
                             "
                           >
-                            As camadas de arquitetura definem as <strong>regras estruturais</strong>, os <strong>níveis de importância</strong> e <strong>onde cada artefato se aloca</strong> dentro dos domínios.
+                            As camadas de arquitetura definem as
+                            <strong>regras estruturais</strong>, os
+                            <strong>níveis de importância</strong> e
+                            <strong>onde cada artefato se aloca</strong> dentro
+                            dos domínios.
                           </p>
                         </div>
-                        <div style="display: flex; gap: 10px; align-items: center; flex-shrink: 0;">
-                          <div class="view-mode-segmented" role="group" aria-label="Modo de visualização das camadas" style="height: 32px;">
-                            <button id="btn-layers-view-grid" class="view-mode-btn active" title="Visualização em Cards" type="button" style="padding: 3px 10px; font-size: 12px;">
-                              <span class="material-symbols-outlined icon-xs">grid_view</span>
+                        <div
+                          style="
+                            display: flex;
+                            gap: 10px;
+                            align-items: center;
+                            flex-shrink: 0;
+                          "
+                        >
+                          <div
+                            class="view-mode-segmented"
+                            role="group"
+                            aria-label="Modo de visualização das camadas"
+                            style="height: 32px"
+                          >
+                            <button
+                              id="btn-layers-view-grid"
+                              class="view-mode-btn active"
+                              title="Visualização em Cards"
+                              type="button"
+                              style="padding: 3px 10px; font-size: 12px"
+                            >
+                              <span class="material-symbols-outlined icon-xs"
+                                >grid_view</span
+                              >
                               <span class="btn-label">Cards</span>
                             </button>
-                            <button id="btn-layers-view-list" class="view-mode-btn" title="Visualização em Lista" type="button" style="padding: 3px 10px; font-size: 12px;">
-                              <span class="material-symbols-outlined icon-xs">view_list</span>
+                            <button
+                              id="btn-layers-view-list"
+                              class="view-mode-btn"
+                              title="Visualização em Lista"
+                              type="button"
+                              style="padding: 3px 10px; font-size: 12px"
+                            >
+                              <span class="material-symbols-outlined icon-xs"
+                                >view_list</span
+                              >
                               <span class="btn-label">Lista</span>
                             </button>
                           </div>
@@ -1790,8 +1920,9 @@
                               gap: 6px;
                             "
                           >
-                            <span class="material-symbols-outlined icon-xs">add</span>
-                            Adicionar Camada Customizada
+                            <span class="material-symbols-outlined icon-xs"
+                              >add</span
+                            >Adicionar
                           </button>
                         </div>
                       </div>
@@ -1802,36 +1933,107 @@
                       </div>
 
                       <!-- Divider -->
-                      <div style="margin: 28px 0 20px 0; border-top: 1px solid var(--border-color);"></div>
+                      <div
+                        style="
+                          margin: 28px 0 20px 0;
+                          border-top: 1px solid var(--border-color);
+                        "
+                      ></div>
 
                       <!-- Bottom Section: Sugestões de Camadas do Framework (Collapsible, background cinzinha mais claro) -->
-                      <div class="domains-suggestions-panel" id="proj-layers-suggestions-panel">
-                        <div class="domains-suggestions-header" id="proj-layers-suggestions-header" role="button" tabindex="0" title="Clique para expandir ou recolher as sugestões padrão">
-                          <div style="display: flex; align-items: center; gap: 10px;">
+                      <div
+                        class="domains-suggestions-panel"
+                        id="proj-layers-suggestions-panel"
+                      >
+                        <div
+                          class="domains-suggestions-header"
+                          id="proj-layers-suggestions-header"
+                          role="button"
+                          tabindex="0"
+                          title="Clique para expandir ou recolher as sugestões padrão"
+                        >
+                          <div
+                            style="
+                              display: flex;
+                              align-items: center;
+                              gap: 10px;
+                            "
+                          >
                             <div class="domains-sug-icon-badge">
-                              <span class="material-symbols-outlined" style="font-size: 18px;">auto_awesome</span>
+                              <span
+                                class="material-symbols-outlined"
+                                style="font-size: 18px"
+                                >auto_awesome</span
+                              >
                             </div>
                             <div>
-                              <div style="display: flex; align-items: center; gap: 8px;">
-                                <strong style="font-size: 13.5px; color: var(--text-main);">Sugestões de Camadas do Framework (L0 a L5)</strong>
-                                <span id="proj-layer-sug-count-badge" class="badge-sug-count">6 disponíveis</span>
+                              <div
+                                style="
+                                  display: flex;
+                                  align-items: center;
+                                  gap: 8px;
+                                "
+                              >
+                                <strong
+                                  style="
+                                    font-size: 13.5px;
+                                    color: var(--text-main);
+                                  "
+                                  >Sugestões de Camadas do Framework</strong
+                                >
                               </div>
-                              <p style="font-size: 11.5px; color: var(--text-muted); margin: 2px 0 0 0;">
-                                Hierarquia padrão recomendada com níveis de importância e regras de navegação entre domínios
+                              <p
+                                style="
+                                  font-size: 11.5px;
+                                  color: var(--text-muted);
+                                  margin: 2px 0 0 0;
+                                "
+                              >
+                                Hierarquia padrão recomendada com níveis de
+                                importância e regras de navegação entre domínios
                               </p>
                             </div>
                           </div>
-                          <div style="display: flex; align-items: center; gap: 6px;">
-                            <span id="proj-layers-sug-label" style="font-size: 12px; color: var(--text-muted); font-weight: 500;">Recolher</span>
-                            <span id="proj-layers-sug-chevron" class="material-symbols-outlined icon-sm" style="transition: transform 0.2s ease;">expand_less</span>
+                          <div
+                            style="display: flex; align-items: center; gap: 6px"
+                          >
+                            <span
+                              id="proj-layers-sug-label"
+                              style="
+                                font-size: 12px;
+                                color: var(--text-muted);
+                                font-weight: 500;
+                              "
+                              >Recolher</span
+                            >
+                            <span
+                              id="proj-layers-sug-chevron"
+                              class="material-symbols-outlined icon-sm"
+                              style="transition: transform 0.2s ease"
+                              >expand_less</span
+                            >
                           </div>
                         </div>
 
-                        <div class="domains-suggestions-body" id="proj-layers-suggestions-body">
-                          <p style="font-size: 12px; color: var(--text-muted); margin: 0 0 12px 0;">
-                            Clique em <strong>+ Adicionar ao Projeto</strong> em qualquer camada recomendada abaixo para incluí-la na governança da arquitetura:
+                        <div
+                          class="domains-suggestions-body"
+                          id="proj-layers-suggestions-body"
+                        >
+                          <p
+                            style="
+                              font-size: 12px;
+                              color: var(--text-muted);
+                              margin: 0 0 12px 0;
+                            "
+                          >
+                            Clique em <strong>+ Adicionar ao Projeto</strong> em
+                            qualquer camada recomendada abaixo para incluí-la na
+                            governança da arquitetura:
                           </p>
-                          <div class="arch-layers-grid" id="proj-layers-suggestions-grid">
+                          <div
+                            class="arch-layers-grid"
+                            id="proj-layers-suggestions-grid"
+                          >
                             <!-- Dynamic Suggestion Cards rendered by project.js -->
                           </div>
                         </div>
@@ -1863,183 +2065,255 @@
                     </div>
                   </div>
 
-                  <!-- TAB 4: POLÍTICAS & GUARDIÃO IA -->
+                  <!-- TAB 4: POLÍTICAS & REGULAÇÃO DO NEGÓCIO -->
                   <div class="project-tab-pane" id="pane-proj-governance">
-                    <!-- Regras de Linter -->
-                    <div class="gov-card">
-                      <div class="gov-card-header">
-                        <h3>Regras de Validação & Linter Arquitetural</h3>
-                      </div>
-                      <div
-                        style="
-                          display: flex;
-                          flex-direction: column;
-                          gap: 14px;
-                          margin-top: 8px;
-                        "
-                      >
-                        <label
-                          style="
-                            display: flex;
-                            align-items: center;
-                            gap: 10px;
-                            cursor: pointer;
-                          "
-                        >
-                          <input
-                            type="checkbox"
-                            id="proj-rule-invariants-tier1"
-                          />
-                          <span>
-                            <strong
-                              >Exigir Invariantes Explícitas em Features Tier
-                              1</strong
-                            >
-                            <span
-                              style="
-                                display: block;
-                                font-size: 12px;
-                                color: var(--text-muted);
-                              "
-                            >
-                              Bloqueia status APPROVED se não houver seção de
-                              invariantes de negócio na spec.
-                            </span>
-                          </span>
-                        </label>
-
-                        <label
-                          style="
-                            display: flex;
-                            align-items: center;
-                            gap: 10px;
-                            cursor: pointer;
-                          "
-                        >
-                          <input
-                            type="checkbox"
-                            id="proj-rule-dictionary-val"
-                          />
-                          <span>
-                            <strong
-                              >Validar Aderência ao Dicionário Ubíquo</strong
-                            >
-                            <span
-                              style="
-                                display: block;
-                                font-size: 12px;
-                                color: var(--text-muted);
-                              "
-                            >
-                              Alerta sobre entidades de domínio usadas em specs
-                              que não constam no dicionário do projeto.
-                            </span>
-                          </span>
-                        </label>
-
-                        <label
-                          style="
-                            display: flex;
-                            align-items: center;
-                            gap: 10px;
-                            cursor: pointer;
-                          "
-                        >
-                          <input
-                            type="checkbox"
-                            id="proj-rule-enforce-lifecycle"
-                          />
-                          <span>
-                            <strong>Exigir Sequência Linear de Esteira</strong>
-                            <span
-                              style="
-                                display: block;
-                                font-size: 12px;
-                                color: var(--text-muted);
-                              "
-                            >
-                              Valida que toda etapa possua
-                              <code>previous_stage</code> e
-                              <code>next_stage</code> vinculados.
-                            </span>
-                          </span>
-                        </label>
-                      </div>
-                    </div>
-
-                    <!-- Prompt do Arquiteto Guardião -->
-                    <div class="gov-card">
-                      <div class="gov-card-header">
-                        <div>
-                          <h3 style="margin: 0">
-                            Prompt Mestre do Arquiteto Guardião (AI Persona)
-                          </h3>
-                          <p
-                            style="
-                              font-size: 12px;
-                              color: var(--text-muted);
-                              margin: 2px 0 0 0;
-                            "
-                          >
-                            Personalize o tom de voz e diretrizes estritas que a
-                            IA adotará ao prestar suporte de arquitetura neste
-                            projeto.
+                    <!-- Banner de Contexto & Presets Rápidos por Setor -->
+                    <div class="policies-header-card">
+                      <div class="policies-header-main">
+                        <div class="policies-header-icon-wrap">
+                          <span class="material-symbols-outlined" style="font-size: 28px; color: #6366f1;">gavel</span>
+                        </div>
+                        <div class="policies-header-info">
+                          <div style="display: flex; align-items: center; gap: 8px;">
+                            <h3 style="margin: 0; font-size: 16px; font-weight: 600; color: var(--text-main);">
+                              Políticas de Negócio, Regulação & Leis Mandatórias
+                            </h3>
+                            <span class="badge badge-neutral" id="proj-policies-doc-badge" style="font-size: 11px;">project/policies.md</span>
+                          </div>
+                          <p style="font-size: 12.5px; color: var(--text-muted); margin: 3px 0 0 0; line-height: 1.45;">
+                            Defina o ambiente regulatório, órgãos fiscalizadores, leis aplicáveis e diretrizes de privacidade que governam este negócio. Essas diretrizes servem de <strong>guardrail supremo</strong> para a IA e para a engenharia.
                           </p>
                         </div>
                       </div>
-                      <textarea
-                        id="proj-ai-guardian-prompt"
-                        rows="5"
-                        placeholder="Diretrizes do Arquiteto Guardião..."
-                        style="
-                          width: 100%;
-                          font-family: monospace;
-                          font-size: 12.5px;
-                          padding: 10px;
-                          line-height: 1.5;
-                        "
-                      ></textarea>
 
-                      <!-- Step Navigation Footer -->
-                      <div class="project-step-footer">
-                        <button
-                          id="btn-nav-gov-prev"
-                          class="btn btn-secondary"
-                          type="button"
-                        >
-                          <span class="material-symbols-outlined icon-xs"
-                            >arrow_back</span
-                          >
-                          Voltar para Arquitetura
-                        </button>
-                        <button
-                          id="btn-nav-gov-finish"
-                          class="btn btn-primary"
-                          type="button"
-                        >
-                          <span class="material-symbols-outlined icon-xs"
-                            >check_circle</span
-                          >
-                          Salvar & Concluir Setup
-                        </button>
+                      <div class="policies-presets-container">
+                        <span class="policies-presets-label">Minutas Rápidas por Setor:</span>
+                        <div class="policies-presets-grid" id="proj-policies-presets-grid">
+                          <button type="button" class="btn-policy-preset" data-preset="ecommerce" title="Aplicar minuta para E-commerce e Varejo Digital">
+                            <span class="material-symbols-outlined icon-xs">shopping_bag</span> E-commerce & Varejo
+                          </button>
+                          <button type="button" class="btn-policy-preset" data-preset="health" title="Aplicar minuta para Saúde, Clínicas e Telemedicina">
+                            <span class="material-symbols-outlined icon-xs">medical_services</span> Saúde & Telemedicina
+                          </button>
+                          <button type="button" class="btn-policy-preset" data-preset="fintech" title="Aplicar minuta para Pagamentos, Pix e Serviços Financeiros">
+                            <span class="material-symbols-outlined icon-xs">payments</span> Fintech & Pagamentos
+                          </button>
+                          <button type="button" class="btn-policy-preset" data-preset="saas" title="Aplicar minuta para Plataformas B2B e SaaS">
+                            <span class="material-symbols-outlined icon-xs">cloud_done</span> SaaS & B2B
+                          </button>
+                          <button type="button" class="btn-policy-preset-clear" id="btn-policy-preset-clear" title="Limpar e preencher do zero">
+                            <span class="material-symbols-outlined icon-xs">restart_alt</span> Limpar
+                          </button>
+                        </div>
                       </div>
+                    </div>
+
+                    <!-- CARD 1: ÓRGÃOS REGULADORES & MARCO LEGAL (COLAPSÁVEL) -->
+                    <div class="about-document-card policy-collapsible-card" id="policy-card-regulators">
+                      <div class="policy-card-toggle-header">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                          <span class="material-symbols-outlined" style="font-size: 20px; color: #6366f1;">account_balance</span>
+                          <div>
+                            <span class="about-section-title" style="font-size: 14.5px;">1. Órgãos Reguladores & Marco Legal</span>
+                            <span class="about-section-hint" style="display: block;">Quais entidades auditam, fiscalizam e quais leis mandatórias regem o negócio.</span>
+                          </div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                          <span class="policy-card-summary-badge" id="badge-summary-regulators">0 órgãos</span>
+                          <span class="material-symbols-outlined policy-card-chevron">expand_more</span>
+                        </div>
+                      </div>
+
+                      <div class="policy-card-body">
+                        <!-- Tag Cloud de Órgãos Reguladores -->
+                        <div class="policies-tags-wrapper" style="margin-top: 12px;">
+                          <div class="policies-tags-list" id="proj-regulators-tags-list">
+                            <!-- Chips renderizados dinamicamente -->
+                          </div>
+                          <div class="policies-tag-input-row">
+                            <input
+                              type="text"
+                              id="proj-input-add-regulator"
+                              class="form-control"
+                              placeholder="Adicionar órgão regulador (ex: ANPD, Procon, Sefaz, CFM, Bacen...)"
+                              style="font-size: 12.5px; height: 34px;"
+                            />
+                            <button class="btn btn-secondary btn-sm" id="btn-add-regulator" type="button" style="height: 34px;">
+                              <span class="material-symbols-outlined icon-xs">add</span> Adicionar
+                            </button>
+                          </div>
+                        </div>
+
+                        <div class="about-divider" style="margin: 16px 0;"></div>
+
+                        <div>
+                          <label for="proj-policies-laws" class="policies-field-label">
+                            <span class="material-symbols-outlined icon-xs" style="color: #6366f1;">menu_book</span>
+                            Leis, Decretos & Normas Mandatórias
+                          </label>
+                          <textarea
+                            id="proj-policies-laws"
+                            class="about-clean-textarea"
+                            rows="3"
+                            placeholder="Ex: Lei Geral de Proteção de Dados (Lei 13.709/2018), Decreto do E-commerce (Decreto 7.962/2013), Código de Defesa do Consumidor (Lei 8.078/1990)..."
+                          ></textarea>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- CARD 2: REGRAS MANDATÓRIAS DO NEGÓCIO & PRAZOS LEGAIS (COLAPSÁVEL) -->
+                    <div class="about-document-card policy-collapsible-card" id="policy-card-rules">
+                      <div class="policy-card-toggle-header">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                          <span class="material-symbols-outlined" style="font-size: 20px; color: #10b981;">timer</span>
+                          <div>
+                            <span class="about-section-title" style="font-size: 14.5px;">2. Prazos Legais & Regras Mandatórias (Hard Rules)</span>
+                            <span class="about-section-hint" style="display: block;">Regras e prazos impostos por lei que nenhuma funcionalidade do software pode violar.</span>
+                          </div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                          <span class="material-symbols-outlined policy-card-chevron">expand_more</span>
+                        </div>
+                      </div>
+
+                      <div class="policy-card-body">
+                        <div class="policies-grid-fields" style="margin-top: 14px;">
+                          <div class="policies-field-item">
+                            <label for="proj-policies-cancellation" class="policies-field-label">
+                              <span class="material-symbols-outlined icon-xs" style="color: #ef4444;">cancel</span>
+                              Direito de Arrependimento / Cancelamento
+                            </label>
+                            <input
+                              type="text"
+                              id="proj-policies-cancellation"
+                              class="form-control"
+                              placeholder="Ex: 7 dias corridos sem custo com estorno total (CDC Art. 49)"
+                            />
+                          </div>
+
+                          <div class="policies-field-item">
+                            <label for="proj-policies-refund" class="policies-field-label">
+                              <span class="material-symbols-outlined icon-xs" style="color: #10b981;">currency_exchange</span>
+                              Política de Estorno & Devolução Financeira
+                            </label>
+                            <input
+                              type="text"
+                              id="proj-policies-refund"
+                              class="form-control"
+                              placeholder="Ex: Estorno imediato via Pix ou até 2 faturas no Cartão de Crédito"
+                            />
+                          </div>
+
+                          <div class="policies-field-item">
+                            <label for="proj-policies-retention" class="policies-field-label">
+                              <span class="material-symbols-outlined icon-xs" style="color: #f59e0b;">inventory_2</span>
+                              Prazos de Retenção Legal de Dados & Documentos
+                            </label>
+                            <input
+                              type="text"
+                              id="proj-policies-retention"
+                              class="form-control"
+                              placeholder="Ex: NFe por 5 anos; Logs de acesso por 6 meses (Marco Civil); Prontuários por 20 anos (CFM)"
+                            />
+                          </div>
+
+                          <div class="policies-field-item">
+                            <label for="proj-policies-sla" class="policies-field-label">
+                              <span class="material-symbols-outlined icon-xs" style="color: #3b82f6;">support_agent</span>
+                              SLA & Canais de Atendimento ao Consumidor
+                            </label>
+                            <input
+                              type="text"
+                              id="proj-policies-sla"
+                              class="form-control"
+                              placeholder="Ex: Atendimento em horário comercial com tempo de resposta máximo de 24h úteis"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- CARD 3: PRIVACIDADE, DADOS PESSOAIS & LGPD (COLAPSÁVEL) -->
+                    <div class="about-document-card policy-collapsible-card" id="policy-card-privacy">
+                      <div class="policy-card-toggle-header">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                          <span class="material-symbols-outlined" style="font-size: 20px; color: #3b82f6;">lock</span>
+                          <div>
+                            <span class="about-section-title" style="font-size: 14.5px;">3. Privacidade, Tratamento de Dados & LGPD / GDPR</span>
+                            <span class="about-section-hint" style="display: block;">Diretrizes para coleta de consentimento, manipulação de dados pessoais (PII) e canal de DPO.</span>
+                          </div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                          <span class="material-symbols-outlined policy-card-chevron">expand_more</span>
+                        </div>
+                      </div>
+
+                      <div class="policy-card-body">
+                        <div class="policies-grid-fields" style="margin-top: 14px;">
+                          <div class="policies-field-item">
+                            <label for="proj-policies-dpo" class="policies-field-label">
+                              <span class="material-symbols-outlined icon-xs" style="color: #6366f1;">badge</span>
+                              Encarregado de Dados (DPO / Contato de Privacidade)
+                            </label>
+                            <input
+                              type="text"
+                              id="proj-policies-dpo"
+                              class="form-control"
+                              placeholder="Ex: dpo@suaempresa.com ou privacidade@suaempresa.com"
+                            />
+                          </div>
+
+                          <div class="policies-field-item">
+                            <label for="proj-policies-consent" class="policies-field-label">
+                              <span class="material-symbols-outlined icon-xs" style="color: #10b981;">check_box</span>
+                              Consentimento & Opt-in de Comunicações
+                            </label>
+                            <input
+                              type="text"
+                              id="proj-policies-consent"
+                              class="form-control"
+                              placeholder="Ex: Checkbox desmarcado por padrão; consentimento granular para marketing e e-mails"
+                            />
+                          </div>
+                        </div>
+
+                        <div style="margin-top: 14px;">
+                          <label for="proj-policies-sensitive-data" class="policies-field-label">
+                            <span class="material-symbols-outlined icon-xs" style="color: #ef4444;">security</span>
+                            Diretrizes para Dados Sensíveis & Proibições em Logs
+                          </label>
+                          <textarea
+                            id="proj-policies-sensitive-data"
+                            class="about-clean-textarea"
+                            rows="2"
+                            placeholder="Ex: Proibição estrita de armazenar ou logar dados de cartão de crédito em texto puro (PCI-DSS); CPF e telefones devem ser mascarados em logs e relatórios não-administrativos..."
+                          ></textarea>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Step Navigation Footer (FORA dos cards, no nível da aba) -->
+                    <div class="project-step-footer" style="margin-top: 10px;">
+                      <button
+                        id="btn-nav-gov-prev"
+                        class="btn btn-secondary"
+                        type="button"
+                      >
+                        <span class="material-symbols-outlined icon-xs">arrow_back</span>
+                        Voltar para Arquitetura
+                      </button>
+                      <button
+                        id="btn-nav-gov-finish"
+                        class="btn btn-primary"
+                        type="button"
+                      >
+                        <span class="material-symbols-outlined icon-xs">check_circle</span>
+                        Salvar & Concluir Setup
+                      </button>
                     </div>
                   </div>
                 </div>
               </div>
-
-              <!-- Vertical Resizer: Project Workspace <-> AI Assistant -->
-              <div
-                id="resizer-proj-ai"
-                class="pane-resizer collapsed"
-                title="Arrastar para redimensionar chat de IA"
-              ></div>
-
-              <!-- DOCKED RIGHT WORKBENCH-STYLE AI COPILOT PANE (FULL HEIGHT) -->
-              <aside
-                id="proj-ai-pane"
-                class="workbench-ai-pane collapsed"
-              ></aside>
             </div>
           </div>
 
@@ -2854,16 +3128,6 @@
                   </div>
                 </footer>
               </section>
-
-              <!-- Vertical Resizer: Editor <-> AI Assistant -->
-              <div
-                id="resizer-ai"
-                class="pane-resizer"
-                title="Arrastar para redimensionar chat de IA"
-              ></div>
-
-              <!-- PANEL 3: AGENTIC AI PAIR ASSISTANT (COLLAPSIBLE DRAWER) -->
-              <aside id="workbench-ai-pane" class="workbench-ai-pane"></aside>
             </div>
           </div>
 
@@ -4301,42 +4565,153 @@
             </div>
           </div>
         </main>
+
+        <!-- Vertical Resizer: Workspace Content <-> Global AI Copilot -->
+        <div
+          id="resizer-global-ai"
+          class="pane-resizer collapsed"
+          title="Arrastar para redimensionar chat de IA"
+        ></div>
+
+        <!-- DOCKED RIGHT GLOBAL CONTEXT-AWARE AI COPILOT SIDEBAR -->
+        <aside id="global-ai-pane" class="workbench-ai-pane collapsed"></aside>
       </div>
     </div>
 
     <!-- Modal: Confirmação de Alterações Não Salvas (Cockpit do Projeto) -->
     <div id="proj-unsaved-modal" class="modal-backdrop" style="display: none">
-      <div class="modal-box" style="max-width: 520px; border-radius: var(--radius-lg); box-shadow: 0 20px 48px rgba(0, 0, 0, 0.18);">
-        <div class="modal-header" style="padding: 20px 24px 16px 24px; border-bottom: 1px solid var(--border-subtle); display: flex; align-items: center; justify-content: space-between;">
-          <div style="display: flex; align-items: center; gap: 12px;">
-            <div style="width: 38px; height: 38px; border-radius: 10px; background: rgba(245, 158, 11, 0.14); color: #d97706; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
-              <span class="material-symbols-outlined" style="font-size: 22px;">warning</span>
+      <div
+        class="modal-box"
+        style="
+          max-width: 520px;
+          border-radius: var(--radius-lg);
+          box-shadow: 0 20px 48px rgba(0, 0, 0, 0.18);
+        "
+      >
+        <div
+          class="modal-header"
+          style="
+            padding: 20px 24px 16px 24px;
+            border-bottom: 1px solid var(--border-subtle);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+          "
+        >
+          <div style="display: flex; align-items: center; gap: 12px">
+            <div
+              style="
+                width: 38px;
+                height: 38px;
+                border-radius: 10px;
+                background: rgba(245, 158, 11, 0.14);
+                color: #d97706;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                flex-shrink: 0;
+              "
+            >
+              <span class="material-symbols-outlined" style="font-size: 22px"
+                >warning</span
+              >
             </div>
             <div>
-              <h3 style="margin: 0; font-size: 16px; font-weight: 600; color: var(--text-heading); line-height: 1.2;">Alterações Não Salvas</h3>
-              <span style="font-size: 12px; color: var(--text-muted);">Confirmação de sincronização Git</span>
+              <h3
+                style="
+                  margin: 0;
+                  font-size: 16px;
+                  font-weight: 600;
+                  color: var(--text-heading);
+                  line-height: 1.2;
+                "
+              >
+                Alterações Não Salvas
+              </h3>
+              <span style="font-size: 12px; color: var(--text-muted)"
+                >Confirmação de sincronização Git</span
+              >
             </div>
           </div>
-          <button id="btn-close-proj-unsaved" class="btn-close" aria-label="Fechar">
+          <button
+            id="btn-close-proj-unsaved"
+            class="btn-close"
+            aria-label="Fechar"
+          >
             <span class="material-symbols-outlined icon-sm">close</span>
           </button>
         </div>
-        <div class="modal-body" style="padding: 20px 24px; display: flex; flex-direction: column; gap: 12px;">
-          <p id="proj-unsaved-modal-msg" style="font-size: 13.5px; color: var(--text-main); line-height: 1.55; margin: 0;">
-            Você possui alterações não salvas nesta etapa do projeto. O que deseja fazer antes de mudar de aba?
+        <div
+          class="modal-body"
+          style="
+            padding: 20px 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+          "
+        >
+          <p
+            id="proj-unsaved-modal-msg"
+            style="
+              font-size: 13.5px;
+              color: var(--text-main);
+              line-height: 1.55;
+              margin: 0;
+            "
+          >
+            Você possui alterações não salvas nesta etapa do projeto. O que
+            deseja fazer antes de mudar de aba?
           </p>
-          <div id="proj-unsaved-modal-hint" style="background: var(--bg-app); border: 1px solid var(--border-subtle); border-left: 3px solid var(--primary); border-radius: 8px; padding: 10px 14px; font-size: 12px; color: var(--text-muted); line-height: 1.5;">
-            💡 <strong>Dica:</strong> Ao salvar, suas definições são versionadas no Git e sincronizadas com a estrutura oficial do repositório.
+          <div
+            id="proj-unsaved-modal-hint"
+            style="
+              background: var(--bg-app);
+              border: 1px solid var(--border-subtle);
+              border-left: 3px solid var(--primary);
+              border-radius: 8px;
+              padding: 10px 14px;
+              font-size: 12px;
+              color: var(--text-muted);
+              line-height: 1.5;
+            "
+          >
+            💡 <strong>Dica:</strong> Ao salvar, suas definições são versionadas
+            no Git e sincronizadas com a estrutura oficial do repositório.
           </div>
         </div>
-        <div class="modal-footer" style="padding: 16px 24px; border-top: 1px solid var(--border-subtle); background: var(--bg-surface); display: flex; align-items: center; justify-content: flex-end; gap: 10px;">
-          <button id="btn-proj-unsaved-cancel" class="btn btn-ghost btn-sm" type="button" style="margin-right: auto;">
+        <div
+          class="modal-footer"
+          style="
+            padding: 16px 24px;
+            border-top: 1px solid var(--border-subtle);
+            background: var(--bg-surface);
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 10px;
+          "
+        >
+          <button
+            id="btn-proj-unsaved-cancel"
+            class="btn btn-ghost btn-sm"
+            type="button"
+            style="margin-right: auto"
+          >
             Continuar Editando
           </button>
-          <button id="btn-proj-unsaved-discard" class="btn btn-danger-outline btn-sm" type="button">
+          <button
+            id="btn-proj-unsaved-discard"
+            class="btn btn-danger-outline btn-sm"
+            type="button"
+          >
             Descartar Alterações
           </button>
-          <button id="btn-proj-unsaved-save" class="btn btn-primary btn-sm" type="button" style="display: inline-flex; align-items: center; gap: 6px;">
+          <button
+            id="btn-proj-unsaved-save"
+            class="btn btn-primary btn-sm"
+            type="button"
+            style="display: inline-flex; align-items: center; gap: 6px"
+          >
             <span class="material-symbols-outlined icon-xs">save</span>
             Salvar & Avançar
           </button>
