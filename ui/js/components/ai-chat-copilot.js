@@ -1427,7 +1427,7 @@ export class AIChatCopilot {
   }
 
   /**
-   * Activates visual element & section picker overlay
+   * Activates visual element & section picker overlay mapping all blocks at once
    */
   startInspector() {
     this.isInspectorActive = true;
@@ -1435,21 +1435,10 @@ export class AIChatCopilot {
       this.domInspectBtn.classList.add("active");
     }
 
-    // Create floating highlight box if not exists
-    let highlightBox = document.getElementById("ai-inspector-highlight-box");
-    if (!highlightBox) {
-      highlightBox = document.createElement("div");
-      highlightBox.id = "ai-inspector-highlight-box";
-      highlightBox.innerHTML = `
-        <div class="inspector-tag-badge">
-          <span class="material-symbols-outlined" style="font-size: 11px;">ads_click</span>
-          <span class="badge-text">Elemento</span>
-        </div>
-      `;
-      document.body.appendChild(highlightBox);
-    }
-    this.inspectorHighlightEl = highlightBox;
-    this.inspectorHighlightEl.style.display = "none";
+    document.body.classList.add("ai-inspecting-mode");
+
+    // Scan and tag all meaningful blocks in the active view
+    this.markInspectableBlocks();
 
     // Create floating toast banner
     let banner = document.getElementById("ai-inspector-toast-banner");
@@ -1458,7 +1447,7 @@ export class AIChatCopilot {
       banner.id = "ai-inspector-toast-banner";
       banner.innerHTML = `
         <span class="material-symbols-outlined" style="color: #60a5fa; font-size: 18px;">ads_click</span>
-        <span>Modo de Seleção Ativo: Clique em qualquer seção ou texto para direcionar ao chat</span>
+        <span>Modo de Seleção Ativo: Escolha qualquer bloco destacado na tela para direcionar ao chat</span>
         <span class="ai-kbd-badge" title="Pressione ESC ou clique para cancelar">ESC</span>
       `;
       document.body.appendChild(banner);
@@ -1470,19 +1459,89 @@ export class AIChatCopilot {
     this.inspectorBannerEl = banner;
     this.inspectorBannerEl.style.display = "flex";
 
-    document.addEventListener("mousemove", this._onInspectorMouseMove, true);
     document.addEventListener("click", this._onInspectorClick, true);
     document.addEventListener("keydown", this._onInspectorKeyDown, true);
   }
 
   /**
-   * Deactivates element picker and hides overlay
+   * Scans and marks all selectable content blocks in the visible workspace
+   */
+  markInspectableBlocks() {
+    const containers = document.querySelectorAll(
+      "main, .dash-subview:not([style*='display: none']), #workbench-content, #editor-container, .notion-editor-surface, .wiki-article, .about-document-card"
+    );
+
+    const selector =
+      "h1, h2, h3, h4, table, pre, blockquote, p, .notion-block, .dash-card, .spec-card, .card, article section";
+
+    containers.forEach((container) => {
+      if (
+        container.closest("#global-ai-pane") ||
+        container.closest(".workbench-ai-pane") ||
+        container.closest(".ai-copilot-prompt-sidebar")
+      ) {
+        return;
+      }
+
+      const elements = container.querySelectorAll(selector);
+      elements.forEach((el) => {
+        if (
+          el.closest("#global-ai-pane") ||
+          el.closest(".workbench-ai-pane") ||
+          el.closest(".ai-copilot-prompt-sidebar") ||
+          el.closest(".pane-resizer") ||
+          el.closest("#ai-settings-modal") ||
+          el.closest("nav") ||
+          el.closest(".sidebar") ||
+          el.closest(".dash-header")
+        ) {
+          return;
+        }
+
+        // Avoid tagging inner paragraphs if part of an existing complex block
+        if (
+          el.tagName === "P" &&
+          (el.closest("blockquote") ||
+            el.closest("table") ||
+            el.closest(".notion-block"))
+        ) {
+          return;
+        }
+
+        const text = el.textContent.trim();
+        if (!text || text.length < 2) return;
+
+        const tag = el.tagName.toUpperCase();
+        let tagLabel = "";
+        if (tag.startsWith("H")) tagLabel = "Seção";
+        else if (tag === "TABLE") tagLabel = "Tabela";
+        else if (tag === "PRE" || tag === "CODE") tagLabel = "Código";
+        else if (tag === "BLOCKQUOTE") tagLabel = "Destaque";
+        else if (tag === "P") tagLabel = "Parágrafo";
+        else tagLabel = "Bloco";
+
+        el.classList.add("ai-inspectable-block");
+        el.setAttribute("data-ai-block-tag", tagLabel);
+      });
+    });
+  }
+
+  /**
+   * Deactivates element picker and clears block highlight marks
    */
   stopInspector() {
     this.isInspectorActive = false;
     if (this.domInspectBtn) {
       this.domInspectBtn.classList.remove("active");
     }
+
+    document.body.classList.remove("ai-inspecting-mode");
+
+    document.querySelectorAll(".ai-inspectable-block").forEach((el) => {
+      el.classList.remove("ai-inspectable-block");
+      el.removeAttribute("data-ai-block-tag");
+    });
+
     if (this.inspectorHighlightEl) {
       this.inspectorHighlightEl.style.display = "none";
     }
@@ -1521,54 +1580,7 @@ export class AIChatCopilot {
    * Highlights hovered DOM element outside of the copilot sidebar
    */
   handleInspectorMouseMove(e) {
-    if (!this.isInspectorActive || !this.inspectorHighlightEl) return;
-
-    const target = document.elementFromPoint(e.clientX, e.clientY);
-    if (!target) return;
-
-    // Ignore AI Copilot sidebar itself, inspector elements, resizers and modals
-    if (
-      target.closest("#global-ai-pane") ||
-      target.closest(".workbench-ai-pane") ||
-      target.closest(".ai-copilot-prompt-sidebar") ||
-      target.closest("#ai-inspector-highlight-box") ||
-      target.closest("#ai-inspector-toast-banner") ||
-      target.closest(".pane-resizer") ||
-      target.closest("#ai-settings-modal")
-    ) {
-      this.inspectorHighlightEl.style.display = "none";
-      return;
-    }
-
-    // Resolve closest meaningful section/block
-    const blockEl =
-      target.closest(
-        "h1, h2, h3, h4, h5, h6, table, pre, code, blockquote, p, ul, ol, .notion-block, .card, section, article, .dash-card, .wiki-article, .spec-card",
-      ) || target;
-
-    const rect = blockEl.getBoundingClientRect();
-    if (rect.width === 0 || rect.height === 0) return;
-
-    this.inspectorHighlightEl.style.display = "block";
-    this.inspectorHighlightEl.style.top = `${rect.top}px`;
-    this.inspectorHighlightEl.style.left = `${rect.left}px`;
-    this.inspectorHighlightEl.style.width = `${rect.width}px`;
-    this.inspectorHighlightEl.style.height = `${rect.height}px`;
-
-    const badgeText = this.inspectorHighlightEl.querySelector(".badge-text");
-    if (badgeText) {
-      const tag = blockEl.tagName.toLowerCase();
-      const id = blockEl.id ? `#${blockEl.id}` : "";
-      const cls =
-        blockEl.className && typeof blockEl.className === "string"
-          ? `.${blockEl.className
-              .split(" ")
-              .filter((c) => c && !c.startsWith("ai-"))
-              .slice(0, 1)
-              .join(".")}`
-          : "";
-      badgeText.textContent = `${tag}${id || cls}`;
-    }
+    // Handled natively by .ai-inspectable-block:hover CSS
   }
 
   /**
@@ -1577,7 +1589,7 @@ export class AIChatCopilot {
   handleInspectorClick(e) {
     if (!this.isInspectorActive) return;
 
-    const target = document.elementFromPoint(e.clientX, e.clientY);
+    const target = e.target;
     if (!target) return;
 
     if (
@@ -1597,6 +1609,7 @@ export class AIChatCopilot {
     e.stopImmediatePropagation();
 
     const blockEl =
+      target.closest(".ai-inspectable-block") ||
       target.closest(
         "h1, h2, h3, h4, h5, h6, table, pre, code, blockquote, p, ul, ol, .notion-block, .card, section, article, .dash-card, .wiki-article, .spec-card",
       ) || target;

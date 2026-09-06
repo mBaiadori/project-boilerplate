@@ -5033,6 +5033,52 @@ span[title] {
   border: 1px solid rgba(255, 255, 255, 0.15);
 }
 
+/* =============================================================================
+   MAP-STYLE ALL SECTIONS INSPECTOR
+   ============================================================================= */
+body.ai-inspecting-mode {
+  user-select: none;
+}
+
+body.ai-inspecting-mode .ai-inspectable-block {
+  outline: 1.5px dashed rgba(37, 99, 235, 0.45) !important;
+  background-color: rgba(37, 99, 235, 0.035) !important;
+  border-radius: 6px !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+  position: relative !important;
+}
+
+body.ai-inspecting-mode .ai-inspectable-block:hover {
+  outline: 2px solid #2563eb !important;
+  background-color: rgba(37, 99, 235, 0.12) !important;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25), 0 4px 12px rgba(37, 99, 235, 0.15) !important;
+  transform: translateY(-1px);
+}
+
+body.ai-inspecting-mode .ai-inspectable-block::after {
+  content: attr(data-ai-block-tag);
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  background: rgba(37, 99, 235, 0.88);
+  color: #ffffff;
+  font-family: var(--font-mono, monospace);
+  font-size: 9.5px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 4px;
+  pointer-events: none;
+  opacity: 0.7;
+  transition: opacity 0.15s ease, background 0.15s ease;
+  z-index: 10;
+}
+
+body.ai-inspecting-mode .ai-inspectable-block:hover::after {
+  opacity: 1;
+  background: #1d4ed8;
+}
+
 #ai-inspector-toast-banner .ai-kbd-badge {
   background: rgba(255, 255, 255, 0.2);
   color: #f8fafc;

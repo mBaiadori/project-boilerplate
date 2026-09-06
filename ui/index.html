@@ -2071,63 +2071,171 @@
                     <div class="policies-header-card">
                       <div class="policies-header-main">
                         <div class="policies-header-icon-wrap">
-                          <span class="material-symbols-outlined" style="font-size: 28px; color: #6366f1;">gavel</span>
+                          <span
+                            class="material-symbols-outlined"
+                            style="font-size: 28px; color: #6366f1"
+                            >gavel</span
+                          >
                         </div>
                         <div class="policies-header-info">
-                          <div style="display: flex; align-items: center; gap: 8px;">
-                            <h3 style="margin: 0; font-size: 16px; font-weight: 600; color: var(--text-main);">
+                          <div
+                            style="display: flex; align-items: center; gap: 8px"
+                          >
+                            <h3
+                              style="
+                                margin: 0;
+                                font-size: 16px;
+                                font-weight: 600;
+                                color: var(--text-main);
+                              "
+                            >
                               Políticas de Negócio, Regulação & Leis Mandatórias
                             </h3>
-                            <span class="badge badge-neutral" id="proj-policies-doc-badge" style="font-size: 11px;">project/policies.md</span>
+                            <span
+                              class="badge badge-neutral"
+                              id="proj-policies-doc-badge"
+                              style="font-size: 11px"
+                              >project/policies.md</span
+                            >
                           </div>
-                          <p style="font-size: 12.5px; color: var(--text-muted); margin: 3px 0 0 0; line-height: 1.45;">
-                            Defina o ambiente regulatório, órgãos fiscalizadores, leis aplicáveis e diretrizes de privacidade que governam este negócio. Essas diretrizes servem de <strong>guardrail supremo</strong> para a IA e para a engenharia.
+                          <p
+                            style="
+                              font-size: 12.5px;
+                              color: var(--text-muted);
+                              margin: 3px 0 0 0;
+                              line-height: 1.45;
+                            "
+                          >
+                            Defina o ambiente regulatório, órgãos
+                            fiscalizadores, leis aplicáveis e diretrizes de
+                            privacidade que governam este negócio. Essas
+                            diretrizes servem de
+                            <strong>guardrail supremo</strong> para a IA e para
+                            a engenharia.
                           </p>
                         </div>
                       </div>
 
                       <div class="policies-presets-container">
-                        <span class="policies-presets-label">Minutas Rápidas por Setor:</span>
-                        <div class="policies-presets-grid" id="proj-policies-presets-grid">
-                          <button type="button" class="btn-policy-preset" data-preset="ecommerce" title="Aplicar minuta para E-commerce e Varejo Digital">
-                            <span class="material-symbols-outlined icon-xs">shopping_bag</span> E-commerce & Varejo
+                        <span class="policies-presets-label"
+                          >Minutas Rápidas por Setor:</span
+                        >
+                        <div
+                          class="policies-presets-grid"
+                          id="proj-policies-presets-grid"
+                        >
+                          <button
+                            type="button"
+                            class="btn-policy-preset"
+                            data-preset="ecommerce"
+                            title="Aplicar minuta para E-commerce e Varejo Digital"
+                          >
+                            <span class="material-symbols-outlined icon-xs"
+                              >shopping_bag</span
+                            >
+                            E-commerce & Varejo
                           </button>
-                          <button type="button" class="btn-policy-preset" data-preset="health" title="Aplicar minuta para Saúde, Clínicas e Telemedicina">
-                            <span class="material-symbols-outlined icon-xs">medical_services</span> Saúde & Telemedicina
+                          <button
+                            type="button"
+                            class="btn-policy-preset"
+                            data-preset="health"
+                            title="Aplicar minuta para Saúde, Clínicas e Telemedicina"
+                          >
+                            <span class="material-symbols-outlined icon-xs"
+                              >medical_services</span
+                            >
+                            Saúde & Telemedicina
                           </button>
-                          <button type="button" class="btn-policy-preset" data-preset="fintech" title="Aplicar minuta para Pagamentos, Pix e Serviços Financeiros">
-                            <span class="material-symbols-outlined icon-xs">payments</span> Fintech & Pagamentos
+                          <button
+                            type="button"
+                            class="btn-policy-preset"
+                            data-preset="fintech"
+                            title="Aplicar minuta para Pagamentos, Pix e Serviços Financeiros"
+                          >
+                            <span class="material-symbols-outlined icon-xs"
+                              >payments</span
+                            >
+                            Fintech & Pagamentos
                           </button>
-                          <button type="button" class="btn-policy-preset" data-preset="saas" title="Aplicar minuta para Plataformas B2B e SaaS">
-                            <span class="material-symbols-outlined icon-xs">cloud_done</span> SaaS & B2B
+                          <button
+                            type="button"
+                            class="btn-policy-preset"
+                            data-preset="saas"
+                            title="Aplicar minuta para Plataformas B2B e SaaS"
+                          >
+                            <span class="material-symbols-outlined icon-xs"
+                              >cloud_done</span
+                            >
+                            SaaS & B2B
                           </button>
-                          <button type="button" class="btn-policy-preset-clear" id="btn-policy-preset-clear" title="Limpar e preencher do zero">
-                            <span class="material-symbols-outlined icon-xs">restart_alt</span> Limpar
+                          <button
+                            type="button"
+                            class="btn-policy-preset-clear"
+                            id="btn-policy-preset-clear"
+                            title="Limpar e preencher do zero"
+                          >
+                            <span class="material-symbols-outlined icon-xs"
+                              >restart_alt</span
+                            >
+                            Limpar
                           </button>
                         </div>
                       </div>
                     </div>
 
                     <!-- CARD 1: ÓRGÃOS REGULADORES & MARCO LEGAL (COLAPSÁVEL) -->
-                    <div class="about-document-card policy-collapsible-card" id="policy-card-regulators">
+                    <div
+                      class="about-document-card policy-collapsible-card"
+                      id="policy-card-regulators"
+                    >
                       <div class="policy-card-toggle-header">
-                        <div style="display: flex; align-items: center; gap: 10px;">
-                          <span class="material-symbols-outlined" style="font-size: 20px; color: #6366f1;">account_balance</span>
+                        <div
+                          style="display: flex; align-items: center; gap: 10px"
+                        >
+                          <span
+                            class="material-symbols-outlined"
+                            style="font-size: 20px; color: #6366f1"
+                            >account_balance</span
+                          >
                           <div>
-                            <span class="about-section-title" style="font-size: 14.5px;">1. Órgãos Reguladores & Marco Legal</span>
-                            <span class="about-section-hint" style="display: block;">Quais entidades auditam, fiscalizam e quais leis mandatórias regem o negócio.</span>
+                            <span
+                              class="about-section-title"
+                              style="font-size: 14.5px"
+                              >1. Órgãos Reguladores & Marco Legal</span
+                            >
+                            <span
+                              class="about-section-hint"
+                              style="display: block"
+                              >Quais entidades auditam, fiscalizam e quais leis
+                              mandatórias regem o negócio.</span
+                            >
                           </div>
                         </div>
-                        <div style="display: flex; align-items: center; gap: 8px;">
-                          <span class="policy-card-summary-badge" id="badge-summary-regulators">0 órgãos</span>
-                          <span class="material-symbols-outlined policy-card-chevron">expand_more</span>
+                        <div
+                          style="display: flex; align-items: center; gap: 8px"
+                        >
+                          <span
+                            class="policy-card-summary-badge"
+                            id="badge-summary-regulators"
+                            >0 órgãos</span
+                          >
+                          <span
+                            class="material-symbols-outlined policy-card-chevron"
+                            >expand_more</span
+                          >
                         </div>
                       </div>
 
                       <div class="policy-card-body">
                         <!-- Tag Cloud de Órgãos Reguladores -->
-                        <div class="policies-tags-wrapper" style="margin-top: 12px;">
-                          <div class="policies-tags-list" id="proj-regulators-tags-list">
+                        <div
+                          class="policies-tags-wrapper"
+                          style="margin-top: 12px"
+                        >
+                          <div
+                            class="policies-tags-list"
+                            id="proj-regulators-tags-list"
+                          >
                             <!-- Chips renderizados dinamicamente -->
                           </div>
                           <div class="policies-tag-input-row">
@@ -2136,19 +2244,34 @@
                               id="proj-input-add-regulator"
                               class="form-control"
                               placeholder="Adicionar órgão regulador (ex: ANPD, Procon, Sefaz, CFM, Bacen...)"
-                              style="font-size: 12.5px; height: 34px;"
+                              style="font-size: 12.5px; height: 34px"
                             />
-                            <button class="btn btn-secondary btn-sm" id="btn-add-regulator" type="button" style="height: 34px;">
-                              <span class="material-symbols-outlined icon-xs">add</span> Adicionar
+                            <button
+                              class="btn btn-secondary btn-sm"
+                              id="btn-add-regulator"
+                              type="button"
+                              style="height: 34px"
+                            >
+                              <span class="material-symbols-outlined icon-xs"
+                                >add</span
+                              >
+                              Adicionar
                             </button>
                           </div>
                         </div>
 
-                        <div class="about-divider" style="margin: 16px 0;"></div>
+                        <div class="about-divider" style="margin: 16px 0"></div>
 
                         <div>
-                          <label for="proj-policies-laws" class="policies-field-label">
-                            <span class="material-symbols-outlined icon-xs" style="color: #6366f1;">menu_book</span>
+                          <label
+                            for="proj-policies-laws"
+                            class="policies-field-label"
+                          >
+                            <span
+                              class="material-symbols-outlined icon-xs"
+                              style="color: #6366f1"
+                              >menu_book</span
+                            >
                             Leis, Decretos & Normas Mandatórias
                           </label>
                           <textarea
@@ -2162,25 +2285,59 @@
                     </div>
 
                     <!-- CARD 2: REGRAS MANDATÓRIAS DO NEGÓCIO & PRAZOS LEGAIS (COLAPSÁVEL) -->
-                    <div class="about-document-card policy-collapsible-card" id="policy-card-rules">
+                    <div
+                      class="about-document-card policy-collapsible-card"
+                      id="policy-card-rules"
+                    >
                       <div class="policy-card-toggle-header">
-                        <div style="display: flex; align-items: center; gap: 10px;">
-                          <span class="material-symbols-outlined" style="font-size: 20px; color: #10b981;">timer</span>
+                        <div
+                          style="display: flex; align-items: center; gap: 10px"
+                        >
+                          <span
+                            class="material-symbols-outlined"
+                            style="font-size: 20px; color: #10b981"
+                            >timer</span
+                          >
                           <div>
-                            <span class="about-section-title" style="font-size: 14.5px;">2. Prazos Legais & Regras Mandatórias (Hard Rules)</span>
-                            <span class="about-section-hint" style="display: block;">Regras e prazos impostos por lei que nenhuma funcionalidade do software pode violar.</span>
+                            <span
+                              class="about-section-title"
+                              style="font-size: 14.5px"
+                              >2. Prazos Legais & Regras Mandatórias (Hard
+                              Rules)</span
+                            >
+                            <span
+                              class="about-section-hint"
+                              style="display: block"
+                              >Regras e prazos impostos por lei que nenhuma
+                              funcionalidade do software pode violar.</span
+                            >
                           </div>
                         </div>
-                        <div style="display: flex; align-items: center; gap: 8px;">
-                          <span class="material-symbols-outlined policy-card-chevron">expand_more</span>
+                        <div
+                          style="display: flex; align-items: center; gap: 8px"
+                        >
+                          <span
+                            class="material-symbols-outlined policy-card-chevron"
+                            >expand_more</span
+                          >
                         </div>
                       </div>
 
                       <div class="policy-card-body">
-                        <div class="policies-grid-fields" style="margin-top: 14px;">
+                        <div
+                          class="policies-grid-fields"
+                          style="margin-top: 14px"
+                        >
                           <div class="policies-field-item">
-                            <label for="proj-policies-cancellation" class="policies-field-label">
-                              <span class="material-symbols-outlined icon-xs" style="color: #ef4444;">cancel</span>
+                            <label
+                              for="proj-policies-cancellation"
+                              class="policies-field-label"
+                            >
+                              <span
+                                class="material-symbols-outlined icon-xs"
+                                style="color: #ef4444"
+                                >cancel</span
+                              >
                               Direito de Arrependimento / Cancelamento
                             </label>
                             <input
@@ -2192,8 +2349,15 @@
                           </div>
 
                           <div class="policies-field-item">
-                            <label for="proj-policies-refund" class="policies-field-label">
-                              <span class="material-symbols-outlined icon-xs" style="color: #10b981;">currency_exchange</span>
+                            <label
+                              for="proj-policies-refund"
+                              class="policies-field-label"
+                            >
+                              <span
+                                class="material-symbols-outlined icon-xs"
+                                style="color: #10b981"
+                                >currency_exchange</span
+                              >
                               Política de Estorno & Devolução Financeira
                             </label>
                             <input
@@ -2205,8 +2369,15 @@
                           </div>
 
                           <div class="policies-field-item">
-                            <label for="proj-policies-retention" class="policies-field-label">
-                              <span class="material-symbols-outlined icon-xs" style="color: #f59e0b;">inventory_2</span>
+                            <label
+                              for="proj-policies-retention"
+                              class="policies-field-label"
+                            >
+                              <span
+                                class="material-symbols-outlined icon-xs"
+                                style="color: #f59e0b"
+                                >inventory_2</span
+                              >
                               Prazos de Retenção Legal de Dados & Documentos
                             </label>
                             <input
@@ -2218,8 +2389,15 @@
                           </div>
 
                           <div class="policies-field-item">
-                            <label for="proj-policies-sla" class="policies-field-label">
-                              <span class="material-symbols-outlined icon-xs" style="color: #3b82f6;">support_agent</span>
+                            <label
+                              for="proj-policies-sla"
+                              class="policies-field-label"
+                            >
+                              <span
+                                class="material-symbols-outlined icon-xs"
+                                style="color: #3b82f6"
+                                >support_agent</span
+                              >
                               SLA & Canais de Atendimento ao Consumidor
                             </label>
                             <input
@@ -2234,26 +2412,62 @@
                     </div>
 
                     <!-- CARD 3: PRIVACIDADE, DADOS PESSOAIS & LGPD (COLAPSÁVEL) -->
-                    <div class="about-document-card policy-collapsible-card" id="policy-card-privacy">
+                    <div
+                      class="about-document-card policy-collapsible-card"
+                      id="policy-card-privacy"
+                    >
                       <div class="policy-card-toggle-header">
-                        <div style="display: flex; align-items: center; gap: 10px;">
-                          <span class="material-symbols-outlined" style="font-size: 20px; color: #3b82f6;">lock</span>
+                        <div
+                          style="display: flex; align-items: center; gap: 10px"
+                        >
+                          <span
+                            class="material-symbols-outlined"
+                            style="font-size: 20px; color: #3b82f6"
+                            >lock</span
+                          >
                           <div>
-                            <span class="about-section-title" style="font-size: 14.5px;">3. Privacidade, Tratamento de Dados & LGPD / GDPR</span>
-                            <span class="about-section-hint" style="display: block;">Diretrizes para coleta de consentimento, manipulação de dados pessoais (PII) e canal de DPO.</span>
+                            <span
+                              class="about-section-title"
+                              style="font-size: 14.5px"
+                              >3. Privacidade, Tratamento de Dados & LGPD /
+                              GDPR</span
+                            >
+                            <span
+                              class="about-section-hint"
+                              style="display: block"
+                              >Diretrizes para coleta de consentimento,
+                              manipulação de dados pessoais (PII) e canal de
+                              DPO.</span
+                            >
                           </div>
                         </div>
-                        <div style="display: flex; align-items: center; gap: 8px;">
-                          <span class="material-symbols-outlined policy-card-chevron">expand_more</span>
+                        <div
+                          style="display: flex; align-items: center; gap: 8px"
+                        >
+                          <span
+                            class="material-symbols-outlined policy-card-chevron"
+                            >expand_more</span
+                          >
                         </div>
                       </div>
 
                       <div class="policy-card-body">
-                        <div class="policies-grid-fields" style="margin-top: 14px;">
+                        <div
+                          class="policies-grid-fields"
+                          style="margin-top: 14px"
+                        >
                           <div class="policies-field-item">
-                            <label for="proj-policies-dpo" class="policies-field-label">
-                              <span class="material-symbols-outlined icon-xs" style="color: #6366f1;">badge</span>
-                              Encarregado de Dados (DPO / Contato de Privacidade)
+                            <label
+                              for="proj-policies-dpo"
+                              class="policies-field-label"
+                            >
+                              <span
+                                class="material-symbols-outlined icon-xs"
+                                style="color: #6366f1"
+                                >badge</span
+                              >
+                              Encarregado de Dados (DPO / Contato de
+                              Privacidade)
                             </label>
                             <input
                               type="text"
@@ -2264,8 +2478,15 @@
                           </div>
 
                           <div class="policies-field-item">
-                            <label for="proj-policies-consent" class="policies-field-label">
-                              <span class="material-symbols-outlined icon-xs" style="color: #10b981;">check_box</span>
+                            <label
+                              for="proj-policies-consent"
+                              class="policies-field-label"
+                            >
+                              <span
+                                class="material-symbols-outlined icon-xs"
+                                style="color: #10b981"
+                                >check_box</span
+                              >
                               Consentimento & Opt-in de Comunicações
                             </label>
                             <input
@@ -2277,9 +2498,16 @@
                           </div>
                         </div>
 
-                        <div style="margin-top: 14px;">
-                          <label for="proj-policies-sensitive-data" class="policies-field-label">
-                            <span class="material-symbols-outlined icon-xs" style="color: #ef4444;">security</span>
+                        <div style="margin-top: 14px">
+                          <label
+                            for="proj-policies-sensitive-data"
+                            class="policies-field-label"
+                          >
+                            <span
+                              class="material-symbols-outlined icon-xs"
+                              style="color: #ef4444"
+                              >security</span
+                            >
                             Diretrizes para Dados Sensíveis & Proibições em Logs
                           </label>
                           <textarea
@@ -2293,13 +2521,15 @@
                     </div>
 
                     <!-- Step Navigation Footer (FORA dos cards, no nível da aba) -->
-                    <div class="project-step-footer" style="margin-top: 10px;">
+                    <div class="project-step-footer" style="margin-top: 10px">
                       <button
                         id="btn-nav-gov-prev"
                         class="btn btn-secondary"
                         type="button"
                       >
-                        <span class="material-symbols-outlined icon-xs">arrow_back</span>
+                        <span class="material-symbols-outlined icon-xs"
+                          >arrow_back</span
+                        >
                         Voltar para Arquitetura
                       </button>
                       <button
@@ -2307,7 +2537,9 @@
                         class="btn btn-primary"
                         type="button"
                       >
-                        <span class="material-symbols-outlined icon-xs">check_circle</span>
+                        <span class="material-symbols-outlined icon-xs"
+                          >check_circle</span
+                        >
                         Salvar & Concluir Setup
                       </button>
                     </div>
@@ -2793,46 +3025,6 @@
                       <div class="meta-header-summary" id="meta-header-summary">
                         <span class="pill" id="meta-summary-pill">Spec</span>
                       </div>
-                    </div>
-                    <div style="display: flex; align-items: center; gap: 8px">
-                      <button
-                        id="btn-ai-fill-template"
-                        class="btn btn-primary btn-xs"
-                        type="button"
-                        title="Preencher metadados e template com IA a partir de uma ideia"
-                        style="
-                          font-size: 11.5px;
-                          padding: 4px 10px;
-                          border-radius: 5px;
-                          display: inline-flex;
-                          align-items: center;
-                          gap: 4px;
-                        "
-                      >
-                        <span class="material-symbols-outlined icon-xs"
-                          >auto_awesome</span
-                        >
-                        Ideia com IA
-                      </button>
-                      <button
-                        class="btn-icon-subtle"
-                        id="btn-toggle-meta-form"
-                        type="button"
-                        title="Editar Metadados & Governança"
-                        style="
-                          width: 32px;
-                          height: 32px;
-                          font-size: 16px;
-                          border-radius: 6px;
-                          display: inline-flex;
-                          align-items: center;
-                          justify-content: center;
-                        "
-                      >
-                        <span class="material-symbols-outlined icon-xs"
-                          >edit</span
-                        >
-                      </button>
                     </div>
                   </div>
 
