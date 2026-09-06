@@ -4891,6 +4891,158 @@ span[title] {
   background: #1e40af;
 }
 
+/* Target Context Pill (attached targeted section above input) */
+.ai-copilot-target-context-pill {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 12px;
+  background: rgba(37, 99, 235, 0.08);
+  border-top: 1px solid rgba(37, 99, 235, 0.18);
+  border-bottom: 1px solid rgba(37, 99, 235, 0.1);
+  font-size: 11.5px;
+  color: var(--primary, #2563eb);
+  animation: slideDownIn 0.18s ease;
+  flex-shrink: 0;
+}
+
+.ai-copilot-target-context-pill .target-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+}
+
+.ai-copilot-target-context-pill .target-title {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-copilot-target-context-pill .btn-remove-target {
+  background: none;
+  border: none;
+  color: var(--text-muted, #64748b);
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+}
+
+.ai-copilot-target-context-pill .btn-remove-target:hover {
+  color: var(--md-sys-color-error, #ef4444);
+  background: rgba(239, 68, 68, 0.1);
+}
+
+/* Inspector Trigger Button */
+.ai-copilot-inspect-btn {
+  background: transparent;
+  border: 1px solid var(--border-color, #cbd5e1);
+  border-radius: 6px;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted, #64748b);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+  padding: 0;
+}
+
+.ai-copilot-inspect-btn .material-symbols-outlined {
+  font-size: 16px;
+}
+
+.ai-copilot-inspect-btn:hover {
+  background: var(--bg-hover, #f1f5f9);
+  color: var(--primary, #2563eb);
+  border-color: var(--primary, #2563eb);
+}
+
+.ai-copilot-inspect-btn.active {
+  background: #2563eb !important;
+  color: #ffffff !important;
+  border-color: #1d4ed8 !important;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25);
+  animation: pulseInspect 1.2s infinite alternate;
+}
+
+@keyframes pulseInspect {
+  0% { transform: scale(1); }
+  100% { transform: scale(1.08); }
+}
+
+/* Global Floating Inspector Overlay & Badge */
+#ai-inspector-highlight-box {
+  position: fixed;
+  pointer-events: none;
+  z-index: 99999;
+  border: 2px solid #2563eb;
+  background: rgba(37, 99, 235, 0.12);
+  border-radius: 6px;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.8), 0 4px 16px rgba(37, 99, 235, 0.2);
+  transition: top 0.05s ease-out, left 0.05s ease-out, width 0.05s ease-out, height 0.05s ease-out;
+  display: none;
+}
+
+#ai-inspector-highlight-box .inspector-tag-badge {
+  position: absolute;
+  top: -22px;
+  left: -2px;
+  background: #1e40af;
+  color: #ffffff;
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 4px;
+  white-space: nowrap;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  pointer-events: none;
+}
+
+#ai-inspector-toast-banner {
+  position: fixed;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100000;
+  background: rgba(15, 23, 42, 0.94);
+  backdrop-filter: blur(8px);
+  color: #ffffff;
+  padding: 8px 18px;
+  border-radius: 24px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+  font-size: 12.5px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  pointer-events: auto;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+#ai-inspector-toast-banner .ai-kbd-badge {
+  background: rgba(255, 255, 255, 0.2);
+  color: #f8fafc;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 10.5px;
+  font-family: var(--font-mono, monospace);
+  cursor: pointer;
+}
+
 /* =============================================================================
    ABOUT DOCUMENT PRESENTATION CARD (GOOGLE MATERIAL DESIGN 3 / EDITORIAL)
    ============================================================================= */

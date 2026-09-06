@@ -84,6 +84,14 @@ export class AIChatCopilot {
     this.currentAuthor = null;
     this.currentBriefing = "";
 
+    // Element & Section Selector (Dev Mode Inspector)
+    this.selectedTargetSnippet = null;
+    this.selectedTargetLabel = null;
+    this.isInspectorActive = false;
+    this._onInspectorMouseMove = this.handleInspectorMouseMove.bind(this);
+    this._onInspectorClick = this.handleInspectorClick.bind(this);
+    this._onInspectorKeyDown = this.handleInspectorKeyDown.bind(this);
+
     if (this.container) {
       this.render();
       this.bindEvents();
@@ -133,7 +141,10 @@ export class AIChatCopilot {
     const prevSessionId = this.sessionId;
 
     // Asynchronously finalize previous session if there were messages
-    if (this.chatHistory.length > 0 && prevContextPath !== (opts.contextPath || prevContextPath)) {
+    if (
+      this.chatHistory.length > 0 &&
+      prevContextPath !== (opts.contextPath || prevContextPath)
+    ) {
       API.finalizeMemorySession({
         repo: prevRepo,
         path: prevContextPath,
@@ -166,6 +177,9 @@ export class AIChatCopilot {
       this.welcomeMessage = opts.welcomeMessage;
 
     this.sessionId = ChatMemoryStoreService.generateSessionId(this.contextPath);
+
+    this.stopInspector();
+    this.clearTargetContext();
 
     this.updateHeaderUI();
     this.updatePromptDrawerUI();
@@ -201,7 +215,11 @@ export class AIChatCopilot {
     try {
       // 1. Load active session from local IndexedDB cache
       const cached = await ChatMemoryStoreService.loadSession(repo, path);
-      if (cached && Array.isArray(cached.history) && cached.history.length > 0) {
+      if (
+        cached &&
+        Array.isArray(cached.history) &&
+        cached.history.length > 0
+      ) {
         this.chatHistory = cached.history;
         this.sessionId = cached.sessionId || this.sessionId;
         this.renderHistoryStream();
@@ -271,12 +289,26 @@ export class AIChatCopilot {
       <!-- Quick Suggestion Chips -->
       <div class="ai-chips-container ai-copilot-chips-container"></div>
 
+      <!-- Targeted Section Context Pill -->
+      <div class="ai-copilot-target-context-pill" style="display: none;">
+        <div class="target-info">
+          <span class="material-symbols-outlined icon-xs">ads_click</span>
+          <span class="target-title"></span>
+        </div>
+        <button type="button" class="btn-remove-target" title="Remover foco da seção">
+          <span class="material-symbols-outlined icon-xs">close</span>
+        </button>
+      </div>
+
       <!-- Prompt Input Area -->
       <div class="ai-input-wrapper ai-copilot-input-wrapper">
+        <button class="ai-copilot-inspect-btn" type="button" title="Selecionar elemento/seção na tela para direcionar ao Chat (Dev Mode Inspector)">
+          <span class="material-symbols-outlined icon-xs">ads_click</span>
+        </button>
         <input 
           type="text" 
           class="ai-copilot-input-field" 
-          placeholder="Peça sugestões, diagramas ou refinamento..." 
+          placeholder="Peça sugestões ou aponte uma seção..." 
         />
         <button class="btn btn-primary btn-sm ai-copilot-send-btn" type="button">
           Enviar
@@ -382,7 +414,9 @@ export class AIChatCopilot {
     this.domClosePromptSidebarBtn = sidebar.querySelector(
       ".ai-copilot-close-prompt-sidebar-btn",
     );
-    this.domOpenAIModalBtn = sidebar.querySelector(".ai-copilot-open-ai-modal-btn");
+    this.domOpenAIModalBtn = sidebar.querySelector(
+      ".ai-copilot-open-ai-modal-btn",
+    );
   }
 
   /**
@@ -396,7 +430,8 @@ export class AIChatCopilot {
     );
     if (!sidebar) {
       sidebar = document.createElement("aside");
-      sidebar.className = "ai-copilot-prompt-sidebar ai-copilot-history-sidebar";
+      sidebar.className =
+        "ai-copilot-prompt-sidebar ai-copilot-history-sidebar";
       sidebar.dataset.copilotFor = this.storageKey;
       sidebar.style.display = "none";
 
@@ -442,13 +477,19 @@ export class AIChatCopilot {
     `;
 
     this.domHistorySidebar = sidebar;
-    this.domCloseHistorySidebarBtn = sidebar.querySelector(".ai-copilot-close-history-sidebar-btn");
+    this.domCloseHistorySidebarBtn = sidebar.querySelector(
+      ".ai-copilot-close-history-sidebar-btn",
+    );
     if (this.domCloseHistorySidebarBtn) {
-      this.domCloseHistorySidebarBtn.addEventListener("click", () => this.toggleHistorySidebar(false));
+      this.domCloseHistorySidebarBtn.addEventListener("click", () =>
+        this.toggleHistorySidebar(false),
+      );
     }
     const refreshBtn = sidebar.querySelector(".ai-copilot-refresh-history-btn");
     if (refreshBtn) {
-      refreshBtn.addEventListener("click", () => this.loadHistorySidebarContent());
+      refreshBtn.addEventListener("click", () =>
+        this.loadHistorySidebarContent(),
+      );
     }
 
     // Auto-load history content on render
@@ -467,7 +508,9 @@ export class AIChatCopilot {
       }
     }
     if (!this.domHistorySidebar) return;
-    const contentEl = this.domHistorySidebar.querySelector(".ai-history-sidebar-body");
+    const contentEl = this.domHistorySidebar.querySelector(
+      ".ai-history-sidebar-body",
+    );
     if (!contentEl) return;
 
     const repo = this.getRepoName();
@@ -504,18 +547,25 @@ export class AIChatCopilot {
       }
 
       // 2. Sessions List
-      if (ok && data && Array.isArray(data.sessions) && data.sessions.length > 0) {
+      if (
+        ok &&
+        data &&
+        Array.isArray(data.sessions) &&
+        data.sessions.length > 0
+      ) {
         html += `
           <div>
             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
               <span style="font-size: 11.5px; font-weight: 600; color: var(--text-heading);">Sessões Gravadas (.spec-memory/):</span>
-              <span style="font-size: 10.5px; color: var(--text-muted);">${data.sessions.length} arquivada${data.sessions.length > 1 ? 's' : ''}</span>
+              <span style="font-size: 10.5px; color: var(--text-muted);">${data.sessions.length} arquivada${data.sessions.length > 1 ? "s" : ""}</span>
             </div>
             <div style="display: flex; flex-direction: column; gap: 8px;">
         `;
         data.sessions.forEach((s) => {
           const author = s.author || { name: "Developer", handle: "dev" };
-          const dateStr = s.created_at ? new Date(s.created_at).toLocaleString("pt-BR") : "Data não disponível";
+          const dateStr = s.created_at
+            ? new Date(s.created_at).toLocaleString("pt-BR")
+            : "Data não disponível";
           const isCurrent = s.session_id === this.sessionId;
           const m = s.metrics || {};
           const totalTokens = m.total_tokens || 0;
@@ -524,25 +574,30 @@ export class AIChatCopilot {
           const totalSecs = ((m.total_latency_ms || 0) / 1000).toFixed(1);
           const rounds = m.rounds || 1;
 
-          const metricsBadge = totalTokens > 0 || m.total_latency_ms > 0
-            ? `<div style="margin-top: 6px; font-size: 10px; color: var(--text-muted); background: #f1f5f9; padding: 4px 6px; border-radius: 4px; display: flex; flex-direction: column; gap: 3px; width: 100%;">
+          const metricsBadge =
+            totalTokens > 0 || m.total_latency_ms > 0
+              ? `<div style="margin-top: 6px; font-size: 10px; color: var(--text-muted); background: #f1f5f9; padding: 4px 6px; border-radius: 4px; display: flex; flex-direction: column; gap: 3px; width: 100%;">
                 <div style="display: flex; align-items: center; justify-content: space-between;">
                   <span title="Tokens totais consumidos">🏷️ Total: <strong>${totalTokens.toLocaleString()}</strong> tok</span>
                   <span title="Tempo total de resposta">⏱️ ${totalSecs}s</span>
-                  <span title="Interações">💬 ${rounds} round${rounds > 1 ? 's' : ''}</span>
+                  <span title="Interações">💬 ${rounds} round${rounds > 1 ? "s" : ""}</span>
                 </div>
-                ${(promptTokens > 0 || compTokens > 0) ? `
+                ${
+                  promptTokens > 0 || compTokens > 0
+                    ? `
                   <div style="display: flex; align-items: center; gap: 8px; font-size: 9.5px; color: #475569; border-top: 1px dashed #cbd5e1; padding-top: 2px;">
                     <span title="Tokens enviados na entrada (Prompt)"><strong style="color: #2563eb;">↑ ${promptTokens.toLocaleString()}</strong> enviad.</span>
                     <span>&bull;</span>
                     <span title="Tokens gerados na resposta (Completion)"><strong style="color: #059669;">↓ ${compTokens.toLocaleString()}</strong> receb.</span>
                   </div>
-                ` : ''}
+                `
+                    : ""
+                }
               </div>`
-            : '';
+              : "";
 
           html += `
-            <div class="ai-history-session-card" data-session-id="${this.escapeHtml(s.session_id)}" style="border: 1px solid ${isCurrent ? 'var(--primary)' : 'var(--border-color)'}; border-radius: 8px; padding: 10px 12px; background: ${isCurrent ? 'rgba(37, 99, 235, 0.04)' : 'var(--bg-card)'}; cursor: pointer; transition: all 0.15s ease;">
+            <div class="ai-history-session-card" data-session-id="${this.escapeHtml(s.session_id)}" style="border: 1px solid ${isCurrent ? "var(--primary)" : "var(--border-color)"}; border-radius: 8px; padding: 10px 12px; background: ${isCurrent ? "rgba(37, 99, 235, 0.04)" : "var(--bg-card)"}; cursor: pointer; transition: all 0.15s ease;">
               <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
                 <div style="display: flex; align-items: center; gap: 6px; min-width: 0;">
                   ${this.renderAuthorAvatar(author, 20)}
@@ -551,7 +606,7 @@ export class AIChatCopilot {
                 <span style="font-size: 10px; color: var(--text-muted); flex-shrink: 0;">${dateStr}</span>
               </div>
               <div style="font-size: 11px; color: var(--text-muted); display: flex; align-items: center; justify-content: space-between; margin-top: 4px;">
-                <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">🤖 ${this.escapeHtml(s.agent_model || 'IA')}</span>
+                <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">🤖 ${this.escapeHtml(s.agent_model || "IA")}</span>
                 ${isCurrent ? '<span class="ai-copilot-status-badge custom" style="font-size: 9px; padding: 1px 6px; flex-shrink: 0;">ATIVA</span>' : '<span style="font-size: 10px; color: var(--primary); display: flex; align-items: center; gap: 2px;">Consultar <span class="material-symbols-outlined" style="font-size: 12px;">arrow_forward</span></span>'}
               </div>
               ${metricsBadge}
@@ -600,7 +655,9 @@ export class AIChatCopilot {
    */
   async showSessionDetailsView(sessionId) {
     if (!this.domHistorySidebar) return;
-    const contentEl = this.domHistorySidebar.querySelector(".ai-history-sidebar-body");
+    const contentEl = this.domHistorySidebar.querySelector(
+      ".ai-history-sidebar-body",
+    );
     if (!contentEl) return;
 
     const repo = this.getResolvedRepoName();
@@ -612,7 +669,10 @@ export class AIChatCopilot {
     `;
 
     try {
-      const { ok, data } = await API.getMemorySession({ repo, session_id: sessionId });
+      const { ok, data } = await API.getMemorySession({
+        repo,
+        session_id: sessionId,
+      });
       if (!ok || !data?.session) {
         throw new Error("Sessão não encontrada no servidor");
       }
@@ -620,7 +680,9 @@ export class AIChatCopilot {
       const s = data.session;
       const author = s.author || { name: "Developer", handle: "dev" };
       const m = s.metrics || {};
-      const dateStr = s.frontmatter?.created_at ? new Date(s.frontmatter.created_at).toLocaleString("pt-BR") : "";
+      const dateStr = s.frontmatter?.created_at
+        ? new Date(s.frontmatter.created_at).toLocaleString("pt-BR")
+        : "";
 
       contentEl.innerHTML = `
         <div style="display: flex; flex-direction: column; gap: 12px;">
@@ -638,31 +700,41 @@ export class AIChatCopilot {
               ${this.renderAuthorAvatar(author, 24)}
               <div>
                 <strong style="font-size: 12px; color: var(--text-heading); display: block;">${this.escapeHtml(author.name || "Developer")}</strong>
-                <span style="font-size: 10.5px; color: var(--text-muted);">${dateStr} &bull; 🤖 ${this.escapeHtml(s.frontmatter?.agent_model || 'IA')}</span>
+                <span style="font-size: 10.5px; color: var(--text-muted);">${dateStr} &bull; 🤖 ${this.escapeHtml(s.frontmatter?.agent_model || "IA")}</span>
               </div>
             </div>
-            ${m.total_tokens ? `
+            ${
+              m.total_tokens
+                ? `
               <div style="font-size: 10.5px; color: var(--text-muted); display: flex; flex-direction: column; gap: 4px; margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--border-color);">
                 <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                   <span>🏷️ <strong>${Number(m.total_tokens).toLocaleString()}</strong> tokens totais</span>
                   <span>&bull;</span>
-                  <span>⏱️ ${(Number(m.total_latency_ms || 0)/1000).toFixed(2)}s total</span>
+                  <span>⏱️ ${(Number(m.total_latency_ms || 0) / 1000).toFixed(2)}s total</span>
                   <span>&bull;</span>
-                  <span>💬 ${m.rounds || 1} round${(m.rounds || 1) > 1 ? 's' : ''}</span>
+                  <span>💬 ${m.rounds || 1} round${(m.rounds || 1) > 1 ? "s" : ""}</span>
                 </div>
-                ${(m.prompt_tokens || m.completion_tokens) ? `
+                ${
+                  m.prompt_tokens || m.completion_tokens
+                    ? `
                   <div style="display: flex; align-items: center; gap: 10px; font-size: 10px; color: #475569; background: #ffffff; padding: 4px 8px; border-radius: 4px; border: 1px solid #e2e8f0;">
                     <span title="Tokens de entrada enviados"><strong style="color: #2563eb;">↑ ${Number(m.prompt_tokens || 0).toLocaleString()}</strong> enviados (prompt)</span>
                     <span>&bull;</span>
                     <span title="Tokens de saída gerados"><strong style="color: #059669;">↓ ${Number(m.completion_tokens || 0).toLocaleString()}</strong> recebidos (completion)</span>
-                    ${m.cached_tokens ? `<span>&bull;</span> <span style="color: #7c3aed;">⚡ ${Number(m.cached_tokens).toLocaleString()} cache</span>` : ''}
+                    ${m.cached_tokens ? `<span>&bull;</span> <span style="color: #7c3aed;">⚡ ${Number(m.cached_tokens).toLocaleString()} cache</span>` : ""}
                   </div>
-                ` : ''}
+                `
+                    : ""
+                }
               </div>
-            ` : ''}
+            `
+                : ""
+            }
           </div>
 
-          ${s.handoff ? `
+          ${
+            s.handoff
+              ? `
             <!-- Consolidated Handoff for this doc -->
             <div style="background: rgba(37, 99, 235, 0.04); border: 1px solid rgba(37, 99, 235, 0.2); border-radius: 8px; padding: 10px 12px;">
               <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
@@ -671,9 +743,11 @@ export class AIChatCopilot {
                   <strong style="font-size: 11.5px; color: var(--primary);">Handoff Consolidado Vinculado</strong>
                 </div>
               </div>
-              <div style="font-size: 11px; line-height: 1.4; color: var(--text-body); max-height: 140px; overflow-y: auto; white-space: pre-wrap; font-family: monospace; background: #fff; padding: 6px 8px; border-radius: 4px; border: 1px solid var(--border-color);">${this.escapeHtml(s.handoff.replace(/^---[\s\S]*?---\n*/, '').trim())}</div>
+              <div style="font-size: 11px; line-height: 1.4; color: var(--text-body); max-height: 140px; overflow-y: auto; white-space: pre-wrap; font-family: monospace; background: #fff; padding: 6px 8px; border-radius: 4px; border: 1px solid var(--border-color);">${this.escapeHtml(s.handoff.replace(/^---[\s\S]*?---\n*/, "").trim())}</div>
             </div>
-          ` : ''}
+          `
+              : ""
+          }
 
           <!-- Dialog Transcript -->
           <div>
@@ -685,7 +759,9 @@ export class AIChatCopilot {
 
       const backBtn = contentEl.querySelector(".ai-back-to-history-btn");
       if (backBtn) {
-        backBtn.addEventListener("click", () => this.loadHistorySidebarContent());
+        backBtn.addEventListener("click", () =>
+          this.loadHistorySidebarContent(),
+        );
       }
     } catch (err) {
       contentEl.innerHTML = `
@@ -696,7 +772,9 @@ export class AIChatCopilot {
       `;
       const backBtn = contentEl.querySelector(".ai-back-to-history-btn");
       if (backBtn) {
-        backBtn.addEventListener("click", () => this.loadHistorySidebarContent());
+        backBtn.addEventListener("click", () =>
+          this.loadHistorySidebarContent(),
+        );
       }
     }
   }
@@ -713,12 +791,19 @@ export class AIChatCopilot {
     } else if (typeof author === "string") {
       name = author;
     }
-    const initials = name.split(" ").map(w => w[0]).filter(Boolean).slice(0, 2).join("").toUpperCase() || "DV";
+    const initials =
+      name
+        .split(" ")
+        .map((w) => w[0])
+        .filter(Boolean)
+        .slice(0, 2)
+        .join("")
+        .toUpperCase() || "DV";
 
     if (avatarUrl && !avatarUrl.includes("ui-avatars.com")) {
-      return `<img src="${this.escapeHtml(avatarUrl)}" alt="${this.escapeHtml(name)}" style="width: ${size}px; height: ${size}px; border-radius: 50%; object-fit: cover; border: 1px solid rgba(0,0,0,0.08); flex-shrink: 0;" onerror="this.outerHTML='<span style=\\'display:inline-flex;align-items:center;justify-content:center;width:${size}px;height:${size}px;border-radius:50%;background:#2563eb;color:#fff;font-size:${Math.round(size*0.45)}px;font-weight:700;flex-shrink:0;\\'>${initials}</span>'" />`;
+      return `<img src="${this.escapeHtml(avatarUrl)}" alt="${this.escapeHtml(name)}" style="width: ${size}px; height: ${size}px; border-radius: 50%; object-fit: cover; border: 1px solid rgba(0,0,0,0.08); flex-shrink: 0;" onerror="this.outerHTML='<span style=\\'display:inline-flex;align-items:center;justify-content:center;width:${size}px;height:${size}px;border-radius:50%;background:#2563eb;color:#fff;font-size:${Math.round(size * 0.45)}px;font-weight:700;flex-shrink:0;\\'>${initials}</span>'" />`;
     }
-    return `<span style="display:inline-flex;align-items:center;justify-content:center;width:${size}px;height:${size}px;border-radius:50%;background:#2563eb;color:#fff;font-size:${Math.round(size*0.45)}px;font-weight:700;flex-shrink:0;">${initials}</span>`;
+    return `<span style="display:inline-flex;align-items:center;justify-content:center;width:${size}px;height:${size}px;border-radius:50%;background:#2563eb;color:#fff;font-size:${Math.round(size * 0.45)}px;font-weight:700;flex-shrink:0;">${initials}</span>`;
   }
 
   /**
@@ -769,7 +854,9 @@ export class AIChatCopilot {
     `;
 
     this.domRawSidebar = sidebar;
-    this.domCloseRawSidebarBtn = sidebar.querySelector(".ai-copilot-close-raw-sidebar-btn");
+    this.domCloseRawSidebarBtn = sidebar.querySelector(
+      ".ai-copilot-close-raw-sidebar-btn",
+    );
     const refreshBtn = sidebar.querySelector(".ai-copilot-refresh-raw-btn");
     if (refreshBtn) {
       refreshBtn.addEventListener("click", () => this.loadRawSidebarContent());
@@ -783,7 +870,7 @@ export class AIChatCopilot {
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = `telemetry-${this.sessionId || 'session'}.json`;
+        a.download = `telemetry-${this.sessionId || "session"}.json`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -859,8 +946,12 @@ export class AIChatCopilot {
     this.rawHistory.forEach((item) => {
       const isExpanded = Boolean(item.expanded);
       const authorName = this.formatAuthorName(item.author);
-      const sentJson = item.sentPayload ? JSON.stringify(item.sentPayload, null, 2) : "Nenhum payload enviado.";
-      const recvJson = item.receivedPayload ? JSON.stringify(item.receivedPayload, null, 2) : "Aguardando resposta da LLM...";
+      const sentJson = item.sentPayload
+        ? JSON.stringify(item.sentPayload, null, 2)
+        : "Nenhum payload enviado.";
+      const recvJson = item.receivedPayload
+        ? JSON.stringify(item.receivedPayload, null, 2)
+        : "Aguardando resposta da LLM...";
 
       // Telemetria do turno
       const usage = item.receivedPayload?.usage;
@@ -876,14 +967,18 @@ export class AIChatCopilot {
           const totalTok = (usage.total_tokens || 0).toLocaleString();
           const inTok = (usage.prompt_tokens || 0).toLocaleString();
           const outTok = (usage.completion_tokens || 0).toLocaleString();
-          const cachedTok = usage.cached_tokens ? ` | ⚡ ${(usage.cached_tokens).toLocaleString()} cache` : '';
-          const estTag = usage.estimated ? ' (est.)' : '';
-          parts.push(`🏷️ ${totalTok} tokens (📥 ${inTok} | 📤 ${outTok}${cachedTok})${estTag}`);
+          const cachedTok = usage.cached_tokens
+            ? ` | ⚡ ${usage.cached_tokens.toLocaleString()} cache`
+            : "";
+          const estTag = usage.estimated ? " (est.)" : "";
+          parts.push(
+            `🏷️ ${totalTok} tokens (📥 ${inTok} | 📤 ${outTok}${cachedTok})${estTag}`,
+          );
         }
         telemetryBadge = `
           <div style="font-size: 10px; color: var(--text-muted, #64748b); margin-top: 4px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-            <span style="background: rgba(37, 99, 235, 0.08); color: var(--primary, #2563eb); padding: 1px 6px; border-radius: 4px; font-weight: 600;">${parts.join(' &bull; ')}</span>
-            ${prov ? `<span style="color: #64748b;">🤖 ${this.escapeHtml(prov)} ${mod ? `(${this.escapeHtml(mod)})` : ''}</span>` : ''}
+            <span style="background: rgba(37, 99, 235, 0.08); color: var(--primary, #2563eb); padding: 1px 6px; border-radius: 4px; font-weight: 600;">${parts.join(" &bull; ")}</span>
+            ${prov ? `<span style="color: #64748b;">🤖 ${this.escapeHtml(prov)} ${mod ? `(${this.escapeHtml(mod)})` : ""}</span>` : ""}
           </div>
         `;
       }
@@ -891,7 +986,7 @@ export class AIChatCopilot {
       html += `
         <div class="ai-raw-entry-card" style="border: 1px solid var(--border-color, #e2e8f0); border-radius: 10px; background: #ffffff; overflow: hidden; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
           <!-- Header (Click to expand/collapse) -->
-          <div class="ai-raw-entry-header" data-raw-id="${item.id}" style="padding: 10px 12px; cursor: pointer; background: var(--bg-hover, #f8fafc); border-bottom: ${isExpanded ? '1px solid var(--border-color, #e2e8f0)' : 'none'}; display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; user-select: none;">
+          <div class="ai-raw-entry-header" data-raw-id="${item.id}" style="padding: 10px 12px; cursor: pointer; background: var(--bg-hover, #f8fafc); border-bottom: ${isExpanded ? "1px solid var(--border-color, #e2e8f0)" : "none"}; display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; user-select: none;">
             <div style="min-width: 0; flex: 1;">
               <div style="display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-muted, #64748b); margin-bottom: 4px;">
                 ${this.renderAuthorAvatar(item.author, 18)}
@@ -905,12 +1000,14 @@ export class AIChatCopilot {
               ${telemetryBadge}
             </div>
             <div style="display: flex; align-items: center; gap: 4px; flex-shrink: 0; padding-top: 2px;">
-              <span class="material-symbols-outlined icon-sm" style="color: var(--text-muted, #64748b); transition: transform 0.15s ease; transform: ${isExpanded ? 'rotate(180deg)' : 'rotate(0deg)'}">expand_more</span>
+              <span class="material-symbols-outlined icon-sm" style="color: var(--text-muted, #64748b); transition: transform 0.15s ease; transform: ${isExpanded ? "rotate(180deg)" : "rotate(0deg)"}">expand_more</span>
             </div>
           </div>
 
           <!-- Expanded Body: 2 Scrollable RAW Views with Height Limit -->
-          ${isExpanded ? `
+          ${
+            isExpanded
+              ? `
             <div class="ai-raw-entry-body" style="padding: 12px; display: flex; flex-direction: column; gap: 12px; background: #ffffff;">
               <!-- View 1: Enviado (Request RAW) -->
               <div>
@@ -936,7 +1033,9 @@ export class AIChatCopilot {
                 <pre class="ai-raw-code-block" id="raw-recv-${item.id}" style="max-height: 240px; overflow-y: auto; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11px; padding: 10px 12px; background: #0f172a; color: #f8fafc; border-radius: 6px; margin: 0; white-space: pre-wrap; word-break: break-word;">${this.escapeHtml(recvJson)}</pre>
               </div>
             </div>
-          ` : ''}
+          `
+              : ""
+          }
         </div>
       `;
     });
@@ -978,7 +1077,9 @@ export class AIChatCopilot {
   bindEvents() {
     this.domAgentBtn = this.container.querySelector(".ai-copilot-agent-btn");
     this.domRawBtn = this.container.querySelector(".ai-copilot-raw-btn");
-    this.domHistoryBtn = this.container.querySelector(".ai-copilot-history-btn");
+    this.domHistoryBtn = this.container.querySelector(
+      ".ai-copilot-history-btn",
+    );
     this.domCloseBtn = this.container.querySelector(".ai-copilot-close-btn");
     this.domMessagesContainer = this.container.querySelector(
       ".ai-copilot-messages-container",
@@ -990,8 +1091,30 @@ export class AIChatCopilot {
       ".ai-copilot-input-field",
     );
     this.domSendBtn = this.container.querySelector(".ai-copilot-send-btn");
+    this.domInspectBtn = this.container.querySelector(
+      ".ai-copilot-inspect-btn",
+    );
+    this.domTargetPill = this.container.querySelector(
+      ".ai-copilot-target-context-pill",
+    );
+    this.domRemoveTargetBtn =
+      this.container.querySelector(".btn-remove-target");
 
     this.renderChips();
+
+    // Dev Mode Element/Section Inspector Button
+    if (this.domInspectBtn) {
+      this.domInspectBtn.addEventListener("click", () =>
+        this.toggleInspector(),
+      );
+    }
+
+    // Clear Targeted Section Context Button
+    if (this.domRemoveTargetBtn) {
+      this.domRemoveTargetBtn.addEventListener("click", () =>
+        this.clearTargetContext(),
+      );
+    }
 
     // Toggle Parameters & System Prompt Sidebar
     if (this.domAgentBtn) {
@@ -1000,7 +1123,8 @@ export class AIChatCopilot {
         if (this.isPromptSidebarOpen) {
           this.isHistorySidebarOpen = false;
           this.isRawSidebarOpen = false;
-          if (this.domHistorySidebar) this.domHistorySidebar.style.display = "none";
+          if (this.domHistorySidebar)
+            this.domHistorySidebar.style.display = "none";
           if (this.domRawSidebar) this.domRawSidebar.style.display = "none";
           if (this.domHistoryBtn) this.domHistoryBtn.classList.remove("active");
           if (this.domRawBtn) this.domRawBtn.classList.remove("active");
@@ -1015,7 +1139,10 @@ export class AIChatCopilot {
             setTimeout(() => this.domPromptTextarea.focus(), 50);
           }
         }
-        this.domAgentBtn.classList.toggle("drawer-open", this.isPromptSidebarOpen);
+        this.domAgentBtn.classList.toggle(
+          "drawer-open",
+          this.isPromptSidebarOpen,
+        );
       });
     }
 
@@ -1038,7 +1165,10 @@ export class AIChatCopilot {
           : "none";
       }
       if (this.domHistoryBtn) {
-        this.domHistoryBtn.classList.toggle("active", this.isHistorySidebarOpen);
+        this.domHistoryBtn.classList.toggle(
+          "active",
+          this.isHistorySidebarOpen,
+        );
       }
     };
 
@@ -1053,7 +1183,8 @@ export class AIChatCopilot {
         this.isPromptSidebarOpen = false;
         this.isHistorySidebarOpen = false;
         if (this.domPromptSidebar) this.domPromptSidebar.style.display = "none";
-        if (this.domHistorySidebar) this.domHistorySidebar.style.display = "none";
+        if (this.domHistorySidebar)
+          this.domHistorySidebar.style.display = "none";
         if (this.domAgentBtn) this.domAgentBtn.classList.remove("drawer-open");
         if (this.domHistoryBtn) this.domHistoryBtn.classList.remove("active");
         this.loadRawSidebarContent();
@@ -1086,7 +1217,8 @@ export class AIChatCopilot {
     if (this.domCloseHistorySidebarBtn) {
       this.domCloseHistorySidebarBtn.addEventListener("click", () => {
         this.isHistorySidebarOpen = false;
-        if (this.domHistorySidebar) this.domHistorySidebar.style.display = "none";
+        if (this.domHistorySidebar)
+          this.domHistorySidebar.style.display = "none";
         if (this.domHistoryBtn) this.domHistoryBtn.classList.remove("active");
       });
     }
@@ -1117,7 +1249,8 @@ export class AIChatCopilot {
         this.isHistorySidebarOpen = false;
         this.isRawSidebarOpen = false;
         if (this.domPromptSidebar) this.domPromptSidebar.style.display = "none";
-        if (this.domHistorySidebar) this.domHistorySidebar.style.display = "none";
+        if (this.domHistorySidebar)
+          this.domHistorySidebar.style.display = "none";
         if (this.domRawSidebar) this.domRawSidebar.style.display = "none";
         if (this.domAgentBtn) this.domAgentBtn.classList.remove("drawer-open");
         if (this.domHistoryBtn) this.domHistoryBtn.classList.remove("active");
@@ -1135,7 +1268,11 @@ export class AIChatCopilot {
     window.addEventListener("ai-memory-cleared", (e) => {
       const targetRepo = e.detail && e.detail.repo;
       const currentRepo = this.getResolvedRepoName();
-      if (!targetRepo || targetRepo === currentRepo || targetRepo === "default") {
+      if (
+        !targetRepo ||
+        targetRepo === currentRepo ||
+        targetRepo === "default"
+      ) {
         this.resetChat();
         this.currentBriefing = "";
         this.updateHeaderUI();
@@ -1290,6 +1427,308 @@ export class AIChatCopilot {
   }
 
   /**
+   * Activates visual element & section picker overlay
+   */
+  startInspector() {
+    this.isInspectorActive = true;
+    if (this.domInspectBtn) {
+      this.domInspectBtn.classList.add("active");
+    }
+
+    // Create floating highlight box if not exists
+    let highlightBox = document.getElementById("ai-inspector-highlight-box");
+    if (!highlightBox) {
+      highlightBox = document.createElement("div");
+      highlightBox.id = "ai-inspector-highlight-box";
+      highlightBox.innerHTML = `
+        <div class="inspector-tag-badge">
+          <span class="material-symbols-outlined" style="font-size: 11px;">ads_click</span>
+          <span class="badge-text">Elemento</span>
+        </div>
+      `;
+      document.body.appendChild(highlightBox);
+    }
+    this.inspectorHighlightEl = highlightBox;
+    this.inspectorHighlightEl.style.display = "none";
+
+    // Create floating toast banner
+    let banner = document.getElementById("ai-inspector-toast-banner");
+    if (!banner) {
+      banner = document.createElement("div");
+      banner.id = "ai-inspector-toast-banner";
+      banner.innerHTML = `
+        <span class="material-symbols-outlined" style="color: #60a5fa; font-size: 18px;">ads_click</span>
+        <span>Modo de Seleção Ativo: Clique em qualquer seção ou texto para direcionar ao chat</span>
+        <span class="ai-kbd-badge" title="Pressione ESC ou clique para cancelar">ESC</span>
+      `;
+      document.body.appendChild(banner);
+      const kbd = banner.querySelector(".ai-kbd-badge");
+      if (kbd) {
+        kbd.addEventListener("click", () => this.stopInspector());
+      }
+    }
+    this.inspectorBannerEl = banner;
+    this.inspectorBannerEl.style.display = "flex";
+
+    document.addEventListener("mousemove", this._onInspectorMouseMove, true);
+    document.addEventListener("click", this._onInspectorClick, true);
+    document.addEventListener("keydown", this._onInspectorKeyDown, true);
+  }
+
+  /**
+   * Deactivates element picker and hides overlay
+   */
+  stopInspector() {
+    this.isInspectorActive = false;
+    if (this.domInspectBtn) {
+      this.domInspectBtn.classList.remove("active");
+    }
+    if (this.inspectorHighlightEl) {
+      this.inspectorHighlightEl.style.display = "none";
+    }
+    if (this.inspectorBannerEl) {
+      this.inspectorBannerEl.style.display = "none";
+    }
+
+    document.removeEventListener("mousemove", this._onInspectorMouseMove, true);
+    document.removeEventListener("click", this._onInspectorClick, true);
+    document.removeEventListener("keydown", this._onInspectorKeyDown, true);
+  }
+
+  /**
+   * Toggles element selector mode
+   */
+  toggleInspector(force) {
+    const nextState = force !== undefined ? force : !this.isInspectorActive;
+    if (nextState) {
+      this.startInspector();
+    } else {
+      this.stopInspector();
+    }
+  }
+
+  /**
+   * Escape key listener to exit inspector
+   */
+  handleInspectorKeyDown(e) {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      this.stopInspector();
+    }
+  }
+
+  /**
+   * Highlights hovered DOM element outside of the copilot sidebar
+   */
+  handleInspectorMouseMove(e) {
+    if (!this.isInspectorActive || !this.inspectorHighlightEl) return;
+
+    const target = document.elementFromPoint(e.clientX, e.clientY);
+    if (!target) return;
+
+    // Ignore AI Copilot sidebar itself, inspector elements, resizers and modals
+    if (
+      target.closest("#global-ai-pane") ||
+      target.closest(".workbench-ai-pane") ||
+      target.closest(".ai-copilot-prompt-sidebar") ||
+      target.closest("#ai-inspector-highlight-box") ||
+      target.closest("#ai-inspector-toast-banner") ||
+      target.closest(".pane-resizer") ||
+      target.closest("#ai-settings-modal")
+    ) {
+      this.inspectorHighlightEl.style.display = "none";
+      return;
+    }
+
+    // Resolve closest meaningful section/block
+    const blockEl =
+      target.closest(
+        "h1, h2, h3, h4, h5, h6, table, pre, code, blockquote, p, ul, ol, .notion-block, .card, section, article, .dash-card, .wiki-article, .spec-card",
+      ) || target;
+
+    const rect = blockEl.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return;
+
+    this.inspectorHighlightEl.style.display = "block";
+    this.inspectorHighlightEl.style.top = `${rect.top}px`;
+    this.inspectorHighlightEl.style.left = `${rect.left}px`;
+    this.inspectorHighlightEl.style.width = `${rect.width}px`;
+    this.inspectorHighlightEl.style.height = `${rect.height}px`;
+
+    const badgeText = this.inspectorHighlightEl.querySelector(".badge-text");
+    if (badgeText) {
+      const tag = blockEl.tagName.toLowerCase();
+      const id = blockEl.id ? `#${blockEl.id}` : "";
+      const cls =
+        blockEl.className && typeof blockEl.className === "string"
+          ? `.${blockEl.className
+              .split(" ")
+              .filter((c) => c && !c.startsWith("ai-"))
+              .slice(0, 1)
+              .join(".")}`
+          : "";
+      badgeText.textContent = `${tag}${id || cls}`;
+    }
+  }
+
+  /**
+   * Captures clicked element, cleanses content and routes context to chat input
+   */
+  handleInspectorClick(e) {
+    if (!this.isInspectorActive) return;
+
+    const target = document.elementFromPoint(e.clientX, e.clientY);
+    if (!target) return;
+
+    if (
+      target.closest("#global-ai-pane") ||
+      target.closest(".workbench-ai-pane") ||
+      target.closest(".ai-copilot-prompt-sidebar") ||
+      target.closest("#ai-inspector-highlight-box") ||
+      target.closest("#ai-inspector-toast-banner") ||
+      target.closest(".pane-resizer") ||
+      target.closest("#ai-settings-modal")
+    ) {
+      return;
+    }
+
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+
+    const blockEl =
+      target.closest(
+        "h1, h2, h3, h4, h5, h6, table, pre, code, blockquote, p, ul, ol, .notion-block, .card, section, article, .dash-card, .wiki-article, .spec-card",
+      ) || target;
+
+    const extracted = this.cleanseAndExtractElement(blockEl);
+    this.stopInspector();
+
+    if (extracted && extracted.cleanText) {
+      this.setTargetContext(extracted.label, extracted.cleanText);
+    }
+  }
+
+  /**
+   * Cleanses DOM element removing CSS noise, buttons, scripts and extracting clean text/markdown
+   */
+  cleanseAndExtractElement(targetEl) {
+    if (!targetEl) return null;
+
+    const clone = targetEl.cloneNode(true);
+
+    // Remove buttons, icons, toolbars, badges, scripts, svgs
+    clone
+      .querySelectorAll(
+        "button, .btn, .btn-icon, script, style, svg, .material-symbols-outlined, .badge, .tooltip, .pane-resizer, .inspector-ignore, .notion-block-actions",
+      )
+      .forEach((n) => n.remove());
+
+    const tagName = targetEl.tagName.toUpperCase();
+    let label = "";
+    let cleanText = "";
+
+    if (tagName.startsWith("H") && tagName.length === 2) {
+      // Heading section
+      const title = (clone.textContent || "").trim();
+      label = `Seção: "${title.length > 36 ? title.substring(0, 33) + "..." : title}"`;
+
+      let sectionContent = `${title}\n\n`;
+      let next = targetEl.nextElementSibling;
+      while (next) {
+        if (
+          /^H[1-6]$/i.test(next.tagName) &&
+          parseInt(next.tagName[1]) <= parseInt(tagName[1])
+        ) {
+          break;
+        }
+        const nextClone = next.cloneNode(true);
+        nextClone
+          .querySelectorAll(
+            "button, .btn, .btn-icon, script, style, svg, .material-symbols-outlined",
+          )
+          .forEach((n) => n.remove());
+        const t = nextClone.textContent.trim();
+        if (t) sectionContent += t + "\n\n";
+        next = next.nextElementSibling;
+      }
+      cleanText = sectionContent.trim();
+    } else if (tagName === "TABLE") {
+      // Table: convert to Markdown table
+      const rows = Array.from(clone.querySelectorAll("tr"));
+      const mdRows = [];
+      rows.forEach((tr, idx) => {
+        const cells = Array.from(tr.querySelectorAll("th, td")).map((td) =>
+          td.textContent.trim().replace(/\|/g, "\\|"),
+        );
+        if (cells.length > 0) {
+          mdRows.push(`| ${cells.join(" | ")} |`);
+          if (idx === 0) {
+            mdRows.push(`| ${cells.map(() => "---").join(" | ")} |`);
+          }
+        }
+      });
+      cleanText = mdRows.join("\n");
+      label = `Tabela (${rows.length} linhas)`;
+    } else if (tagName === "PRE" || tagName === "CODE") {
+      cleanText = clone.textContent.trim();
+      label = `Bloco de Código`;
+    } else if (tagName === "UL" || tagName === "OL") {
+      const items = Array.from(clone.querySelectorAll("li")).map((li, i) => {
+        const prefix = tagName === "UL" ? "* " : `${i + 1}. `;
+        return prefix + li.textContent.trim();
+      });
+      cleanText = items.join("\n");
+      label = `Lista (${items.length} itens)`;
+    } else if (tagName === "BLOCKQUOTE") {
+      cleanText = `> ${clone.textContent.trim()}`;
+      label = `Citação / Destaque`;
+    } else {
+      // General paragraph, card, or container
+      cleanText = (clone.innerText || clone.textContent || "").trim();
+      cleanText = cleanText.replace(/\n\s*\n\s*\n/g, "\n\n");
+      const preview = cleanText.replace(/\s+/g, " ");
+      label = `${tagName.toLowerCase()}: "${
+        preview.length > 32 ? preview.substring(0, 29) + "..." : preview
+      }"`;
+    }
+
+    return { label, cleanText };
+  }
+
+  /**
+   * Sets targeted context pill and attaches snippet
+   */
+  setTargetContext(label, text) {
+    this.selectedTargetLabel = label;
+    this.selectedTargetSnippet = text;
+
+    if (this.domTargetPill) {
+      const titleEl = this.domTargetPill.querySelector(".target-title");
+      if (titleEl) titleEl.textContent = label;
+      this.domTargetPill.style.display = "flex";
+    }
+
+    if (this.domInputField) {
+      this.domInputField.focus();
+    }
+  }
+
+  /**
+   * Clears targeted context pill
+   */
+  clearTargetContext() {
+    this.selectedTargetLabel = null;
+    this.selectedTargetSnippet = null;
+
+    if (this.domTargetPill) {
+      this.domTargetPill.style.display = "none";
+      const titleEl = this.domTargetPill.querySelector(".target-title");
+      if (titleEl) titleEl.textContent = "";
+    }
+  }
+
+  /**
    * Updates Header Title, Icon, Badges and Author Info
    */
   updateHeaderUI() {
@@ -1300,11 +1739,17 @@ export class AIChatCopilot {
     if (iconEl) iconEl.textContent = this.agentIcon;
 
     if (this.domPromptSidebar) {
-      const tag = this.domPromptSidebar.querySelector(".ai-copilot-prompt-agent-tag");
+      const tag = this.domPromptSidebar.querySelector(
+        ".ai-copilot-prompt-agent-tag",
+      );
       if (tag) tag.textContent = this.agentName;
-      const modelLabel = this.domPromptSidebar.querySelector(".ai-copilot-model-name-label");
+      const modelLabel = this.domPromptSidebar.querySelector(
+        ".ai-copilot-model-name-label",
+      );
       if (modelLabel) modelLabel.textContent = this.modelName;
-      const badge = this.domPromptSidebar.querySelector(".ai-copilot-status-badge");
+      const badge = this.domPromptSidebar.querySelector(
+        ".ai-copilot-status-badge",
+      );
       if (badge) {
         const isCustom = this.isCustomActive();
         badge.className = `ai-copilot-status-badge ${isCustom ? "custom" : "preset"}`;
@@ -1313,7 +1758,9 @@ export class AIChatCopilot {
     }
 
     if (this.domHistorySidebar) {
-      const pathTag = this.domHistorySidebar.querySelector(".ai-copilot-history-path-tag");
+      const pathTag = this.domHistorySidebar.querySelector(
+        ".ai-copilot-history-path-tag",
+      );
       if (pathTag) pathTag.textContent = this.contextPath;
     }
   }
@@ -1326,7 +1773,9 @@ export class AIChatCopilot {
       this.domPromptTextarea.value = this.getActivePrompt();
     }
     if (this.domPromptSidebar) {
-      const tag = this.domPromptSidebar.querySelector(".ai-copilot-prompt-agent-tag");
+      const tag = this.domPromptSidebar.querySelector(
+        ".ai-copilot-prompt-agent-tag",
+      );
       if (tag) tag.textContent = this.agentName;
     }
   }
@@ -1412,8 +1861,30 @@ export class AIChatCopilot {
 
       if (this.domInputField) this.domInputField.value = "";
 
-      // Append User Bubble
-      this.appendBubble("user", promptText);
+      const targetLabel = this.selectedTargetLabel;
+      const targetSnippet = this.selectedTargetSnippet;
+
+      // Clear target pill after capturing state for message
+      this.clearTargetContext();
+
+      // Append User Bubble (with target badge if element was focused)
+      if (targetLabel) {
+        const userBubbleHtml = `
+          <div style="font-size: 11px; color: var(--primary, #2563eb); font-weight: 600; margin-bottom: 6px; display: inline-flex; align-items: center; gap: 4px; background: rgba(37, 99, 235, 0.08); padding: 2px 8px; border-radius: 4px;">
+            <span class="material-symbols-outlined icon-xs">ads_click</span> ${this.escapeHtml(targetLabel)}
+          </div>
+          <div>${this.escapeHtml(promptText)}</div>
+        `;
+        this.appendBubble("user", userBubbleHtml, true);
+      } else {
+        this.appendBubble("user", promptText);
+      }
+
+      // Build effective prompt grounded in the targeted section
+      let finalPrompt = promptText;
+      if (targetSnippet) {
+        finalPrompt = `[Foco na Seção Selecionada: "${targetLabel || "Elemento"}"]\n"""\n${targetSnippet}\n"""\n\nInstrução do Usuário: ${promptText}`;
+      }
 
       // Get Active Document Content
       let docContext = "";
@@ -1440,7 +1911,10 @@ export class AIChatCopilot {
         : activePrompt;
 
       const requestPayload = {
-        prompt: promptText,
+        prompt: finalPrompt,
+        target_section: targetSnippet
+          ? { label: targetLabel, snippet: targetSnippet }
+          : null,
         content: docContext,
         path: this.contextPath,
         history: this.chatHistory.slice(),
@@ -1578,7 +2052,7 @@ export class AIChatCopilot {
 
     if (typeof mermaid !== "undefined") {
       const mermaidCodes = bubbleEl.querySelectorAll(
-        "pre code.language-mermaid, pre code.lang-mermaid"
+        "pre code.language-mermaid, pre code.lang-mermaid",
       );
       mermaidCodes.forEach((codeEl) => {
         const preEl = codeEl.closest("pre");
@@ -1629,7 +2103,7 @@ export class AIChatCopilot {
     const codeBlocks = bubbleEl.querySelectorAll("pre");
     codeBlocks.forEach((pre) => {
       if (pre.classList.contains("mermaid")) return;
-      
+
       const codeText =
         pre.querySelector("code")?.textContent || pre.textContent;
       const actionsBar = document.createElement("div");
