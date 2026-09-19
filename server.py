@@ -665,12 +665,6 @@ def save_project_config(repo_name, post_data):
             pf.write(policies_md_content)
         pol_change_type = "MODIFIED" if old_pol_content else "ADDED"
         record_change(repo_name, "project/policies.md", pol_change_type, old_pol_content, policies_md_content)
-
-    # Sincroniza e cria as pastas oficiais em domains/ para os domínios definidos no projeto
-    org_domains = config_data.get("organization_domains", [])
-    if isinstance(org_domains, list) and len(org_domains) > 0:
-        sync_domains_to_repo_folders(repo_name, org_domains)
-
     return {
         "success": True,
         "config": config_data,
@@ -712,133 +706,6 @@ def revert_single_change(repo_dir, change):
     except Exception as e:
         print(f"[Discard Warning] Não foi possível reverter '{rel_path}': {e}")
 
-def sync_domains_to_repo_folders(repo_name, organization_domains):
-    """
-    Cria as pastas físicas e arquivos oficiais em domains/ correspondentes a cada domínio corporativo,
-    registrando metadados de escopo e responsáveis identificados.
-    """
-    if not repo_name or not isinstance(organization_domains, list):
-        return
-    repo_dir = os.path.join(PROJECTS_DIR, repo_name)
-    domains_dir = os.path.join(repo_dir, "domains")
-    os.makedirs(domains_dir, exist_ok=True)
-
-    for d in organization_domains:
-        if not isinstance(d, dict):
-            continue
-        dom_id = (d.get("id") or d.get("name", "").lower()).strip().replace(" ", "-").replace("_", "-")
-        dom_id = re.sub(r'[^a-zA-Z0-9\-]', '', dom_id).lower()
-        if not dom_id:
-            continue
-        dom_name = d.get("name") or dom_id.capitalize()
-        dom_desc = d.get("description") or f"Área de domínio de {dom_name}."
-        responsibles = d.get("responsibles") or []
-        if isinstance(responsibles, str):
-            responsibles = [r.strip() for r in responsibles.split(",") if r.strip()]
-        
-        resp_str = ", ".join(responsibles) if responsibles else "Equipe do Projeto"
-
-        dom_path = os.path.join(domains_dir, dom_id)
-        os.makedirs(dom_path, exist_ok=True)
-
-        index_file = os.path.join(dom_path, "index.md")
-        if not os.path.exists(index_file):
-            resp_yaml = json.dumps(responsibles, ensure_ascii=False)
-            content = f"""---
-type: "domain"
-version: "1.0.0"
-status: "draft"
-layer: "L2_DOMAIN"
-domain: "{dom_id}"
-responsibles: {resp_yaml}
-path: "domains/{dom_id}/index.md"
----
-
-# 🏛️ Domínio: {dom_name}
-
-> {dom_desc}
-
-**Responsáveis pelo Domínio:** {resp_str}
-
----
-
-## 🎯 Escopo & Responsabilidades
-
-{dom_desc}
-
-## 📁 Subdomínios & Features
-
-Este diretório gerencia as especificações, fluxos e regras de negócio relativas a **{dom_name}**.
-"""
-            with open(index_file, "w", encoding="utf-8") as f:
-                f.write(content)
-            record_change(repo_name, f"domains/{dom_id}/index.md", "ADDED", "", content)
-
-        # Sincroniza Subdomínios físicos dentro de domains/{dom_id}/{sub_id}/
-        subdomains = d.get("subdomains") or []
-        if isinstance(subdomains, list):
-            seen_subs = set()
-            for sub in subdomains:
-                if not isinstance(sub, dict):
-                    continue
-                raw_sub_id = (sub.get("id") or sub.get("name", "").lower()).strip().replace(" ", "-").replace("_", "-")
-                sub_id = re.sub(r'[^a-zA-Z0-9\-]', '', raw_sub_id).lower().strip("-")
-                if not sub_id:
-                    continue
-
-                # Evita colisões de subpastas no mesmo domínio
-                base_sub_id = sub_id
-                counter = 2
-                while sub_id in seen_subs:
-                    sub_id = f"{base_sub_id}-{counter}"
-                    counter += 1
-                seen_subs.add(sub_id)
-
-                sub_name = sub.get("name") or sub_id.capitalize()
-                sub_desc = sub.get("description") or f"Subdomínio e capacidade funcional de {sub_name} em {dom_name}."
-                sub_resps = sub.get("responsibles") or responsibles
-                if isinstance(sub_resps, str):
-                    sub_resps = [r.strip() for r in sub_resps.split(",") if r.strip()]
-                sub_resp_str = ", ".join(sub_resps) if sub_resps else resp_str
-                sub_resp_yaml = json.dumps(sub_resps, ensure_ascii=False)
-
-                sub_path = os.path.join(dom_path, sub_id)
-                os.makedirs(sub_path, exist_ok=True)
-
-                sub_index_file = os.path.join(sub_path, "index.md")
-                if not os.path.exists(sub_index_file):
-                    sub_content = f"""---
-type: "subdomain"
-version: "1.0.0"
-status: "draft"
-layer: "L2_SUBDOMAIN"
-domain: "{dom_id}"
-subdomain: "{sub_id}"
-responsibles: {sub_resp_yaml}
-path: "domains/{dom_id}/{sub_id}/index.md"
-parent: "domains/{dom_id}/index.md"
----
-
-# 🧩 Subdomínio: {sub_name}
-
-> {sub_desc}
-
-**Domínio Pai:** [{dom_name}](../index.md)  
-**Responsáveis pelo Subdomínio:** {sub_resp_str}
-
----
-
-## 🎯 Capacidades & Escopo
-
-{sub_desc}
-
-## 🚀 Features & Especificações
-
-Este subdomínio organiza os módulos funcionais, regras de negócio e especificações técnicas de **{sub_name}** sob o domínio **{dom_name}**.
-"""
-                    with open(sub_index_file, "w", encoding="utf-8") as f:
-                        f.write(sub_content)
-                    record_change(repo_name, f"domains/{dom_id}/{sub_id}/index.md", "ADDED", "", sub_content)
 
 
 def get_project_team_members(repo_name):
@@ -1079,50 +946,6 @@ def get_installed_repo_templates(repo_name):
             })
     return installed
 
-def get_engineering_files(repo_name):
-    """
-    Lista todos os documentos técnicos e padrões arquiteturais dentro de engenharia/ do repositório.
-    """
-    repo_dir = os.path.join(PROJECTS_DIR, repo_name)
-    eng_dir = os.path.join(repo_dir, "engenharia")
-    if not os.path.exists(eng_dir):
-        return []
-
-    files_list = []
-    for root, _, files in os.walk(eng_dir):
-        for f in files:
-            if f.endswith(".md"):
-                fpath = os.path.join(root, f)
-                rel_path = os.path.relpath(fpath, repo_dir).replace("\\", "/")
-                try:
-                    with open(fpath, "r", encoding="utf-8") as file:
-                        content = file.read()
-                    meta, body = extract_frontmatter(content)
-                    title = meta.get("title") or f.replace(".md", "").replace("-", " ").title()
-                    category = meta.get("category") or (
-                        "ADR" if "adr" in rel_path.lower() else (
-                            "Event-Driven & Mensageria" if "event" in rel_path.lower() or "kafka" in rel_path.lower() else (
-                                "APIs & Contratos" if "api" in rel_path.lower() or "contract" in rel_path.lower() else (
-                                    "Infra & Observabilidade" if "infra" in rel_path.lower() or "obs" in rel_path.lower() else "Padrão de Engenharia"
-                                )
-                            )
-                        )
-                    )
-                    files_list.append({
-                        "id": meta.get("id") or rel_path.replace("/", "-").replace(".md", ""),
-                        "path": rel_path,
-                        "filename": f,
-                        "title": title,
-                        "category": category,
-                        "status": meta.get("status", "active").upper(),
-                        "layer": meta.get("layer", "L4_ARTIFACT"),
-                        "description": meta.get("description") or f"Padrão arquitetural em {rel_path}",
-                        "content": content,
-                        "assistant_prompt": f"Você é o Arquiteto de Software e Engenharia especialista no padrão: {title}."
-                    })
-                except Exception:
-                    pass
-    return files_list
 
 def get_project_dictionary(repo_name):
     repo_dir = os.path.join(PROJECTS_DIR, repo_name)
@@ -1359,21 +1182,12 @@ def build_workspace_graph(repo_name):
             if not title:
                 title = os.path.splitext(f)[0]
 
-            # Inferir Camada Oficial (L1, L2, L3, L4)
-            layer = fm.get("layer")
-            if not layer:
-                if rel_path in ["index.md", "project/index.md"]:
-                    layer = "L1_PROJECT"
-                elif rel_path.startswith("domains/") and rel_path.count("/") == 1:
-                    layer = "L2_DOMAIN"
-                elif rel_path.startswith("domains/") and rel_path.count("/") == 2:
-                    layer = "L3_SUBDOMAIN"
-                elif rel_path.startswith("domains/"):
-                    layer = "L4_FEATURE"
-                elif rel_path.startswith("specs/"):
-                    layer = "L4_ARTIFACT"
-                else:
-                    layer = "L4_ARTIFACT"
+            # Inferir Categoria / Tipo
+            layer = fm.get("layer") or fm.get("type") or (
+                "ADR" if rel_path.startswith("adrs/") else (
+                    "Especificação" if rel_path.startswith("specs/") else "Documento"
+                )
+            )
 
             raw_nodes[rel_path] = {
                 "id": fm.get("id", rel_path.replace("/", "-").replace(".md", "")),
@@ -2129,12 +1943,10 @@ def build_tree(current_dir, base_dir):
         full_f = os.path.join(current_dir, f)
         rel_f = os.path.relpath(full_f, base_dir).replace("\\", "/")
         
-        # Badge inteligente baseado em L0-L4
-        badge = "L0" if (rel_f.startswith("project/") or rel_f in ["index.md", "project/index.md"]) else (
-            "L1" if rel_f.startswith("domains/") and rel_f.count("/") == 1 else (
-                "L2" if rel_f.startswith("domains/") and rel_f.count("/") == 2 else (
-                    "L3" if "domains" in rel_f or "specs" in rel_f else "DOC"
-                )
+        # Badge baseado no tipo de documento
+        badge = "ADR" if rel_f.startswith("adrs/") else (
+            "SPEC" if rel_f.startswith("specs/") else (
+                "MD" if rel_f.endswith(".md") else "DOC"
             )
         )
         items.append({
@@ -3418,22 +3230,6 @@ class ModularGovernanceHandler(SimpleHTTPRequestHandler):
             workflows = master_cfg.get("workflows", [])
             return self.send_json({ "workflows": workflows, "count": len(workflows) })
 
-        # 4.015 Configuração Oficial do Projeto (Camadas, Níveis, Definições Estratégicas, Taxonomia, Políticas)
-        if path == "/api/project/config":
-            cfg = load_config()
-            active_repo = cfg.get("active_repo")
-            repo_name = active_repo.get("name", "local") if active_repo else "local"
-            proj_cfg = get_project_config(repo_name)
-            return self.send_json(proj_cfg)
-
-        # 4.016 Membros do Time e Contribuidores do Projeto (GitHub & Git Local)
-        if path == "/api/project/members":
-            cfg = load_config()
-            active_repo = cfg.get("active_repo")
-            repo_name = active_repo.get("name", "local") if active_repo else "local"
-            members = get_project_team_members(repo_name)
-            return self.send_json({ "members": members, "count": len(members) })
-
         # 4.02 Status de Governança do Projeto Ativo
         if path == "/api/project/status":
             cfg = load_config()
@@ -3443,16 +3239,6 @@ class ModularGovernanceHandler(SimpleHTTPRequestHandler):
             repo_name = active_repo.get("name", "local")
             status_data = check_repo_governance_status(repo_name)
             return self.send_json(status_data)
-
-        # 4.03 Padrões e Documentos de Engenharia
-        if path == "/api/engineering/files":
-            cfg = load_config()
-            active_repo = cfg.get("active_repo")
-            if not active_repo:
-                return self.send_json({ "files": [], "count": 0 })
-            repo_name = active_repo.get("name", "local")
-            eng_files = get_engineering_files(repo_name)
-            return self.send_json({ "files": eng_files, "count": len(eng_files) })
 
         # 4.04 Dicionário Ubíquo Estruturado
         if path == "/api/dictionary":
@@ -3961,24 +3747,6 @@ Retorne APENAS o JSON puro válido."""
                 new_tree = build_tree(repo_dir, repo_dir)
                 return self.send_json({ "success": True, "message": "Todas as alterações foram descartadas com sucesso.", "tree": new_tree })
 
-        # 4.99 Salvar Configuração Oficial do Projeto (project.config.json)
-        if path == "/api/project/config":
-            cfg = load_config()
-            active_repo = cfg.get("active_repo")
-            if not active_repo: return self.send_json({"error": "Nenhum repositório selecionado"}, 400)
-            repo_name = active_repo.get("name", "local")
-            res = save_project_config(repo_name, payload)
-            return self.send_json(res)
-
-        # 4.995 Restaurar Presets Recomendados do Framework para o Projeto
-        if path == "/api/project/config/reset":
-            cfg = load_config()
-            active_repo = cfg.get("active_repo")
-            if not active_repo: return self.send_json({"error": "Nenhum repositório selecionado"}, 400)
-            repo_name = active_repo.get("name", "local")
-            res = reset_project_config(repo_name)
-            return self.send_json(res)
-
         # 5. Criar Arquivo / Domínio na Árvore
         if path == "/api/project/file/create":
             cfg = load_config()
@@ -4252,47 +4020,6 @@ Retorne APENAS o JSON puro válido."""
 
             save_config(cfg)
             return self.send_json({ "success": True, "settings": cfg["settings"], "message": "Configurações sistêmicas salvas com sucesso!" })
-
-        # 8.8 Criar Padrão / Documento de Engenharia
-        if path == "/api/engineering/create":
-            cfg = load_config()
-            active_repo = cfg.get("active_repo")
-            if not active_repo:
-                return self.send_json({ "error": "Nenhum repositório ativo" }, 400)
-            repo_name = active_repo.get("name", "local")
-            title = payload.get("title", "").strip()
-            category = payload.get("category", "Padrão de Engenharia").strip()
-            filename = payload.get("filename", "").strip()
-            content = payload.get("content", "").strip()
-            if not filename.endswith(".md"):
-                filename += ".md"
-            rel_path = f"engenharia/{filename}"
-            if not content:
-                content = f"""---
-id: "pattern-{filename.replace('.md', '').lower()}"
-title: "{title or filename.replace('.md', '').title()}"
-type: "pattern"
-version: "1.0.0"
-status: "active"
-layer: "L4_ARTIFACT"
-path: "{rel_path}"
-parent: "project/index.md"
----
-
-# ⚙️ {title or filename.replace('.md', '').title()}
-
-## 1. Contexto & Motivação
-Descreva o contexto do problema técnico e a decisão de engenharia tomada.
-
-## 2. Diretrizes Técnicas
-Especificações, contratos, bibliotecas e regras mandatórias.
-"""
-            full_target = os.path.join(PROJECTS_DIR, repo_name, rel_path)
-            os.makedirs(os.path.dirname(full_target), exist_ok=True)
-            with open(full_target, "w", encoding="utf-8") as f:
-                f.write(content)
-            record_change(repo_name, rel_path, "ADDED", "", content)
-            return self.send_json({ "success": True, "path": rel_path, "message": f"Padrão '{rel_path}' criado com sucesso!" })
 
         # 9. Login Token PAT
         if path == "/api/auth/token":

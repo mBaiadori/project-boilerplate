@@ -107,12 +107,12 @@ export function initTemplatesView({ onUseTemplateInEditor }) {
       tplModalTitle.textContent = "Novo Template";
       tplIdInput.value = "";
       tplTitleInput.value = "";
-      tplCategoryInput.value = "Domain-Driven Design";
+      tplCategoryInput.value = "Especificação Técnica";
       tplDescInput.value = "";
       tplFilenameInput.value = "novo-template.md";
       tplAssistantInput.value = "";
       tplContentInput.value =
-        '---\nid: "custom-template"\ntitle: "Novo Template"\ntype: "spec"\nversion: "1.0.0"\nstatus: "draft"\nlayer: "L4_ARTIFACT"\n---\n\n# Novo Documento\n\nDescreva as seções oficiais aqui...\n';
+        '---\nid: "custom-template"\ntitle: "Novo Template"\ntype: "spec"\nversion: "1.0.0"\nstatus: "draft"\n---\n\n# Novo Documento\n\nDescreva as seções oficiais aqui...\n';
     }
     tplAiIdeaInput.value = "";
     templateEditorModal.style.display = "flex";
@@ -404,32 +404,23 @@ export function initTemplatesView({ onUseTemplateInEditor }) {
       cachedInstalledTemplates.find((t) => t.id === templateId);
     if (!tpl) return;
 
-    const domainName = prompt(
-      `Informe o nome do Domínio / Feature para aplicar o template "${tpl.title}":`,
-      "novo-modulo",
+    const docName = prompt(
+      `Informe o nome do arquivo / especificação para o template "${tpl.title}":`,
+      "nova-especificacao",
     );
-    if (!domainName || !domainName.trim()) return;
+    if (!docName || !docName.trim()) return;
 
-    const cleanName = domainName.trim().toLowerCase().replace(/\s+/g, "-");
+    const cleanName = docName.trim().toLowerCase().replace(/[^a-z0-9\-_]/g, "-").replace(/-+/g, "-");
     let targetPath = "";
-    if (
-      tpl.suggested_folder &&
-      tpl.suggested_folder.includes("[nome-do-dominio]")
-    ) {
-      targetPath =
-        tpl.suggested_folder.replace(/\[nome-do-dominio\]/g, cleanName) +
-        `/${tpl.default_filename}`;
-    } else if (tpl.suggested_folder === "domains") {
-      targetPath = `domains/${cleanName}/${tpl.default_filename}`;
-    } else if (tpl.suggested_folder) {
+    if (tpl.suggested_folder && tpl.suggested_folder !== "domains") {
       targetPath = `${tpl.suggested_folder}/${cleanName}.md`;
     } else {
-      targetPath = `${cleanName}.md`;
+      targetPath = `specs/${cleanName}.md`;
     }
 
     const customContent = tpl.content
-      .replace(/\[NOME-DO-DOMINIO\]/g, cleanName.toUpperCase())
-      .replace(/\[nome-do-dominio\]/g, cleanName)
+      .replace(/\[NOME-DO-DOCUMENTO\]/g, cleanName.toUpperCase())
+      .replace(/\[nome-do-documento\]/g, cleanName)
       .replace(/\[NOME-DA-FEATURE\]/g, cleanName.toUpperCase())
       .replace(/\[FEATURE\]/g, cleanName.toUpperCase());
 

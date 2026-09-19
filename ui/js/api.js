@@ -402,21 +402,6 @@ export const API = {
     return { ok: res.ok, data: await res.json() };
   },
 
-  // Engineering Standards & ADRs
-  async getEngineeringFiles() {
-    const res = await fetch('/api/engineering/files');
-    return { ok: res.ok, data: await res.json() };
-  },
-
-  async createEngineeringFile({ title, category, filename, content }) {
-    const res = await fetch('/api/engineering/create', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title, category, filename, content })
-    });
-    return { ok: res.ok, data: await res.json() };
-  },
-
   // Ubiquitous Dictionary API
   async getDictionary() {
     const res = await fetch('/api/dictionary');
@@ -432,7 +417,7 @@ export const API = {
     return { ok: res.ok, data: await res.json() };
   },
 
-  // Dynamic Domains and Documents Catalog for Selectors
+  // Dynamic Documents Catalog for Selectors
   async getProjectDomainsDocs() {
     const res = await fetch('/api/project/domains-docs');
     return { ok: res.ok, data: await res.json() };
@@ -447,35 +432,6 @@ export const API = {
   // GitLens / Blame & Auditoria
   async getFileBlame(path) {
     const res = await fetch(`/api/git/blame?path=${encodeURIComponent(path)}`);
-    return { ok: res.ok, data: await res.json() };
-  },
-
-  // Project Configuration & Setup (Layers, Taxonomy, 5W2H, Governance)
-  async getProjectConfig() {
-    const res = await fetch('/api/project/config');
-    return { ok: res.ok, data: await res.json() };
-  },
-
-  async saveProjectConfig(configData) {
-    const res = await fetch('/api/project/config', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(configData)
-    });
-    return { ok: res.ok, data: await res.json() };
-  },
-
-  async resetProjectConfig() {
-    const res = await fetch('/api/project/config/reset', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({})
-    });
-    return { ok: res.ok, data: await res.json() };
-  },
-
-  async getProjectMembers() {
-    const res = await fetch('/api/project/members');
     return { ok: res.ok, data: await res.json() };
   }
 };

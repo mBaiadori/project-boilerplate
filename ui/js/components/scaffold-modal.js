@@ -1,5 +1,5 @@
 // =============================================================================
-// COMPONENT: SCAFFOLD WIZARD MODAL (CRIAÇÃO GUIADA DE DOMÍNIOS, ÁREAS E FEATURES)
+// COMPONENT: SCAFFOLD WIZARD MODAL (CRIAÇÃO DE ESPECIFICAÇÕES E ADRs)
 // =============================================================================
 import { API } from '../api.js';
 
@@ -11,41 +11,23 @@ export function initScaffoldModal({ onScaffoldSuccess }) {
 
   // Type Selection Buttons
   const typeBtns = document.querySelectorAll('.scaffold-type-tab');
-  const groupDomain = document.getElementById('scaffold-group-domain');
-  const groupArea = document.getElementById('scaffold-group-area');
-  const groupFeature = document.getElementById('scaffold-group-feature');
-  const groupRisk = document.getElementById('scaffold-group-risk');
-  const groupCrossCutting = document.getElementById('scaffold-group-cross');
 
   // Inputs
-  const inputDomainSelect = document.getElementById('scaffold-domain-select');
-  const inputDomainCustom = document.getElementById('scaffold-domain-custom');
-  const inputAreaSelect = document.getElementById('scaffold-area-select');
-  const inputAreaCustom = document.getElementById('scaffold-area-custom');
   const inputFeatureName = document.getElementById('scaffold-feature-name');
   const inputFeatureTitle = document.getElementById('scaffold-feature-title');
-  const crossCuttingCheckboxes = document.getElementById('scaffold-cross-container');
   const previewPathCode = document.getElementById('scaffold-preview-path');
 
-  let activeType = 'feature'; // 'feature' | 'subdomain' | 'domain'
-  let cachedGraph = null;
+  let activeType = 'spec'; // 'spec' | 'adr'
 
-  async function openModal(defaultType = 'feature') {
+  async function openModal(defaultType = 'spec') {
     activeType = defaultType;
-    modalBackdrop.style.display = 'flex';
+    if (modalBackdrop) modalBackdrop.style.display = 'flex';
     setTypeTab(activeType);
-
-    try {
-      cachedGraph = await API.getProjectGraph();
-      populateDropdowns(cachedGraph.nodes || {});
-      updatePathPreview();
-    } catch (err) {
-      console.warn('Erro ao carregar grafo no wizard:', err);
-    }
+    updatePathPreview();
   }
 
   function closeModal() {
-    modalBackdrop.style.display = 'none';
+    if (modalBackdrop) modalBackdrop.style.display = 'none';
   }
 
   function setTypeTab(type) {
@@ -53,134 +35,36 @@ export function initScaffoldModal({ onScaffoldSuccess }) {
     typeBtns.forEach(btn => {
       btn.classList.toggle('active', btn.dataset.type === type);
     });
-
-    if (type === 'domain') {
-      groupDomain.style.display = 'block';
-      groupArea.style.display = 'none';
-      groupFeature.style.display = 'none';
-      groupRisk.style.display = 'none';
-      groupCrossCutting.style.display = 'none';
-    } else if (type === 'subdomain') {
-      groupDomain.style.display = 'block';
-      groupArea.style.display = 'block';
-      groupFeature.style.display = 'none';
-      groupRisk.style.display = 'none';
-      groupCrossCutting.style.display = 'none';
-    } else {
-      groupDomain.style.display = 'block';
-      groupArea.style.display = 'block';
-      groupFeature.style.display = 'block';
-      groupRisk.style.display = 'block';
-      groupCrossCutting.style.display = 'block';
-    }
     updatePathPreview();
-  }
-
-  function populateDropdowns(nodes) {
-    const domainsSet = new Set();
-    const areasMap = {}; // domain -> Set of areas
-
-    Object.keys(nodes).forEach(p => {
-      if (p.startsWith('domains/')) {
-        const parts = p.split('/');
-        if (parts.length >= 2) {
-          const dom = parts[1];
-          domainsSet.add(dom);
-          if (!areasMap[dom]) areasMap[dom] = new Set();
-          if (parts.length >= 3 && !parts[2].endsWith('.md')) {
-            areasMap[dom].add(parts[2]);
-          }
-        }
-      }
-    });
-
-    const domainsList = Array.from(domainsSet);
-    inputDomainSelect.innerHTML = domainsList.map(d => `<option value="${d}">${d}</option>`).join('') +
-      '<option value="__custom__">+ Criar Novo Domínio...</option>';
-
-    function updateAreasForSelectedDomain() {
-      const currentDom = inputDomainSelect.value;
-      if (currentDom === '__custom__') {
-        inputDomainCustom.style.display = 'block';
-        inputAreaSelect.innerHTML = '<option value="__custom__">+ Digitar Nova Área...</option>';
-        inputAreaCustom.style.display = 'block';
-      } else {
-        inputDomainCustom.style.display = 'none';
-        const areas = Array.from(areasMap[currentDom] || []);
-        inputAreaSelect.innerHTML = areas.map(a => `<option value="${a}">${a}</option>`).join('') +
-          '<option value="__custom__">+ Criar Nova Área...</option>';
-        if (areas.length > 0) {
-          inputAreaCustom.style.display = 'none';
-        } else {
-          inputAreaCustom.style.display = 'block';
-        }
-      }
-      updatePathPreview();
-    }
-
-    inputDomainSelect.onchange = updateAreasForSelectedDomain;
-    inputAreaSelect.onchange = () => {
-      if (inputAreaSelect.value === '__custom__') inputAreaCustom.style.display = 'block';
-      else inputAreaCustom.style.display = 'none';
-      updatePathPreview();
-    };
-
-    updateAreasForSelectedDomain();
-
-    // Populate Cross-Cutting options
-    if (crossCuttingCheckboxes) {
-      const candidates = Object.entries(nodes).filter(([p, n]) => p.endsWith('.md') && p !== 'index.md');
-      crossCuttingCheckboxes.innerHTML = candidates.map(([p, n]) => {
-        return `
-          <label class="cross-checkbox-item">
-            <input type="checkbox" name="cross-candidate" value="${p}">
-            <div class="cross-text">
-              <span class="cross-title">${escapeHtml(n.title || p)}</span>
-              <span class="cross-path">${escapeHtml(p)}</span>
-            </div>
-          </label>
-        `;
-      }).join('');
-    }
-  }
-
-  function getEffectiveDomain() {
-    if (inputDomainSelect.value === '__custom__') return (inputDomainCustom.value || 'novo-dominio').trim().toLowerCase();
-    return (inputDomainSelect.value || 'novo-dominio').trim().toLowerCase();
-  }
-
-  function getEffectiveArea() {
-    if (inputAreaSelect.value === '__custom__') return (inputAreaCustom.value || 'core').trim().toLowerCase();
-    return (inputAreaSelect.value || 'core').trim().toLowerCase();
   }
 
   function updatePathPreview() {
     if (!previewPathCode) return;
-    const dom = getEffectiveDomain();
-    const area = getEffectiveArea();
-    const feat = (inputFeatureName.value || 'MINHA-FEATURE').trim().toUpperCase();
+    const rawName = (inputFeatureName?.value || '').trim().toLowerCase().replace(/[^a-z0-9\-_]/g, '-').replace(/-+/g, '-');
+    const fallbackName = activeType === 'adr' ? 'adr-001' : 'minha-especificacao';
+    const name = rawName || fallbackName;
 
-    if (activeType === 'domain') {
-      previewPathCode.textContent = `domains/${dom}/index.md`;
-    } else if (activeType === 'subdomain') {
-      previewPathCode.textContent = `domains/${dom}/${area}/index.md`;
+    if (activeType === 'adr') {
+      previewPathCode.textContent = `adrs/${name}.md`;
     } else {
-      previewPathCode.textContent = `domains/${dom}/${area}/${feat}/ (Esteira completa: 8 documentos)`;
+      previewPathCode.textContent = `specs/${name}.md`;
     }
   }
 
-  inputDomainCustom.oninput = updatePathPreview;
-  inputAreaCustom.oninput = updatePathPreview;
-  inputFeatureName.oninput = () => {
-    if (!inputFeatureTitle.dataset.manualEdited) {
-      inputFeatureTitle.value = inputFeatureName.value.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-    }
-    updatePathPreview();
-  };
+  if (inputFeatureName) {
+    inputFeatureName.oninput = () => {
+      if (inputFeatureTitle && !inputFeatureTitle.dataset.manualEdited) {
+        inputFeatureTitle.value = inputFeatureName.value.replace(/[-_]/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+      }
+      updatePathPreview();
+    };
+  }
 
-  inputFeatureTitle.oninput = () => {
-    inputFeatureTitle.dataset.manualEdited = 'true';
-  };
+  if (inputFeatureTitle) {
+    inputFeatureTitle.oninput = () => {
+      inputFeatureTitle.dataset.manualEdited = 'true';
+    };
+  }
 
   typeBtns.forEach(btn => {
     btn.addEventListener('click', () => setTypeTab(btn.dataset.type));
@@ -192,49 +76,83 @@ export function initScaffoldModal({ onScaffoldSuccess }) {
   if (btnConfirm) {
     btnConfirm.addEventListener('click', async () => {
       btnConfirm.disabled = true;
-      btnConfirm.textContent = 'Gerando Esteira...';
+      btnConfirm.textContent = 'Criando...';
 
-      const dom = getEffectiveDomain();
-      const area = getEffectiveArea();
-      const name = (inputFeatureName.value || 'NOVA-FEATURE').trim();
-      const title = (inputFeatureTitle.value || name).trim();
+      const rawName = (inputFeatureName?.value || '').trim().toLowerCase().replace(/[^a-z0-9\-_]/g, '-').replace(/-+/g, '-');
+      const fallbackName = activeType === 'adr' ? 'adr-001' : 'nova-especificacao';
+      const name = rawName || fallbackName;
+      const title = (inputFeatureTitle?.value || name).trim();
+      const targetPath = activeType === 'adr' ? `adrs/${name}.md` : `specs/${name}.md`;
 
-      const selectedRisk = document.querySelector('input[name="scaffold-risk-radio"]:checked')?.value || 'tier_2';
-      const crossTargets = Array.from(document.querySelectorAll('input[name="cross-candidate"]:checked')).map(cb => cb.value);
+      const defaultContent = activeType === 'adr' 
+        ? `---
+title: "${title}"
+status: "proposed"
+type: "adr"
+date: "${new Date().toISOString().split('T')[0]}"
+---
 
-      const payload = {
-        type: activeType,
-        domain: dom,
-        area: area,
-        name: name,
-        title: title,
-        risk_tier: selectedRisk,
-        cross_cutting: crossTargets
-      };
+# 🏛️ ${title}
+
+## Contexto & Declaração do Problema
+Descreva o contexto e o problema de engenharia ou arquitetura que motiva esta decisão.
+
+## Decisão Proposta
+Qual solução foi escolhida e qual padrão arquitetural será aplicado.
+
+## Consequências
+- **Positivas:** Ganhos de performance, clareza, manutenibilidade.
+- **Negativas / Trade-offs:** Custos, complexidade adicional, migrações necessárias.
+`
+        : `---
+title: "${title}"
+status: "draft"
+type: "specification"
+version: "1.0.0"
+---
+
+# 📋 ${title}
+
+> Especificação funcional e técnica detalhada.
+
+## 🎯 Objetivo & Escopo
+Descreva o escopo e o comportamento esperado desta funcionalidade.
+
+## ⚙️ Regras de Negócio & Invariantes
+1. **Regra 1:** Descrição detalhada da regra de negócio.
+2. **Regra 2:** Critérios de validação e restrições.
+
+## 🧪 Cenários de Aceitação (BDD)
+\`\`\`gherkin
+Cenário: Execução com sucesso
+  Dado que o usuário está autenticado
+  Quando solicitar a operação
+  Então o sistema deve processar e retornar 200 OK
+\`\`\`
+`;
 
       try {
-        const { ok, data } = await API.scaffoldEntity(payload);
-        if (ok && data.success) {
+        const { ok, data } = await API.createFile({
+          path: targetPath,
+          content: defaultContent,
+          is_dir: false
+        });
+
+        if (ok) {
           closeModal();
           if (onScaffoldSuccess) {
-            onScaffoldSuccess(data.primary_file);
+            onScaffoldSuccess(targetPath);
           }
         } else {
-          alert('Erro ao gerar esteira: ' + (data?.error || 'Erro desconhecido.'));
+          alert('Erro ao criar arquivo: ' + (data?.error || 'Erro desconhecido.'));
         }
       } catch (err) {
-        alert('Erro ao conectar com o servidor para criar esteira.');
+        alert('Erro ao conectar com o servidor para criar o arquivo.');
       } finally {
         btnConfirm.disabled = false;
-        btnConfirm.textContent = 'Criar & Abrir Esteira';
+        btnConfirm.textContent = 'Criar & Abrir no Editor';
       }
     });
-  }
-
-  function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text || '';
-    return div.innerHTML;
   }
 
   return {

@@ -39,7 +39,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   const reposView = initReposView({
     onSelectRepo: (repo) => {
       currentActiveRepo = repo;
-      Router.navigate(`/workspace/${encodeURIComponent(repo.name)}/project`);
+      Router.navigate(`/workspace/${encodeURIComponent(repo.name)}/editor`);
     },
     onLogout: () => {
       currentUser = null;
@@ -54,7 +54,7 @@ window.addEventListener('DOMContentLoaded', async () => {
       currentUser = user;
       const route = Router.getRoute();
       if (route.routeName === 'workspace' && route.repo) {
-        Router.navigate(`/workspace/${encodeURIComponent(route.repo)}/${route.subview || 'project'}`, route.query, true);
+        Router.navigate(`/workspace/${encodeURIComponent(route.repo)}/${route.subview || 'editor'}`, route.query, true);
       } else {
         Router.navigate('/repos');
       }
@@ -82,7 +82,7 @@ window.addEventListener('DOMContentLoaded', async () => {
       if (route.routeName === 'auth') {
         if (status.active_repo) {
           currentActiveRepo = status.active_repo;
-          Router.navigate(`/workspace/${encodeURIComponent(status.active_repo.name)}/project`, {}, true);
+          Router.navigate(`/workspace/${encodeURIComponent(status.active_repo.name)}/editor`, {}, true);
         } else {
           Router.navigate('/repos', {}, true);
         }
@@ -113,10 +113,10 @@ window.addEventListener('DOMContentLoaded', async () => {
 
           await API.selectRepo(matchedRepo);
           currentActiveRepo = matchedRepo;
-          await dashboardView.open(matchedRepo, route.subview || 'project', route.query);
+          await dashboardView.open(matchedRepo, route.subview || 'editor', route.query);
         } else {
           // Repositório já ativo, apenas chaveia subview e propaga query params
-          dashboardView.switchSubview(route.subview || 'project', route.query, true);
+          dashboardView.switchSubview(route.subview || 'editor', route.query, true);
         }
         return;
       }

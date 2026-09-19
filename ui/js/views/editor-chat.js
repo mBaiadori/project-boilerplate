@@ -522,23 +522,14 @@ export function initEditorChatView({ onWorkspaceChanged, getActiveRepo, onDocume
 
   function updateMetaSummary() {
     if (!currentDocMetadata) return;
-    const l = (currentDocMetadata.layer || "L4")
-      .replace("L", "")
-      .substring(0, 2);
     const s = currentDocMetadata.status || "draft";
     const t = currentDocMetadata.type || "spec";
     if (metaSummaryPill) {
-      metaSummaryPill.innerHTML = `<strong>L${l}</strong> &bull; ${s.toUpperCase()} &bull; <code>${t}</code> &bull; <em>${escapeHtml(currentDocMetadata.id || currentFilePath)}</em>`;
+      metaSummaryPill.innerHTML = `${s.toUpperCase()} &bull; <code>${t}</code> &bull; <em>${escapeHtml(currentDocMetadata.id || currentFilePath)}</em>`;
     }
   }
 
   function generateCanonicalId(title, layer, path, existingDocs = []) {
-    const l = (layer || "L4").split("_")[0].toLowerCase();
-    let domain = "core";
-    if (path && path.startsWith("domains/")) {
-      const parts = path.split("/");
-      if (parts.length > 1) domain = parts[1].toLowerCase();
-    }
     const cleanTitle = (title || "spec")
       .toLowerCase()
       .normalize("NFD")
@@ -546,7 +537,7 @@ export function initEditorChatView({ onWorkspaceChanged, getActiveRepo, onDocume
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "");
 
-    const baseId = `${l}-${domain}-${cleanTitle}`;
+    const baseId = cleanTitle || "documento";
     let candidate = baseId;
     let counter = 2;
     const existingIds = new Set(existingDocs.map((d) => d.id));
@@ -623,23 +614,19 @@ export function initEditorChatView({ onWorkspaceChanged, getActiveRepo, onDocume
       btnSubmitAiIdea.textContent = "Gerando com IA...";
 
       try {
-        const prompt = `Você é o Arquiteto de Software SDLC especialista no Context OS.
-O usuário deseja criar/estruturar a especificação para a seguinte ideia de negócio:
+        const prompt = `Você é o Arquiteto de Software especialista em especificações técnicas.
+O usuário deseja criar/estruturar a especificação para a seguinte necessidade:
 "${ideaText}"
-Camada solicitada: ${layerChoice === "auto" ? "Determine a camada oficial mais adequada (L1 a L6)" : layerChoice}.
 Caminho atual do arquivo: ${currentFilePath}
 
-Retorne uma especificação oficial completa em Markdown com bloco Frontmatter YAML válido entre '---' contendo:
+Retorne uma especificação técnica oficial completa em Markdown com bloco Frontmatter YAML válido entre '---' contendo:
 - id: ID oficial unívoco
 - title: Título objetivo
-- layer: ${layerChoice === "auto" ? "L1_PROJECT, L2_DOMAIN, L3_SUBDOMAIN, L4_ARTIFACT, L5_BEHAVIOR ou L6_OBSERVABILITY" : layerChoice}
-- type: tipo de artefato (ex: spec, flow, entity, kpis, bdd)
+- type: tipo de artefato (ex: spec, adr, flow, bdd)
 - version: "1.0.0"
 - status: "draft"
-- parent: caminho ou ID do documento pai sugerido
-- breadcrumb: lista com { title, path }
 
-E no corpo Markdown, estruture o documento com seções claras, propostas de valor, regras de negócio e critérios de aceitação práticos. Não inclua blocos adicionais fora do markdown retornado.`;
+E no corpo Markdown, estruture o documento com seções claras: Objetivo, Regras de Negócio, Invariantes e Critérios de Aceitação (BDD / Gherkin). Não inclua blocos adicionais fora do markdown retornado.`;
 
         const res = await API.sendMessageToAI(prompt);
         if (res && res.reply) {

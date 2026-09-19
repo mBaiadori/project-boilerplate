@@ -8,10 +8,8 @@ import { initDiffModal } from './components/diff-modal.js';
 import { initPanelResizers } from './components/panel-resizer.js';
 import { initOnboardingModal } from './components/onboarding-modal.js';
 import { AIChatCopilot } from './components/ai-chat-copilot.js';
-import { initProjectView } from './views/project.js';
 import { initEditorChatView } from './views/editor-chat.js';
 import { initTreeView } from './views/tree.js';
-import { initEngineeringView } from './views/engineering.js';
 import { initTemplatesView } from './views/templates.js';
 import { initSettingsView } from './views/settings.js';
 import { initGovernanceView } from './views/governance.js';
@@ -47,10 +45,8 @@ export function initDashboardView({ onBackToRepos }) {
   // Sidebar Nav Items & Subviews
   const navItems = document.querySelectorAll('.dash-nav-item');
   const subviews = {
-    project: document.getElementById('subview-project'),
     editor: document.getElementById('subview-editor'),
     dictionary: document.getElementById('subview-dictionary'),
-    engineering: document.getElementById('subview-engineering'),
     wiki: document.getElementById('subview-wiki'),
     graph: document.getElementById('subview-graph'),
     audit: document.getElementById('subview-audit'),
@@ -62,7 +58,7 @@ export function initDashboardView({ onBackToRepos }) {
   };
 
   let activeRepo = null;
-  let currentActiveSubview = 'project';
+  let currentActiveSubview = 'editor';
 
   // 1. Initialize Components & Subviews
   initPanelResizers();
@@ -112,22 +108,6 @@ export function initDashboardView({ onBackToRepos }) {
     }
   });
 
-  const projectView = initProjectView({
-    getActiveRepo: () => activeRepo,
-    onConfigSaved: async () => {
-      await diffModal.updateBadgeStatus();
-      if (editorChatView.loadProjectTaxonomy) {
-        await editorChatView.loadProjectTaxonomy();
-      }
-      if (currentActiveSubview === 'project') {
-        updateGlobalCopilotContext('project');
-      }
-    },
-    onNotify: (msg) => {
-      console.log(`[Project Hub] ${msg}`);
-    }
-  });
-
   const editorChatView = initEditorChatView({
     getActiveRepo: () => activeRepo,
     onWorkspaceChanged: () => {
@@ -153,17 +133,6 @@ export function initDashboardView({ onBackToRepos }) {
     }
   });
 
-  const engineeringView = initEngineeringView({
-    onOpenInEditor: async (path) => {
-      if (activeRepo) {
-        Router.navigate(`/workspace/${encodeURIComponent(activeRepo.name)}/editor`, { file: path });
-      } else {
-        switchSubview('editor', { file: path });
-      }
-      diffModal.updateBadgeStatus();
-    }
-  });
-
   const templatesView = initTemplatesView({
     onUseTemplateInEditor: async (path, assistantPrompt) => {
       if (activeRepo) {
@@ -183,92 +152,68 @@ export function initDashboardView({ onBackToRepos }) {
       } else {
         switchSubview('editor', { file: filename });
       }
-      editorChatView.setContent(content, filename, `Você está praticando o tutorial: ${title}`);
-    }
-  });
-
-  const graphView = initGraphView({
-    onOpenDocument: async (path) => {
-      if (activeRepo) {
-        Router.navigate(`/workspace/${encodeURIComponent(activeRepo.name)}/editor`, { file: path });
-      } else {
-        switchSubview('editor', { file: path });
+      if (editorChatView.setEditorMarkdown) {
+        editorChatView.setEditorMarkdown(content);
       }
+      diffModal.updateBadgeStatus();
     }
   });
 
+  const prsView = initPRsView();
+  const graphView = initGraphView();
   const auditView = initAuditView({
-    onOpenDocument: async (path) => {
+    onFixWithAI: (issue) => {
+      if (btnGlobalAiCopilot) {
+        setGlobalAiVisibility(true);
+        if (globalCopilot) {
+          globalCopilot.sendMessage(`Por favor, analise e proponha a correção para o seguinte problema de conformidade:\n\nRegra: ${issue.ruleId || 'N/A'}\nMensagem: ${issue.message}\nArquivo: ${issue.file || 'N/A'}`);
+        }
+      }
+    }
+  });
+  const dictionaryView = initDictionaryView();
+  const wikiDecisionsView = initWikiDecisionsView({
+    onOpenInEditor: async (path) => {
       if (activeRepo) {
         Router.navigate(`/workspace/${encodeURIComponent(activeRepo.name)}/editor`, { file: path });
       } else {
         switchSubview('editor', { file: path });
       }
+      diffModal.updateBadgeStatus();
     }
-  });
-
-  const settingsView = initSettingsView({
-    onLogout: () => onBackToRepos()
   });
   const governanceView = initGovernanceView();
-  const prsView = initPRsView();
+  const settingsView = initSettingsView();
 
-  const dictionaryView = initDictionaryView({
-    onOpenDocument: async (path) => {
-      if (activeRepo) {
-        Router.navigate(`/workspace/${encodeURIComponent(activeRepo.name)}/editor`, { file: path });
-      } else {
-        switchSubview('editor', { file: path });
-      }
-    }
-  });
-
-  const wikiDecisionsView = initWikiDecisionsView({
-    getActiveRepo: () => activeRepo
-  });
-
-  // Global Copilot Management
-  function setGlobalAiVisibility(show) {
+  function setGlobalAiVisibility(shouldOpen) {
     if (!globalAiPane) return;
-    globalAiPane.classList.toggle('collapsed', !show);
-    if (resizerGlobalAi) {
-      resizerGlobalAi.classList.toggle('collapsed', !show);
-    }
+    globalAiPane.style.display = shouldOpen ? 'flex' : 'none';
+    if (resizerGlobalAi) resizerGlobalAi.style.display = shouldOpen ? 'block' : 'none';
     if (btnGlobalAiCopilot) {
-      btnGlobalAiCopilot.classList.toggle('active', show);
+      btnGlobalAiCopilot.classList.toggle('active', shouldOpen);
     }
-    try {
-      localStorage.setItem(STORAGE_KEY_GLOBAL_AI_OPEN, show ? 'true' : 'false');
-    } catch (e) {}
-  }
-
-  function isGlobalAiOpen() {
-    return globalAiPane && !globalAiPane.classList.contains('collapsed');
+    localStorage.setItem(STORAGE_KEY_GLOBAL_AI_OPEN, shouldOpen ? 'true' : 'false');
   }
 
   function toggleGlobalAi() {
-    setGlobalAiVisibility(!isGlobalAiOpen());
+    const isCurrentlyOpen = globalAiPane && globalAiPane.style.display !== 'none';
+    setGlobalAiVisibility(!isCurrentlyOpen);
   }
 
   if (globalAiPane) {
     globalCopilot = new AIChatCopilot({
-      container: globalAiPane,
-      resizer: resizerGlobalAi,
-      storageKey: 'governance_global_ai_width',
-      contextPath: 'project/index.md',
-      agentName: 'Arquiteto de Fundação',
-      agentIcon: 'psychology',
-      modelName: 'gemini-3.5-flash',
-      defaultSystemPrompt: '',
-      getRepoName: () => (activeRepo ? activeRepo.name : 'default'),
-      getContent: () => (projectView.getProjectSummaryContent ? projectView.getProjectSummaryContent() : ''),
+      containerEl: globalAiPane,
+      scopeType: 'global',
+      contextPath: 'wiki/index.md',
+      agentName: 'Antigravity Agent',
+      agentIcon: 'smart_toy',
+      storageKeyPrefix: 'governance_global_chat_history',
+      getContent: () => '',
       chips: [
-        { label: "🚀 Propor Bounded Contexts", prompt: "Com base nas premissas e 5W2H do projeto, proponha a divisão inicial de Bounded Contexts e domínios essenciais." },
-        { label: "⚖️ Análise 5W2H", prompt: "Revise o Canvas 5W2H do projeto e identifique riscos, lacunas de escopo e possíveis dependências ocultas." },
-        { label: "🏗️ Padrões de Camadas", prompt: "Sugira a arquitetura em camadas mais adequada para os domínios configurados (Hexagonal, Onion, Clean Architecture)." },
-        { label: "🔍 Auditar Coerência", prompt: "Audite a consistência entre o nome do projeto, descrição de negócio e as capacidades de domínio mapeadas." }
+        { label: "✨ Propor Especificação", prompt: "Proponha a estrutura para uma nova especificação técnica baseada nas necessidades do sistema." },
+        { label: "🔍 Auditar Coerência", prompt: "Audite a consistência entre as especificações e regras de negócio do repositório." }
       ],
-      welcomeMessage: 'Olá! Sou o Arquiteto de Fundação. Posso ajudar na definição da visão do projeto, Bounded Contexts, canvas 5W2H e taxonomia de arquitetura.',
+      welcomeMessage: 'Olá! Sou o assistente de governança e especificação. Como posso ajudar com a arquitetura ou documentos do projeto?',
       onClose: () => {
         setGlobalAiVisibility(false);
       }
@@ -288,26 +233,8 @@ export function initDashboardView({ onBackToRepos }) {
   function updateGlobalCopilotContext(viewKey, extraParams = {}) {
     if (!globalCopilot) return;
 
-    if (viewKey === 'project') {
-      globalCopilot.setContext({
-        contextPath: 'project/index.md',
-        agentName: 'Arquiteto de Fundação',
-        agentIcon: 'psychology',
-        defaultSystemPrompt: projectView.DEFAULT_ABOUT_AGENT_PROMPT || '',
-        getContent: () => (projectView.getProjectSummaryContent ? projectView.getProjectSummaryContent() : ''),
-        chips: [
-          { label: "🚀 Propor Bounded Contexts", prompt: "Com base nas premissas e 5W2H do projeto, proponha a divisão inicial de Bounded Contexts e domínios essenciais." },
-          { label: "⚖️ Análise 5W2H", prompt: "Revise o Canvas 5W2H do projeto e identifique riscos, lacunas de escopo e possíveis dependências ocultas." },
-          { label: "🏗️ Padrões de Camadas", prompt: "Sugira a arquitetura em camadas mais adequada para os domínios configurados (Hexagonal, Onion, Clean Architecture)." },
-          { label: "🔍 Auditar Coerência", prompt: "Audite a consistência entre o nome do projeto, descrição de negócio e as capacidades de domínio mapeadas." }
-        ],
-        welcomeMessage: 'Olá! Sou o Arquiteto de Fundação. Posso ajudar na definição da visão do projeto, Bounded Contexts, canvas 5W2H e taxonomia de arquitetura.',
-        onApplyContent: null,
-        onPromptSaved: null,
-        onPromptRestored: null
-      });
-    } else if (viewKey === 'editor') {
-      const activeFilePath = extraParams.file || (editorChatView.getCurrentPath ? editorChatView.getCurrentPath() : 'domains/index.md');
+    if (viewKey === 'editor') {
+      const activeFilePath = extraParams.file || (editorChatView.getCurrentPath ? editorChatView.getCurrentPath() : 'index.md');
       const meta = editorChatView.getCurrentMetadata ? editorChatView.getCurrentMetadata() : {};
       const customPrompt = (meta && meta.assistant_prompt) || extraParams.assistantPrompt || '';
       const isSpecialized = Boolean(customPrompt);
@@ -322,7 +249,7 @@ export function initDashboardView({ onBackToRepos }) {
         chips: [
           { label: "📊 Diagrama Mermaid", prompt: "Gere um diagrama Mermaid para a arquitetura deste documento." },
           { label: "📖 Dicionário Ubíquo", prompt: "Refine o Dicionário Ubíquo adicionando novas entidades com escopo e regras baseadas neste documento." },
-          { label: "🛡️ Auditar DDD", prompt: "Audite a aderência deste documento aos princípios de DDD e padrões de arquitetura." },
+          { label: "🛡️ Auditar Especificação", prompt: "Audite a aderência deste documento aos padrões de arquitetura e consistência." },
           { label: "🧪 Cenário BDD", prompt: "Proponha um cenário BDD em Gherkin com base nas invariantes deste documento." }
         ],
         welcomeMessage: isSpecialized
@@ -350,39 +277,23 @@ export function initDashboardView({ onBackToRepos }) {
       });
     } else if (viewKey === 'dictionary') {
       globalCopilot.setContext({
-        contextPath: 'project/dictionary.md',
+        contextPath: 'dictionary.json',
         agentName: 'Curador de Linguagem Ubíqua',
         agentIcon: 'menu_book',
-        getContent: () => 'Dicionário Ubíquo de Termos de Negócio e Glossário de Domínios',
+        getContent: () => 'Dicionário Ubíquo de Termos de Negócio e Glossário',
         chips: [
-          { label: "✨ Sugerir Termo", prompt: "Sugira novos termos ubíquos e sinônimos recomendados para os domínios do projeto." },
-          { label: "🔍 Auditar Ambiguidade", prompt: "Identifique termos com duplo sentido ou ambiguidades conceituais entre contextos delimitados." },
-          { label: "📝 Padronizar Sinônimos", prompt: "Padronize termos de negócio eliminando jargões técnicos incompatíveis com a linguagem ubíqua." }
+          { label: "✨ Sugerir Termo", prompt: "Sugira novos termos ubíquos e sinônimos recomendados para o projeto." },
+          { label: "🔍 Auditar Ambiguidade", prompt: "Identifique termos com duplo sentido ou ambiguidades conceituais." },
+          { label: "📝 Padronizar Sinônimos", prompt: "Padronize termos de negócio eliminando inconsistências conceituais." }
         ],
-        welcomeMessage: 'Curador de Linguagem Ubíqua ativo. Posso ajudar na definição de termos canônicos, limites semânticos e glossário DDD.',
-        onApplyContent: null,
-        onPromptSaved: null,
-        onPromptRestored: null
-      });
-    } else if (viewKey === 'engineering') {
-      globalCopilot.setContext({
-        contextPath: 'engenharia/index.md',
-        agentName: 'Especialista em Engenharia',
-        agentIcon: 'terminal',
-        getContent: () => 'Diretrizes de Engenharia, CI/CD, Containers e DevOps',
-        chips: [
-          { label: "⚡ Auditar CI/CD", prompt: "Analise a esteira de CI/CD e sugira automações para validação de testes e linter." },
-          { label: "🐳 Docker & Containers", prompt: "Recomende melhorias para os Dockerfiles e orquestração de microsserviços." },
-          { label: "🛡️ Segurança & Secrets", prompt: "Revise a estratégia de gestão de segredos e conformidade de dependências." }
-        ],
-        welcomeMessage: 'Especialista em Engenharia pronto. Posso auxiliar em pipelines de CI/CD, configurações Docker, infraestrutura e automação.',
+        welcomeMessage: 'Curador de Linguagem Ubíqua ativo. Posso ajudar na definição de termos canônicos e vocabulário oficial.',
         onApplyContent: null,
         onPromptSaved: null,
         onPromptRestored: null
       });
     } else if (viewKey === 'governance') {
       globalCopilot.setContext({
-        contextPath: '.spec-memory/_rules/governance.yaml',
+        contextPath: '.governance/governance.json',
         agentName: 'Guardião de Governança',
         agentIcon: 'verified_user',
         getContent: () => 'Regras de Governança, Políticas de Revisão e Conformidade de Especificação',
@@ -390,7 +301,7 @@ export function initDashboardView({ onBackToRepos }) {
           { label: "🛡️ Auditar Regras", prompt: "Audite todas as regras de governança ativas e aponte violações de conformidade." },
           { label: "📋 Propor Política", prompt: "Proponha uma nova política de revisão de código e aprovação para branches principais." }
         ],
-        welcomeMessage: 'Guardião de Governança ativo. Posso avaliar conformidade de branch protection, políticas de spec memory e regras arquiteturais.',
+        welcomeMessage: 'Guardião de Governança ativo. Posso avaliar conformidade de branch protection e regras arquiteturais.',
         onApplyContent: null,
         onPromptSaved: null,
         onPromptRestored: null
@@ -415,27 +326,27 @@ export function initDashboardView({ onBackToRepos }) {
         contextPath: 'graph/dependencies.json',
         agentName: 'Analista de Grafo de Conhecimento',
         agentIcon: 'hub',
-        getContent: () => 'Grafo de Relacionamentos, Dependências e Consumidores de Artefatos',
+        getContent: () => 'Grafo de Relacionamentos, Dependências e Conexões entre Documentos',
         chips: [
           { label: "🕸️ Dependências Cíclicas", prompt: "Identifique nós com acoplamento excessivo ou ciclos no grafo de dependências." },
-          { label: "🎯 Impacto de Mudança", prompt: "Qual o raio de impacto no grafo caso o domínio principal seja refatorado?" }
+          { label: "🎯 Impacto de Mudança", prompt: "Qual o raio de impacto no grafo caso um documento central seja alterado?" }
         ],
-        welcomeMessage: 'Analista de Grafo pronto. Posso interpretar nós, arestas de dependência e impactos arquiteturais em cascata.',
+        welcomeMessage: 'Analista de Grafo pronto. Posso interpretar nós, conexões e impactos estruturais em cascata.',
         onApplyContent: null,
         onPromptSaved: null,
         onPromptRestored: null
       });
     } else if (viewKey === 'audit') {
       globalCopilot.setContext({
-        contextPath: 'audit/spec-lint.md',
+        contextPath: 'audit/report.md',
         agentName: 'Auditor de Especificação',
         agentIcon: 'fact_check',
         getContent: () => 'Relatório de Linting, Validações Semânticas e Score de Conformidade',
         chips: [
-          { label: "🚨 Corrigir Erros L1/L4", prompt: "Analise os erros de lint detectados e forneça correções passo a passo." },
-          { label: "📈 Score de Maturidade", prompt: "Como elevar a pontuação de conformidade e maturidade da especificação para 100%?" }
+          { label: "🚨 Corrigir Violações", prompt: "Analise os problemas de conformidade detectados e forneça correções passo a passo." },
+          { label: "📈 Score de Maturidade", prompt: "Como elevar a pontuação de conformidade das especificações?" }
         ],
-        welcomeMessage: 'Auditor de Especificação ativo. Posso analisar violações de taxonomia L1–L4 e guiar o plano de correção.',
+        welcomeMessage: 'Auditor de Especificação ativo. Posso analisar violações de conformidade e guiar o plano de correção.',
         onApplyContent: null,
         onPromptSaved: null,
         onPromptRestored: null
@@ -447,10 +358,10 @@ export function initDashboardView({ onBackToRepos }) {
         agentIcon: 'merge_type',
         getContent: () => 'Revisão de Pull Requests e Diffs de Especificação',
         chips: [
-          { label: "🔍 Resumo do PR", prompt: "Faça um resumo executivo dos PRs abertos e seus impactos nos domínios." },
+          { label: "🔍 Resumo do PR", prompt: "Faça um resumo executivo dos PRs abertos e suas alterações." },
           { label: "⚠️ Conflitos & Riscos", prompt: "Aponte conflitos potenciais e riscos de regressão nas branches ativas." }
         ],
-        welcomeMessage: 'Revisor de PRs ativo. Posso avaliar o impacto de propostas de merge em relação à baseline do projeto.',
+        welcomeMessage: 'Revisor de PRs ativo. Posso avaliar o impacto de propostas de merge em relação à baseline do repositório.',
         onApplyContent: null,
         onPromptSaved: null,
         onPromptRestored: null
@@ -465,7 +376,7 @@ export function initDashboardView({ onBackToRepos }) {
           { label: "💡 Explicar Conceito", prompt: "Explique de forma didática o conceito central deste tutorial com exemplos práticos." },
           { label: "🎯 Próximo Exercício", prompt: "Recomende o próximo exercício prático para fixar o aprendizado." }
         ],
-        welcomeMessage: 'Tutor Interativo pronto. Posso tirar dúvidas sobre conceitos de DDD, Frontmatter, BDD e boas práticas.',
+        welcomeMessage: 'Tutor Interativo pronto. Posso tirar dúvidas sobre conceitos de especificação, Frontmatter, BDD e boas práticas.',
         onApplyContent: null,
         onPromptSaved: null,
         onPromptRestored: null
@@ -496,7 +407,7 @@ export function initDashboardView({ onBackToRepos }) {
 
   function switchSubview(viewKey, queryParams = {}, isFromRouter = false) {
     if (!subviews[viewKey]) {
-      viewKey = 'project';
+      viewKey = 'editor';
     }
     currentActiveSubview = viewKey;
 
@@ -519,10 +430,7 @@ export function initDashboardView({ onBackToRepos }) {
       }
     });
 
-    if (viewKey === 'project') {
-      projectView.loadProjectConfig(queryParams.tab || null);
-    } else if (viewKey === 'editor') {
-      // View Documentos: Árvore completa de domains/ visível
+    if (viewKey === 'editor') {
       if (treePane) treePane.style.display = 'flex';
       if (resizerTree) resizerTree.style.display = 'block';
       treeView.loadDocumentTree();
@@ -534,8 +442,6 @@ export function initDashboardView({ onBackToRepos }) {
       }
     } else if (viewKey === 'dictionary') {
       dictionaryView.loadDictionary();
-    } else if (viewKey === 'engineering') {
-      engineeringView.loadEngineeringFiles();
     } else if (viewKey === 'wiki') {
       wikiDecisionsView.loadWiki();
     } else if (viewKey === 'graph') {
@@ -557,23 +463,12 @@ export function initDashboardView({ onBackToRepos }) {
     updateGlobalCopilotContext(viewKey, queryParams);
   }
 
-  async function open(repo, targetSubview = 'project', queryParams = {}) {
+  async function open(repo, targetSubview = 'editor', queryParams = {}) {
     activeRepo = repo;
     dashRepoTitle.textContent = repo.name;
     dashRepoLink.href = repo.html_url || `https://github.com/${repo.full_name}`;
 
-    // Verificar se o projeto é novo/não-configurado diretamente no repositório
-    let initialSubview = targetSubview;
-    try {
-      const { ok, data: statusData } = await API.getProjectStatus();
-      if (ok && statusData && statusData.is_configured === false) {
-        initialSubview = 'project';
-      }
-    } catch (e) {
-      console.warn('Erro ao verificar status do projeto:', e);
-    }
-
-    switchSubview(initialSubview, queryParams, true);
+    switchSubview(targetSubview || 'editor', queryParams, true);
     await diffModal.updateBadgeStatus();
     try {
       const st = await API.getStatus();
