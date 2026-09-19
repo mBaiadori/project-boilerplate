@@ -1,10 +1,12 @@
+// =============================================================================
+// COMPONENT: UNIVERSAL AI CHAT COPILOT WITH CONTINUOUS CONTEXT MEMORY
+// Minimalist, elegant header, prompt stream, quick chips & dev inspector
+// =============================================================================
+
 import React, { useState, useRef, useEffect } from 'react';
 import { marked } from 'marked';
 import { useAI } from '../../context/AIContext';
 import { useWorkspace } from '../../context/WorkspaceContext';
-import { PromptSidebar } from './PromptSidebar';
-import { HistorySidebar } from './HistorySidebar';
-import { RawInspectorSidebar } from './RawInspectorSidebar';
 
 const DEFAULT_COPILOT_CHIPS = [
   { label: "💡 Sugerir Melhorias", prompt: "Analise o contexto deste documento e sugira melhorias técnicas, funcionais e de negócio." },
@@ -16,6 +18,9 @@ const DEFAULT_COPILOT_CHIPS = [
 interface AICopilotPanelProps {
   isOpen: boolean;
   onClose: () => void;
+  onOpenPrompt?: () => void;
+  onOpenHistory?: () => void;
+  onOpenRaw?: () => void;
   onApplyContent?: (content: string) => void;
   onInsertAtCursor?: (text: string) => void;
 }
@@ -23,18 +28,15 @@ interface AICopilotPanelProps {
 export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
   isOpen,
   onClose,
+  onOpenPrompt = () => {},
+  onOpenHistory = () => {},
+  onOpenRaw = () => {},
   onApplyContent,
   onInsertAtCursor
 }) => {
-  const { messages, isThinking, sendMessage, aiSettings, openSettingsModal } = useAI();
-  const { activeFile, activeRepo, fileContent, setFileContent } = useWorkspace();
+  const { messages, isThinking, sendMessage } = useAI();
+  const { activeFile, setFileContent } = useWorkspace();
   const [inputText, setInputText] = useState('');
-
-  // Sidebar states
-  const [isPromptOpen, setIsPromptOpen] = useState(false);
-  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
-  const [isRawOpen, setIsRawOpen] = useState(false);
-  const [systemPrompt, setSystemPrompt] = useState('');
   const [targetSnippet, setTargetSnippet] = useState<{ label: string; text: string } | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -88,7 +90,7 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
             className="ai-copilot-agent-btn"
             type="button"
             title="Clique para configurar o modelo e editar o pré-prompt deste agente"
-            onClick={() => setIsPromptOpen(true)}
+            onClick={onOpenPrompt}
           >
             <span className="material-symbols-outlined icon-xs ai-copilot-agent-icon">smart_toy</span>
             <span className="ai-copilot-agent-name">Antigravity Agent</span>
@@ -101,7 +103,7 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
             className="ai-copilot-raw-btn"
             title="Inspetor RAW (Ver Prompts, Memória e Payloads na Íntegra)"
             type="button"
-            onClick={() => setIsRawOpen(true)}
+            onClick={onOpenRaw}
           >
             RAW
           </button>
@@ -109,7 +111,7 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
             className="btn-icon ai-copilot-history-btn"
             title="Linha de Raciocínio & Histórico de Sessões"
             type="button"
-            onClick={() => setIsHistoryOpen(true)}
+            onClick={onOpenHistory}
           >
             <span className="material-symbols-outlined icon-sm">history</span>
           </button>
@@ -183,9 +185,9 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
                   type="button"
                   style={{ fontSize: '11px', padding: '2px 6px' }}
                   onClick={() => handleApplyToDoc(msg.content)}
-                  title="Substituir todo o documento"
+                  title="Substituir documento pelo conteúdo"
                 >
-                  📄 Substituir Doc
+                  ⚡ Substituir
                 </button>
               </div>
             )}
@@ -193,15 +195,14 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
         ))}
 
         {isThinking && (
-          <div className="chat-bubble ai">
+          <div className="chat-bubble ai thinking">
             <div className="chat-bubble-sender">
-              <span className="material-symbols-outlined icon-xs" style={{ animation: 'spin 1s linear infinite' }}>
-                progress_activity
-              </span>
+              <span className="material-symbols-outlined icon-xs">smart_toy</span>
               <strong>Antigravity Agent</strong>
             </div>
-            <div className="ai-reply-content" style={{ color: 'var(--text-muted)' }}>
-              Raciocinando & compilando contexto...
+            <div className="ai-reply-content" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span className="dot pulse"></span>
+              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Raciocinando na especificação...</span>
             </div>
           </div>
         )}
@@ -214,18 +215,18 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
         {DEFAULT_COPILOT_CHIPS.map((chip, idx) => (
           <button
             key={idx}
-            className="chip-item"
+            className="ai-chip"
             type="button"
-            onClick={() => setInputText(chip.prompt)}
+            onClick={() => sendMessage(chip.prompt, activeFile ? [`📄 ${activeFile}`] : [])}
           >
             {chip.label}
           </button>
         ))}
       </div>
 
-      {/* 4. Targeted Section Context Pill (if active) */}
+      {/* 4. Targeted Section Context Pill */}
       {targetSnippet && (
-        <div className="ai-copilot-target-context-pill">
+        <div className="ai-copilot-target-context-pill" style={{ display: 'flex' }}>
           <div className="target-info">
             <span className="material-symbols-outlined icon-xs">ads_click</span>
             <span className="target-title">{targetSnippet.label}</span>
@@ -266,38 +267,6 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
           Enviar
         </button>
       </form>
-
-      {/* Sidebars */}
-      <PromptSidebar
-        isOpen={isPromptOpen}
-        onClose={() => setIsPromptOpen(false)}
-        systemPrompt={systemPrompt}
-        defaultPrompt="Você é o Arquiteto de Software & Assistente do Spec-Driven Context OS."
-        onSavePrompt={(p) => setSystemPrompt(p)}
-        onResetPrompt={() => setSystemPrompt('')}
-        onOpenAIModal={openSettingsModal}
-        modelName={aiSettings?.active_model || 'gemini-3.5-flash'}
-      />
-
-      <HistorySidebar
-        isOpen={isHistoryOpen}
-        onClose={() => setIsHistoryOpen(false)}
-        repo={activeRepo?.name || 'default'}
-        docPath={activeFile || 'index.md'}
-        onRestoreSession={() => {}}
-      />
-
-      <RawInspectorSidebar
-        isOpen={isRawOpen}
-        onClose={() => setIsRawOpen(false)}
-        rawPayload={{
-          repo: activeRepo?.name,
-          docPath: activeFile,
-          contentLength: fileContent?.length || 0,
-          model: aiSettings?.active_model
-        }}
-        rawResponse={messages[messages.length - 1] || null}
-      />
     </>
   );
 };

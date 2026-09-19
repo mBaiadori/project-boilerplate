@@ -1,7 +1,11 @@
+// =============================================================================
+// COMPONENT: NOTION-LIKE LIVE INTERACTIVE MARKDOWN EDITOR (PRO NOTION UX)
+// Exact DOM layout, SVG toolbar icons, connectivity pills, and metadata inspector
+// =============================================================================
+
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { parseFrontmatter, serializeFrontmatter, type DocumentMetadata } from '../../services/frontmatter';
-import { SlashMenu, type SlashCommandItem } from './SlashMenu';
-import { BubbleMenu } from './BubbleMenu';
+import { NotionEditorEngine } from './notion-editor-engine';
 import { API } from '../../services/api';
 
 interface NotionEditorProps {
@@ -38,14 +42,9 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
   const [showConsumers, setShowConsumers] = useState(false);
   const [showDeps, setShowDeps] = useState(false);
 
-  // Slash & Bubble Menu State
-  const [slashMenuOpen, setSlashMenuOpen] = useState(false);
-  const [slashMenuPosition, setSlashMenuPosition] = useState({ top: 0, left: 0 });
-  const [slashFilter, setSlashFilter] = useState('');
-  const [bubbleMenuOpen, setBubbleMenuOpen] = useState(false);
-  const [bubbleMenuPosition, setBubbleMenuPosition] = useState({ top: 0, left: 0 });
-
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const engineRef = useRef<NotionEditorEngine | null>(null);
+  const isInternalChangeRef = useRef(false);
 
   const parsed = parseFrontmatter(content || '');
   const metadata: DocumentMetadata = parsed.metadata || {};
@@ -64,12 +63,9 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
 
   const handleMetadataFieldChange = (field: keyof DocumentMetadata, value: any) => {
     const updatedMetadata = { ...metadata, [field]: value };
-    const newDoc = serializeFrontmatter(updatedMetadata, body);
-    onChange(newDoc);
-  };
-
-  const handleBodyChange = (newBody: string) => {
-    const newDoc = serializeFrontmatter(metadata, newBody);
+    const currentBody = engineRef.current ? engineRef.current.getMarkdown() : body;
+    const newDoc = serializeFrontmatter(updatedMetadata, currentBody);
+    isInternalChangeRef.current = true;
     onChange(newDoc);
   };
 
@@ -77,19 +73,67 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
     if (!filePath) return;
     setSaveStatus('Salvando...');
     try {
-      await API.saveProjectFile({ path: filePath, content });
+      const currentBody = engineRef.current ? engineRef.current.getMarkdown() : body;
+      const fullDoc = serializeFrontmatter(metadata, currentBody);
+      await API.saveProjectFile({ path: filePath, content: fullDoc });
       setSaveStatus('Salvo no workspace');
       setTimeout(() => setSaveStatus('Pronto'), 2500);
     } catch (e) {
       console.error('Erro ao salvar documento:', e);
       setSaveStatus('Pronto');
     }
-  }, [filePath, content]);
+  }, [filePath, metadata, body]);
+
+  // Initialize & Mount NotionEditorEngine
+  useEffect(() => {
+    if (!canvasRef.current) return;
+
+    const engine = new NotionEditorEngine({
+      canvasElement: canvasRef.current,
+      onChange: () => {
+        if (!engineRef.current) return;
+        const currentBody = engineRef.current.getMarkdown();
+        const currentFull = serializeFrontmatter(metadata, currentBody);
+        isInternalChangeRef.current = true;
+        onChange(currentFull);
+      },
+      onSave: () => {
+        handleSave();
+      },
+      onSendSelectionToCopilot: (text) => {
+        if (onSendSelectionToCopilot) {
+          onSendSelectionToCopilot(text);
+        }
+      }
+    });
+
+    engineRef.current = engine;
+    engine.setMarkdown(body);
+
+    return () => {
+      engine.destroy();
+      engineRef.current = null;
+    };
+  }, []);
+
+  // Sync external content changes into the editor canvas
+  useEffect(() => {
+    if (isInternalChangeRef.current) {
+      isInternalChangeRef.current = false;
+      return;
+    }
+    if (engineRef.current) {
+      const currentEngineMd = engineRef.current.getMarkdown();
+      if (currentEngineMd !== body) {
+        engineRef.current.setMarkdown(body);
+      }
+    }
+  }, [body]);
 
   // Keyboard shortcut Ctrl+S / Cmd+S
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
         e.preventDefault();
         handleSave();
       }
@@ -149,120 +193,40 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
     handleMetadataFieldChange('id', autoId);
   };
 
-  const handleSelectText = () => {
-    const selection = window.getSelection();
-    if (!selection || selection.isCollapsed) {
-      setBubbleMenuOpen(false);
-      return;
-    }
-    const range = selection.getRangeAt(0);
-    const rect = range.getBoundingClientRect();
-    if (rect.width > 0) {
-      setBubbleMenuPosition({ top: rect.top, left: rect.left });
-      setBubbleMenuOpen(true);
-    }
-  };
-
-  const handleFormat = (prefix: string, suffix = '') => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const selected = textarea.value.substring(start, end);
-    const replacement = `${prefix}${selected || 'texto'}${suffix}`;
-
-    const newBody = textarea.value.substring(0, start) + replacement + textarea.value.substring(end);
-    handleBodyChange(newBody);
-    setBubbleMenuOpen(false);
-
-    setTimeout(() => {
-      textarea.focus();
-      textarea.setSelectionRange(start + prefix.length, start + replacement.length - suffix.length);
-    }, 50);
-  };
-
-  const handleTextareaKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === '/') {
-      const textarea = textareaRef.current;
-      if (textarea) {
-        const rect = textarea.getBoundingClientRect();
-        setSlashMenuPosition({ top: rect.top + 40, left: rect.left + 30 });
-        setSlashMenuOpen(true);
-        setSlashFilter('');
-      }
-    } else if (slashMenuOpen) {
-      if (e.key === 'Escape') {
-        setSlashMenuOpen(false);
-      } else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey) {
-        setSlashFilter(prev => prev + e.key);
-      } else if (e.key === 'Backspace') {
-        setSlashFilter(prev => prev.slice(0, -1));
-      }
-    }
-  };
-
-  const handleSelectSlashCommand = (cmd: SlashCommandItem) => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-
-    const cursor = textarea.selectionStart;
-    const before = textarea.value.substring(0, cursor);
-    const after = textarea.value.substring(cursor);
-    const cleanBefore = before.endsWith('/') ? before.slice(0, -1) : before;
-    const newBody = cleanBefore + cmd.template + after;
-    handleBodyChange(newBody);
-    setSlashMenuOpen(false);
-
-    setTimeout(() => {
-      textarea.focus();
-    }, 50);
-  };
-
   const wordCount = body.trim() ? body.trim().split(/\s+/).length : 0;
-  const lineCount = body ? body.split('\n').length : 0;
+  const lineCount = body ? body.split(/\r?\n/).length : 0;
 
-  const consumers = contextData?.consumers || [];
-  const dependencies = contextData?.dependencies || [];
-  const currentLayer = metadata.layer || contextData?.layer || 'L4_ARTIFACT';
-  const currentStatus = (metadata.status || contextData?.status || 'draft').toUpperCase();
-
-  // If no document is selected, render empty state
   if (!filePath) {
     return (
-      <div id="editor-empty-state" className="editor-empty-state" style={{ display: 'flex' }}>
-        <div className="editor-empty-state-card">
-          <div className="empty-icon-circle">
-            <span className="material-symbols-outlined" style={{ fontSize: '32px', color: 'var(--color-primary, #6366f1)' }}>
-              description
+      <div id="editor-empty-state" className="empty-state-container" style={{ display: 'flex' }}>
+        <div className="empty-state-content">
+          <div className="empty-state-icon">
+            <span className="material-symbols-outlined" style={{ fontSize: '48px', color: 'var(--primary, #2563eb)' }}>
+              edit_document
             </span>
           </div>
-          <h3 style={{ margin: '14px 0 6px 0', fontSize: '17px', fontWeight: 600, color: 'var(--text-normal)' }}>
-            Nenhum documento selecionado
-          </h3>
-          <p style={{ margin: '0 0 20px 0', fontSize: '13px', color: 'var(--text-muted)', maxWidth: '440px', lineHeight: 1.5, textAlign: 'center' }}>
-            Selecione um documento na árvore lateral à esquerda ou inicie uma nova especificação a partir do catálogo de templates.
+          <h2>Nenhum Documento Selecionado</h2>
+          <p>
+            Selecione uma especificação na árvore lateral ou inicie a modelagem de um novo domínio de arquitetura.
           </p>
-          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center' }}>
+          <div className="empty-state-actions">
+            {onOpenScaffoldWizard && (
+              <button
+                id="btn-empty-new-spec"
+                className="btn btn-primary"
+                onClick={onOpenScaffoldWizard}
+              >
+                <span className="material-symbols-outlined icon-sm">add_circle</span>
+                <span>Explorar Templates & Criar</span>
+              </button>
+            )}
             <button
-              id="btn-empty-state-templates"
-              className="btn btn-primary"
-              type="button"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 16px', fontSize: '13px' }}
-              onClick={onOpenScaffoldWizard}
-            >
-              <span className="material-symbols-outlined icon-sm">auto_stories</span>
-              <span>Explorar Templates</span>
-            </button>
-            <button
-              id="btn-empty-state-new"
+              id="btn-empty-open-copilot"
               className="btn btn-secondary"
-              type="button"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 16px', fontSize: '13px' }}
-              onClick={onOpenScaffoldWizard}
+              onClick={onToggleCopilot}
             >
-              <span className="material-symbols-outlined icon-sm">add</span>
-              <span>Novo Documento</span>
+              <span className="material-symbols-outlined icon-sm">auto_awesome</span>
+              <span>Abrir Copilot IA</span>
             </button>
           </div>
         </div>
@@ -272,7 +236,7 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
 
   return (
     <>
-      {/* 1. Document Header & Toolbar */}
+      {/* 1. Document Header & Toolbar (Exact Original Layout with SVG Icons) */}
       <div className="editor-top-toolbar">
         <div className="doc-meta-left">
           <div className="doc-breadcrumbs">
@@ -289,6 +253,7 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
             <button
               id="btn-copy-doc-path"
               className="btn-icon-subtle"
+              type="button"
               title="Copiar caminho do arquivo"
               onClick={handleCopyPath}
             >
@@ -300,7 +265,6 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
           </div>
         </div>
 
-        {/* Editor Actions */}
         <div className="editor-actions-right">
           <div className="doc-icon-actions">
             <button
@@ -342,6 +306,7 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
               </svg>
             </button>
           </div>
+
           <div className="toolbar-divider"></div>
 
           {/* Botão Salvar (Ícone Disquete) */}
@@ -350,7 +315,11 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
             className="btn-icon-action"
             type="button"
             title="Salvar no workspace (Ctrl+S)"
-            style={{ color: 'var(--primary, #2563eb)', borderColor: '#bfdbfe', background: '#eff6ff' }}
+            style={{
+              color: 'var(--primary, #2563eb)',
+              borderColor: '#bfdbfe',
+              background: '#eff6ff'
+            }}
             onClick={handleSave}
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -361,22 +330,24 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
           </button>
 
           {/* Botão Diffs & PR (Ícone Git PR) */}
-          <button
-            id="btn-review-diff-direct"
-            className="btn-icon-action"
-            type="button"
-            title="Revisar alterações e propor PR"
-            onClick={onOpenDiffModal}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="18" cy="18" r="3"></circle>
-              <circle cx="6" cy="6" r="3"></circle>
-              <path d="M13 6h3a2 2 0 0 1 2 2v7"></path>
-              <line x1="6" y1="9" x2="6" y2="21"></line>
-            </svg>
-          </button>
+          {onOpenDiffModal && (
+            <button
+              id="btn-review-diff-direct"
+              className="btn-icon-action"
+              type="button"
+              title="Revisar alterações e propor PR"
+              onClick={onOpenDiffModal}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="18" cy="18" r="3"></circle>
+                <circle cx="6" cy="6" r="3"></circle>
+                <path d="M13 6h3a2 2 0 0 1 2 2v7"></path>
+                <line x1="6" y1="9" x2="6" y2="21"></line>
+              </svg>
+            </button>
+          )}
 
-          {/* Botão Modo Auditoria / GitLens */}
+          {/* Botão Modo Auditoria */}
           <button
             id="btn-toggle-audit-mode"
             className={`btn-icon-action ${isAuditMode ? 'active' : ''}`}
@@ -389,98 +360,142 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
               <circle cx="12" cy="12" r="3"></circle>
             </svg>
           </button>
-
-          {/* Botão IA */}
-          <button
-            id="btn-toggle-ai-pane"
-            className="btn-icon-action"
-            type="button"
-            title="Abrir Assistente de IA"
-            onClick={onToggleCopilot}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"></path>
-            </svg>
-          </button>
         </div>
       </div>
 
       {/* 2. Active Bidirectional Connectivity & Breadcrumb Bar */}
       <div className="doc-connectivity-bar" id="doc-connectivity-bar">
         <div className="connectivity-left">
-          <span className="layer-pill" id="conn-layer-pill">{currentLayer}</span>
-          <span className="status-pill" id="conn-status-pill">{currentStatus}</span>
+          <span className="layer-pill" id="conn-layer-pill">
+            {metadata.layer ? metadata.layer.replace(/_.*$/, '') : 'L4'}
+          </span>
+          <span className={`status-pill ${metadata.status || 'active'}`} id="conn-status-pill">
+            {(metadata.status || 'ACTIVE').toUpperCase()}
+          </span>
           <div className="breadcrumb-trail" id="conn-breadcrumb-trail">
-            {filePath.split('/').map((part, i) => (
-              <span key={i} className={`trail-item ${i === filePath.split('/').length - 1 ? 'current' : ''}`}>
-                {part}
+            {metadata.parent ? (
+              <span
+                className="trail-item"
+                style={{ cursor: 'pointer' }}
+                onClick={() => onNavigateFile(metadata.parent!)}
+              >
+                {metadata.parent} &rsaquo;{' '}
               </span>
-            ))}
+            ) : null}
+            <span className="trail-item current">{filePath.split('/').pop()}</span>
           </div>
         </div>
 
         <div className="connectivity-right">
-          {consumers.length > 0 && (
-            <div className="conn-item-badge" id="conn-consumers-badge">
-              <button
-                className="conn-pill consumers"
-                id="btn-toggle-consumers-pop"
-                title="Outros documentos que dependem desta spec"
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-                onClick={() => setShowConsumers(!showConsumers)}
-              >
-                <span className="material-symbols-outlined icon-xs">link</span>
-                <span id="conn-consumers-count">{consumers.length}</span> Consumidor(es)
-              </button>
-              {showConsumers && (
-                <div className="conn-dropdown-menu" id="dropdown-consumers" style={{ display: 'block' }}>
-                  {consumers.map((c: any, idx: number) => (
+          {/* Consumers Badge */}
+          <div className="conn-item-badge" id="conn-consumers-badge" style={{ display: 'inline-flex' }}>
+            <button
+              className="conn-pill consumers"
+              id="btn-toggle-consumers-pop"
+              type="button"
+              title="Outros documentos que dependem desta spec"
+              onClick={() => {
+                setShowConsumers(!showConsumers);
+                setShowDeps(false);
+              }}
+            >
+              <span className="material-symbols-outlined icon-xs">link</span>
+              <span id="conn-consumers-count">{contextData?.consumers?.length || 0}</span> Consumidor(es)
+            </button>
+            {showConsumers && (
+              <div className="conn-dropdown-menu" id="dropdown-consumers" style={{ display: 'block' }}>
+                <div style={{ padding: '8px 12px', fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)' }}>
+                  Consumidores deste Documento
+                </div>
+                {!contextData?.consumers || contextData.consumers.length === 0 ? (
+                  <div style={{ padding: '8px 12px', fontSize: '11px', color: 'var(--text-dim)' }}>
+                    Nenhum consumidor registrado
+                  </div>
+                ) : (
+                  contextData.consumers.map((c: any, idx: number) => (
                     <div
                       key={idx}
-                      className="dropdown-item"
+                      className="relation-item"
+                      style={{ padding: '6px 12px', cursor: 'pointer', fontSize: '11.5px' }}
                       onClick={() => {
-                        onNavigateFile(c.path || c);
+                        onNavigateFile(c.path);
                         setShowConsumers(false);
                       }}
                     >
-                      {c.title || c.path || c}
+                      {c.title || c.path}
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
+                  ))
+                )}
+              </div>
+            )}
+          </div>
 
-          {dependencies.length > 0 && (
-            <div className="conn-item-badge" id="conn-deps-badge">
-              <button
-                className="conn-pill deps"
-                id="btn-toggle-deps-pop"
-                title="Contratos consumidos por esta spec"
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-                onClick={() => setShowDeps(!showDeps)}
-              >
-                <span className="material-symbols-outlined icon-xs">arrow_forward</span>
-                <span id="conn-deps-count">{dependencies.length}</span> Dependência(s)
-              </button>
-              {showDeps && (
-                <div className="conn-dropdown-menu" id="dropdown-deps" style={{ display: 'block' }}>
-                  {dependencies.map((d: any, idx: number) => (
+          {/* Dependencies Badge */}
+          <div className="conn-item-badge" id="conn-deps-badge" style={{ display: 'inline-flex' }}>
+            <button
+              className="conn-pill deps"
+              id="btn-toggle-deps-pop"
+              type="button"
+              title="Contratos consumidos por esta spec"
+              onClick={() => {
+                setShowDeps(!showDeps);
+                setShowConsumers(false);
+              }}
+            >
+              <span className="material-symbols-outlined icon-xs">arrow_forward</span>
+              <span id="conn-deps-count">{contextData?.dependencies?.length || 0}</span> Dependência(s)
+            </button>
+            {showDeps && (
+              <div className="conn-dropdown-menu" id="dropdown-deps" style={{ display: 'block' }}>
+                <div style={{ padding: '8px 12px', fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)' }}>
+                  Dependências deste Documento
+                </div>
+                {!contextData?.dependencies || contextData.dependencies.length === 0 ? (
+                  <div style={{ padding: '8px 12px', fontSize: '11px', color: 'var(--text-dim)' }}>
+                    Nenhuma dependência registrada
+                  </div>
+                ) : (
+                  contextData.dependencies.map((d: any, idx: number) => (
                     <div
                       key={idx}
-                      className="dropdown-item"
+                      className="relation-item"
+                      style={{ padding: '6px 12px', cursor: 'pointer', fontSize: '11.5px' }}
                       onClick={() => {
-                        onNavigateFile(d.path || d);
+                        onNavigateFile(d.path);
                         setShowDeps(false);
                       }}
                     >
-                      {d.title || d.path || d}
+                      {d.title || d.path}
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Lifecycle Nav Group */}
+          <div className="lifecycle-nav-group" id="conn-lifecycle-group" style={{ display: 'inline-flex' }}>
+            <button
+              className="btn-lifecycle"
+              id="btn-lifecycle-prev"
+              type="button"
+              title="Etapa anterior"
+              disabled={!metadata.previous_stage}
+              onClick={() => metadata.previous_stage && onNavigateFile(metadata.previous_stage)}
+            >
+              ‹ Anterior
+            </button>
+            <button
+              className="btn-lifecycle"
+              id="btn-lifecycle-next"
+              type="button"
+              title="Próxima etapa"
+              disabled={!metadata.next_stage}
+              onClick={() => metadata.next_stage && onNavigateFile(metadata.next_stage)}
+            >
+              Próxima ›
+            </button>
+          </div>
         </div>
       </div>
 
@@ -495,9 +510,20 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
             <span className="meta-toggle-icon material-symbols-outlined icon-sm">tune</span>
             <strong id="meta-header-title">Metadados & Governança</strong>
             <div className="meta-header-summary" id="meta-header-summary">
-              <span className="pill" id="meta-summary-pill">{metadata.type || 'Spec'}</span>
+              <span className="pill" id="meta-summary-pill">
+                {metadata.type || metadata.layer || 'Spec'}
+              </span>
             </div>
           </div>
+          <button
+            type="button"
+            className="btn-icon-subtle"
+            style={{ border: 'none', background: 'transparent' }}
+          >
+            <span className="material-symbols-outlined icon-xs">
+              {isInspectorOpen ? 'expand_less' : 'expand_more'}
+            </span>
+          </button>
         </div>
 
         {/* Expanded Form Fields */}
@@ -515,7 +541,15 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
                   className="btn-icon-subtle"
                   type="button"
                   title="Gerar ID Oficial Único"
-                  style={{ fontSize: '11px', padding: '1px 6px', color: 'var(--primary, #2563eb)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '2px' }}
+                  style={{
+                    fontSize: '11px',
+                    padding: '1px 6px',
+                    color: 'var(--primary, #2563eb)',
+                    fontWeight: 600,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '2px'
+                  }}
                   onClick={handleAutoGenId}
                 >
                   <span className="material-symbols-outlined icon-xs">bolt</span>
@@ -653,28 +687,11 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
       {/* 4. Notion-like Canvas Body */}
       <div className="notion-editor-wrapper" id="notion-editor-wrapper">
         <div className="notion-editor-scroll-container">
-          <div id="notion-editor-canvas" className="notion-canvas" onMouseUp={handleSelectText}>
-            <textarea
-              ref={textareaRef}
-              id="notion-raw-textarea"
-              value={body}
-              onChange={e => handleBodyChange(e.target.value)}
-              onKeyDown={handleTextareaKeyDown}
-              placeholder="Digite '/' para comandos rápidos ou comece a escrever sua especificação..."
-              style={{
-                width: '100%',
-                minHeight: '520px',
-                border: 'none',
-                outline: 'none',
-                resize: 'none',
-                background: 'transparent',
-                fontFamily: 'inherit',
-                fontSize: '15px',
-                lineHeight: '1.7',
-                color: 'var(--text-main)'
-              }}
-            />
-          </div>
+          <div
+            ref={canvasRef}
+            id="notion-editor-canvas"
+            className="notion-canvas"
+          />
         </div>
       </div>
 
@@ -701,33 +718,6 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
           </button>
         </div>
       </footer>
-
-      {/* Floating Menus */}
-      <SlashMenu
-        isOpen={slashMenuOpen}
-        onClose={() => setSlashMenuOpen(false)}
-        onSelect={handleSelectSlashCommand}
-        position={slashMenuPosition}
-        filterText={slashFilter}
-      />
-
-      <BubbleMenu
-        isOpen={bubbleMenuOpen}
-        position={bubbleMenuPosition}
-        onFormat={handleFormat}
-        onAskAI={() => {
-          const textarea = textareaRef.current;
-          if (textarea && onSendSelectionToCopilot) {
-            const start = textarea.selectionStart;
-            const end = textarea.selectionEnd;
-            const selected = textarea.value.substring(start, end);
-            if (selected.trim()) {
-              onSendSelectionToCopilot(selected);
-              setBubbleMenuOpen(false);
-            }
-          }
-        }}
-      />
 
       {/* Import Doc Modal */}
       {isImportModalOpen && (

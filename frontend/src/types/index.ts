@@ -50,10 +50,12 @@ export interface WorkspaceChange {
 export interface TreeNode {
   name: string;
   path: string;
-  type: 'file' | 'directory';
+  type: 'file' | 'directory' | 'dir' | string;
   children?: TreeNode[];
   is_directory?: boolean;
   status?: string;
+  badge?: string;
+  desc?: string;
 }
 
 export interface PR {

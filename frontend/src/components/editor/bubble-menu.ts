@@ -1,0 +1,224 @@
+// =============================================================================
+// COMPONENT: BUBBLE MENU (FLOATING SELECTION TOOLBAR WITH NOTION PALETTE)
+// Oferece formatação rápida (Negrito, Itálico, Código, Link, Cores Notion) ao selecionar texto.
+// =============================================================================
+
+export class BubbleMenuEngine {
+  container: HTMLElement;
+  onFormat: (action: string) => void;
+  onAskCopilot?: (text: string) => void;
+  element: HTMLElement | null = null;
+  colorPicker: HTMLElement | null = null;
+  isVisible = false;
+  savedRange: Range | null = null;
+
+  notionColors = [
+    { name: 'Padrão', color: 'inherit', bg: 'transparent' },
+    { name: 'Cinza', color: '#64748b', bg: '#f1f5f9' },
+    { name: 'Marrom', color: '#78350f', bg: '#fef3c7' },
+    { name: 'Laranja', color: '#c2410c', bg: '#ffedd5' },
+    { name: 'Amarelo', color: '#854d0e', bg: '#fef9c3' },
+    { name: 'Verde', color: '#15803d', bg: '#dcfce7' },
+    { name: 'Azul', color: '#1d4ed8', bg: '#dbeafe' },
+    { name: 'Roxo', color: '#7e22ce', bg: '#f3e8ff' },
+    { name: 'Rosa', color: '#be185d', bg: '#fce7f3' },
+    { name: 'Vermelho', color: '#b91c1c', bg: '#fee2e2' }
+  ];
+
+  private onSelectionChangeHandler: () => void;
+  private onResizeHandler: () => void;
+  private onScrollHandler: () => void;
+
+  constructor({
+    container,
+    onFormat,
+    onAskCopilot
+  }: {
+    container: HTMLElement;
+    onFormat?: (action: string) => void;
+    onAskCopilot?: (text: string) => void;
+  }) {
+    this.container = container;
+    this.onFormat = onFormat || (() => {});
+    this.onAskCopilot = onAskCopilot;
+
+    this.onSelectionChangeHandler = () => this.updatePosition();
+    this.onResizeHandler = () => this.updatePosition();
+    this.onScrollHandler = () => this.updatePosition();
+
+    this.init();
+  }
+
+  init() {
+    this.element = document.createElement('div');
+    this.element.className = 'bubble-menu-popover';
+    this.element.style.display = 'none';
+    this.element.innerHTML = `
+      <button type="button" class="bubble-btn" data-action="bold" title="Negrito (Ctrl+B)"><strong>B</strong></button>
+      <button type="button" class="bubble-btn" data-action="italic" title="Itálico (Ctrl+I)"><em>I</em></button>
+      <button type="button" class="bubble-btn" data-action="strike" title="Tachado"><s>S</s></button>
+      <div class="bubble-divider"></div>
+      <button type="button" class="bubble-btn" data-action="code" title="Código inline"><code>&lt;/&gt;</code></button>
+      <button type="button" class="bubble-btn" data-action="link" title="Inserir Link (Ctrl+K)"><span class="material-symbols-outlined icon-xs">link</span></button>
+      <button type="button" class="bubble-btn" data-action="color" title="Cor & Destaque"><span class="material-symbols-outlined icon-xs">palette</span></button>
+      <div class="bubble-divider"></div>
+      <button type="button" class="bubble-btn ai-btn" data-action="ask-ai" title="Consultar / Refatorar com IA Copilot" style="color: var(--primary, #2563eb); display: inline-flex; align-items: center; gap: 3px; font-weight: 600; font-size: 11.5px; padding: 2px 7px;">
+        <span class="material-symbols-outlined icon-xs">auto_awesome</span>
+        <span>Perguntar à IA</span>
+      </button>
+    `;
+
+    // Color Picker Popover
+    this.colorPicker = document.createElement('div');
+    this.colorPicker.className = 'bubble-color-picker';
+    this.colorPicker.style.display = 'none';
+    this.colorPicker.innerHTML = this.notionColors.map(c => `
+      <div class="color-swatch" style="background:${c.bg}; border-color:${c.color};" data-color="${c.color}" data-bg="${c.bg}" title="${c.name}"></div>
+    `).join('');
+
+    this.element.appendChild(this.colorPicker);
+    document.body.appendChild(this.element);
+
+    this.element.querySelectorAll('.bubble-btn').forEach(btn => {
+      btn.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        const action = (btn as HTMLElement).dataset.action;
+        if (action === 'color') {
+          if (this.colorPicker) {
+            const isShown = this.colorPicker.style.display === 'flex';
+            this.colorPicker.style.display = isShown ? 'none' : 'flex';
+          }
+        } else if (action === 'ask-ai') {
+          const selection = window.getSelection();
+          const text = selection ? selection.toString().trim() : '';
+          this.hide();
+          if (text && this.onAskCopilot) {
+            this.onAskCopilot(text);
+          }
+        } else {
+          if (this.colorPicker) this.colorPicker.style.display = 'none';
+          if (action) this.handleAction(action);
+        }
+      });
+    });
+
+    this.colorPicker.querySelectorAll('.color-swatch').forEach(swatch => {
+      swatch.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        const color = (swatch as HTMLElement).dataset.color || 'inherit';
+        const bg = (swatch as HTMLElement).dataset.bg || 'transparent';
+        this.applyColor(color, bg);
+        if (this.colorPicker) this.colorPicker.style.display = 'none';
+      });
+    });
+
+    document.addEventListener('selectionchange', this.onSelectionChangeHandler);
+    window.addEventListener('resize', this.onResizeHandler);
+    window.addEventListener('scroll', this.onScrollHandler, true);
+  }
+
+  updatePosition() {
+    const selection = window.getSelection();
+    if (!selection || selection.isCollapsed || !this.container) {
+      this.hide();
+      return;
+    }
+
+    const range = selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
+    if (!range || !this.container.contains(range.commonAncestorContainer)) {
+      this.hide();
+      return;
+    }
+
+    const text = selection.toString().trim();
+    if (!text) {
+      this.hide();
+      return;
+    }
+
+    this.savedRange = range.cloneRange();
+    const rect = range.getBoundingClientRect();
+    if (rect.width === 0 && rect.height === 0) {
+      this.hide();
+      return;
+    }
+
+    if (this.element) {
+      this.element.style.display = 'flex';
+      const menuWidth = this.element.offsetWidth || 300;
+      const left = Math.max(10, Math.min(rect.left + rect.width / 2 - menuWidth / 2, window.innerWidth - menuWidth - 10));
+      this.element.style.left = `${left}px`;
+      this.element.style.top = `${rect.top - 46}px`;
+    }
+    this.isVisible = true;
+  }
+
+  handleAction(action: string) {
+    switch (action) {
+      case 'bold':
+        document.execCommand('bold', false, undefined);
+        break;
+      case 'italic':
+        document.execCommand('italic', false, undefined);
+        break;
+      case 'strike':
+        document.execCommand('strikeThrough', false, undefined);
+        break;
+      case 'code':
+        this.wrapSelectionWithTag('code');
+        break;
+      case 'link': {
+        const url = prompt('Insira o link / URL:');
+        if (url) {
+          document.execCommand('createLink', false, url);
+        }
+        break;
+      }
+    }
+
+    this.onFormat(action);
+    this.updatePosition();
+  }
+
+  wrapSelectionWithTag(tag: string) {
+    const selection = window.getSelection();
+    if (!selection || selection.isCollapsed) return;
+
+    const range = selection.getRangeAt(0);
+    const selectedText = range.extractContents();
+    const el = document.createElement(tag);
+    el.appendChild(selectedText);
+    range.insertNode(el);
+
+    selection.removeAllRanges();
+    const newRange = document.createRange();
+    newRange.selectNodeContents(el);
+    selection.addRange(newRange);
+  }
+
+  applyColor(color: string, bg: string) {
+    if (bg && bg !== 'transparent') {
+      document.execCommand('hiliteColor', false, bg);
+    }
+    if (color && color !== 'inherit') {
+      document.execCommand('foreColor', false, color);
+    }
+    this.onFormat('color');
+  }
+
+  hide() {
+    if (this.element) this.element.style.display = 'none';
+    if (this.colorPicker) this.colorPicker.style.display = 'none';
+    this.isVisible = false;
+  }
+
+  destroy() {
+    document.removeEventListener('selectionchange', this.onSelectionChangeHandler);
+    window.removeEventListener('resize', this.onResizeHandler);
+    window.removeEventListener('scroll', this.onScrollHandler, true);
+    if (this.element) {
+      this.element.remove();
+      this.element = null;
+    }
+  }
+}

@@ -1,30 +1,90 @@
 // =============================================================================
-// COMPONENT: NOTION-LIKE LIVE INTERACTIVE MARKDOWN EDITOR (PRO NOTION UX)
-// Inclui Side Block Handles ('+' e '⋮⋮'), Auto-formatação Markdown (#, ##, -, 1., []),
+// COMPONENT: NOTION-LIKE LIVE INTERACTIVE MARKDOWN EDITOR ENGINE (PRO NOTION UX)
+// Side Block Handles ('+' e '⋮⋮'), Auto-formatação Markdown (#, ##, -, 1., []),
 // Smart Backspace, Context Menu de Blocos, Tabelas, Callouts e Diagramas Mermaid.
 // =============================================================================
 
-import { SlashMenu } from './slash-menu.js';
-import { BubbleMenu } from './bubble-menu.js';
-import { NotionTable } from './notion-table.js';
+import { SlashMenuEngine } from './slash-menu';
+import { BubbleMenuEngine } from './bubble-menu';
+import { NotionTable } from './notion-table';
 
-export class NotionEditor {
-  constructor({ canvasElement, onChange, onSave }) {
+declare const mermaid: any;
+
+function escapeHtml(text: string): string {
+  if (!text) return '';
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+export class NotionEditorEngine {
+  canvas: HTMLElement;
+  onChange: () => void;
+  onSave: () => void;
+  onSendSelectionToCopilot?: (text: string) => void;
+
+  undoStack: string[] = [];
+  redoStack: string[] = [];
+  isComposing = false;
+  historyTimer: any = null;
+  MAX_HISTORY = 150;
+
+  slashMenu: SlashMenuEngine | null = null;
+  bubbleMenu: BubbleMenuEngine | null = null;
+  sideHandle: HTMLElement | null = null;
+  blockMenu: HTMLElement | null = null;
+  dropIndicator: HTMLElement | null = null;
+  hoveredBlock: HTMLElement | null = null;
+  draggedBlock: HTMLElement | null = null;
+  dropTargetBlock: HTMLElement | null = null;
+  dropPosition: 'before' | 'after' = 'after';
+
+  private boundOnKeyDown: (e: KeyboardEvent) => void;
+  private boundOnKeyUp: (e: KeyboardEvent) => void;
+  private boundOnInput: (e: Event) => void;
+  private boundOnPaste: (e: ClipboardEvent) => void;
+  private boundOnClick: (e: MouseEvent) => void;
+  private boundOnMouseMove: (e: MouseEvent) => void;
+  private boundOnMouseLeave: (e: MouseEvent) => void;
+  private boundOnDragOver: (e: DragEvent) => void;
+  private boundOnDragLeave: (e: DragEvent) => void;
+  private boundOnDrop: (e: DragEvent) => void;
+  private boundDocClick: (e: MouseEvent) => void;
+
+  constructor({
+    canvasElement,
+    onChange,
+    onSave,
+    onSendSelectionToCopilot
+  }: {
+    canvasElement: HTMLElement;
+    onChange?: () => void;
+    onSave?: () => void;
+    onSendSelectionToCopilot?: (text: string) => void;
+  }) {
     this.canvas = canvasElement;
     this.onChange = onChange || (() => {});
     this.onSave = onSave || (() => {});
+    this.onSendSelectionToCopilot = onSendSelectionToCopilot;
 
-    this.undoStack = [];
-    this.redoStack = [];
-    this.isComposing = false;
-    this.historyTimer = null;
-    this.MAX_HISTORY = 150;
-
-    this.slashMenu = null;
-    this.bubbleMenu = null;
-    this.sideHandle = null;
-    this.blockMenu = null;
-    this.hoveredBlock = null;
+    this.boundOnKeyDown = (e) => this.handleKeyDown(e);
+    this.boundOnKeyUp = (e) => this.handleKeyUp(e);
+    this.boundOnInput = (e) => this.handleInput(e);
+    this.boundOnPaste = (e) => this.handlePaste(e);
+    this.boundOnClick = (e) => this.handleClick(e);
+    this.boundOnMouseMove = (e) => this.handleMouseMove(e);
+    this.boundOnMouseLeave = (e) => this.handleMouseLeave(e);
+    this.boundOnDragOver = (e) => this.handleDragOver(e);
+    this.boundOnDragLeave = (e) => this.handleDragLeave(e);
+    this.boundOnDrop = (e) => this.handleDrop(e);
+    this.boundDocClick = (e) => {
+      if (this.blockMenu && !this.blockMenu.contains(e.target as Node)) {
+        this.blockMenu.style.display = 'none';
+      }
+    };
 
     this.init();
   }
@@ -34,52 +94,47 @@ export class NotionEditor {
     this.canvas.setAttribute('spellcheck', 'false');
     this.canvas.classList.add('notion-canvas');
 
-    // 1. Inicializa Menus Flutuantes
-    this.slashMenu = new SlashMenu({
+    // 1. Menus Flutuantes
+    this.slashMenu = new SlashMenuEngine({
       container: this.canvas,
       onSelectCommand: (cmdId, targetRange) => this.handleSlashCommand(cmdId, targetRange)
     });
 
-    this.bubbleMenu = new BubbleMenu({
+    this.bubbleMenu = new BubbleMenuEngine({
       container: this.canvas,
-      onFormat: () => this.recordChange()
-    });
-
-    // 2. Inicializa Side Handle ('+' e '⋮⋮') e Menu de Contexto
-    this.initSideHandles();
-
-    // 3. Eventos de Teclado, Input e Mouse
-    this.canvas.addEventListener('keydown', (e) => this.handleKeyDown(e));
-    this.canvas.addEventListener('keyup', (e) => this.handleKeyUp(e));
-    this.canvas.addEventListener('input', (e) => this.handleInput(e));
-    this.canvas.addEventListener('paste', (e) => this.handlePaste(e));
-
-    // Clique em checkboxes de todo-lists e ícones de callout
-    this.canvas.addEventListener('click', (e) => {
-      if (e.target.classList.contains('notion-todo-checkbox')) {
-        const item = e.target.closest('.notion-todo-item');
-        if (item) {
-          item.classList.toggle('checked', e.target.checked);
-          this.recordChange();
+      onFormat: () => this.recordChange(),
+      onAskCopilot: (text) => {
+        if (this.onSendSelectionToCopilot) {
+          this.onSendSelectionToCopilot(text);
         }
-      } else if (e.target.classList.contains('notion-callout-icon')) {
-        this.toggleCalloutType(e.target.closest('.notion-callout'));
       }
     });
 
-    // Se estiver vazio, inicializa com parágrafo inicial
+    // 2. Side Handle e Menu de Contexto
+    this.initSideHandles();
+
+    // 3. Event Listeners
+    this.canvas.addEventListener('keydown', this.boundOnKeyDown);
+    this.canvas.addEventListener('keyup', this.boundOnKeyUp);
+    this.canvas.addEventListener('input', this.boundOnInput);
+    this.canvas.addEventListener('paste', this.boundOnPaste);
+    this.canvas.addEventListener('click', this.boundOnClick);
+    this.canvas.addEventListener('mousemove', this.boundOnMouseMove);
+    this.canvas.addEventListener('mouseleave', this.boundOnMouseLeave);
+    this.canvas.addEventListener('dragover', this.boundOnDragOver);
+    this.canvas.addEventListener('dragleave', this.boundOnDragLeave);
+    this.canvas.addEventListener('drop', this.boundOnDrop);
+    document.addEventListener('click', this.boundDocClick);
+
     if (!this.canvas.innerHTML.trim()) {
       this.canvas.innerHTML = '<p><br></p>';
     }
   }
 
-  // ===========================================================================
-  // NOTION SIDE GUTTER HANDLES ('+' e '⋮⋮') & CONTEXT MENU
-  // ===========================================================================
-
   initSideHandles() {
     this.sideHandle = document.createElement('div');
     this.sideHandle.className = 'notion-side-handle';
+    this.sideHandle.style.display = 'none';
     this.sideHandle.innerHTML = `
       <button type="button" class="btn-side-handle" data-action="add-block" title="Adicionar bloco abaixo (+)">+</button>
       <button type="button" class="btn-side-handle" data-action="block-options" draggable="true" title="Arraste para mover ou clique para opções (⋮⋮)">⋮⋮</button>
@@ -93,6 +148,7 @@ export class NotionEditor {
 
     this.blockMenu = document.createElement('div');
     this.blockMenu.className = 'notion-block-menu';
+    this.blockMenu.style.display = 'none';
     this.blockMenu.innerHTML = `
       <div class="block-menu-section">Ações do Bloco</div>
       <div class="block-menu-item" data-action="move-up"><span class="material-symbols-outlined icon-xs">arrow_upward</span> Mover para Cima</div>
@@ -112,139 +168,71 @@ export class NotionEditor {
     `;
     document.body.appendChild(this.blockMenu);
 
-    const dragBtn = this.sideHandle.querySelector('[data-action="block-options"]');
+    const dragBtn = this.sideHandle.querySelector('[data-action="block-options"]') as HTMLElement | null;
 
-    // 1. DRAG & DROP NATIVO DE BLOCOS
-    dragBtn.addEventListener('dragstart', (e) => {
-      if (!this.hoveredBlock) return;
-      this.draggedBlock = this.hoveredBlock;
-      e.dataTransfer.setData('text/plain', '');
-      e.dataTransfer.effectAllowed = 'move';
-      this.hoveredBlock.style.opacity = '0.4';
-      this.blockMenu.style.display = 'none';
-    });
-
-    dragBtn.addEventListener('dragend', () => {
-      if (this.draggedBlock) {
-        this.draggedBlock.style.opacity = '1';
-        this.draggedBlock = null;
-      }
-      this.dropIndicator.style.display = 'none';
-    });
-
-    this.canvas.addEventListener('dragover', (e) => {
-      if (!this.draggedBlock) return;
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'move';
-
-      const target = this.findTopLevelBlock(e.target);
-      if (target && target !== this.canvas && target !== this.draggedBlock) {
-        this.dropTargetBlock = target;
-        const rect = target.getBoundingClientRect();
-        const isUpperHalf = e.clientY < rect.top + rect.height / 2;
-        this.dropPosition = isUpperHalf ? 'before' : 'after';
-
-        this.dropIndicator.style.display = 'block';
-        this.dropIndicator.style.left = `${rect.left}px`;
-        this.dropIndicator.style.width = `${rect.width}px`;
-        this.dropIndicator.style.top = isUpperHalf ? `${rect.top - 2}px` : `${rect.bottom - 1}px`;
-      }
-    });
-
-    this.canvas.addEventListener('dragleave', (e) => {
-      if (!this.canvas.contains(e.relatedTarget)) {
-        this.dropIndicator.style.display = 'none';
-      }
-    });
-
-    this.canvas.addEventListener('drop', (e) => {
-      if (!this.draggedBlock || !this.dropTargetBlock) return;
-      e.preventDefault();
-
-      if (this.dropPosition === 'before') {
-        this.dropTargetBlock.insertAdjacentElement('beforebegin', this.draggedBlock);
-      } else {
-        this.dropTargetBlock.insertAdjacentElement('afterend', this.draggedBlock);
-      }
-
-      this.dropIndicator.style.display = 'none';
-      this.draggedBlock.style.opacity = '1';
-      this.draggedBlock = null;
-      this.dropTargetBlock = null;
-      this.recordChange();
-    });
-
-    // 2. Posicionamento do Side Handle no Hover
-    this.canvas.addEventListener('mousemove', (e) => {
-      if (this.draggedBlock) return;
-      if (!this.canvas.offsetParent) {
-        this.hideFloatingMenus();
-        return;
-      }
-      const block = this.findTopLevelBlock(e.target);
-      if (block && block !== this.canvas) {
-        this.hoveredBlock = block;
-        const rect = block.getBoundingClientRect();
-        this.sideHandle.style.display = 'flex';
-        this.sideHandle.style.left = `${rect.left - 54}px`;
-        this.sideHandle.style.top = `${rect.top + 2}px`;
-      }
-    });
-
-    this.canvas.addEventListener('mouseleave', (e) => {
-      setTimeout(() => {
-        const isOverHandle = this.sideHandle && this.sideHandle.matches(':hover');
-        const isOverMenu = this.blockMenu && this.blockMenu.matches(':hover');
-        if (!isOverHandle && !isOverMenu) {
-          if (this.sideHandle) this.sideHandle.style.display = 'none';
+    if (dragBtn) {
+      dragBtn.addEventListener('dragstart', (e: DragEvent) => {
+        if (!this.hoveredBlock) return;
+        this.draggedBlock = this.hoveredBlock;
+        if (e.dataTransfer) {
+          e.dataTransfer.setData('text/plain', '');
+          e.dataTransfer.effectAllowed = 'move';
         }
-      }, 60);
-    });
+        this.hoveredBlock.style.opacity = '0.4';
+        if (this.blockMenu) this.blockMenu.style.display = 'none';
+      });
 
-    this.sideHandle.addEventListener('mouseenter', () => {
-      this.sideHandle.style.display = 'flex';
-    });
-
-    this.sideHandle.addEventListener('mouseleave', () => {
-      setTimeout(() => {
-        const isOverCanvas = this.canvas && this.canvas.matches(':hover');
-        const isOverMenu = this.blockMenu && this.blockMenu.matches(':hover');
-        if (!isOverCanvas && !isOverMenu) {
-          if (this.sideHandle) this.sideHandle.style.display = 'none';
+      dragBtn.addEventListener('dragend', () => {
+        if (this.draggedBlock) {
+          this.draggedBlock.style.opacity = '1';
+          this.draggedBlock = null;
         }
-      }, 60);
-    });
+        if (this.dropIndicator) this.dropIndicator.style.display = 'none';
+      });
 
-    // 3. Clique no botão '+'
-    this.sideHandle.querySelector('[data-action="add-block"]').addEventListener('click', (e) => {
+      dragBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (!this.hoveredBlock || !this.sideHandle || !this.blockMenu) return;
+        const rect = this.sideHandle.getBoundingClientRect();
+        this.blockMenu.style.display = 'flex';
+        const menuWidth = 230;
+        const left = Math.min(rect.right + 6, window.innerWidth - menuWidth - 10);
+        this.blockMenu.style.left = `${Math.max(10, left)}px`;
+        this.blockMenu.style.top = `${rect.top}px`;
+      });
+    }
+
+    this.sideHandle.querySelector('[data-action="add-block"]')?.addEventListener('click', (e) => {
       e.stopPropagation();
       if (!this.hoveredBlock) return;
       const newP = document.createElement('p');
       newP.innerHTML = '<br>';
       this.hoveredBlock.insertAdjacentElement('afterend', newP);
       this.placeCursorIn(newP);
-      this.slashMenu.openAtCaret('');
+      if (this.slashMenu) this.slashMenu.openAtCaret('');
       this.recordChange();
     });
 
-    // 4. Clique no botão '⋮⋮' (Opções)
-    dragBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      if (!this.hoveredBlock) return;
-      const rect = this.sideHandle.getBoundingClientRect();
-      this.blockMenu.style.display = 'flex';
-      const menuWidth = 230;
-      const left = Math.min(rect.right + 6, window.innerWidth - menuWidth - 10);
-      this.blockMenu.style.left = `${Math.max(10, left)}px`;
-      this.blockMenu.style.top = `${rect.top}px`;
+    this.sideHandle.addEventListener('mouseenter', () => {
+      if (this.sideHandle) this.sideHandle.style.display = 'flex';
     });
 
-    // 5. Ações do Menu de Bloco
+    this.sideHandle.addEventListener('mouseleave', () => {
+      setTimeout(() => {
+        const isOverCanvas = this.canvas && this.canvas.matches(':hover');
+        const isOverMenu = this.blockMenu && this.blockMenu.matches(':hover');
+        if (!isOverCanvas && !isOverMenu && this.sideHandle) {
+          this.sideHandle.style.display = 'none';
+        }
+      }, 60);
+    });
+
+    // Ações do Menu de Bloco
     this.blockMenu.querySelectorAll('.block-menu-item').forEach(item => {
       item.addEventListener('click', () => {
-        const action = item.dataset.action;
-        const turn = item.dataset.turn;
-        this.blockMenu.style.display = 'none';
+        const action = (item as HTMLElement).dataset.action;
+        const turn = (item as HTMLElement).dataset.turn;
+        if (this.blockMenu) this.blockMenu.style.display = 'none';
 
         if (!this.hoveredBlock) return;
 
@@ -265,7 +253,7 @@ export class NotionEditor {
           if (!this.canvas.children.length) this.canvas.innerHTML = '<p><br></p>';
           this.recordChange();
         } else if (action === 'duplicate') {
-          const clone = this.hoveredBlock.cloneNode(true);
+          const clone = this.hoveredBlock.cloneNode(true) as HTMLElement;
           this.hoveredBlock.insertAdjacentElement('afterend', clone);
           this.attachInteractiveListeners();
           this.recordChange();
@@ -274,33 +262,110 @@ export class NotionEditor {
         }
       });
     });
+  }
 
-    document.addEventListener('click', (e) => {
-      if (!this.blockMenu.contains(e.target)) {
-        this.blockMenu.style.display = 'none';
+  handleMouseMove(e: MouseEvent) {
+    if (this.draggedBlock) return;
+    if (!this.canvas.offsetParent) {
+      this.hideFloatingMenus();
+      return;
+    }
+    const block = this.findTopLevelBlock(e.target as Node);
+    if (block && block !== this.canvas && this.sideHandle) {
+      this.hoveredBlock = block;
+      const rect = block.getBoundingClientRect();
+      this.sideHandle.style.display = 'flex';
+      this.sideHandle.style.left = `${rect.left - 54}px`;
+      this.sideHandle.style.top = `${rect.top + 2}px`;
+    }
+  }
+
+  handleMouseLeave(_e: MouseEvent) {
+    setTimeout(() => {
+      const isOverHandle = this.sideHandle && this.sideHandle.matches(':hover');
+      const isOverMenu = this.blockMenu && this.blockMenu.matches(':hover');
+      if (!isOverHandle && !isOverMenu && this.sideHandle) {
+        this.sideHandle.style.display = 'none';
       }
-    });
+    }, 60);
+  }
+
+  handleDragOver(e: DragEvent) {
+    if (!this.draggedBlock) return;
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+
+    const target = this.findTopLevelBlock(e.target as Node);
+    if (target && target !== this.canvas && target !== this.draggedBlock && this.dropIndicator) {
+      this.dropTargetBlock = target;
+      const rect = target.getBoundingClientRect();
+      const isUpperHalf = e.clientY < rect.top + rect.height / 2;
+      this.dropPosition = isUpperHalf ? 'before' : 'after';
+
+      this.dropIndicator.style.display = 'block';
+      this.dropIndicator.style.left = `${rect.left}px`;
+      this.dropIndicator.style.width = `${rect.width}px`;
+      this.dropIndicator.style.top = isUpperHalf ? `${rect.top - 2}px` : `${rect.bottom - 1}px`;
+    }
+  }
+
+  handleDragLeave(e: DragEvent) {
+    if (!this.canvas.contains(e.relatedTarget as Node) && this.dropIndicator) {
+      this.dropIndicator.style.display = 'none';
+    }
+  }
+
+  handleDrop(e: DragEvent) {
+    if (!this.draggedBlock || !this.dropTargetBlock) return;
+    e.preventDefault();
+
+    if (this.dropPosition === 'before') {
+      this.dropTargetBlock.insertAdjacentElement('beforebegin', this.draggedBlock);
+    } else {
+      this.dropTargetBlock.insertAdjacentElement('afterend', this.draggedBlock);
+    }
+
+    if (this.dropIndicator) this.dropIndicator.style.display = 'none';
+    this.draggedBlock.style.opacity = '1';
+    this.draggedBlock = null;
+    this.dropTargetBlock = null;
+    this.recordChange();
+  }
+
+  handleClick(e: MouseEvent) {
+    const target = e.target as HTMLElement | null;
+    if (!target) return;
+
+    if (target.classList.contains('notion-todo-checkbox')) {
+      const item = target.closest('.notion-todo-item') as HTMLElement | null;
+      if (item) {
+        item.classList.toggle('checked', (target as HTMLInputElement).checked);
+        this.recordChange();
+      }
+    } else if (target.classList.contains('notion-callout-icon')) {
+      this.toggleCalloutType(target.closest('.notion-callout') as HTMLElement | null);
+    }
   }
 
   hideFloatingMenus() {
     if (this.sideHandle) this.sideHandle.style.display = 'none';
     if (this.blockMenu) this.blockMenu.style.display = 'none';
     if (this.dropIndicator) this.dropIndicator.style.display = 'none';
-    if (this.bubbleMenu && typeof this.bubbleMenu.hide === 'function') this.bubbleMenu.hide();
-    if (this.slashMenu && typeof this.slashMenu.hide === 'function') this.slashMenu.hide();
+    if (this.bubbleMenu) this.bubbleMenu.hide();
+    if (this.slashMenu) this.slashMenu.hide();
   }
 
-  findTopLevelBlock(node) {
-    let current = node;
+  findTopLevelBlock(node: Node | null): HTMLElement | null {
+    let current = node as HTMLElement | null;
     while (current && current.parentElement && current.parentElement !== this.canvas) {
       current = current.parentElement;
     }
     return current;
   }
 
-  turnBlockInto(block, type) {
-    const text = block.textContent.trim();
-    let newEl = null;
+  turnBlockInto(block: HTMLElement, type: string) {
+    const text = block.textContent?.trim() || '';
+    let newEl: HTMLElement | null = null;
 
     if (type === 'h1') newEl = document.createElement('h1');
     else if (type === 'h2') newEl = document.createElement('h2');
@@ -310,15 +375,15 @@ export class NotionEditor {
     else if (type === 'todo') {
       const div = document.createElement('div');
       div.innerHTML = this.createTodoItemHtml(text || 'Nova tarefa');
-      newEl = div.firstElementChild;
+      newEl = div.firstElementChild as HTMLElement;
     } else if (type === 'callout') {
       const div = document.createElement('div');
       div.innerHTML = this.createCalloutBlockHtml('note', text || 'Nota de destaque...');
-      newEl = div.firstElementChild;
+      newEl = div.firstElementChild as HTMLElement;
     } else if (type === 'code') {
       const div = document.createElement('div');
       div.innerHTML = this.createCodeBlockHtml('javascript', text || '// Código');
-      newEl = div.firstElementChild;
+      newEl = div.firstElementChild as HTMLElement;
     }
 
     if (newEl && !['todo', 'callout', 'code'].includes(type)) {
@@ -334,7 +399,7 @@ export class NotionEditor {
     }
   }
 
-  toggleCalloutType(calloutEl) {
+  toggleCalloutType(calloutEl: HTMLElement | null) {
     if (!calloutEl) return;
     const types = ['note', 'tip', 'warning', 'danger'];
     const current = calloutEl.dataset.type || 'note';
@@ -344,7 +409,7 @@ export class NotionEditor {
     calloutEl.dataset.type = nextType;
     const iconSpan = calloutEl.querySelector('.notion-callout-icon');
     if (iconSpan) {
-      const iconMap = {
+      const iconMap: Record<string, string> = {
         note: 'info',
         tip: 'check_circle',
         warning: 'warning',
@@ -367,7 +432,7 @@ export class NotionEditor {
     }
 
     const lines = markdown.split(/\r?\n/);
-    const htmlFragments = [];
+    const htmlFragments: string[] = [];
     let i = 0;
 
     while (i < lines.length) {
@@ -400,7 +465,7 @@ export class NotionEditor {
         continue;
       }
 
-      // 3. Dropdown / Toggle List (<details><summary>...</summary>...</details>)
+      // 3. Dropdown / Toggle List
       if (line.trim().startsWith('<details') || line.trim().startsWith('<details>')) {
         let toggleContent = '';
         let summaryTitle = 'Seção Expansível';
@@ -440,7 +505,7 @@ export class NotionEditor {
 
       // 5. GFM Table
       if (line.trim().startsWith('|') && line.trim().endsWith('|')) {
-        const tableLines = [];
+        const tableLines: string[] = [];
         while (i < lines.length && lines[i].trim().startsWith('|') && lines[i].trim().endsWith('|')) {
           tableLines.push(lines[i]);
           i++;
@@ -548,9 +613,9 @@ export class NotionEditor {
   // DOM TO MARKDOWN (SERIALIZER)
   // ===========================================================================
 
-  getMarkdown() {
-    const lines = [];
-    const children = Array.from(this.canvas.children);
+  getMarkdown(): string {
+    const lines: string[] = [];
+    const children = Array.from(this.canvas.children) as HTMLElement[];
 
     for (const node of children) {
       if (node.classList && (node.classList.contains('notion-inline-diff-card') || node.classList.contains('not-prose'))) {
@@ -604,22 +669,22 @@ export class NotionEditor {
         lines.push(this.serializeCallout(node));
         lines.push('');
       } else if (node.classList.contains('notion-todo-item')) {
-        const chk = node.querySelector('.notion-todo-checkbox');
+        const chk = node.querySelector('.notion-todo-checkbox') as HTMLInputElement | null;
         const isChecked = chk ? chk.checked : false;
-        const textEl = node.querySelector('.notion-todo-text') || node;
+        const textEl = (node.querySelector('.notion-todo-text') || node) as HTMLElement;
         const text = this.serializeInline(textEl).trim();
         lines.push(`- [${isChecked ? 'x' : ' '}] ${text}`);
       } else if (node.classList.contains('notion-code-block')) {
         const langEl = node.querySelector('.notion-code-lang');
-        const codeEl = node.querySelector('.notion-code-content') || node.querySelector('code');
-        const lang = langEl ? langEl.textContent.trim().toLowerCase() : '';
+        const codeEl = (node.querySelector('.notion-code-content') || node.querySelector('code')) as HTMLElement | null;
+        const lang = langEl ? langEl.textContent?.trim().toLowerCase() : '';
         const code = codeEl ? codeEl.innerText : '';
         lines.push(`\`\`\`${lang}`);
         lines.push(code);
         lines.push('```');
         lines.push('');
       } else if (node.classList.contains('notion-mermaid-block')) {
-        const textarea = node.querySelector('.notion-mermaid-textarea');
+        const textarea = node.querySelector('.notion-mermaid-textarea') as HTMLTextAreaElement | null;
         const code = textarea ? textarea.value.trim() : (node.dataset.mermaidCode || '');
         lines.push('```mermaid');
         lines.push(code);
@@ -637,11 +702,7 @@ export class NotionEditor {
     return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
   }
 
-  // ===========================================================================
-  // SERIALIZERS AUXILIARES
-  // ===========================================================================
-
-  parseInlineMarkdown(text) {
+  parseInlineMarkdown(text: string): string {
     if (!text) return '<br>';
     return text
       .replace(/&/g, '&amp;')
@@ -654,7 +715,7 @@ export class NotionEditor {
       .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
   }
 
-  serializeInline(element) {
+  serializeInline(element: HTMLElement | null): string {
     if (!element) return '';
     let result = '';
 
@@ -662,22 +723,23 @@ export class NotionEditor {
       if (child.nodeType === Node.TEXT_NODE) {
         result += child.textContent;
       } else if (child.nodeType === Node.ELEMENT_NODE) {
-        const tag = child.tagName.toLowerCase();
+        const el = child as HTMLElement;
+        const tag = el.tagName.toLowerCase();
         if (tag === 'strong' || tag === 'b') {
-          result += `**${this.serializeInline(child)}**`;
+          result += `**${this.serializeInline(el)}**`;
         } else if (tag === 'em' || tag === 'i') {
-          result += `*${this.serializeInline(child)}*`;
+          result += `*${this.serializeInline(el)}*`;
         } else if (tag === 's' || tag === 'strike') {
-          result += `~~${this.serializeInline(child)}~~`;
+          result += `~~${this.serializeInline(el)}~~`;
         } else if (tag === 'code') {
-          result += `\`${child.textContent}\``;
+          result += `\`${el.textContent}\``;
         } else if (tag === 'a') {
-          const href = child.getAttribute('href') || '#';
-          result += `[${this.serializeInline(child)}](${href})`;
+          const href = el.getAttribute('href') || '#';
+          result += `[${this.serializeInline(el)}](${href})`;
         } else if (tag === 'br') {
           result += '\n';
         } else {
-          result += this.serializeInline(child);
+          result += this.serializeInline(el);
         }
       }
     });
@@ -685,16 +747,16 @@ export class NotionEditor {
     return result;
   }
 
-  serializeTable(wrapper) {
+  serializeTable(wrapper: HTMLElement): string {
     const table = wrapper.querySelector('table');
     if (!table) return '';
 
     const rows = Array.from(table.querySelectorAll('tr'));
     if (rows.length === 0) return '';
 
-    const mdLines = [];
+    const mdLines: string[] = [];
     rows.forEach((tr, rIdx) => {
-      const cells = Array.from(tr.querySelectorAll('th, td'));
+      const cells = Array.from(tr.querySelectorAll('th, td')) as HTMLElement[];
       const rowStr = '| ' + cells.map(c => this.serializeInline(c).trim() || ' ').join(' | ') + ' |';
       mdLines.push(rowStr);
 
@@ -707,18 +769,18 @@ export class NotionEditor {
     return mdLines.join('\n');
   }
 
-  serializeToggle(toggle) {
+  serializeToggle(toggle: HTMLElement): string {
     const summary = toggle.querySelector('summary');
     const title = summary ? (summary.querySelector('.notion-toggle-summary-text')?.textContent || summary.textContent || 'Seção').trim() : 'Seção';
-    const content = toggle.querySelector('.notion-toggle-content') || toggle;
+    const content = (toggle.querySelector('.notion-toggle-content') || toggle) as HTMLElement;
     const body = this.serializeInline(content).trim();
 
     return `<details>\n<summary>${title}</summary>\n\n${body}\n</details>`;
   }
 
-  serializeCallout(callout) {
+  serializeCallout(callout: HTMLElement): string {
     const type = (callout.dataset.type || 'note').toUpperCase();
-    const content = callout.querySelector('.notion-callout-content') || callout;
+    const content = (callout.querySelector('.notion-callout-content') || callout) as HTMLElement;
     const body = this.serializeInline(content).trim();
     const lines = body.split('\n');
 
@@ -729,15 +791,15 @@ export class NotionEditor {
   // HTML GENERATORS
   // ===========================================================================
 
-  createTableHtml(rows = 3, cols = 3) {
+  createTableHtml(rows = 3, cols = 3): string {
     return NotionTable.createDefaultHtml(rows, cols);
   }
 
-  createTableFromMarkdown(tableLines) {
+  createTableFromMarkdown(tableLines: string[]): string {
     return NotionTable.fromMarkdownLines(tableLines);
   }
 
-  createToggleBlockHtml(title = 'Clique para expandir', content = 'Conteúdo oculto...') {
+  createToggleBlockHtml(title = 'Clique para expandir', content = 'Conteúdo oculto...'): string {
     return `
       <details class="notion-toggle" open>
         <summary>
@@ -750,8 +812,8 @@ export class NotionEditor {
     `;
   }
 
-  createCalloutBlockHtml(type = 'note', content = 'Insira o contexto aqui...') {
-    const iconMap = {
+  createCalloutBlockHtml(type = 'note', content = 'Insira o contexto aqui...'): string {
+    const iconMap: Record<string, string> = {
       note: 'info',
       tip: 'check_circle',
       warning: 'warning',
@@ -767,7 +829,7 @@ export class NotionEditor {
     `;
   }
 
-  createTodoItemHtml(text = 'Nova tarefa', isChecked = false) {
+  createTodoItemHtml(text = 'Nova tarefa', isChecked = false): string {
     return `
       <div class="notion-todo-item ${isChecked ? 'checked' : ''}" contenteditable="false">
         <input type="checkbox" class="notion-todo-checkbox" ${isChecked ? 'checked' : ''} />
@@ -776,7 +838,7 @@ export class NotionEditor {
     `;
   }
 
-  createCodeBlockHtml(lang = 'javascript', code = '// Código aqui') {
+  createCodeBlockHtml(lang = 'javascript', code = '// Código aqui'): string {
     return `
       <div class="notion-code-block" contenteditable="false">
         <div class="notion-code-header">
@@ -788,7 +850,7 @@ export class NotionEditor {
     `;
   }
 
-  createMermaidBlockHtml(code = 'flowchart TD\n  A[Início] --> B[Processo]\n  B --> C[Fim]') {
+  createMermaidBlockHtml(code = 'flowchart TD\n  A[Início] --> B[Processo]\n  B --> C[Fim]'): string {
     const id = `mermaid-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
     return `
       <div class="notion-mermaid-block" id="${id}" data-mermaid-code="${escapeHtml(code)}" contenteditable="false">
@@ -817,19 +879,17 @@ export class NotionEditor {
   // ===========================================================================
 
   attachInteractiveListeners() {
-    // Inicialização das Tabelas com UX do Notion
     this.canvas.querySelectorAll('.notion-table-block, .notion-table-wrapper').forEach(wrapper => {
       new NotionTable({
-        wrapper,
+        wrapper: wrapper as HTMLElement,
         onChange: () => this.recordChange()
       });
     });
 
-    // Código
     this.canvas.querySelectorAll('.btn-code-copy').forEach(btn => {
-      btn.onclick = (e) => {
+      (btn as HTMLElement).onclick = (e) => {
         e.preventDefault();
-        const codeEl = btn.closest('.notion-code-block').querySelector('.notion-code-content');
+        const codeEl = btn.closest('.notion-code-block')?.querySelector('.notion-code-content') as HTMLElement | null;
         if (codeEl) {
           navigator.clipboard.writeText(codeEl.innerText);
           btn.textContent = 'Copiado!';
@@ -838,12 +898,11 @@ export class NotionEditor {
       };
     });
 
-    // Mermaid
     this.canvas.querySelectorAll('.notion-mermaid-block').forEach(block => {
-      const btnToggle = block.querySelector('.btn-toggle-mermaid-editor');
-      const btnRefresh = block.querySelector('.btn-refresh-mermaid');
-      const editorPanel = block.querySelector('.notion-mermaid-editor');
-      const textarea = block.querySelector('.notion-mermaid-textarea');
+      const btnToggle = block.querySelector('.btn-toggle-mermaid-editor') as HTMLElement | null;
+      const btnRefresh = block.querySelector('.btn-refresh-mermaid') as HTMLElement | null;
+      const editorPanel = block.querySelector('.notion-mermaid-editor') as HTMLElement | null;
+      const textarea = block.querySelector('.notion-mermaid-textarea') as HTMLTextAreaElement | null;
 
       if (btnToggle && editorPanel) {
         btnToggle.onclick = () => {
@@ -856,8 +915,8 @@ export class NotionEditor {
 
       if (btnRefresh && textarea) {
         btnRefresh.onclick = () => {
-          block.dataset.mermaidCode = textarea.value.trim();
-          this.renderMermaidBlock(block);
+          (block as HTMLElement).dataset.mermaidCode = textarea.value.trim();
+          this.renderMermaidBlock(block as HTMLElement);
           this.recordChange();
         };
       }
@@ -865,16 +924,16 @@ export class NotionEditor {
   }
 
   async renderAllMermaidBlocks() {
-    const blocks = this.canvas.querySelectorAll('.notion-mermaid-block');
+    const blocks = Array.from(this.canvas.querySelectorAll('.notion-mermaid-block')) as HTMLElement[];
     for (const block of blocks) {
       await this.renderMermaidBlock(block);
     }
   }
 
-  async renderMermaidBlock(block) {
+  async renderMermaidBlock(block: HTMLElement) {
     if (typeof mermaid === 'undefined') return;
     const renderArea = block.querySelector('.notion-mermaid-render');
-    const textarea = block.querySelector('.notion-mermaid-textarea');
+    const textarea = block.querySelector('.notion-mermaid-textarea') as HTMLTextAreaElement | null;
     const code = textarea ? textarea.value.trim() : (block.dataset.mermaidCode || '');
 
     if (!renderArea || !code) return;
@@ -883,21 +942,21 @@ export class NotionEditor {
       const renderId = `m-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
       const { svg } = await mermaid.render(renderId, code);
       renderArea.innerHTML = svg;
-    } catch (e) {
+    } catch (e: any) {
       renderArea.innerHTML = `
         <div style="color:#ef4444; font-size:12px; padding:12px; display:flex; align-items:center; gap:6px;">
           <span class="material-symbols-outlined icon-xs">warning</span>
-          <span>Erro na sintaxe Mermaid: ${escapeHtml(e.message || String(e))}</span>
+          <span>Erro na sintaxe Mermaid: ${escapeHtml(e?.message || String(e))}</span>
         </div>
       `;
     }
   }
 
   // ===========================================================================
-  // NOTION INPUT RULES (AUTO-FORMATTING ON TYPING '# ', '- ', '1. ', '[] ')
+  // NOTION INPUT RULES
   // ===========================================================================
 
-  handleKeyUp(e) {
+  handleKeyUp(e: KeyboardEvent) {
     if (e.key === ' ' || e.key === 'Spacebar') {
       this.checkMarkdownInputRules();
     }
@@ -911,11 +970,10 @@ export class NotionEditor {
     const node = range.startContainer;
     if (!node || node.nodeType !== Node.TEXT_NODE) return;
 
-    const text = node.textContent;
+    const text = node.textContent || '';
     const parent = node.parentElement;
     if (!parent || parent.tagName.toLowerCase() !== 'p') return;
 
-    // Regras de conversão instantânea estilo Notion
     if (text.startsWith('# ')) {
       node.textContent = text.substring(2);
       this.turnBlockInto(parent, 'h1');
@@ -961,21 +1019,19 @@ export class NotionEditor {
   }
 
   // ===========================================================================
-  // ATALHOS DE TECLADO, SMART BACKSPACE & ENTER
+  // ATALHOS DE TECLADO & SMART BACKSPACE
   // ===========================================================================
 
-  handleKeyDown(e) {
+  handleKeyDown(e: KeyboardEvent) {
     const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
     const modifier = isMac ? e.metaKey : e.ctrlKey;
 
-    // Salvar: Ctrl+S
     if (modifier && (e.key === 's' || e.key === 'S')) {
       e.preventDefault();
       this.onSave();
       return;
     }
 
-    // Undo / Redo
     if (modifier && (e.key === 'z' || e.key === 'Z') && !e.shiftKey) {
       e.preventDefault();
       this.undo();
@@ -987,7 +1043,7 @@ export class NotionEditor {
       return;
     }
 
-    // Smart Backspace no início de blocos formatados
+    // Smart Backspace
     if (e.key === 'Backspace') {
       const selection = window.getSelection();
       if (selection && selection.rangeCount > 0 && selection.isCollapsed) {
@@ -1014,46 +1070,47 @@ export class NotionEditor {
       }
     }
 
-    // Navegação em Células de Tabela com Tab
+    // Tab Navigation em Tabelas
     if (e.key === 'Tab') {
-      const cell = document.activeElement ? document.activeElement.closest('td, th') : null;
+      const cell = document.activeElement ? document.activeElement.closest('td, th') as HTMLElement | null : null;
       if (cell) {
         e.preventDefault();
-        const tr = cell.parentElement;
-        const table = tr.closest('table');
-        const allCells = Array.from(table.querySelectorAll('th, td'));
-        const idx = allCells.indexOf(cell);
+        const tr = cell.parentElement as HTMLTableRowElement | null;
+        const table = tr ? tr.closest('table') : null;
+        if (table) {
+          const allCells = Array.from(table.querySelectorAll('th, td')) as HTMLElement[];
+          const idx = allCells.indexOf(cell);
 
-        if (e.shiftKey) {
-          if (idx > 0) allCells[idx - 1].focus();
-        } else {
-          if (idx < allCells.length - 1) {
-            allCells[idx + 1].focus();
+          if (e.shiftKey) {
+            if (idx > 0) allCells[idx - 1].focus();
           } else {
-            const cols = table.querySelectorAll('thead tr th').length || 2;
-            const newTr = document.createElement('tr');
-            for (let i = 0; i < cols; i++) {
-              newTr.innerHTML += '<td contenteditable="true"></td>';
+            if (idx < allCells.length - 1) {
+              allCells[idx + 1].focus();
+            } else {
+              const cols = table.querySelectorAll('thead tr th').length || 2;
+              const newTr = document.createElement('tr');
+              for (let i = 0; i < cols; i++) {
+                newTr.innerHTML += '<td contenteditable="true"></td>';
+              }
+              table.querySelector('tbody')?.appendChild(newTr);
+              this.recordChange();
+              setTimeout(() => {
+                (newTr.querySelector('td') as HTMLElement)?.focus();
+              }, 10);
             }
-            table.querySelector('tbody').appendChild(newTr);
-            this.recordChange();
-            setTimeout(() => {
-              newTr.querySelector('td')?.focus();
-            }, 10);
           }
+          return;
         }
-        return;
       }
     }
 
-    // Enter dentro de To-Do item cria novo To-Do
+    // Enter dentro de To-Do
     if (e.key === 'Enter') {
-      const todoItem = document.activeElement ? document.activeElement.closest('.notion-todo-item') : null;
+      const todoItem = document.activeElement ? document.activeElement.closest('.notion-todo-item') as HTMLElement | null : null;
       if (todoItem && !e.shiftKey) {
         e.preventDefault();
         const textSpan = todoItem.querySelector('.notion-todo-text');
-        if (textSpan && !textSpan.textContent.trim()) {
-          // Se estava vazio, converte para parágrafo normal
+        if (textSpan && !textSpan.textContent?.trim()) {
           this.turnBlockInto(todoItem, 'p');
           return;
         }
@@ -1068,13 +1125,13 @@ export class NotionEditor {
         todoItem.insertAdjacentElement('afterend', newItem);
         this.recordChange();
         setTimeout(() => {
-          newItem.querySelector('.notion-todo-text')?.focus();
+          (newItem.querySelector('.notion-todo-text') as HTMLElement)?.focus();
         }, 10);
         return;
       }
     }
 
-    // Trigger da barra '/'
+    // Trigger Slash '/'
     if (e.key === '/' && !modifier) {
       setTimeout(() => {
         this.checkSlashTrigger();
@@ -1091,19 +1148,21 @@ export class NotionEditor {
     const text = node.textContent || '';
     const offset = range.startOffset;
 
-    if (offset > 0 && text[offset - 1] === '/') {
+    if (offset > 0 && text[offset - 1] === '/' && this.slashMenu) {
       this.slashMenu.openAtCaret('');
     }
   }
 
-  handleSlashCommand(cmdId, targetRange) {
+  handleSlashCommand(cmdId: string, targetRange: Range | null) {
     if (targetRange) {
       const selection = window.getSelection();
-      selection.removeAllRanges();
-      selection.addRange(targetRange);
+      if (selection) {
+        selection.removeAllRanges();
+        selection.addRange(targetRange);
+      }
 
       const node = targetRange.startContainer;
-      if (node && node.nodeType === Node.TEXT_NODE && node.textContent.includes('/')) {
+      if (node && node.nodeType === Node.TEXT_NODE && node.textContent?.includes('/')) {
         node.textContent = node.textContent.replace(/\/$/, '');
       }
     }
@@ -1164,21 +1223,22 @@ export class NotionEditor {
     this.recordChange();
   }
 
-  insertBlockHtml(html) {
+  insertBlockHtml(html: string) {
     const div = document.createElement('div');
     div.innerHTML = html.trim();
-    const element = div.firstElementChild;
+    const element = div.firstElementChild as HTMLElement;
+    if (!element) return;
 
     const selection = window.getSelection();
     if (selection && selection.rangeCount > 0) {
       const range = selection.getRangeAt(0);
-      let targetNode = range.startContainer;
+      let targetNode = range.startContainer as HTMLElement | null;
       while (targetNode && targetNode.parentElement !== this.canvas && targetNode !== this.canvas) {
         targetNode = targetNode.parentElement;
       }
 
       if (targetNode && targetNode.parentElement === this.canvas) {
-        if (!targetNode.textContent.trim()) {
+        if (!targetNode.textContent?.trim()) {
           targetNode.replaceWith(element);
         } else {
           targetNode.insertAdjacentElement('afterend', element);
@@ -1193,24 +1253,26 @@ export class NotionEditor {
     this.placeCursorIn(element);
   }
 
-  placeCursorIn(element) {
-    const target = element.querySelector('[contenteditable="true"]') || element;
+  placeCursorIn(element: HTMLElement) {
+    const target = (element.querySelector('[contenteditable="true"]') || element) as HTMLElement;
     target.focus();
     const range = document.createRange();
     range.selectNodeContents(target);
     range.collapse(false);
     const sel = window.getSelection();
-    sel.removeAllRanges();
-    sel.addRange(range);
+    if (sel) {
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
   }
 
-  handleInput(e) {
+  handleInput(_e: Event) {
     this.recordChange();
   }
 
-  handlePaste(e) {
+  handlePaste(e: ClipboardEvent) {
     e.preventDefault();
-    const text = (e.clipboardData || window.clipboardData).getData('text/plain');
+    const text = (e.clipboardData || (window as any).clipboardData)?.getData('text/plain') || '';
     document.execCommand('insertText', false, text);
     this.recordChange();
   }
@@ -1238,7 +1300,7 @@ export class NotionEditor {
   undo() {
     if (this.undoStack.length <= 1) return;
     const current = this.undoStack.pop();
-    this.redoStack.push(current);
+    if (current) this.redoStack.push(current);
 
     const prev = this.undoStack[this.undoStack.length - 1];
     if (prev) {
@@ -1250,161 +1312,34 @@ export class NotionEditor {
   }
 
   redo() {
-    if (this.redoStack.length === 0) return;
+    if (!this.redoStack.length) return;
     const next = this.redoStack.pop();
-    this.undoStack.push(next);
-
-    this.canvas.innerHTML = next;
-    this.attachInteractiveListeners();
-    this.renderAllMermaidBlocks();
-    this.onChange();
-  }
-
-  insertTextAtCursor(text) {
-    this.insertBlockHtml(`<p>${escapeHtml(text)}</p>`);
-  }
-
-  /**
-   * Renders in-editor visual diff card marking the exact section to be modified
-   */
-  showInlineDiff({ search = '', replace = '', explanation = '', onAccept = null, onReject = null } = {}) {
-    this.clearInlineDiff();
-
-    const cleanSearch = (search || '').trim();
-    const cleanReplace = (replace || '').trim();
-
-    if (!cleanSearch && !cleanReplace) return false;
-
-    const diffCard = document.createElement('div');
-    diffCard.className = 'notion-inline-diff-card not-prose';
-    diffCard.setAttribute('contenteditable', 'false');
-
-    diffCard.innerHTML = `
-      <div class="inline-diff-header">
-        <div class="inline-diff-title">
-          <span class="material-symbols-outlined icon-xs" style="color: #059669;">difference</span>
-          <strong>Alteração Proposta pela IA ${explanation ? `&bull; <span style="font-weight: 400; color: var(--text-muted);">${escapeHtml(explanation)}</span>` : ''}</strong>
-        </div>
-        <div class="inline-diff-actions">
-          <button type="button" class="btn-diff-accept" title="Aceitar e aplicar esta alteração no documento">
-            <span class="material-symbols-outlined icon-xs">check</span> Aceitar
-          </button>
-          <button type="button" class="btn-diff-reject" title="Descartar esta alteração e manter original">
-            <span class="material-symbols-outlined icon-xs">undo</span> Desfazer
-          </button>
-        </div>
-      </div>
-      <div class="inline-diff-body">
-        ${cleanSearch && cleanSearch !== '*' ? `<div class="diff-del"><span class="diff-sign">-</span> ${escapeHtml(cleanSearch)}</div>` : ''}
-        ${cleanReplace ? `<div class="diff-ins"><span class="diff-sign">+</span> ${escapeHtml(cleanReplace)}</div>` : ''}
-      </div>
-    `;
-
-    // Handle Accept
-    const btnAccept = diffCard.querySelector('.btn-diff-accept');
-    btnAccept.addEventListener('click', (e) => {
-      e.stopPropagation();
-      this.applyInlineDiff(cleanSearch, cleanReplace);
-      if (onAccept) onAccept();
-    });
-
-    // Handle Reject / Undo
-    const btnReject = diffCard.querySelector('.btn-diff-reject');
-    btnReject.addEventListener('click', (e) => {
-      e.stopPropagation();
-      this.clearInlineDiff();
-      if (onReject) onReject();
-    });
-
-    // Try to position near matching node
-    let targetNode = null;
-    if (cleanSearch && cleanSearch !== '*') {
-      const searchFirstLine = cleanSearch.split('\n')[0].replace(/^#+\s*/, '').trim();
-      if (searchFirstLine) {
-        for (const child of Array.from(this.canvas.children)) {
-          if (child.textContent.includes(searchFirstLine)) {
-            targetNode = child;
-            break;
-          }
-        }
-      }
+    if (next) {
+      this.undoStack.push(next);
+      this.canvas.innerHTML = next;
+      this.attachInteractiveListeners();
+      this.renderAllMermaidBlocks();
+      this.onChange();
     }
-
-    if (targetNode) {
-      this.canvas.insertBefore(diffCard, targetNode);
-      diffCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    } else if (cleanSearch === '*' || !cleanSearch) {
-      this.canvas.appendChild(diffCard);
-      diffCard.scrollIntoView({ behavior: 'smooth', block: 'end' });
-    } else {
-      this.canvas.prepend(diffCard);
-      diffCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-
-    this._activeDiffCard = diffCard;
-    this._activeDiffData = { search: cleanSearch, replace: cleanReplace };
-    return true;
-  }
-
-  /**
-   * Removes active inline diff card without modifying document
-   */
-  clearInlineDiff() {
-    const existing = this.canvas.querySelector('.notion-inline-diff-card');
-    if (existing) {
-      existing.remove();
-    }
-    this._activeDiffCard = null;
-    this._activeDiffData = null;
-  }
-
-  /**
-   * Applies inline diff permanently into the document
-   */
-  applyInlineDiff(search, replace) {
-    this.clearInlineDiff();
-    const currentMd = this.getMarkdown();
-    let newMd = currentMd;
-
-    if (search && currentMd.includes(search)) {
-      newMd = currentMd.replace(search, replace);
-    } else if (search) {
-      const lines = currentMd.split('\n');
-      const searchLines = search.split('\n').map(l => l.trim()).filter(Boolean);
-      if (searchLines.length > 0) {
-        const firstSearch = searchLines[0];
-        const matchIdx = lines.findIndex(l => l.trim() === firstSearch);
-        if (matchIdx !== -1) {
-          lines.splice(matchIdx, searchLines.length, replace);
-          newMd = lines.join('\n');
-        } else {
-          newMd = `${currentMd}\n\n${replace}`;
-        }
-      } else {
-        newMd = `${currentMd}\n\n${replace}`;
-      }
-    } else {
-      newMd = `${currentMd}\n\n${replace}`;
-    }
-
-    this.setMarkdown(newMd);
-    this.recordChange();
-    this.onChange(newMd);
   }
 
   destroy() {
+    this.canvas.removeEventListener('keydown', this.boundOnKeyDown);
+    this.canvas.removeEventListener('keyup', this.boundOnKeyUp);
+    this.canvas.removeEventListener('input', this.boundOnInput);
+    this.canvas.removeEventListener('paste', this.boundOnPaste);
+    this.canvas.removeEventListener('click', this.boundOnClick);
+    this.canvas.removeEventListener('mousemove', this.boundOnMouseMove);
+    this.canvas.removeEventListener('mouseleave', this.boundOnMouseLeave);
+    this.canvas.removeEventListener('dragover', this.boundOnDragOver);
+    this.canvas.removeEventListener('dragleave', this.boundOnDragLeave);
+    this.canvas.removeEventListener('drop', this.boundOnDrop);
+    document.removeEventListener('click', this.boundDocClick);
+
     if (this.slashMenu) this.slashMenu.destroy();
     if (this.bubbleMenu) this.bubbleMenu.destroy();
-    if (this.sideHandle && this.sideHandle.parentElement) this.sideHandle.remove();
-    if (this.blockMenu && this.blockMenu.parentElement) this.blockMenu.remove();
+    if (this.sideHandle) this.sideHandle.remove();
+    if (this.blockMenu) this.blockMenu.remove();
+    if (this.dropIndicator) this.dropIndicator.remove();
   }
-}
-
-function escapeHtml(text) {
-  if (!text) return '';
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
 }
