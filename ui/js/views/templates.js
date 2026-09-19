@@ -171,7 +171,7 @@ export function initTemplatesView({ onUseTemplateInEditor }) {
     const default_filename = tplFilenameInput.value.trim() || "template.md";
     const assistant_prompt = tplAssistantInput.value.trim();
     const content = tplContentInput.value;
-    const create_pr = tplCreatePrCheck.checked;
+    const create_pr = tplCreatePrCheck ? tplCreatePrCheck.checked : false;
 
     if (!title || !content) {
       alert("Por favor informe o título e o conteúdo do template.");

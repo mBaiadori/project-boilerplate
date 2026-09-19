@@ -12,11 +12,8 @@ import { initEditorChatView } from './views/editor-chat.js';
 import { initTreeView } from './views/tree.js';
 import { initTemplatesView } from './views/templates.js';
 import { initSettingsView } from './views/settings.js';
-import { initGovernanceView } from './views/governance.js';
 import { initPRsView } from './views/prs.js';
 import { initTutorialsView } from './views/tutorials.js';
-import { initGraphView } from './views/graph.js';
-import { initAuditView } from './views/audit.js';
 import { initDictionaryView } from './views/dictionary.js';
 import { initWikiDecisionsView } from './views/wiki-decisions.js';
 import { initScaffoldModal } from './components/scaffold-modal.js';
@@ -48,11 +45,8 @@ export function initDashboardView({ onBackToRepos }) {
     editor: document.getElementById('subview-editor'),
     dictionary: document.getElementById('subview-dictionary'),
     wiki: document.getElementById('subview-wiki'),
-    graph: document.getElementById('subview-graph'),
-    audit: document.getElementById('subview-audit'),
     templates: document.getElementById('subview-templates'),
     settings: document.getElementById('subview-settings'),
-    governance: document.getElementById('subview-governance'),
     prs: document.getElementById('subview-prs'),
     tutorials: document.getElementById('subview-tutorials')
   };
@@ -160,17 +154,6 @@ export function initDashboardView({ onBackToRepos }) {
   });
 
   const prsView = initPRsView();
-  const graphView = initGraphView();
-  const auditView = initAuditView({
-    onFixWithAI: (issue) => {
-      if (btnGlobalAiCopilot) {
-        setGlobalAiVisibility(true);
-        if (globalCopilot) {
-          globalCopilot.sendMessage(`Por favor, analise e proponha a correção para o seguinte problema de conformidade:\n\nRegra: ${issue.ruleId || 'N/A'}\nMensagem: ${issue.message}\nArquivo: ${issue.file || 'N/A'}`);
-        }
-      }
-    }
-  });
   const dictionaryView = initDictionaryView();
   const wikiDecisionsView = initWikiDecisionsView({
     onOpenInEditor: async (path) => {
@@ -182,7 +165,6 @@ export function initDashboardView({ onBackToRepos }) {
       diffModal.updateBadgeStatus();
     }
   });
-  const governanceView = initGovernanceView();
   const settingsView = initSettingsView();
 
   function setGlobalAiVisibility(shouldOpen) {
@@ -291,21 +273,6 @@ export function initDashboardView({ onBackToRepos }) {
         onPromptSaved: null,
         onPromptRestored: null
       });
-    } else if (viewKey === 'governance') {
-      globalCopilot.setContext({
-        contextPath: '.governance/governance.json',
-        agentName: 'Guardião de Governança',
-        agentIcon: 'verified_user',
-        getContent: () => 'Regras de Governança, Políticas de Revisão e Conformidade de Especificação',
-        chips: [
-          { label: "🛡️ Auditar Regras", prompt: "Audite todas as regras de governança ativas e aponte violações de conformidade." },
-          { label: "📋 Propor Política", prompt: "Proponha uma nova política de revisão de código e aprovação para branches principais." }
-        ],
-        welcomeMessage: 'Guardião de Governança ativo. Posso avaliar conformidade de branch protection e regras arquiteturais.',
-        onApplyContent: null,
-        onPromptSaved: null,
-        onPromptRestored: null
-      });
     } else if (viewKey === 'wiki') {
       globalCopilot.setContext({
         contextPath: 'wiki/index.md',
@@ -317,36 +284,6 @@ export function initDashboardView({ onBackToRepos }) {
           { label: "📚 Sintetizar Wiki", prompt: "Sintetize a documentação da Wiki e aponte tópicos desatualizados." }
         ],
         welcomeMessage: 'Curador de Wiki & ADRs ativo. Posso auxiliar na redação de decisões arquiteturais e artigos da base de conhecimento.',
-        onApplyContent: null,
-        onPromptSaved: null,
-        onPromptRestored: null
-      });
-    } else if (viewKey === 'graph') {
-      globalCopilot.setContext({
-        contextPath: 'graph/dependencies.json',
-        agentName: 'Analista de Grafo de Conhecimento',
-        agentIcon: 'hub',
-        getContent: () => 'Grafo de Relacionamentos, Dependências e Conexões entre Documentos',
-        chips: [
-          { label: "🕸️ Dependências Cíclicas", prompt: "Identifique nós com acoplamento excessivo ou ciclos no grafo de dependências." },
-          { label: "🎯 Impacto de Mudança", prompt: "Qual o raio de impacto no grafo caso um documento central seja alterado?" }
-        ],
-        welcomeMessage: 'Analista de Grafo pronto. Posso interpretar nós, conexões e impactos estruturais em cascata.',
-        onApplyContent: null,
-        onPromptSaved: null,
-        onPromptRestored: null
-      });
-    } else if (viewKey === 'audit') {
-      globalCopilot.setContext({
-        contextPath: 'audit/report.md',
-        agentName: 'Auditor de Especificação',
-        agentIcon: 'fact_check',
-        getContent: () => 'Relatório de Linting, Validações Semânticas e Score de Conformidade',
-        chips: [
-          { label: "🚨 Corrigir Violações", prompt: "Analise os problemas de conformidade detectados e forneça correções passo a passo." },
-          { label: "📈 Score de Maturidade", prompt: "Como elevar a pontuação de conformidade das especificações?" }
-        ],
-        welcomeMessage: 'Auditor de Especificação ativo. Posso analisar violações de conformidade e guiar o plano de correção.',
         onApplyContent: null,
         onPromptSaved: null,
         onPromptRestored: null
@@ -444,18 +381,12 @@ export function initDashboardView({ onBackToRepos }) {
       dictionaryView.loadDictionary();
     } else if (viewKey === 'wiki') {
       wikiDecisionsView.loadWiki();
-    } else if (viewKey === 'graph') {
-      graphView.load();
-    } else if (viewKey === 'audit') {
-      auditView.load();
     } else if (viewKey === 'templates') {
       templatesView.loadTemplatesCatalog();
     } else if (viewKey === 'tutorials') {
       tutorialsView.loadTutorials(queryParams.id || queryParams.tutorial);
     } else if (viewKey === 'settings') {
       settingsView.loadSystemSettings();
-    } else if (viewKey === 'governance') {
-      governanceView.loadGovernanceData();
     } else if (viewKey === 'prs') {
       prsView.loadAllPRs();
     }

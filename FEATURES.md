@@ -1,6 +1,6 @@
-# Funcionalidades Atualizadas — Spec-Driven Context OS & Architecture Governance
+# Funcionalidades Atualizadas — Spec-Driven Context OS
 
-> **Visão Geral:** Plataforma unificada de governança de especificações técnicas, memória de desenvolvimento para IA e gestão de documentação arquitetural (*Spec-Driven Development*).
+> **Visão Geral:** Plataforma unificada de engenharia de especificações técnicas, memória de desenvolvimento para IA e documentação viva de arquitetura (*Spec-Driven Development*).
 
 ---
 
@@ -25,7 +25,8 @@
 
 ## 3. 📝 Editor Inteligente & Gestão de Documentos (`/editor` — Visão Principal)
 * **Árvore de Documentos & Explorador:**
-  * Navegação limpa por pastas e arquivos do repositório (`specs/`, `adrs/`, `wiki/`, `docs/`).
+  * Navegação limpa por pastas e arquivos do repositório (`domains/`, `templates/`, `wiki/`, `index.md`).
+  * Criação rápida de estruturas completas de domínios, subdomínios e esteiras de features com scaffold em 1 clique.
 * **Editor WYSIWYG / Notion-style em Markdown:**
   * **Frontmatter Parser:** Edição dinâmica e visual de metadados YAML (autor, status, tags, versão, contexto).
   * **Tabelas Ricas Interativas:** Adição/remoção de colunas, ordenação, tipos de dados e edição inline.
@@ -62,42 +63,30 @@
 * **Ciclo de Vida de ADRs:**
   * Criação, categorização e acompanhamento de status de decisões arquiteturais (`Proposed`, `Accepted`, `Superseded`, `Deprecated`).
 * **Busca Textual e Indexação:**
-  * Busca em tempo real para localização rápida de decisões e contextos históricos.
+  * Busca em tempo real para localização rápida de decisões e contextos históricos (Padrão Karpathy LLM-Wiki).
 
 ---
 
-## 7. 🕸️ Grafo de Dependências & Relacionamentos (`/graph`)
-* **Visualização Interativa de Conexões:**
-  * Grafo interativo de nós conectando documentos, especificações e dependências do repositório.
-
----
-
-## 8. 🛡️ Auditoria & Drift Detection (`/audit`)
-* **Verificação de Conformidade:**
-  * Análise de conformidade das especificações de governança e documentação.
-  * Relatórios detalhados de regras violadas e pendências.
-
----
-
-## 9. 📚 Templates & Boilerplates (`/templates`)
+## 7. 📚 Templates & Boilerplates (`/templates`)
 * **Biblioteca de Modelos Padronizados:**
-  * Templates pré-configurados para especificações técnicas, ADRs, contratos de API e políticas.
+  * Templates pré-configurados para especificações técnicas, contratos de API e modelos de domínio.
+  * Assistentes de IA especialistas embutidos em cada template.
 
 ---
 
-## 10. 🔀 Integração Git & Pull Requests (`/prs`)
-* **Governança de Pull Requests:**
+## 8. 🔀 Integração Git & Pull Requests (`/prs`)
+* **Gestão de Pull Requests & Diffs:**
   * Visualização de PRs e branches ativas no repositório.
   * Criação de PRs diretamente pela interface, com *diff viewer* unificado para revisão prévia.
 
 ---
 
-## 11. 🎓 Tutoriais & Guias Práticos (`/tutorials`)
+## 9. 🎓 Tutoriais & Guias Práticos (`/tutorials`)
 * **Base de Conhecimento Prático:**
-  * Guias passo a passo com exemplos reais de desenvolvimento guiado por especificações.
+  * Guias passo a passo com exemplos reais de desenvolvimento guiado por especificações (DDD, SDD, BDD, TDD).
 
 ---
 
-## 12. ⚙️ Configurações & Personalização (`/settings`)
-* **Configuração de Provedores de IA:** Gestão de chaves de API, seleção de modelos e controle de temperatura.
+## 10. ⚙️ Configurações & Personalização (`/settings`)
+* **Configuração de Provedores de IA:** Gestão de chaves de API, seleção de modelos e controle de endpoints.
 * **Layout e Interface:** Painéis redimensionáveis com persistência no `localStorage`.

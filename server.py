@@ -3348,6 +3348,38 @@ class ModularGovernanceHandler(SimpleHTTPRequestHandler):
                     "source": "github"
                 })
 
+            # Se for index.md e não existir nem local nem no github, criar a constituição inicial padrão
+            if file_path == "index.md":
+                default_content = f"""---
+id: "PROJ-ROOT"
+title: "Constituição do Projeto — {repo_name}"
+layer: "L1_PROJECT"
+status: "draft"
+version: "1.0.0"
+---
+
+# 🏛️ Constituição do Projeto — {repo_name}
+
+> Documento Raiz de Governança & Arquitetura
+
+## 🎯 Visão Estratégica (5W2H)
+- **What (O que):** Descreva o propósito e os objetivos do sistema.
+- **Why (Por que):** Motivação de negócio e valor gerado.
+- **Who (Quem):** Stakeholders e usuários impactados.
+- **Where (Onde):** Arquitetura e ambientes de execução.
+- **When (Quando):** Cronograma e fases de entrega.
+- **How (Como):** Stack tecnológica e padrões arquiteturais.
+- **How Much (Quanto):** Estimativas de custos e recursos.
+"""
+                os.makedirs(os.path.dirname(local_file) if os.path.dirname(local_file) else os.path.join(PROJECTS_DIR, repo_name), exist_ok=True)
+                with open(local_file, "w", encoding="utf-8") as f:
+                    f.write(default_content)
+                return self.send_json({
+                    "path": file_path,
+                    "content": default_content,
+                    "source": "local"
+                })
+
             return self.send_json({"error": "Arquivo não encontrado"}, 404)
 
         # 7. Árvore de Documentos Dinâmica & Expandível
@@ -3363,18 +3395,6 @@ class ModularGovernanceHandler(SimpleHTTPRequestHandler):
             repo_dir = os.path.join(PROJECTS_DIR, repo_name)
             tree_data = build_tree(repo_dir, repo_dir)
             return self.send_json({ "repo": active_repo, "tree": tree_data })
-
-        # 7.1 Grafo  Bidirecional, Camadas L1-L4 & Blast Radius
-        if path == "/api/project/graph":
-            cfg = load_config()
-            active_repo = cfg.get("active_repo")
-            if not active_repo:
-                return self.send_json({ "nodes": {}, "stats": {}, "repo": None })
-
-            repo_name = active_repo.get("name", "local")
-            ensure_default_repo_files(repo_name)
-            graph_data = build_workspace_graph(repo_name)
-            return self.send_json(graph_data)
 
         # 7.2 Contexto de Conectividade de um Documento (Backlinks & Rastreabilidade)
         if path == "/api/project/document-context":
@@ -3417,24 +3437,6 @@ class ModularGovernanceHandler(SimpleHTTPRequestHandler):
                 "node": node,
                 "stats": graph_data.get("stats", {})
             })
-
-        # 7.3 Relatório de Auditoria de Qualidade, SAST & Feedback Loops
-        if path == "/api/project/audit":
-            cfg = load_config()
-            active_repo = cfg.get("active_repo")
-            if not active_repo:
-                return self.send_json({ "score": 100, "grade": "A+", "total_docs": 0, "issues": [], "feedback_loops": [], "checks": {} })
-
-            repo_name = active_repo.get("name", "local")
-            ensure_default_repo_files(repo_name)
-            audit_report = audit_workspace(repo_name)
-            return self.send_json(audit_report)
-
-        # 8. Governança
-        if path == "/api/governance":
-            cfg = load_config()
-            gov = cfg.get("governance", { "min_approvals": 1, "reviewers": [] })
-            return self.send_json({ "active_repo": cfg.get("active_repo"), "governance": gov })
 
         # 9. Listar PRs (Abertos, Aprovados e Histórico Merged)
         if path == "/api/prs":
@@ -4238,35 +4240,7 @@ Retorne APENAS o JSON puro válido."""
             save_config(cfg)
             return self.send_json({ "success": True, "message": f"Repositório {repo_full_name} criado no GitHub!", "repo": cfg["active_repo"] })
 
-        # 15. Adicionar Reviewer
-        if path == "/api/governance/reviewers":
-            name = payload.get("name", "").strip()
-            handle = payload.get("handle", "").strip()
-            role = payload.get("role", "Tech Lead").strip()
-            tier = payload.get("tier", "Tier 0 (Global)").strip()
 
-            if not handle or not name: return self.send_json({"error": "Nome e GitHub handle são obrigatórios"}, 400)
-            if not handle.startswith("@"): handle = f"@{handle}"
-
-            cfg = load_config()
-            if "governance" not in cfg: cfg["governance"] = { "min_approvals": 1, "reviewers": [] }
-            new_rev = { "id": str(int(time.time() * 1000)), "name": name, "handle": handle, "role": role, "tier": tier }
-            cfg["governance"]["reviewers"].append(new_rev)
-            save_config(cfg)
-            return self.send_json({"success": True, "reviewer": new_rev, "reviewers": cfg["governance"]["reviewers"]})
-
-        # 16. Atualizar Mínimo de Aprovações
-        if path == "/api/governance/settings":
-            min_approvals = int(payload.get("min_approvals", 1))
-            cfg = load_config()
-            if "governance" not in cfg: cfg["governance"] = { "min_approvals": 1, "reviewers": [] }
-            cfg["governance"]["min_approvals"] = min_approvals
-            save_config(cfg)
-            active_repo = cfg.get("active_repo")
-            token = cfg.get("token")
-            if active_repo and token:
-                apply_branch_protection(active_repo["full_name"], active_repo.get("default_branch", "main"), token, min_approvals)
-            return self.send_json({ "success": True, "message": f"Regra atualizada: Requer {min_approvals} aprovação(ões).", "min_approvals": min_approvals })
 
         # 17. Aprovar PR (Com Auto-Merge por Quórum de Governança)
         if path == "/api/prs/approve":
@@ -4365,14 +4339,7 @@ Retorne APENAS o JSON puro válido."""
             new_tree = build_tree(repo_dir, repo_dir)
             return self.send_json({ "success": True, "path": file_path, "tree": new_tree })
 
-        # 3. Remover Reviewer de Governança
-        if path == "/api/governance/reviewers":
-            rev_id = query.get("id", [""])[0]
-            cfg = load_config()
-            reviewers = cfg.get("governance", {}).get("reviewers", [])
-            cfg["governance"]["reviewers"] = [r for r in reviewers if r["id"] != rev_id]
-            save_config(cfg)
-            return self.send_json({"success": True, "reviewers": cfg["governance"]["reviewers"]})
+
 
         self.send_json({"error": "Endpoint não encontrado"}, 404)
 

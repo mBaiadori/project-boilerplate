@@ -14,12 +14,12 @@ const DEFAULT_WIDTHS = {
 export function initPanelResizers() {
   const sidebarPane = document.getElementById('dash-sidebar-nav') || document.querySelector('.dash-sidebar-nav');
   const treePane = document.getElementById('workbench-tree-pane');
-  const aiPane = document.getElementById('workbench-ai-pane');
+  const aiPane = document.getElementById('global-ai-pane') || document.getElementById('workbench-ai-pane');
   const btnToggleGlobalSidebar = document.getElementById('btn-toggle-global-sidebar');
 
   const resizerSidebar = document.getElementById('resizer-sidebar');
   const resizerTree = document.getElementById('resizer-tree');
-  const resizerAi = document.getElementById('resizer-ai');
+  const resizerAi = document.getElementById('resizer-global-ai') || document.getElementById('resizer-ai');
 
   // 1. Restore saved widths from localStorage
   let savedWidths = DEFAULT_WIDTHS;
@@ -69,29 +69,21 @@ export function initPanelResizers() {
     btnToggleGlobalSidebar.addEventListener('click', () => {
       const willCollapse = !sidebarPane.classList.contains('collapsed');
       sidebarPane.classList.toggle('collapsed', willCollapse);
-      
+      localStorage.setItem(SIDEBAR_COLLAPSED_KEY, willCollapse ? 'true' : 'false');
       if (willCollapse) {
         sidebarPane.style.width = '52px';
       } else {
-        const restoreWidth = Math.max(140, savedWidths.sidebar || DEFAULT_WIDTHS.sidebar);
-        sidebarPane.style.width = `${restoreWidth}px`;
+        sidebarPane.style.width = `${Math.max(120, Math.min(340, savedWidths.sidebar))}px`;
       }
-
-      try {
-        localStorage.setItem(SIDEBAR_COLLAPSED_KEY, willCollapse ? 'true' : 'false');
-      } catch (e) {}
     });
   }
 
-  // 4. Setup Resizer for Global Sidebar (Left Nav)
+  // 4. Setup Resizer for Main Navigation Sidebar
   if (resizerSidebar && sidebarPane) {
     setupHorizontalDrag({
       resizer: resizerSidebar,
       onMove: (deltaX, startWidth) => {
-        if (sidebarPane.classList.contains('collapsed')) {
-          sidebarPane.classList.remove('collapsed');
-          localStorage.setItem(SIDEBAR_COLLAPSED_KEY, 'false');
-        }
+        if (sidebarPane.classList.contains('collapsed')) return;
         const newWidth = Math.max(120, Math.min(360, startWidth + deltaX));
         sidebarPane.style.width = `${newWidth}px`;
       },

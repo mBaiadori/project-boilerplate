@@ -8,27 +8,32 @@ class AppRouter {
     this.guards = new Set();
     this.currentRoute = null;
     this.isNavigating = false;
+    this.pendingNavigations = [];
 
     // Escuta mudanças de hash e histórico do browser
-    window.addEventListener('hashchange', () => this._handleHashChange());
+    window.addEventListener('hashchange', () => this._scheduleHashChange());
   }
 
   /**
    * Inicializa o router e processa a URL inicial
    */
   init() {
-    this._handleHashChange();
+    this._scheduleHashChange();
   }
 
   /**
    * Registra um callback para quando a rota mudar
-   * @param {Function} callback (route) => void
+   * @param {Function} callback (route, fromRoute) => Promise<void> | void
    * @returns {Function} Função para desinscrever o listener
    */
   onRouteChange(callback) {
     this.listeners.add(callback);
     if (this.currentRoute) {
-      callback(this.currentRoute);
+      try {
+        callback(this.currentRoute, null);
+      } catch (e) {
+        console.error('[Router] Erro na chamada inicial do listener:', e);
+      }
     }
     return () => this.listeners.delete(callback);
   }
@@ -72,7 +77,7 @@ class AppRouter {
     } else if (segments[0] === 'workspace') {
       routeName = 'workspace';
       repo = decodeURIComponent(segments[1] || '');
-      subview = segments[2] || 'project';
+      subview = segments[2] || 'editor';
     } else {
       routeName = segments[0] || 'auth';
     }
@@ -117,17 +122,14 @@ class AppRouter {
     const queryString = searchParams.toString();
     const newHash = `#/${cleanPath}${queryString ? '?' + queryString : ''}`;
 
-    if (window.location.hash === newHash) {
-      return;
-    }
-
     if (replace) {
       const currentUrl = window.location.href.split('#')[0] + newHash;
       window.history.replaceState(null, '', currentUrl);
-      this._handleHashChange();
-    } else {
+    } else if (window.location.hash !== newHash) {
       window.location.hash = newHash;
     }
+
+    this._scheduleHashChange();
   }
 
   /**
@@ -149,11 +151,18 @@ class AppRouter {
     this.navigate(route.path, mergedQuery, replace);
   }
 
+  _scheduleHashChange() {
+    if (this.isNavigating) {
+      this.pendingNavigations.push(window.location.hash);
+      return;
+    }
+    this._processHashChange();
+  }
+
   /**
-   * Manipulador interno de evento hashchange
+   * Manipulador interno de evento hashchange com suporte assíncrono e fila
    */
-  async _handleHashChange() {
-    if (this.isNavigating) return;
+  async _processHashChange() {
     this.isNavigating = true;
 
     try {
@@ -168,11 +177,9 @@ class AppRouter {
           if (fromRoute && fromRoute.raw) {
             window.location.hash = fromRoute.raw;
           }
-          this.isNavigating = false;
           return;
         } else if (typeof result === 'string') {
           // Redirecionamento ordenado pelo guard
-          this.isNavigating = false;
           this.navigate(result, {}, true);
           return;
         }
@@ -180,16 +187,20 @@ class AppRouter {
 
       this.currentRoute = newRoute;
 
-      // Notifica todos os ouvintes
-      this.listeners.forEach(cb => {
+      // Notifica todos os ouvintes aguardando execução assíncrona
+      for (const cb of this.listeners) {
         try {
-          cb(newRoute, fromRoute);
+          await cb(newRoute, fromRoute);
         } catch (err) {
           console.error('[Router] Erro no listener de rota:', err);
         }
-      });
+      }
     } finally {
       this.isNavigating = false;
+      if (this.pendingNavigations.length > 0) {
+        this.pendingNavigations.shift();
+        this._processHashChange();
+      }
     }
   }
 }

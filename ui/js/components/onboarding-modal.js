@@ -23,68 +23,68 @@ export function initOnboardingModal({ onStartExploring } = {}) {
         "Cada repositório é governado por um documento mestre (<code>index.md</code>) baseado em uma sólida <strong>Visão Estratégica</strong> (Propósito, Proposta de Valor, Stakeholders, Escopo, Cronograma, Método e Custos).",
       bullets: [
         "<strong>Visão Centralizada:</strong> Apresentação clara do produto e valor estratégico sem poluição de arquivos.",
-        "<strong>Arquiteto Guardião (IA):</strong> O assistente ao lado ajuda você a preencher as Definições Estratégicas e o Dicionário Ubíquo.",
-        "<strong>Governança Viva:</strong> O mapa de domínios e contratos é atualizado automaticamente conforme o projeto evolui.",
+        "<strong>Arquiteto Guardião (IA):</strong> O assistente contextual ajuda você a preencher as especificações e o vocabulário oficial.",
+        "<strong>Estrutura Viva:</strong> O mapa de documentos e contratos é sincronizado em tempo real com o seu repositório Git.",
       ],
       tipIcon: "lightbulb",
       tipText:
-        "Dica: Você está na view <strong>Projeto</strong>. Ela é a porta de entrada e documento de apresentação do seu software!",
+        "Dica: A view <strong>Documentos</strong> é a sua central de trabalho diário para ler, criar e editar especificações!",
     },
     {
       badge: "Bounded Contexts (DDD)",
       icon: "category",
-      title: "Domínios de Negócio & Features L1 a L4",
+      title: "Domínios de Negócio & Árvore de Documentos",
       description:
         "No menu <strong>Documentos</strong>, você navega na estrutura limpa da pasta <code>domains/</code>, organizada em camadas arquiteturais.",
       bullets: [
-        "<strong>L2 (Domínios Centrais):</strong> Bounded contexts principais (ex: <code>domains/faturamento/</code>).",
-        "<strong>L3 (Subdomínios / Áreas):</strong> Especializações funcionais (ex: <code>domains/faturamento/pix/</code>).",
-        "<strong>L4 (Features & Esteiras):</strong> Esteiras completas com 8 documentos s (Ideação, KPIs, Regras, BDD Gherkin, etc.).",
+        "<strong>Domínios Centrais:</strong> Bounded contexts principais (ex: <code>domains/faturamento/</code>).",
+        "<strong>Subdomínios / Áreas:</strong> Especializações funcionais (ex: <code>domains/faturamento/pix/</code>).",
+        "<strong>Features & Especificações:</strong> Esteiras completas de especificação técnica com regras e cenários BDD Gherkin.",
       ],
       tipIcon: "lightbulb",
       tipText:
         "Dica: Use o botão <strong>+ Nova Feature</strong> na barra superior para criar uma esteira completa em 1 clique.",
     },
     {
-      badge: "Arquitetura & ADRs",
-      icon: "engineering",
-      title: "Engenharia, Decisões Técnicas & Contratos",
+      badge: "Dicionário & Wiki IA",
+      icon: "auto_stories",
+      title: "Dicionário Ubíquo & Decisões Arquiteturais (ADRs)",
       description:
-        "A view <strong>Engenharia</strong> substitui pastas desorganizadas por um catálogo formal da pasta <code>engenharia/</code>.",
+        "Centralize a linguagem de negócio oficial e registre decisões arquiteturais imutáveis.",
       bullets: [
-        "<strong>Architecture Decision Records (ADRs):</strong> Registre decisões imutáveis (ex: Transactional Outbox, Kafka, Autenticação JWT).",
-        "<strong>Contratos de Mensageria & APIs:</strong> Padrões de payload e integração entre microsserviços.",
-        "<strong>Gerador de ADR com IA:</strong> Descreva o problema e deixe a IA formular o padrão arquitetural em segundos.",
+        "<strong>Dicionário Ubíquo:</strong> Padronize nomes de entidades, regras e sinônimos oficiais consumidos pela IA.",
+        "<strong>Wiki de Decisões (ADRs):</strong> Registre decisões técnicas imutáveis no padrão Karpathy LLM-Wiki.",
+        "<strong>Assistente Especialista:</strong> Prompts otimizados para sugerir termos e validar consistência semântica.",
       ],
       tipIcon: "lightbulb",
       tipText:
-        "Dica: ADRs garantem que decisões técnicas sejam rastreáveis e compreensíveis por novos desenvolvedores.",
+        "Dica: O Dicionário Ubíquo alimenta o contexto da IA para manter todo o código alinhado às regras de negócio.",
     },
     {
       badge: "Template Store",
       icon: "storefront",
-      title: "Template Store & Catálogo ",
+      title: "Template Store & Catálogo de Modelos",
       description:
-        "Acelere o desenvolvimento utilizando modelos pré-validados da comunidade e da sua organização.",
+        "Acelere a escrita técnica utilizando modelos estruturados com assistentes de IA embutidos.",
       bullets: [
-        "<strong>Packs 1-Click:</strong> Instale templates de Checkout, Mensageria, KYC, Autenticação e APIs.",
+        "<strong>Modelos Padronizados:</strong> Templates de Checkout, Mensageria, Autenticação, APIs e Regras de Negócio.",
         "<strong>Assistentes Especialistas:</strong> Cada template inclui um prompt de IA customizado para guiar o preenchimento.",
-        "<strong>Criador de Templates:</strong> Crie novos templates personalizados com o gerador de meta-prompts.",
+        "<strong>Editor Visual Notion-Style:</strong> Formatação rica, tabelas dinâmicas, slash commands e frontmatter visual.",
       ],
       tipIcon: "lightbulb",
       tipText:
-        "Dica: Templates instalados ficam na pasta <code>templates/</code> do seu repositório Git.",
+        "Dica: Templates salvos ficam disponíveis para toda a equipe no seu repositório Git.",
     },
     {
-      badge: "Governança & Git",
-      icon: "shield",
+      badge: "Git & Pull Requests",
+      icon: "merge_type",
       title: "Edição Ágil no Workspace & Pull Requests Seguros",
       description:
-        "Trabalhe com total liberdade e controle de qualidade contínuo.",
+        "Trabalhe com total liberdade e controle de versão integrado ao Git.",
       bullets: [
         "<strong>Modo Ágil:</strong> Edite e salve múltiplos documentos no workspace sem criar dezenas de commits isolados.",
-        "<strong>Central de Diffs & PR:</strong> Revise alterações pendentes com guardrails de risco e abra um Pull Request único para a branch <code>main</code>.",
-        "<strong>Auditoria de Qualidade:</strong> O verificador automático identifica links quebrados, metadados órfãos e feedback loops pendentes.",
+        "<strong>Central de Diffs & PR:</strong> Revise alterações pendentes com visualizador de diff antes de enviar.",
+        "<strong>Criação de PR Unificada:</strong> Abra Pull Requests detalhados diretamente para a branch <code>main</code>.",
       ],
       tipIcon: "verified",
       tipText:

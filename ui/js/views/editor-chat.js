@@ -88,7 +88,7 @@ export function initEditorChatView({ onWorkspaceChanged, getActiveRepo, onDocume
   const docLineCount = document.getElementById("doc-line-count");
 
   // AI Assistant Drawer Elements
-  const workbenchAiPane = document.getElementById("workbench-ai-pane");
+  const workbenchAiPane = document.getElementById("global-ai-pane") || document.getElementById("workbench-ai-pane");
   const btnToggleAiPane = document.getElementById("btn-toggle-ai-pane");
   const btnCloseAiPane = document.getElementById("btn-close-ai-pane");
 

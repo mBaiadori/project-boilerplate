@@ -80,18 +80,8 @@ export const API = {
     return res.json();
   },
 
-  async getProjectGraph() {
-    const res = await fetch('/api/project/graph');
-    return res.json();
-  },
-
   async getDocumentContext(path) {
     const res = await fetch(`/api/project/document-context?path=${encodeURIComponent(path)}`);
-    return res.json();
-  },
-
-  async getAuditReport() {
-    const res = await fetch('/api/project/audit');
     return res.json();
   },
 
@@ -191,36 +181,7 @@ export const API = {
     return { ok: res.ok, data: await res.json() };
   },
 
-  // Governance
-  async getGovernance() {
-    const res = await fetch('/api/governance');
-    return res.json();
-  },
 
-  async addReviewer({ name, handle, role, tier }) {
-    const res = await fetch('/api/governance/reviewers', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, handle, role, tier })
-    });
-    return { ok: res.ok, data: await res.json() };
-  },
-
-  async removeReviewer(id) {
-    const res = await fetch(`/api/governance/reviewers?id=${encodeURIComponent(id)}`, {
-      method: 'DELETE'
-    });
-    return { ok: res.ok, data: await res.json() };
-  },
-
-  async updateGovernanceSettings({ min_approvals }) {
-    const res = await fetch('/api/governance/settings', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ min_approvals })
-    });
-    return { ok: res.ok, data: await res.json() };
-  },
 
   // Agentic AI Chat & Memory Engine
   async sendChatMessage({ prompt, content, path, history, assistant_prompt, session_id, repo }) {
