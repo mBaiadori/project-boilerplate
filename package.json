@@ -3,8 +3,12 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "npm --prefix frontend run dev",
-    "build": "npm --prefix frontend run build",
-    "start": "python3 server.py"
+    "dev": "npx -y concurrently -k \"npm --prefix server run dev\" \"npm --prefix frontend run dev\"",
+    "dev:server": "npm --prefix server run dev",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "build:server": "npm --prefix server run build",
+    "build:frontend": "npm --prefix frontend run build",
+    "build": "npm run build:server && npm run build:frontend",
+    "start": "npm --prefix server start"
   }
 }
