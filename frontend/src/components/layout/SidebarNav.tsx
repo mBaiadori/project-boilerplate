@@ -18,10 +18,14 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({ activeView, onSelectView
           <button
             id="btn-toggle-global-sidebar"
             className="dash-sidebar-toggle-top"
-            title="Recolher / Expandir Menu Lateral"
+            title={isCollapsed ? "Expandir Menu Lateral" : "Recolher Menu Lateral"}
             onClick={() => setIsCollapsed(!isCollapsed)}
           >
-            <span className="toggle-arrow">{isCollapsed ? '›' : '‹'}</span>
+            <span className="toggle-arrow">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="15 18 9 12 15 6"></polyline>
+              </svg>
+            </span>
           </button>
         </div>
 

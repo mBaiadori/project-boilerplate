@@ -61,9 +61,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onBackToRepos }) =
           onSelectView={(view) => setActiveSubView(view)}
         />
 
-        {/* Vertical Resizer: Sidebar <-> Views Container */}
-        <div id="resizer-sidebar" className="pane-resizer" title="Arrastar para redimensionar menu lateral"></div>
-
         {/* Main Views Container */}
         <main className="dash-views-container">
           {activeSubView === 'editor' && (
