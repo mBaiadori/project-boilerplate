@@ -1,0 +1,21 @@
+/* ========================================================================= */
+/* CSS Architecture Import (Preserves 100% of Design Tokens & Aesthetics)     */
+/* ========================================================================= */
+@import './styles/design-tokens.css';
+@import './styles/main.css';
+@import './styles/auth.css';
+@import './styles/repos.css';
+@import './styles/material-dropdown.css';
+@import './styles/dashboard.css';
+@import './styles/notion-editor.css';
+
+/* React Root Full Height Setup */
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}

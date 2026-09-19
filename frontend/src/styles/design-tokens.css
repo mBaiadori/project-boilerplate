@@ -1,0 +1,437 @@
+/**
+ * Material Design 3 (Material You) Design Tokens
+ * Google Web Design Guidelines System Tokens
+ */
+
+:root {
+  /* ========================================================================= */
+  /* COLOR SYSTEM - LIGHT THEME (Google Material 3)                           */
+  /* ========================================================================= */
+
+  /* Primary */
+  --md-sys-color-primary: #1a73e8;
+  --md-sys-color-on-primary: #ffffff;
+  --md-sys-color-primary-container: #d2e3fc;
+  --md-sys-color-on-primary-container: #041e49;
+
+  /* Secondary */
+  --md-sys-color-secondary: #5f6368;
+  --md-sys-color-on-secondary: #ffffff;
+  --md-sys-color-secondary-container: #e8eaed;
+  --md-sys-color-on-secondary-container: #202124;
+
+  /* Tertiary */
+  --md-sys-color-tertiary: #188038;
+  --md-sys-color-on-tertiary: #ffffff;
+  --md-sys-color-tertiary-container: #ceead6;
+  --md-sys-color-on-tertiary-container: #0d652d;
+
+  /* Surfaces & Backgrounds */
+  --md-sys-color-surface: #ffffff;
+  --md-sys-color-on-surface: #202124;
+  --md-sys-color-surface-variant: #f1f3f4;
+  --md-sys-color-on-surface-variant: #5f6368;
+  --md-sys-color-surface-container-lowest: #ffffff;
+  --md-sys-color-surface-container-low: #f8f9fa;
+  --md-sys-color-surface-container: #f1f3f4;
+  --md-sys-color-surface-container-high: #e8eaed;
+  --md-sys-color-surface-container-highest: #dadce0;
+
+  /* Outlines */
+  --md-sys-color-outline: #747775;
+  --md-sys-color-outline-variant: #c4c7c5;
+
+  /* Status Colors */
+  --md-sys-color-error: #d93025;
+  --md-sys-color-on-error: #ffffff;
+  --md-sys-color-error-container: #fce8e6;
+  --md-sys-color-on-error-container: #c5221f;
+
+  --md-sys-color-warning: #f29900;
+  --md-sys-color-warning-container: #fef7e0;
+  --md-sys-color-info: #1a73e8;
+  --md-sys-color-success: #1e8e3e;
+
+  /* ========================================================================= */
+  /* SHAPES & CORNER RADII                                                    */
+  /* ========================================================================= */
+  --md-shape-corner-none: 0px;
+  --md-shape-corner-xs: 4px;
+  --md-shape-corner-sm: 8px;
+  --md-shape-corner-md: 12px;
+  --md-shape-corner-lg: 16px;
+  --md-shape-corner-xl: 28px;
+  --md-shape-corner-full: 9999px;
+
+  /* ========================================================================= */
+  /* ELEVATION & SHADOWS                                                      */
+  /* ========================================================================= */
+  --md-sys-elevation-0: none;
+  --md-sys-elevation-1: 0 1px 3px rgba(60, 64, 67, 0.12), 0 1px 2px rgba(60, 64, 67, 0.08);
+  --md-sys-elevation-2: 0 2px 6px rgba(60, 64, 67, 0.15), 0 1px 2px rgba(60, 64, 67, 0.10);
+  --md-sys-elevation-3: 0 4px 12px rgba(60, 64, 67, 0.15), 0 2px 4px rgba(60, 64, 67, 0.12);
+  --md-sys-elevation-4: 0 8px 24px rgba(60, 64, 67, 0.18), 0 4px 8px rgba(60, 64, 67, 0.12);
+
+  /* ========================================================================= */
+  /* SPATIAL SCALE (4px/8px rhythm)                                            */
+  /* ========================================================================= */
+  --md-spacing-2xs: 2px;
+  --md-spacing-xs: 4px;
+  --md-spacing-sm: 8px;
+  --md-spacing-md: 12px;
+  --md-spacing-lg: 16px;
+  --md-spacing-xl: 24px;
+  --md-spacing-2xl: 32px;
+  --md-spacing-3xl: 48px;
+  --md-spacing-4xl: 64px;
+
+  /* ========================================================================= */
+  /* TYPOGRAPHY SCALE (Google Material Design 3 Type Scale)                    */
+  /* ========================================================================= */
+  --md-sys-typescale-font-brand: 'Outfit', 'Inter', -apple-system, sans-serif;
+  --md-sys-typescale-font-plain: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --md-sys-typescale-font-code: 'JetBrains Mono', monospace;
+
+  /* Display (Large, expressive headlines) */
+  --md-sys-typescale-display-large-size: 57px;
+  --md-sys-typescale-display-large-line-height: 64px;
+  --md-sys-typescale-display-large-weight: 400;
+  --md-sys-typescale-display-large-tracking: -0.25px;
+
+  --md-sys-typescale-display-medium-size: 45px;
+  --md-sys-typescale-display-medium-line-height: 52px;
+  --md-sys-typescale-display-medium-weight: 400;
+  --md-sys-typescale-display-medium-tracking: 0px;
+
+  --md-sys-typescale-display-small-size: 36px;
+  --md-sys-typescale-display-small-line-height: 44px;
+  --md-sys-typescale-display-small-weight: 400;
+  --md-sys-typescale-display-small-tracking: 0px;
+
+  /* Headline (High-emphasis section headings) */
+  --md-sys-typescale-headline-large-size: 32px;
+  --md-sys-typescale-headline-large-line-height: 40px;
+  --md-sys-typescale-headline-large-weight: 400;
+  --md-sys-typescale-headline-large-tracking: 0px;
+
+  --md-sys-typescale-headline-medium-size: 28px;
+  --md-sys-typescale-headline-medium-line-height: 36px;
+  --md-sys-typescale-headline-medium-weight: 400;
+  --md-sys-typescale-headline-medium-tracking: 0px;
+
+  --md-sys-typescale-headline-small-size: 24px;
+  --md-sys-typescale-headline-small-line-height: 32px;
+  --md-sys-typescale-headline-small-weight: 400;
+  --md-sys-typescale-headline-small-tracking: 0px;
+
+  /* Title (Medium-emphasis headers, dialog titles, card titles) */
+  --md-sys-typescale-title-large-size: 22px;
+  --md-sys-typescale-title-large-line-height: 28px;
+  --md-sys-typescale-title-large-weight: 400;
+  --md-sys-typescale-title-large-tracking: 0px;
+
+  --md-sys-typescale-title-medium-size: 16px;
+  --md-sys-typescale-title-medium-line-height: 24px;
+  --md-sys-typescale-title-medium-weight: 500;
+  --md-sys-typescale-title-medium-tracking: 0.15px;
+
+  --md-sys-typescale-title-small-size: 14px;
+  --md-sys-typescale-title-small-line-height: 20px;
+  --md-sys-typescale-title-small-weight: 500;
+  --md-sys-typescale-title-small-tracking: 0.1px;
+
+  /* Body (Long-form content, paragraphs, data tables) */
+  --md-sys-typescale-body-large-size: 16px;
+  --md-sys-typescale-body-large-line-height: 24px;
+  --md-sys-typescale-body-large-weight: 400;
+  --md-sys-typescale-body-large-tracking: 0.5px;
+
+  --md-sys-typescale-body-medium-size: 14px;
+  --md-sys-typescale-body-medium-line-height: 20px;
+  --md-sys-typescale-body-medium-weight: 400;
+  --md-sys-typescale-body-medium-tracking: 0.25px;
+
+  --md-sys-typescale-body-small-size: 12px;
+  --md-sys-typescale-body-small-line-height: 16px;
+  --md-sys-typescale-body-small-weight: 400;
+  --md-sys-typescale-body-small-tracking: 0.4px;
+
+  /* Label (Buttons, form labels, badges, captions, status indicators) */
+  --md-sys-typescale-label-large-size: 14px;
+  --md-sys-typescale-label-large-line-height: 20px;
+  --md-sys-typescale-label-large-weight: 500;
+  --md-sys-typescale-label-large-tracking: 0.1px;
+
+  --md-sys-typescale-label-medium-size: 12px;
+  --md-sys-typescale-label-medium-line-height: 16px;
+  --md-sys-typescale-label-medium-weight: 500;
+  --md-sys-typescale-label-medium-tracking: 0.5px;
+
+  --md-sys-typescale-label-small-size: 11px;
+  --md-sys-typescale-label-small-line-height: 16px;
+  --md-sys-typescale-label-small-weight: 500;
+  --md-sys-typescale-label-small-tracking: 0.5px;
+
+  /* ========================================================================= */
+  /* RESPONSIVE WINDOW SIZE CLASSES & BREAKPOINTS (Google M3)                  */
+  /* ========================================================================= */
+  --md-breakpoint-compact-max: 599.98px;     /* Mobile portrait (4 cols, 16px margin) */
+  --md-breakpoint-medium-min: 600px;         /* Tablets portrait, Foldables (8 cols, 24px) */
+  --md-breakpoint-medium-max: 839.98px;
+  --md-breakpoint-expanded-min: 840px;       /* Tablets landscape, Laptops (12 cols, 24px) */
+  --md-breakpoint-expanded-max: 1199.98px;
+  --md-breakpoint-large-min: 1200px;         /* Desktop Displays (12 cols, 24px) */
+  --md-breakpoint-large-max: 1599.98px;
+  --md-breakpoint-xlarge-min: 1600px;        /* Ultra-wide Monitors (12 cols, bounded) */
+
+  /* Grid Layout Tokens */
+  --md-grid-margin-compact: 16px;
+  --md-grid-margin-expanded: 24px;
+  --md-grid-gutter-compact: 16px;
+  --md-grid-gutter-expanded: 24px;
+  --md-content-max-width: 1440px;
+
+  /* ========================================================================= */
+  /* MOTION & TRANSITIONS                                                     */
+  /* ========================================================================= */
+  --md-sys-motion-easing-standard: cubic-bezier(0.2, 0.0, 0, 1.0);
+  --md-sys-motion-easing-emphasized: cubic-bezier(0.05, 0.7, 0.1, 1.0);
+  --md-sys-motion-duration-short: 150ms;
+  --md-sys-motion-duration-medium: 250ms;
+  --md-sys-motion-duration-long: 400ms;
+}
+
+/* ========================================================================= */
+/* COLOR SYSTEM - DARK THEME                                                 */
+/* ========================================================================= */
+[data-theme="dark"], .dark-theme {
+  --md-sys-color-primary: #8ab4f8;
+  --md-sys-color-on-primary: #041e49;
+  --md-sys-color-primary-container: #174ea6;
+  --md-sys-color-on-primary-container: #d2e3fc;
+
+  --md-sys-color-secondary: #bdc1c6;
+  --md-sys-color-on-secondary: #202124;
+  --md-sys-color-secondary-container: #3c4043;
+  --md-sys-color-on-secondary-container: #e8eaed;
+
+  --md-sys-color-tertiary: #81c995;
+  --md-sys-color-on-tertiary: #072711;
+  --md-sys-color-tertiary-container: #0d652d;
+  --md-sys-color-on-tertiary-container: #ceead6;
+
+  --md-sys-color-surface: #121212;
+  --md-sys-color-on-surface: #e8eaed;
+  --md-sys-color-surface-variant: #202124;
+  --md-sys-color-on-surface-variant: #9aa0a6;
+  --md-sys-color-surface-container-lowest: #0d0e0f;
+  --md-sys-color-surface-container-low: #1a1a1c;
+  --md-sys-color-surface-container: #202124;
+  --md-sys-color-surface-container-high: #2d2f31;
+  --md-sys-color-surface-container-highest: #3c4043;
+
+  --md-sys-color-outline: #8e918f;
+  --md-sys-color-outline-variant: #444746;
+
+  --md-sys-color-error: #f28b82;
+  --md-sys-color-on-error: #601410;
+  --md-sys-color-error-container: #8c1d18;
+  --md-sys-color-on-error-container: #fce8e6;
+
+  --md-sys-color-warning: #fdd663;
+  --md-sys-color-warning-container: #493c00;
+  --md-sys-color-info: #8ab4f8;
+  --md-sys-color-success: #81c995;
+
+  --md-sys-elevation-1: 0 1px 3px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.3);
+  --md-sys-elevation-2: 0 2px 6px rgba(0, 0, 0, 0.45), 0 1px 3px rgba(0, 0, 0, 0.35);
+  --md-sys-elevation-3: 0 4px 12px rgba(0, 0, 0, 0.5), 0 2px 4px rgba(0, 0, 0, 0.4);
+  --md-sys-elevation-4: 0 8px 24px rgba(0, 0, 0, 0.55), 0 4px 8px rgba(0, 0, 0, 0.45);
+}
+
+/* ========================================================================= */
+/* GOOGLE MATERIAL SYMBOLS (OUTLINED)                                        */
+/* ========================================================================= */
+.material-symbols-outlined {
+  font-family: 'Material Symbols Outlined';
+  font-weight: normal;
+  font-style: normal;
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-feature-settings: 'liga';
+  -webkit-font-smoothing: antialiased;
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  vertical-align: middle;
+  user-select: none;
+}
+
+.material-symbols-outlined.fill {
+  font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
+/* Material 3 Optical Size & Scale Tokens */
+.icon-xs { 
+  font-size: 16px !important; 
+  font-variation-settings: 'opsz' 20;
+}
+.icon-sm { 
+  font-size: 20px !important; 
+  font-variation-settings: 'opsz' 20;
+}
+.icon-md { 
+  font-size: 24px !important; 
+  font-variation-settings: 'opsz' 24;
+}
+.icon-lg { 
+  font-size: 32px !important; 
+  font-variation-settings: 'opsz' 40;
+}
+.icon-xl { 
+  font-size: 40px !important; 
+  font-variation-settings: 'opsz' 48;
+}
+
+/* M3 Icon-only button touch target standard (min 40px desktop / 48px mobile) */
+.btn-icon,
+.btn-icon-subtle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  min-height: 36px;
+  padding: 6px;
+  border-radius: var(--md-sys-shape-corner-full, 9999px);
+  border: none;
+  background: transparent;
+  color: var(--md-sys-color-on-surface-variant);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.btn-icon:hover,
+.btn-icon-subtle:hover {
+  background-color: var(--md-sys-color-surface-container-high);
+  color: var(--md-sys-color-on-surface);
+}
+
+/* ========================================================================= */
+  /* TYPOGRAPHY ROLE CLASSES (Google M3)                                      */
+  /* ========================================================================= */
+.type-display-large {
+  font-family: var(--md-sys-typescale-font-brand);
+  font-size: var(--md-sys-typescale-display-large-size);
+  line-height: var(--md-sys-typescale-display-large-line-height);
+  font-weight: var(--md-sys-typescale-display-large-weight);
+  letter-spacing: var(--md-sys-typescale-display-large-tracking);
+}
+.type-display-medium {
+  font-family: var(--md-sys-typescale-font-brand);
+  font-size: var(--md-sys-typescale-display-medium-size);
+  line-height: var(--md-sys-typescale-display-medium-line-height);
+  font-weight: var(--md-sys-typescale-display-medium-weight);
+  letter-spacing: var(--md-sys-typescale-display-medium-tracking);
+}
+.type-display-small {
+  font-family: var(--md-sys-typescale-font-brand);
+  font-size: var(--md-sys-typescale-display-small-size);
+  line-height: var(--md-sys-typescale-display-small-line-height);
+  font-weight: var(--md-sys-typescale-display-small-weight);
+  letter-spacing: var(--md-sys-typescale-display-small-tracking);
+}
+
+.type-headline-large {
+  font-family: var(--md-sys-typescale-font-brand);
+  font-size: var(--md-sys-typescale-headline-large-size);
+  line-height: var(--md-sys-typescale-headline-large-line-height);
+  font-weight: var(--md-sys-typescale-headline-large-weight);
+  letter-spacing: var(--md-sys-typescale-headline-large-tracking);
+}
+.type-headline-medium {
+  font-family: var(--md-sys-typescale-font-brand);
+  font-size: var(--md-sys-typescale-headline-medium-size);
+  line-height: var(--md-sys-typescale-headline-medium-line-height);
+  font-weight: var(--md-sys-typescale-headline-medium-weight);
+  letter-spacing: var(--md-sys-typescale-headline-medium-tracking);
+}
+.type-headline-small {
+  font-family: var(--md-sys-typescale-font-brand);
+  font-size: var(--md-sys-typescale-headline-small-size);
+  line-height: var(--md-sys-typescale-headline-small-line-height);
+  font-weight: var(--md-sys-typescale-headline-small-weight);
+  letter-spacing: var(--md-sys-typescale-headline-small-tracking);
+}
+
+.type-title-large {
+  font-family: var(--md-sys-typescale-font-brand);
+  font-size: var(--md-sys-typescale-title-large-size);
+  line-height: var(--md-sys-typescale-title-large-line-height);
+  font-weight: var(--md-sys-typescale-title-large-weight);
+  letter-spacing: var(--md-sys-typescale-title-large-tracking);
+}
+.type-title-medium {
+  font-family: var(--md-sys-typescale-font-plain);
+  font-size: var(--md-sys-typescale-title-medium-size);
+  line-height: var(--md-sys-typescale-title-medium-line-height);
+  font-weight: var(--md-sys-typescale-title-medium-weight);
+  letter-spacing: var(--md-sys-typescale-title-medium-tracking);
+}
+.type-title-small {
+  font-family: var(--md-sys-typescale-font-plain);
+  font-size: var(--md-sys-typescale-title-small-size);
+  line-height: var(--md-sys-typescale-title-small-line-height);
+  font-weight: var(--md-sys-typescale-title-small-weight);
+  letter-spacing: var(--md-sys-typescale-title-small-tracking);
+}
+
+.type-body-large {
+  font-family: var(--md-sys-typescale-font-plain);
+  font-size: var(--md-sys-typescale-body-large-size);
+  line-height: var(--md-sys-typescale-body-large-line-height);
+  font-weight: var(--md-sys-typescale-body-large-weight);
+  letter-spacing: var(--md-sys-typescale-body-large-tracking);
+}
+.type-body-medium {
+  font-family: var(--md-sys-typescale-font-plain);
+  font-size: var(--md-sys-typescale-body-medium-size);
+  line-height: var(--md-sys-typescale-body-medium-line-height);
+  font-weight: var(--md-sys-typescale-body-medium-weight);
+  letter-spacing: var(--md-sys-typescale-body-medium-tracking);
+}
+.type-body-small {
+  font-family: var(--md-sys-typescale-font-plain);
+  font-size: var(--md-sys-typescale-body-small-size);
+  line-height: var(--md-sys-typescale-body-small-line-height);
+  font-weight: var(--md-sys-typescale-body-small-weight);
+  letter-spacing: var(--md-sys-typescale-body-small-tracking);
+}
+
+.type-label-large {
+  font-family: var(--md-sys-typescale-font-plain);
+  font-size: var(--md-sys-typescale-label-large-size);
+  line-height: var(--md-sys-typescale-label-large-line-height);
+  font-weight: var(--md-sys-typescale-label-large-weight);
+  letter-spacing: var(--md-sys-typescale-label-large-tracking);
+}
+.type-label-medium {
+  font-family: var(--md-sys-typescale-font-plain);
+  font-size: var(--md-sys-typescale-label-medium-size);
+  line-height: var(--md-sys-typescale-label-medium-line-height);
+  font-weight: var(--md-sys-typescale-label-medium-weight);
+  letter-spacing: var(--md-sys-typescale-label-medium-tracking);
+}
+.type-label-small {
+  font-family: var(--md-sys-typescale-font-plain);
+  font-size: var(--md-sys-typescale-label-small-size);
+  line-height: var(--md-sys-typescale-label-small-line-height);
+  font-weight: var(--md-sys-typescale-label-small-weight);
+  letter-spacing: var(--md-sys-typescale-label-small-tracking);
+}
+

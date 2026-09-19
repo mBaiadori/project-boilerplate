@@ -3557,9 +3557,18 @@ version: "1.0.0"
             res = fetch_provider_models(provider, api_key, custom_endpoint)
             return self.send_json(res)
 
-        # Servir Arquivos da UI
-        if path == "/" or path == "/index.html": target = os.path.join(UI_DIR, "index.html")
-        else: target = os.path.join(UI_DIR, path.lstrip("/"))
+        # Servir Arquivos da UI (Suporte a React + Vite em ui/dist com fallback para ui/)
+        ui_dist_dir = os.path.join(UI_DIR, "dist")
+        active_ui_dir = ui_dist_dir if os.path.exists(os.path.join(ui_dist_dir, "index.html")) else UI_DIR
+
+        if path == "/" or path == "/index.html":
+            target = os.path.join(active_ui_dir, "index.html")
+        else:
+            target = os.path.join(active_ui_dir, path.lstrip("/"))
+            if not os.path.exists(target) and active_ui_dir == ui_dist_dir:
+                fallback_target = os.path.join(UI_DIR, path.lstrip("/"))
+                if os.path.exists(fallback_target):
+                    target = fallback_target
 
         if os.path.exists(target) and not os.path.isdir(target):
             mime_type, _ = mimetypes.guess_type(target)
