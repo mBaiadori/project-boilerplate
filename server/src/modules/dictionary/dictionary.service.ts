@@ -3,9 +3,16 @@ import path from 'node:path';
 import { PROJECTS_DIR } from '../../config/constants.js';
 import { loadConfig, recordChange } from '../../config/storage.js';
 
+import { validateJsonSchema } from '../../utils/schema.validator.js';
+
 export class DictionaryService {
   private getDictionaryPath(repoName: string): string {
-    return path.join(PROJECTS_DIR, repoName || 'local', 'project', 'dictionary.json');
+    const hiddenPath = path.join(PROJECTS_DIR, repoName || 'local', '.dictionary.json');
+    const legacyPath = path.join(PROJECTS_DIR, repoName || 'local', 'project', 'dictionary.json');
+    if (!fs.existsSync(hiddenPath) && fs.existsSync(legacyPath)) {
+      return legacyPath;
+    }
+    return hiddenPath;
   }
 
   getDictionary() {
@@ -15,8 +22,12 @@ export class DictionaryService {
 
     if (fs.existsSync(dictPath)) {
       try {
-        const data = fs.readFileSync(dictPath, 'utf-8');
-        return JSON.parse(data);
+        const data = JSON.parse(fs.readFileSync(dictPath, 'utf-8'));
+        const valRes = validateJsonSchema('dictionary', data);
+        if (!valRes.valid) {
+          console.warn('[Dictionary] Aviso de schema inválido em .dictionary.json:', valRes.errors);
+        }
+        return data;
       } catch (e) {
         console.error('Erro ao ler dicionário:', e);
       }
@@ -30,6 +41,11 @@ export class DictionaryService {
   }
 
   saveDictionary(data: any) {
+    const valRes = validateJsonSchema('dictionary', data);
+    if (!valRes.valid) {
+      throw new Error(`Dados do dicionário inválidos: ${valRes.errors?.join(', ')}`);
+    }
+
     const cfg = loadConfig();
     const repoName = cfg.active_repo?.name || 'local';
     const dictPath = this.getDictionaryPath(repoName);
@@ -44,7 +60,7 @@ export class DictionaryService {
     const newContent = JSON.stringify(data, null, 2);
     fs.writeFileSync(dictPath, newContent, 'utf-8');
 
-    recordChange(repoName, 'project/dictionary.json', oldContent ? 'MODIFIED' : 'ADDED', oldContent, newContent);
+    recordChange(repoName, '.dictionary.json', oldContent ? 'MODIFIED' : 'ADDED', oldContent, newContent);
 
     return {
       success: true,

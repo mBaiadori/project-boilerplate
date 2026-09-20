@@ -146,10 +146,10 @@ export class SlashMenuEngine {
       keywords: ['number', 'numero', 'ordenada', 'ol', 'sequencia']
     },
 
-    // 5. Técnico & Governança
+    // 5. Avançado & Código
     {
       id: 'mermaid',
-      category: 'Técnico & Governança',
+      category: 'Avançado & Código',
       title: 'Diagrama Mermaid',
       desc: 'Fluxogramas, sequências e arquitetura renderizados ao vivo',
       icon: '<span class="material-symbols-outlined icon-sm">schema</span>',
@@ -157,7 +157,7 @@ export class SlashMenuEngine {
     },
     {
       id: 'code',
-      category: 'Técnico & Governança',
+      category: 'Avançado & Código',
       title: 'Bloco de Código',
       desc: 'Caixa com destaque de sintaxe e botão de cópia',
       icon: '<span class="material-symbols-outlined icon-sm">code</span>',
@@ -165,7 +165,7 @@ export class SlashMenuEngine {
     },
     {
       id: 'quote',
-      category: 'Técnico & Governança',
+      category: 'Avançado & Código',
       title: 'Citação em Bloco',
       desc: 'Texto em destaque com barra lateral',
       icon: '<span class="material-symbols-outlined icon-sm">format_quote</span>',
@@ -217,6 +217,70 @@ export class SlashMenuEngine {
         this.close();
       }
     });
+
+    // Window resize / scroll repositioning
+    window.addEventListener('resize', () => {
+      if (this.isOpen) {
+        this.positionMenu();
+      }
+    });
+
+    window.addEventListener('scroll', () => {
+      if (this.isOpen) {
+        this.positionMenu();
+      }
+    }, true);
+  }
+
+  positionMenu() {
+    if (!this.element || !this.triggerRange) return;
+
+    let rect = this.triggerRange.getBoundingClientRect();
+    if (rect.width === 0 && rect.height === 0 && rect.top === 0 && rect.bottom === 0) {
+      const node = this.triggerRange.startContainer;
+      const el = node.nodeType === Node.ELEMENT_NODE ? (node as HTMLElement) : node.parentElement;
+      if (el) {
+        rect = el.getBoundingClientRect();
+      }
+    }
+
+    const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
+    const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+    const margin = 14;
+    const menuWidth = this.element.offsetWidth || 320;
+    const menuHeight = this.element.offsetHeight || 320;
+    const maxAllowedHeight = 360;
+
+    // 1. Horizontal Calculation (Clamp to viewport)
+    let left = rect.left;
+    if (left + menuWidth > viewportWidth - margin) {
+      left = viewportWidth - menuWidth - margin;
+    }
+    if (left < margin) {
+      left = margin;
+    }
+
+    // 2. Vertical Calculation (Smart Flip & Clamp)
+    const spaceBelow = viewportHeight - rect.bottom - margin;
+    const spaceAbove = rect.top - margin;
+
+    // Prefer below if at least 220px of space or if spaceBelow >= spaceAbove
+    if (spaceBelow >= 220 || spaceBelow >= spaceAbove) {
+      const availableHeight = Math.min(maxAllowedHeight, Math.max(120, Math.floor(spaceBelow - 8)));
+      this.element.style.maxHeight = `${availableHeight}px`;
+      this.element.style.top = `${Math.round(rect.bottom + 6)}px`;
+      this.element.style.bottom = 'auto';
+    } else {
+      // Flip upwards above the caret
+      const availableHeight = Math.min(maxAllowedHeight, Math.max(120, Math.floor(spaceAbove - 8)));
+      this.element.style.maxHeight = `${availableHeight}px`;
+      const currentH = Math.min(menuHeight, availableHeight);
+      const topPos = Math.max(margin, Math.round(rect.top - currentH - 6));
+      this.element.style.top = `${topPos}px`;
+      this.element.style.bottom = 'auto';
+    }
+
+    this.element.style.left = `${Math.round(left)}px`;
   }
 
   openAtCaret(initialQuery = '') {
@@ -224,26 +288,25 @@ export class SlashMenuEngine {
     if (!selection || selection.rangeCount === 0 || !this.element) return;
 
     this.triggerRange = selection.getRangeAt(0).cloneRange();
-    const rect = this.triggerRange.getBoundingClientRect();
-
-    this.element.style.display = 'flex';
-
-    // Position right below the cursor
-    const left = Math.min(rect.left, window.innerWidth - 340);
-    const top = rect.bottom + 8;
-    this.element.style.left = `${Math.max(16, left)}px`;
-    this.element.style.top = `${top}px`;
-
     this.isOpen = true;
     this.query = initialQuery;
+
     if (this.searchInput) {
       this.searchInput.value = initialQuery;
     }
+
+    this.element.style.display = 'flex';
+    this.element.style.visibility = 'hidden';
+
     this.renderList();
+    this.positionMenu();
+
+    this.element.style.visibility = 'visible';
 
     setTimeout(() => {
+      this.positionMenu();
       this.searchInput?.focus();
-    }, 50);
+    }, 30);
   }
 
   renderList() {
@@ -268,6 +331,7 @@ export class SlashMenuEngine {
         </div>
       `;
       this.selectedIndex = 0;
+      this.positionMenu();
       return;
     }
 
@@ -314,6 +378,7 @@ export class SlashMenuEngine {
     });
 
     this.scrollActiveItemIntoView();
+    this.positionMenu();
   }
 
   updateActiveItem() {

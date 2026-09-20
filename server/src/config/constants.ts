@@ -10,8 +10,9 @@ export const BASE_DIR = path.resolve(__dirname, '../../../');
 export const PROJECTS_DIR = path.join(BASE_DIR, 'projects');
 export const CONFIG_PATH = path.join(BASE_DIR, 'config.json');
 export const PROJECTS_CONFIG_PATH = path.join(PROJECTS_DIR, 'project.config.json');
-export const UI_DIR = path.join(BASE_DIR, 'ui');
-export const UI_DIST_DIR = path.join(UI_DIR, 'dist');
+export const FRONTEND_DIR = path.join(BASE_DIR, 'frontend');
+export const UI_DIST_DIR = path.join(FRONTEND_DIR, 'dist');
+export const UI_DIR = UI_DIST_DIR;
 export const TEMPLATES_DIR = path.join(BASE_DIR, 'templates');
 export const DOCS_DIR = path.join(BASE_DIR, 'docs');
 

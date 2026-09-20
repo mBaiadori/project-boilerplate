@@ -59,12 +59,12 @@ export const API = {
     return { ok: res.ok, data: await res.json() };
   },
 
-  async getProjectFile(path = 'index.md'): Promise<{ path: string; content: string; source?: string; error?: string }> {
+  async getProjectFile(path: string): Promise<{ path: string; content: string; meta?: any; source?: string; error?: string }> {
     const res = await fetch(`/api/project/file?path=${encodeURIComponent(path)}`);
     return res.json();
   },
 
-  async createProjectFile(payload: { path: string; is_folder?: boolean; content?: string }): Promise<ApiResponse<any>> {
+  async createProjectFile(payload: { path: string; is_folder?: boolean; content?: string; meta?: any }): Promise<ApiResponse<any>> {
     const res = await fetch('/api/project/file/create', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -119,7 +119,7 @@ export const API = {
     return res.json();
   },
 
-  async saveWorkspaceFile(payload: { path: string; content: string }): Promise<ApiResponse<any>> {
+  async saveWorkspaceFile(payload: { path: string; content: string; meta?: any }): Promise<ApiResponse<any>> {
     const res = await fetch('/api/workspace/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -128,7 +128,7 @@ export const API = {
     return { ok: res.ok, data: await res.json() };
   },
 
-  async saveProjectFile(payload: { path: string; content: string }): Promise<ApiResponse<any>> {
+  async saveProjectFile(payload: { path: string; content: string; meta?: any }): Promise<ApiResponse<any>> {
     return this.saveWorkspaceFile(payload);
   },
 

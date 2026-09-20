@@ -9,6 +9,7 @@ import {
   DEFAULT_TEMPLATE_CREATOR_PROMPT,
   DEFAULT_PROJECT_ABOUT_PROMPT,
 } from './constants.js';
+import { validateJsonSchema } from '../utils/schema.validator.js';
 
 export interface WorkspaceChange {
   path: string;
@@ -207,40 +208,96 @@ export function clearWorkspaceChanges(repoName: string): void {
   }
 }
 
-export function ensureDefaultRepoFiles(repoName: string): void {
-  if (!repoName) return;
-  const targetDir = path.join(PROJECTS_DIR, repoName);
-  const master = loadProjectsMasterConfig();
+export function syncBlueprint(sourceDir: string, targetDir: string): void {
+  if (!fs.existsSync(sourceDir)) return;
+  fs.mkdirSync(targetDir, { recursive: true });
 
-  // Create mandatory directories
-  const dirs = master.mandatory_structure?.directories || ['project', 'domains', 'engenharia', 'templates'];
-  for (const d of dirs) {
-    fs.mkdirSync(path.join(targetDir, d), { recursive: true });
-  }
+  const entries = fs.readdirSync(sourceDir, { withFileTypes: true });
+  for (const entry of entries) {
+    if (entry.name === 'node_modules' || entry.name === '.git') continue;
 
-  // Create essential root files if missing
-  const indexMd = path.join(targetDir, 'index.md');
-  if (!fs.existsSync(indexMd)) {
-    const defaultIndex = `# ${repoName.toUpperCase()} - Governança e Especificações
+    const srcPath = path.join(sourceDir, entry.name);
+    const dstPath = path.join(targetDir, entry.name);
 
-Bem-vindo ao repositório de especificações e contratos vivos do projeto **${repoName}**.
+    if (entry.isDirectory()) {
+      syncBlueprint(srcPath, dstPath);
+    } else if (entry.isFile()) {
+      if (!fs.existsSync(dstPath)) {
+        fs.mkdirSync(path.dirname(dstPath), { recursive: true });
+        fs.copyFileSync(srcPath, dstPath);
 
-## Estrutura do Repositório
-- \`project/\`: Configurações oficiais, visões estratégicas e políticas de governança.
-- \`domains/\`: Contextos delimitados (DDD), modelos de domínio e regras de negócio.
-- \`engenharia/\`: Guias de implementação, padrões arquiteturais e esteiras CI/CD.
-- \`templates/\`: Catálogo de templates instalados e modelos de especificação.
-`;
-    fs.writeFileSync(indexMd, defaultIndex, 'utf-8');
-  }
-
-  // Essential files from master config
-  const essential = master.mandatory_structure?.essential_files || [];
-  for (const item of essential) {
-    const targetFile = path.join(targetDir, item.path);
-    if (!fs.existsSync(targetFile)) {
-      fs.mkdirSync(path.dirname(targetFile), { recursive: true });
-      fs.writeFileSync(targetFile, item.content || '', 'utf-8');
+        // Validate JSON if applicable
+        if (entry.name === '.project.config.json' || entry.name === 'project.config.json') {
+          try {
+            const data = JSON.parse(fs.readFileSync(dstPath, 'utf-8'));
+            const res = validateJsonSchema('project.config', data);
+            if (!res.valid) {
+              console.warn(`[Schema Warning] project config em ${dstPath} inválido:`, res.errors);
+            }
+          } catch {}
+        } else if (entry.name === '.dictionary.json' || entry.name === 'dictionary.json') {
+          try {
+            const data = JSON.parse(fs.readFileSync(dstPath, 'utf-8'));
+            const res = validateJsonSchema('dictionary', data);
+            if (!res.valid) {
+              console.warn(`[Schema Warning] dictionary em ${dstPath} inválido:`, res.errors);
+            }
+          } catch {}
+        } else if (entry.name === '.docs.metadata.json' || entry.name === 'docs.metadata.json') {
+          try {
+            const data = JSON.parse(fs.readFileSync(dstPath, 'utf-8'));
+            const res = validateJsonSchema('docs.metadata', data);
+            if (!res.valid) {
+              console.warn(`[Schema Warning] docs metadata em ${dstPath} inválido:`, res.errors);
+            }
+          } catch {}
+        }
+      }
     }
   }
+}
+
+export function ensureDefaultRepoFiles(repoName: string): void {
+  if (!repoName) return;
+
+  const defaultDir = path.join(PROJECTS_DIR, 'default');
+  const targetDir = path.join(PROJECTS_DIR, repoName);
+
+  // Guarantee defaultDir exists with minimal blank structure if missing
+  if (!fs.existsSync(defaultDir)) {
+    fs.mkdirSync(defaultDir, { recursive: true });
+    fs.mkdirSync(path.join(defaultDir, '.spec-memory'), { recursive: true });
+
+    const defaultCfg = {
+      project: {
+        name: 'Default Project',
+        description: 'Estrutura padrão de governança de especificações.',
+        version: '1.0.0',
+        architecture_pattern: 'Modular Specs',
+        repository_url: '',
+        lead: '@usuario',
+      },
+      tags: ['backend', 'frontend', 'api', 'database', 'security'],
+      statuses: [
+        { key: 'draft', label: 'DRAFT (Rascunho)', badge: 'badge-neutral' },
+        { key: 'in_review', label: 'IN_REVIEW (Em Revisão)', badge: 'badge-warning' },
+        { key: 'approved', label: 'APPROVED (Aprovado)', badge: 'badge-success' },
+        { key: 'active', label: 'ACTIVE (Ativo em Produção)', badge: 'badge-primary' },
+        { key: 'deprecated', label: 'DEPRECATED (Obsoleto)', badge: 'badge-danger' },
+      ],
+      governance_rules: { min_approvals_default: 1 },
+      reviewers: [],
+      ai_assistant_prompt: 'Você é o assistente de IA do projeto.',
+    };
+    fs.writeFileSync(path.join(defaultDir, '.project.config.json'), JSON.stringify(defaultCfg, null, 2), 'utf-8');
+    fs.writeFileSync(path.join(defaultDir, '.dictionary.json'), JSON.stringify({ version: '1.0.0', terms: [], domains: [] }, null, 2), 'utf-8');
+    fs.writeFileSync(path.join(defaultDir, '.docs.metadata.json'), JSON.stringify({ version: '1.0.0', updated_at: new Date().toISOString(), documents: {} }, null, 2), 'utf-8');
+    fs.writeFileSync(path.join(defaultDir, '.spec-memory', '_meta.yaml'), 'version: 1.0\ninitialized: true\n', 'utf-8');
+  }
+
+  // If this is the default repo itself, we are done
+  if (repoName === 'default') return;
+
+  // Sync from default blueprint to target repository
+  syncBlueprint(defaultDir, targetDir);
 }

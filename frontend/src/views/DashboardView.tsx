@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { TopHeader } from '../components/layout/TopHeader';
 import { SidebarNav, type SubViewType } from '../components/layout/SidebarNav';
 import { AICopilotPanel } from '../components/copilot/AICopilotPanel';
@@ -24,12 +24,68 @@ interface DashboardViewProps {
   onBackToRepos: () => void;
 }
 
+const AI_WIDTH_STORAGE_KEY = 'spec_ai_pane_width';
+const DEFAULT_AI_WIDTH = 360;
+
 export const DashboardView: React.FC<DashboardViewProps> = ({ onBackToRepos }) => {
   const [activeSubView, setActiveSubView] = useState<SubViewType>('editor');
   const [isCopilotOpen, setIsCopilotOpen] = useState(false);
   const [activeCopilotSidebar, setActiveCopilotSidebar] = useState<'prompt' | 'history' | 'raw' | null>(null);
   const [isDiffModalOpen, setIsDiffModalOpen] = useState(false);
   const [isScaffoldModalOpen, setIsScaffoldModalOpen] = useState(false);
+
+  const [aiWidth, setAiWidth] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem(AI_WIDTH_STORAGE_KEY);
+      if (saved) {
+        const parsed = parseInt(saved, 10);
+        if (!isNaN(parsed) && parsed >= 240 && parsed <= 750) {
+          return parsed;
+        }
+      }
+    } catch (e) {}
+    return DEFAULT_AI_WIDTH;
+  });
+
+  const isAiDraggingRef = useRef(false);
+  const startAiXRef = useRef(0);
+  const startAiWidthRef = useRef(DEFAULT_AI_WIDTH);
+
+  const handleAiResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    isAiDraggingRef.current = true;
+    startAiXRef.current = e.clientX;
+    startAiWidthRef.current = aiWidth;
+
+    document.body.classList.add('is-resizing');
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      if (!isAiDraggingRef.current) return;
+      // Dragging AI resizer to the left increases AI width
+      const deltaX = moveEvent.clientX - startAiXRef.current;
+      const newWidth = Math.max(240, Math.min(750, startAiWidthRef.current - deltaX));
+      setAiWidth(newWidth);
+    };
+
+    const handleMouseUp = (upEvent: MouseEvent) => {
+      if (!isAiDraggingRef.current) return;
+      isAiDraggingRef.current = false;
+      document.body.classList.remove('is-resizing');
+
+      const deltaX = upEvent.clientX - startAiXRef.current;
+      const finalWidth = Math.max(240, Math.min(750, startAiWidthRef.current - deltaX));
+      setAiWidth(finalWidth);
+      try {
+        localStorage.setItem(AI_WIDTH_STORAGE_KEY, String(finalWidth));
+      } catch (e) {}
+
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+  };
 
   const { activeFile, activeRepo, fileContent } = useWorkspace();
   const { messages, aiSettings, openSettingsModal } = useAI();
@@ -136,18 +192,23 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onBackToRepos }) =
         )}
 
         {/* Vertical Resizer: Workspace Content <-> Global AI Copilot */}
-        <div
-          id="resizer-global-ai"
-          className={`pane-resizer ${isCopilotOpen ? '' : 'collapsed'}`}
-          title="Arrastar para redimensionar chat de IA"
-          style={{ display: isCopilotOpen ? 'block' : 'none' }}
-        ></div>
+        {isCopilotOpen && (
+          <div
+            id="resizer-global-ai"
+            className="pane-resizer"
+            title="Arrastar para redimensionar chat de IA"
+            onMouseDown={handleAiResizeStart}
+          />
+        )}
 
         {/* Docked Right Global Context-Aware AI Copilot Sidebar */}
         <aside
           id="global-ai-pane"
-          className={`workbench-ai-pane ${isCopilotOpen ? '' : 'collapsed'}`}
-          style={{ display: isCopilotOpen ? 'flex' : 'none' }}
+          className="workbench-ai-pane"
+          style={{
+            display: isCopilotOpen ? 'flex' : 'none',
+            width: `${aiWidth}px`
+          }}
         >
           <AICopilotPanel
             isOpen={isCopilotOpen}

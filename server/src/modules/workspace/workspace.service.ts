@@ -1,8 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { PROJECTS_DIR, extractFrontmatter } from '../../config/constants.js';
+import { PROJECTS_DIR } from '../../config/constants.js';
 import { loadConfig, saveConfig, recordChange, ensureDefaultRepoFiles } from '../../config/storage.js';
 import { computeDiff } from '../../utils/diff.js';
+import { validateJsonSchema } from '../../utils/schema.validator.js';
 
 export interface TreeNode {
   name: string;
@@ -22,10 +23,51 @@ export class WorkspaceService {
     return path.join(PROJECTS_DIR, repoName || 'local');
   }
 
-  buildTree(dir: string, baseDir: string): TreeNode[] {
+  private getDocsMetadataPath(repoName: string): string {
+    const hiddenPath = path.join(this.getRepoDir(repoName), '.docs.metadata.json');
+    const legacyPath = path.join(this.getRepoDir(repoName), 'project', 'docs.metadata.json');
+    if (!fs.existsSync(hiddenPath) && fs.existsSync(legacyPath)) {
+      return legacyPath;
+    }
+    return hiddenPath;
+  }
+
+  private loadDocsMetadata(repoName: string): any {
+    const metaPath = this.getDocsMetadataPath(repoName);
+    if (fs.existsSync(metaPath)) {
+      try {
+        const raw = fs.readFileSync(metaPath, 'utf-8');
+        return JSON.parse(raw);
+      } catch (err) {
+        console.error(`[Workspace] Erro ao ler docs.metadata.json em ${metaPath}:`, err);
+      }
+    }
+    return {
+      version: '1.0.0',
+      updated_at: new Date().toISOString(),
+      documents: {},
+    };
+  }
+
+  private saveDocsMetadata(repoName: string, metaData: any): void {
+    const metaPath = this.getDocsMetadataPath(repoName);
+    metaData.updated_at = new Date().toISOString();
+    
+    const valRes = validateJsonSchema('docs.metadata', metaData);
+    if (!valRes.valid) {
+      console.warn(`[Workspace] Aviso de validação docs.metadata.json:`, valRes.errors);
+    }
+
+    fs.mkdirSync(path.dirname(metaPath), { recursive: true });
+    fs.writeFileSync(metaPath, JSON.stringify(metaData, null, 2), 'utf-8');
+  }
+
+  buildTree(dir: string, baseDir: string, docsMetadata?: any): TreeNode[] {
     if (!fs.existsSync(dir)) return [];
     const entries = fs.readdirSync(dir, { withFileTypes: true });
     const nodes: TreeNode[] = [];
+
+    const meta = docsMetadata || { documents: {} };
 
     for (const entry of entries) {
       if (entry.name.startsWith('.') || entry.name === 'node_modules') continue;
@@ -38,26 +80,21 @@ export class WorkspaceService {
           name: entry.name,
           path: relPath,
           type: 'directory',
-          children: this.buildTree(fullPath, baseDir),
+          children: this.buildTree(fullPath, baseDir, meta),
         });
-      } else if (entry.isFile() && (entry.name.endsWith('.md') || entry.name.endsWith('.json') || entry.name.endsWith('.yaml') || entry.name.endsWith('.yml'))) {
-        let meta: Record<string, any> = {};
-        try {
-          const content = fs.readFileSync(fullPath, 'utf-8');
-          meta = extractFrontmatter(content).meta;
-        } catch {}
-
+      } else if (entry.isFile()) {
+        const docMeta = meta.documents?.[relPath] || {};
         const stat = fs.statSync(fullPath);
 
         nodes.push({
           name: entry.name,
           path: relPath,
           type: 'file',
-          title: meta.title || entry.name.replace('.md', ''),
-          category: meta.category || meta.layer || '',
-          layer: meta.layer || '',
-          badge: meta.badge || '',
-          status: meta.status || '',
+          title: docMeta.title || entry.name.replace(/\.[^/.]+$/, ''),
+          category: docMeta.category || docMeta.layer || '',
+          layer: docMeta.layer || '',
+          badge: docMeta.badge || '',
+          status: docMeta.status || '',
           last_modified: stat.mtimeMs,
         });
       }
@@ -75,7 +112,8 @@ export class WorkspaceService {
     const repoDir = this.getRepoDir(repoName);
     ensureDefaultRepoFiles(repoName);
 
-    const tree = this.buildTree(repoDir, repoDir);
+    const docsMetadata = this.loadDocsMetadata(repoName);
+    const tree = this.buildTree(repoDir, repoDir, docsMetadata);
     return {
       repo: repoName,
       tree,
@@ -85,7 +123,7 @@ export class WorkspaceService {
   getFile(filePath: string) {
     const cfg = loadConfig();
     const repoName = cfg.active_repo?.name || 'local';
-    const cleanPath = (filePath || 'index.md').trim().replace(/^\/+/, '');
+    const cleanPath = (filePath || '').trim().replace(/^\/+/, '');
     const fullPath = path.join(this.getRepoDir(repoName), cleanPath);
 
     if (!fs.existsSync(fullPath)) {
@@ -93,7 +131,8 @@ export class WorkspaceService {
     }
 
     const content = fs.readFileSync(fullPath, 'utf-8');
-    const { meta } = extractFrontmatter(content);
+    const docsMetadata = this.loadDocsMetadata(repoName);
+    const meta = docsMetadata.documents?.[cleanPath] || {};
 
     return {
       path: cleanPath,
@@ -103,10 +142,10 @@ export class WorkspaceService {
     };
   }
 
-  saveFile(filePath: string, content: string) {
+  saveFile(filePath: string, content: string, meta?: any) {
     const cfg = loadConfig();
     const repoName = cfg.active_repo?.name || 'local';
-    const cleanPath = (filePath || 'index.md').trim().replace(/^\/+/, '');
+    const cleanPath = (filePath || '').trim().replace(/^\/+/, '');
     const fullPath = path.join(this.getRepoDir(repoName), cleanPath);
 
     let oldContent = '';
@@ -122,41 +161,95 @@ export class WorkspaceService {
     fs.writeFileSync(fullPath, content, 'utf-8');
     recordChange(repoName, cleanPath, changeType, oldContent, content);
 
+    // Update centralized metadata if provided or if markdown file
+    const docsMetadata = this.loadDocsMetadata(repoName);
+    if (!docsMetadata.documents) docsMetadata.documents = {};
+
+    if (meta && typeof meta === 'object') {
+      docsMetadata.documents[cleanPath] = {
+        ...(docsMetadata.documents[cleanPath] || {}),
+        ...meta,
+        updated_at: new Date().toISOString(),
+      };
+      this.saveDocsMetadata(repoName, docsMetadata);
+    }
+
     const repoDir = this.getRepoDir(repoName);
-    const newTree = this.buildTree(repoDir, repoDir);
+    const newTree = this.buildTree(repoDir, repoDir, docsMetadata);
 
     return {
       success: true,
       path: cleanPath,
+      meta: docsMetadata.documents[cleanPath] || {},
       tree: newTree,
     };
   }
 
-  createFile(filePath: string, initialContent: string = '') {
+  createFile(filePath: string, initialContent: string = '', isFolder: boolean = false, meta?: any) {
     const cfg = loadConfig();
     const repoName = cfg.active_repo?.name || 'local';
-    let cleanPath = (filePath || '').trim().replace(/^\/+/, '');
-    if (!cleanPath.endsWith('.md') && !cleanPath.endsWith('.json')) {
+    let cleanPath = (filePath || '').trim().replace(/^\/+/, '').replace(/\/+$/, '');
+
+    if (!cleanPath) {
+      throw new Error('Caminho não pode ser vazio.');
+    }
+
+    const repoDir = this.getRepoDir(repoName);
+
+    if (isFolder) {
+      const fullPath = path.join(repoDir, cleanPath);
+      if (fs.existsSync(fullPath)) {
+        throw new Error(`A pasta '${cleanPath}' já existe.`);
+      }
+      fs.mkdirSync(fullPath, { recursive: true });
+      const docsMetadata = this.loadDocsMetadata(repoName);
+      const newTree = this.buildTree(repoDir, repoDir, docsMetadata);
+      return {
+        success: true,
+        path: cleanPath,
+        is_folder: true,
+        tree: newTree,
+      };
+    }
+
+    if (!path.extname(cleanPath)) {
       cleanPath += '.md';
     }
 
-    const fullPath = path.join(this.getRepoDir(repoName), cleanPath);
+    const fullPath = path.join(repoDir, cleanPath);
     if (fs.existsSync(fullPath)) {
       throw new Error(`Arquivo '${cleanPath}' já existe.`);
     }
 
     fs.mkdirSync(path.dirname(fullPath), { recursive: true });
-    const content = initialContent || `# ${path.basename(cleanPath, '.md')}\n\nNovo documento criado.`;
+    const content = initialContent || `# ${path.basename(cleanPath, path.extname(cleanPath))}\n\nNovo documento criado.`;
     fs.writeFileSync(fullPath, content, 'utf-8');
 
     recordChange(repoName, cleanPath, 'ADDED', '', content);
 
-    const repoDir = this.getRepoDir(repoName);
-    const newTree = this.buildTree(repoDir, repoDir);
+    // Central metadata entry
+    const docsMetadata = this.loadDocsMetadata(repoName);
+    if (!docsMetadata.documents) docsMetadata.documents = {};
+
+    docsMetadata.documents[cleanPath] = {
+      title: meta?.title || path.basename(cleanPath, path.extname(cleanPath)),
+      status: meta?.status || 'draft',
+      category: meta?.category || '',
+      layer: meta?.layer || '',
+      badge: meta?.badge || '',
+      tags: meta?.tags || [],
+      updated_at: new Date().toISOString(),
+      ...(meta || {}),
+    };
+    this.saveDocsMetadata(repoName, docsMetadata);
+
+    const newTree = this.buildTree(repoDir, repoDir, docsMetadata);
 
     return {
       success: true,
       path: cleanPath,
+      is_folder: false,
+      meta: docsMetadata.documents[cleanPath],
       tree: newTree,
     };
   }
@@ -164,31 +257,46 @@ export class WorkspaceService {
   renameFile(oldPath: string, newPath: string) {
     const cfg = loadConfig();
     const repoName = cfg.active_repo?.name || 'local';
-    const cleanOld = (oldPath || '').trim().replace(/^\/+/, '');
-    let cleanNew = (newPath || '').trim().replace(/^\/+/, '');
-    if (!cleanNew.endsWith('.md') && !cleanNew.endsWith('.json')) {
+    const cleanOld = (oldPath || '').trim().replace(/^\/+/, '').replace(/\/+$/, '');
+    let cleanNew = (newPath || '').trim().replace(/^\/+/, '').replace(/\/+$/, '');
+
+    const fullOld = path.join(this.getRepoDir(repoName), cleanOld);
+    if (!fs.existsSync(fullOld)) {
+      throw new Error(`Origem '${cleanOld}' não existe.`);
+    }
+
+    const isDir = fs.statSync(fullOld).isDirectory();
+    if (!isDir && !path.extname(cleanNew)) {
       cleanNew += '.md';
     }
 
-    const fullOld = path.join(this.getRepoDir(repoName), cleanOld);
     const fullNew = path.join(this.getRepoDir(repoName), cleanNew);
-
-    if (!fs.existsSync(fullOld)) {
-      throw new Error(`Arquivo de origem '${cleanOld}' não existe.`);
-    }
     if (fs.existsSync(fullNew)) {
       throw new Error(`Destino '${cleanNew}' já existe.`);
     }
 
-    const oldContent = fs.readFileSync(fullOld, 'utf-8');
     fs.mkdirSync(path.dirname(fullNew), { recursive: true });
     fs.renameSync(fullOld, fullNew);
 
-    recordChange(repoName, cleanOld, 'DELETED', oldContent, '');
-    recordChange(repoName, cleanNew, 'ADDED', '', oldContent);
+    let oldContent = '';
+    if (!isDir) {
+      if (fs.existsSync(fullNew)) {
+        oldContent = fs.readFileSync(fullNew, 'utf-8');
+      }
+      recordChange(repoName, cleanOld, 'DELETED', oldContent, '');
+      recordChange(repoName, cleanNew, 'ADDED', '', oldContent);
+    }
+
+    // Update metadata entry
+    const docsMetadata = this.loadDocsMetadata(repoName);
+    if (docsMetadata.documents && docsMetadata.documents[cleanOld]) {
+      docsMetadata.documents[cleanNew] = docsMetadata.documents[cleanOld];
+      delete docsMetadata.documents[cleanOld];
+      this.saveDocsMetadata(repoName, docsMetadata);
+    }
 
     const repoDir = this.getRepoDir(repoName);
-    const newTree = this.buildTree(repoDir, repoDir);
+    const newTree = this.buildTree(repoDir, repoDir, docsMetadata);
 
     return {
       success: true,
@@ -203,8 +311,8 @@ export class WorkspaceService {
     const repoName = cfg.active_repo?.name || 'local';
     const cleanPath = (filePath || '').trim().replace(/^\/+/, '');
 
-    if (!cleanPath || cleanPath === 'index.md') {
-      throw new Error('O arquivo raiz index.md não pode ser removido.');
+    if (!cleanPath) {
+      throw new Error('Caminho de arquivo inválido.');
     }
 
     const fullPath = path.join(this.getRepoDir(repoName), cleanPath);
@@ -221,8 +329,15 @@ export class WorkspaceService {
 
     recordChange(repoName, cleanPath, 'DELETED', oldContent, '');
 
+    // Remove from metadata
+    const docsMetadata = this.loadDocsMetadata(repoName);
+    if (docsMetadata.documents && docsMetadata.documents[cleanPath]) {
+      delete docsMetadata.documents[cleanPath];
+      this.saveDocsMetadata(repoName, docsMetadata);
+    }
+
     const repoDir = this.getRepoDir(repoName);
-    const newTree = this.buildTree(repoDir, repoDir);
+    const newTree = this.buildTree(repoDir, repoDir, docsMetadata);
 
     return {
       success: true,
@@ -312,7 +427,8 @@ export class WorkspaceService {
     cfg.workspace_changes[repoName] = remainingChanges;
     saveConfig(cfg);
 
-    const newTree = this.buildTree(repoDir, repoDir);
+    const docsMetadata = this.loadDocsMetadata(repoName);
+    const newTree = this.buildTree(repoDir, repoDir, docsMetadata);
     return {
       success: true,
       message: 'Alterações descartadas com sucesso.',
@@ -325,6 +441,7 @@ export class WorkspaceService {
     const repoName = cfg.active_repo?.name || 'local';
     const cleanPath = (filePath || '').trim().replace(/^\/+/, '');
     const repoDir = this.getRepoDir(repoName);
+    const docsMetadata = this.loadDocsMetadata(repoName);
 
     const contextItems: any[] = [];
     const collectDocs = (dir: string) => {
@@ -339,12 +456,12 @@ export class WorkspaceService {
         } else if (entry.isFile() && entry.name.endsWith('.md')) {
           try {
             const content = fs.readFileSync(full, 'utf-8');
-            const { meta } = extractFrontmatter(content);
+            const docMeta = docsMetadata.documents?.[rel] || {};
             contextItems.push({
               path: rel,
-              title: meta.title || entry.name.replace('.md', ''),
-              layer: meta.layer || '',
-              badge: meta.badge || '',
+              title: docMeta.title || entry.name.replace('.md', ''),
+              layer: docMeta.layer || '',
+              badge: docMeta.badge || '',
               summary: content.slice(0, 300),
             });
           } catch {}

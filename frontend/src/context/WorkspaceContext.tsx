@@ -4,12 +4,26 @@ import { API } from '../services/api';
 import { DraftStore } from '../services/draft-store';
 import { useAuth } from './AuthContext';
 
+function findFirstMdFile(nodes: TreeNode[]): string | null {
+  for (const node of nodes) {
+    if (node.type === 'file' && node.path.endsWith('.md')) {
+      return node.path;
+    }
+    if (node.children && node.children.length > 0) {
+      const found = findFirstMdFile(node.children);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
 interface WorkspaceContextType {
   activeRepo: Repo | null;
   repos: Repo[];
   tree: TreeNode[];
   activeFile: string;
   fileContent: string;
+  fileMetadata: Record<string, any>;
   pendingChanges: WorkspaceChange[];
   guardrailStatus: string;
   isSaving: boolean;
@@ -21,7 +35,8 @@ interface WorkspaceContextType {
   loadTree: () => Promise<void>;
   loadFile: (filePath: string) => Promise<void>;
   setFileContent: (content: string) => void;
-  saveCurrentFile: () => Promise<{ success: boolean; error?: string }>;
+  setFileMetadata: (meta: Record<string, any>) => void;
+  saveCurrentFile: (meta?: Record<string, any>) => Promise<{ success: boolean; error?: string }>;
   refreshPendingChanges: () => Promise<void>;
   discardChanges: (path?: string) => Promise<void>;
 }
@@ -33,8 +48,9 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [activeRepo, setActiveRepo] = useState<Repo | null>(null);
   const [repos, setRepos] = useState<Repo[]>([]);
   const [tree, setTree] = useState<TreeNode[]>([]);
-  const [activeFile, setActiveFile] = useState<string>('index.md');
+  const [activeFile, setActiveFile] = useState<string>('');
   const [fileContent, setFileContentState] = useState<string>('');
+  const [fileMetadata, setFileMetadataState] = useState<Record<string, any>>({});
   const [originalContent, setOriginalContent] = useState<string>('');
   const [pendingChanges, setPendingChanges] = useState<WorkspaceChange[]>([]);
   const [guardrailStatus, setGuardrailStatus] = useState<string>('CLEAN');
@@ -80,7 +96,12 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   }, [activeRepo]);
 
   const loadFile = useCallback(async (filePath: string) => {
-    if (!activeRepo) return;
+    if (!activeRepo || !filePath) return;
+    const isMd = filePath.endsWith('.md') || filePath.endsWith('.markdown');
+    if (!isMd) {
+      console.warn('[WorkspaceContext] Arquivo não é markdown, abertura ignorada:', filePath);
+      return;
+    }
     setIsLoadingFile(true);
     setActiveFile(filePath);
     try {
@@ -90,6 +111,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       const content = draft ? draft.rawContent : (data.content || '');
       setFileContentState(content);
       setOriginalContent(data.content || '');
+      setFileMetadataState(data.meta || {});
     } catch (err) {
       console.error('[WorkspaceContext] Erro ao carregar arquivo:', err);
     } finally {
@@ -104,21 +126,39 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   };
 
+  const setFileMetadata = (meta: Record<string, any>) => {
+    setFileMetadataState(meta);
+  };
+
   const selectRepo = async (repo: Repo) => {
     setActiveRepo(repo);
     await API.selectRepo(repo);
-    await loadTree();
+    const data = await API.getProjectTree();
+    setTree(data.tree || []);
     await refreshPendingChanges();
-    await loadFile('index.md');
+
+    const firstFile = findFirstMdFile(data.tree || []);
+    if (firstFile) {
+      await loadFile(firstFile);
+    } else {
+      setActiveFile('');
+      setFileContentState('');
+      setOriginalContent('');
+      setFileMetadataState({});
+    }
   };
 
-  const saveCurrentFile = async () => {
+  const saveCurrentFile = async (metaOverride?: Record<string, any>) => {
     if (!activeRepo || !activeFile) return { success: false, error: 'Nenhum arquivo ativo' };
     setIsSaving(true);
     try {
-      const res = await API.saveWorkspaceFile({ path: activeFile, content: fileContent });
+      const meta = metaOverride !== undefined ? metaOverride : fileMetadata;
+      const res = await API.saveWorkspaceFile({ path: activeFile, content: fileContent, meta });
       if (res.ok) {
         setOriginalContent(fileContent);
+        if (res.data?.meta) {
+          setFileMetadataState(res.data.meta);
+        }
         DraftStore.clearDocDraft(activeRepo.name, activeFile);
         await refreshPendingChanges();
         return { success: true };
@@ -138,7 +178,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       DraftStore.clearDocDraft(activeRepo.name, path);
     }
     await refreshPendingChanges();
-    if (path === activeFile || !path) {
+    if (path === activeFile || (!path && activeFile)) {
       await loadFile(activeFile);
     }
   };
@@ -149,7 +189,6 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
     loadRepos();
 
-    // EventSource para SSE Fast Refresh do servidor Python
     let evtSource: EventSource | null = null;
     try {
       evtSource = new EventSource('/api/events');
@@ -174,6 +213,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         tree,
         activeFile,
         fileContent,
+        fileMetadata,
         pendingChanges,
         guardrailStatus,
         isSaving,
@@ -185,6 +225,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         loadTree,
         loadFile,
         setFileContent,
+        setFileMetadata,
         saveCurrentFile,
         refreshPendingChanges,
         discardChanges

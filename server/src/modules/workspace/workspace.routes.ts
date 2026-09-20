@@ -12,26 +12,34 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
 
   fastify.get('/api/project/file', async (request, reply) => {
     const query = request.query as { path?: string };
+    const filePath = query.path?.trim();
+    if (!filePath) {
+      return reply.status(400).send({ error: 'Parâmetro path é obrigatório' });
+    }
     try {
-      return reply.send(workspaceService.getFile(query.path || 'index.md'));
+      return reply.send(workspaceService.getFile(filePath));
     } catch (err: any) {
       return reply.status(404).send({ error: err.message });
     }
   });
 
   fastify.post('/api/workspace/save', async (request, reply) => {
-    const body = request.body as { path?: string; content?: string };
+    const body = request.body as { path?: string; content?: string; meta?: any };
+    if (!body.path) {
+      return reply.status(400).send({ error: 'Parâmetro path é obrigatório' });
+    }
     try {
-      return reply.send(workspaceService.saveFile(body.path || 'index.md', body.content || ''));
+      return reply.send(workspaceService.saveFile(body.path, body.content || '', body.meta));
     } catch (err: any) {
       return reply.status(400).send({ error: err.message });
     }
   });
 
   fastify.post('/api/project/file/create', async (request, reply) => {
-    const body = request.body as { path?: string; content?: string };
+    const body = request.body as { path?: string; content?: string; is_folder?: boolean; isFolder?: boolean; meta?: any };
     try {
-      return reply.send(workspaceService.createFile(body.path || '', body.content || ''));
+      const isFolder = !!(body.is_folder || body.isFolder);
+      return reply.send(workspaceService.createFile(body.path || '', body.content || '', isFolder, body.meta));
     } catch (err: any) {
       return reply.status(400).send({ error: err.message });
     }
