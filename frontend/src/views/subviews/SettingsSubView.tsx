@@ -1,11 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useAI } from '../../context/AIContext';
+import { useWorkspace } from '../../context/WorkspaceContext';
 import { API } from '../../services/api';
 
 export const SettingsSubView: React.FC = () => {
   const { user, logout } = useAuth();
   const { aiSettings, saveSettings: saveAISettings } = useAI();
+  const { activeRepo, gitStatus, gitLog } = useWorkspace();
+  const [gitDiagnostic, setGitDiagnostic] = useState<{ version: string; installed: boolean } | null>(null);
 
   // AI Provider State
   const [provider, setProvider] = useState<string>('gemini');
@@ -42,6 +45,11 @@ export const SettingsSubView: React.FC = () => {
         if (res.governance?.auto_pr !== undefined) {
           setAutoPROn(res.governance.auto_pr);
         }
+      }
+
+      const diag = await API.getGitDiagnostic();
+      if (diag.ok && diag.data) {
+        setGitDiagnostic(diag.data);
       }
     } catch (err) {
       console.error('[SettingsSubView] Erro ao carregar configurações:', err);
@@ -304,15 +312,53 @@ export const SettingsSubView: React.FC = () => {
         {/* SEÇÃO 3: REGRAS DE GOVERNANÇA & GIT */}
         <div className="gov-card" style={{ marginBottom: '24px' }}>
           <div className="gov-card-header">
-            <div>
-              <h3 style={{ margin: 0, fontSize: '15px' }}>Governança de Pull Requests & Git</h3>
-              <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '2px 0 0 0' }}>
-                Fluxo de aprovação e acúmulo de alterações no workspace.
-              </p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span className="material-symbols-outlined icon-lg" style={{ color: 'var(--md-sys-color-primary, #3b82f6)' }}>
+                alt_route
+              </span>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '15px' }}>Governança de Pull Requests & Git</h3>
+                <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '2px 0 0 0' }}>
+                  Status da integração local de Git, branches e fluxo de aprovação de PRs.
+                </p>
+              </div>
+            </div>
+            <span className={`pill-dot ${gitDiagnostic?.installed ? 'success' : 'warning'}`}>
+              <span className="dot"></span> {gitDiagnostic?.installed ? 'Git Conectado' : 'Git Offline'}
+            </span>
+          </div>
+
+          {/* Git Stats Panel */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', marginTop: '14px' }}>
+            <div style={{ padding: '12px', background: 'var(--bg-surface)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block' }}>Repositório Ativo</span>
+              <strong style={{ fontSize: '13px', fontFamily: 'var(--font-mono)' }}>{activeRepo?.name || 'local'}</strong>
+            </div>
+
+            <div style={{ padding: '12px', background: 'var(--bg-surface)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block' }}>CLI do Git</span>
+              <strong style={{ fontSize: '13px', fontFamily: 'var(--font-mono)' }}>{gitDiagnostic?.version || 'Verificando...'}</strong>
+            </div>
+
+            <div style={{ padding: '12px', background: 'var(--bg-surface)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block' }}>Branch Ativa</span>
+              <strong style={{ fontSize: '13px', fontFamily: 'var(--font-mono)' }}>{gitStatus?.branch || 'main'}</strong>
+            </div>
+
+            <div style={{ padding: '12px', background: 'var(--bg-surface)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block' }}>Remote Origin</span>
+              <strong style={{ fontSize: '12px', fontFamily: 'var(--font-mono)', wordBreak: 'break-all' }}>
+                {gitStatus?.remoteUrl || 'Local (Sem remote)'}
+              </strong>
+            </div>
+
+            <div style={{ padding: '12px', background: 'var(--bg-surface)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block' }}>Commits Registrados</span>
+              <strong style={{ fontSize: '13px' }}>{gitLog.length} commits</strong>
             </div>
           </div>
 
-          <div className="form-group-checkbox" style={{ marginTop: '14px' }}>
+          <div className="form-group-checkbox" style={{ marginTop: '16px' }}>
             <label>
               <input
                 type="checkbox"

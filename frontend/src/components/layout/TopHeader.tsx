@@ -5,6 +5,7 @@ interface TopHeaderProps {
   onBackToRepos: () => void;
   onOpenDiffModal: () => void;
   onToggleCopilot: () => void;
+  onOpenGitModal?: () => void;
   onOpenTour?: () => void;
 }
 
@@ -12,9 +13,14 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
   onBackToRepos,
   onOpenDiffModal,
   onToggleCopilot,
+  onOpenGitModal = () => {},
   onOpenTour = () => {}
 }) => {
-  const { activeRepo, pendingChanges } = useWorkspace();
+  const { activeRepo, pendingChanges, gitStatus } = useWorkspace();
+
+  const currentBranch = gitStatus?.branch || (activeRepo?.is_local ? 'local' : 'main');
+  const isGitClean = gitStatus?.isClean ?? true;
+  const gitFilesCount = gitStatus?.files?.length || 0;
 
   return (
     <header className="dashboard-navbar">
@@ -34,9 +40,38 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
         <div className="dash-title-wrap">
           <div className="dash-title-row">
             <h1 id="dash-repo-title">{activeRepo?.name || 'Projeto'}</h1>
-            <span className="pill-dot protected">
-              <span className="dot"></span> {activeRepo?.is_local ? 'local' : 'main'}
-            </span>
+            
+            {/* Git Branch & Status Pill */}
+            <button
+              id="btn-open-git-status-header"
+              className="btn btn-ghost btn-xs"
+              type="button"
+              title="Abrir Painel Git (Branch, Status, Histórico e Sync)"
+              onClick={onOpenGitModal}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '3px 8px',
+                borderRadius: '12px',
+                background: isGitClean ? 'var(--bg-surface, rgba(255,255,255,0.06))' : 'rgba(234, 179, 8, 0.15)',
+                border: `1px solid ${isGitClean ? 'var(--border-color, rgba(255,255,255,0.12))' : 'rgba(234, 179, 8, 0.4)'}`,
+                cursor: 'pointer'
+              }}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: '14px', color: isGitClean ? 'var(--primary, #3b82f6)' : '#eab308' }}>
+                alt_route
+              </span>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', fontWeight: 600, color: 'var(--text-normal)' }}>
+                {currentBranch}
+              </span>
+              <span
+                className={`pill-dot ${isGitClean ? 'success' : 'warning'}`}
+                style={{ margin: 0, padding: 0 }}
+              >
+                <span className="dot" style={{ width: '6px', height: '6px' }}></span>
+              </span>
+            </button>
           </div>
           <span className="dash-meta">
             {activeRepo?.full_name && !activeRepo.is_local ? (
@@ -46,16 +81,36 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
                 target="_blank"
                 rel="noreferrer"
               >
-                Ver no GitHub ↗
+                GitHub: {activeRepo.full_name} ↗
               </a>
             ) : (
-              <span id="dash-repo-link">Modo Local / Offline</span>
+              <span id="dash-repo-link">Git Local Ativo</span>
             )}
           </span>
         </div>
       </div>
 
       <div className="dash-nav-right">
+        {/* Quick Git Control Button */}
+        <button
+          id="btn-quick-git-control"
+          className="btn btn-secondary btn-sm"
+          type="button"
+          title="Abrir Painel de Controle Git"
+          onClick={onOpenGitModal}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '12px' }}
+        >
+          <span className="material-symbols-outlined icon-xs" style={{ color: isGitClean ? 'inherit' : '#eab308' }}>
+            commit
+          </span>
+          <span>Git</span>
+          {gitFilesCount > 0 && (
+            <span className="badge badge-warning" style={{ fontSize: '10px', padding: '1px 5px' }}>
+              {gitFilesCount}
+            </span>
+          )}
+        </button>
+
         <button
           id="btn-open-onboarding-tour"
           className="btn-dash-tour"

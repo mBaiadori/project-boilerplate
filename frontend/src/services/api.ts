@@ -1,7 +1,8 @@
 // API CLIENT MODULE (REST Calls to Backend Server)
 import type { 
   WorkspaceStatus, Repo, WorkspaceChange, TreeNode, 
-  PR, TemplateItem, TutorialItem, AISettingsState, DictionaryTerm, User 
+  PR, TemplateItem, TutorialItem, AISettingsState, DictionaryTerm, User,
+  GitStatus, GitCommitInfo
 } from '../types';
 
 export interface ApiResponse<T = any> {
@@ -424,5 +425,54 @@ export const API = {
   async getFileBlame(path: string): Promise<ApiResponse<any>> {
     const res = await fetch(`/api/git/blame?path=${encodeURIComponent(path)}`);
     return { ok: res.ok, data: await res.json() };
+  },
+
+  // Git Core Management
+  async getGitStatus(): Promise<ApiResponse<GitStatus>> {
+    const res = await fetch('/api/git/status');
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async getGitLog(limit = 20): Promise<ApiResponse<{ repo_name: string; commits: GitCommitInfo[] }>> {
+    const res = await fetch(`/api/git/log?limit=${limit}`);
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async getGitBranches(): Promise<ApiResponse<{ current: string; branches: string[] }>> {
+    const res = await fetch('/api/git/branches');
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async createOrSwitchBranch(branch: string): Promise<ApiResponse<{ success: boolean; message: string }>> {
+    const res = await fetch('/api/git/branch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ branch })
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async commitGitChanges(payload: { message: string; files?: string[] }): Promise<ApiResponse<{ success: boolean; message: string; commitHash?: string }>> {
+    const res = await fetch('/api/git/commit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async syncGit(branch?: string): Promise<ApiResponse<{ success: boolean; message: string }>> {
+    const res = await fetch('/api/git/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ branch })
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async getGitDiagnostic(): Promise<ApiResponse<{ version: string; installed: boolean }>> {
+    const res = await fetch('/api/git/diagnostic');
+    return { ok: res.ok, data: await res.json() };
   }
 };
+

@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { PROJECTS_DIR } from '../../config/constants.js';
 import { loadConfig, saveConfig, ensureDefaultRepoFiles } from '../../config/storage.js';
-import { callGitHubAPI, applyBranchProtection } from '../../utils/git.js';
+import { callGitHubAPI, applyBranchProtection, ensureGitRepo } from '../../utils/git.js';
 
 export class ReposService {
   async listRepos() {
@@ -65,7 +65,7 @@ export class ReposService {
     };
   }
 
-  selectRepo(repo: any) {
+  async selectRepo(repo: any) {
     if (!repo || !repo.name) {
       throw new Error('Repositório inválido.');
     }
@@ -81,6 +81,8 @@ export class ReposService {
     };
 
     ensureDefaultRepoFiles(repo.name);
+    const repoDir = path.join(PROJECTS_DIR, repo.name);
+    await ensureGitRepo(repoDir, cfg.user, repo.html_url, cfg.token);
     saveConfig(cfg);
 
     return {
@@ -103,9 +105,11 @@ export class ReposService {
     }
 
     const cfg = loadConfig();
+    const repoDir = path.join(PROJECTS_DIR, repoName);
     if (!cfg.authenticated || !cfg.token) {
       // Local fallback
       ensureDefaultRepoFiles(repoName);
+      await ensureGitRepo(repoDir, cfg.user);
       cfg.active_repo = {
         name: repoName,
         full_name: `local/${repoName}`,
@@ -143,11 +147,13 @@ export class ReposService {
     }
 
     ensureDefaultRepoFiles(repoName);
+    const remoteUrl = respData.html_url || `https://github.com/${repoFullName}`;
+    await ensureGitRepo(repoDir, cfg.user, remoteUrl, cfg.token);
 
     cfg.active_repo = {
       name: repoName,
       full_name: repoFullName,
-      html_url: respData.html_url || `https://github.com/${repoFullName}`,
+      html_url: remoteUrl,
       description: payload.description || '',
       is_private: payload.is_private ?? true,
       protection: protectionStatus,

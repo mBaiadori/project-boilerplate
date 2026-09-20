@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import type { Repo, WorkspaceChange, TreeNode } from '../types';
+import type { Repo, WorkspaceChange, TreeNode, GitStatus, GitCommitInfo } from '../types';
 import { API } from '../services/api';
 import { DraftStore } from '../services/draft-store';
 import { useAuth } from './AuthContext';
@@ -30,6 +30,8 @@ interface WorkspaceContextType {
   isLoadingFile: boolean;
   isLoading: boolean;
   hasUnsavedChanges: boolean;
+  gitStatus: GitStatus | null;
+  gitLog: GitCommitInfo[];
   loadRepos: () => Promise<void>;
   selectRepo: (repo: Repo) => Promise<void>;
   loadTree: () => Promise<void>;
@@ -39,6 +41,11 @@ interface WorkspaceContextType {
   saveCurrentFile: (meta?: Record<string, any>) => Promise<{ success: boolean; error?: string }>;
   refreshPendingChanges: () => Promise<void>;
   discardChanges: (path?: string) => Promise<void>;
+  refreshGitStatus: () => Promise<void>;
+  refreshGitLog: (limit?: number) => Promise<void>;
+  commitGit: (message: string, files?: string[]) => Promise<{ success: boolean; message: string; commitHash?: string }>;
+  syncGit: (branch?: string) => Promise<{ success: boolean; message: string }>;
+  createOrSwitchBranch: (branch: string) => Promise<{ success: boolean; message: string }>;
 }
 
 const WorkspaceContext = createContext<WorkspaceContextType | undefined>(undefined);
@@ -57,6 +64,8 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingFile, setIsLoadingFile] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [gitStatus, setGitStatus] = useState<GitStatus | null>(null);
+  const [gitLog, setGitLog] = useState<GitCommitInfo[]>([]);
 
   const hasUnsavedChanges = fileContent !== originalContent;
 
@@ -74,16 +83,41 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   }, []);
 
+  const refreshGitStatus = useCallback(async () => {
+    if (!activeRepo) return;
+    try {
+      const res = await API.getGitStatus();
+      if (res.ok && res.data) {
+        setGitStatus(res.data);
+      }
+    } catch (err) {
+      console.warn('[WorkspaceContext] Erro ao buscar status do Git:', err);
+    }
+  }, [activeRepo]);
+
+  const refreshGitLog = useCallback(async (limit = 20) => {
+    if (!activeRepo) return;
+    try {
+      const res = await API.getGitLog(limit);
+      if (res.ok && res.data?.commits) {
+        setGitLog(res.data.commits);
+      }
+    } catch (err) {
+      console.warn('[WorkspaceContext] Erro ao buscar histórico Git:', err);
+    }
+  }, [activeRepo]);
+
   const refreshPendingChanges = useCallback(async () => {
     if (!activeRepo) return;
     try {
       const data = await API.getWorkspaceChanges();
       setPendingChanges(data.changes || []);
       setGuardrailStatus(data.guardrail || 'CLEAN');
+      await refreshGitStatus();
     } catch (err) {
       console.error('[WorkspaceContext] Erro ao buscar alterações pendentes:', err);
     }
-  }, [activeRepo]);
+  }, [activeRepo, refreshGitStatus]);
 
   const loadTree = useCallback(async () => {
     if (!activeRepo) return;
@@ -136,6 +170,8 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     const data = await API.getProjectTree();
     setTree(data.tree || []);
     await refreshPendingChanges();
+    await refreshGitStatus();
+    await refreshGitLog(15);
 
     const firstFile = findFirstMdFile(data.tree || []);
     if (firstFile) {
@@ -183,6 +219,37 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   };
 
+  const commitGit = async (message: string, files?: string[]) => {
+    const res = await API.commitGitChanges({ message, files });
+    if (res.ok && res.data.success) {
+      await refreshPendingChanges();
+      await refreshGitStatus();
+      await refreshGitLog(15);
+    }
+    return res.data;
+  };
+
+  const syncGit = async (branch?: string) => {
+    const res = await API.syncGit(branch);
+    if (res.ok) {
+      await refreshPendingChanges();
+      await refreshGitStatus();
+      await refreshGitLog(15);
+      await loadTree();
+    }
+    return res.data;
+  };
+
+  const createOrSwitchBranch = async (branch: string) => {
+    const res = await API.createOrSwitchBranch(branch);
+    if (res.ok) {
+      await refreshGitStatus();
+      await refreshGitLog(15);
+      await loadTree();
+    }
+    return res.data;
+  };
+
   // Carrega status inicial e eventos SSE de Fast Refresh
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -195,6 +262,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       evtSource.addEventListener('refresh', () => {
         refreshPendingChanges();
         loadTree();
+        refreshGitStatus();
       });
     } catch (e) {
       console.warn('[WorkspaceContext] SSE não disponível:', e);
@@ -203,7 +271,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     return () => {
       if (evtSource) evtSource.close();
     };
-  }, [isAuthenticated, loadRepos, refreshPendingChanges, loadTree]);
+  }, [isAuthenticated, loadRepos, refreshPendingChanges, loadTree, refreshGitStatus]);
 
   return (
     <WorkspaceContext.Provider
@@ -220,6 +288,8 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         isLoadingFile,
         isLoading,
         hasUnsavedChanges,
+        gitStatus,
+        gitLog,
         loadRepos,
         selectRepo,
         loadTree,
@@ -228,7 +298,12 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         setFileMetadata,
         saveCurrentFile,
         refreshPendingChanges,
-        discardChanges
+        discardChanges,
+        refreshGitStatus,
+        refreshGitLog,
+        commitGit,
+        syncGit,
+        createOrSwitchBranch
       }}
     >
       {children}

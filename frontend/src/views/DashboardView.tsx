@@ -8,6 +8,7 @@ import { RawInspectorSidebar } from '../components/copilot/RawInspectorSidebar';
 import { DiffModal } from '../components/modals/DiffModal';
 import { ScaffoldModal } from '../components/modals/ScaffoldModal';
 import { AISettingsModal } from '../components/modals/AISettingsModal';
+import { GitModal } from '../components/modals/GitModal';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { useAI } from '../context/AIContext';
 
@@ -33,6 +34,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onBackToRepos }) =
   const [activeCopilotSidebar, setActiveCopilotSidebar] = useState<'prompt' | 'history' | 'raw' | null>(null);
   const [isDiffModalOpen, setIsDiffModalOpen] = useState(false);
   const [isScaffoldModalOpen, setIsScaffoldModalOpen] = useState(false);
+  const [isGitModalOpen, setIsGitModalOpen] = useState(false);
 
   const [aiWidth, setAiWidth] = useState<number>(() => {
     try {
@@ -107,6 +109,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onBackToRepos }) =
         onBackToRepos={onBackToRepos}
         onOpenDiffModal={() => setIsDiffModalOpen(true)}
         onToggleCopilot={toggleCopilot}
+        onOpenGitModal={() => setIsGitModalOpen(true)}
       />
 
       {/* Main Workspace Layout */}
@@ -236,6 +239,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onBackToRepos }) =
         isOpen={isScaffoldModalOpen}
         onClose={() => setIsScaffoldModalOpen(false)}
         onCreated={() => setActiveSubView('editor')}
+      />
+
+      <GitModal
+        isOpen={isGitModalOpen}
+        onClose={() => setIsGitModalOpen(false)}
       />
     </div>
   );

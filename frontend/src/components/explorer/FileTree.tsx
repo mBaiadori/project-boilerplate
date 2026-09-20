@@ -37,16 +37,28 @@ interface InlineCreatingState {
   isFolder: boolean;
 }
 
+interface DraggedItem {
+  path: string;
+  name: string;
+  isFolder: boolean;
+}
+
 export const FileTree: React.FC<FileTreeProps> = ({
   onOpenFile,
   isCollapsed,
   onToggleCollapse,
   width
 }) => {
-  const { tree, activeFile, loadTree } = useWorkspace();
+  const { tree, activeFile, loadTree, gitStatus, pendingChanges } = useWorkspace();
   const [searchTerm, setSearchTerm] = useState('');
   const [collapsedFolders, setCollapsedFolders] = useState<Record<string, boolean>>({});
   const [selectedFolder, setSelectedFolder] = useState<string>('');
+
+  // Drag and Drop State
+  const [draggedItem, setDraggedItem] = useState<DraggedItem | null>(null);
+  const [dragOverTarget, setDragOverTarget] = useState<string | null>(null);
+  const [isDragOverRoot, setIsDragOverRoot] = useState(false);
+  const dragHoverTimerRef = useRef<any>(null);
 
   // VS Code Inline Creation State
   const [inlineCreating, setInlineCreating] = useState<InlineCreatingState | null>(null);
@@ -63,6 +75,178 @@ export const FileTree: React.FC<FileTreeProps> = ({
     toastTimerRef.current = setTimeout(() => {
       setToast(null);
     }, 3500);
+  };
+
+  // Drag and Drop Handlers
+  const handleDragStart = (e: React.DragEvent, node: TreeNode, isFolder: boolean) => {
+    e.stopPropagation();
+    const item: DraggedItem = {
+      path: node.path,
+      name: node.name,
+      isFolder
+    };
+    setDraggedItem(item);
+    e.dataTransfer.setData('text/plain', node.path);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragEnd = (e: React.DragEvent) => {
+    e.stopPropagation();
+    setDraggedItem(null);
+    setDragOverTarget(null);
+    setIsDragOverRoot(false);
+    if (dragHoverTimerRef.current) clearTimeout(dragHoverTimerRef.current);
+  };
+
+  const handleDragOverFolder = (e: React.DragEvent, folderPath: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!draggedItem) return;
+    if (draggedItem.path === folderPath) return;
+    if (draggedItem.isFolder && (folderPath === draggedItem.path || folderPath.startsWith(`${draggedItem.path}/`))) {
+      return;
+    }
+    e.dataTransfer.dropEffect = 'move';
+    if (dragOverTarget !== folderPath) {
+      setDragOverTarget(folderPath);
+      setIsDragOverRoot(false);
+
+      if (collapsedFolders[folderPath]) {
+        if (dragHoverTimerRef.current) clearTimeout(dragHoverTimerRef.current);
+        dragHoverTimerRef.current = setTimeout(() => {
+          setCollapsedFolders(prev => ({ ...prev, [folderPath]: false }));
+        }, 600);
+      }
+    }
+  };
+
+  const handleDragLeaveFolder = (e: React.DragEvent, folderPath: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (dragOverTarget === folderPath) {
+      setDragOverTarget(null);
+      if (dragHoverTimerRef.current) clearTimeout(dragHoverTimerRef.current);
+    }
+  };
+
+  const handleDropOnFolder = async (e: React.DragEvent, folderPath: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOverTarget(null);
+    setIsDragOverRoot(false);
+    if (dragHoverTimerRef.current) clearTimeout(dragHoverTimerRef.current);
+
+    if (!draggedItem) return;
+    const { path: sourcePath, name: itemName, isFolder } = draggedItem;
+    setDraggedItem(null);
+
+    if (sourcePath === folderPath) return;
+    if (isFolder && (folderPath === sourcePath || folderPath.startsWith(`${sourcePath}/`))) {
+      showToast('Não é possível mover uma pasta para dentro de si mesma.', 'warning');
+      return;
+    }
+
+    const targetPath = `${folderPath}/${itemName}`;
+    if (sourcePath === targetPath) return;
+
+    await executeMove(sourcePath, targetPath, itemName, folderPath);
+  };
+
+  const handleDragOverFile = (e: React.DragEvent, filePath: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!draggedItem) return;
+    if (draggedItem.path === filePath) return;
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverTarget(filePath);
+    setIsDragOverRoot(false);
+  };
+
+  const handleDragLeaveFile = (e: React.DragEvent, filePath: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (dragOverTarget === filePath) {
+      setDragOverTarget(null);
+    }
+  };
+
+  const handleDropOnFile = async (e: React.DragEvent, targetFilePath: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOverTarget(null);
+    setIsDragOverRoot(false);
+    if (!draggedItem) return;
+
+    const { path: sourcePath, name: itemName, isFolder } = draggedItem;
+    setDraggedItem(null);
+
+    if (sourcePath === targetFilePath) return;
+
+    const segments = targetFilePath.split('/');
+    segments.pop();
+    const parentDir = segments.join('/');
+
+    if (isFolder && parentDir && (parentDir === sourcePath || parentDir.startsWith(`${sourcePath}/`))) {
+      showToast('Não é possível mover uma pasta para dentro de si mesma.', 'warning');
+      return;
+    }
+
+    const targetPath = parentDir ? `${parentDir}/${itemName}` : itemName;
+    if (sourcePath === targetPath) return;
+
+    await executeMove(sourcePath, targetPath, itemName, parentDir || 'raiz');
+  };
+
+  const handleDragOverRoot = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!draggedItem) return;
+    if (!draggedItem.path.includes('/')) return;
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverTarget(null);
+    setIsDragOverRoot(true);
+  };
+
+  const handleDragLeaveRoot = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOverRoot(false);
+  };
+
+  const handleDropOnRoot = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOverRoot(false);
+    setDragOverTarget(null);
+    if (!draggedItem) return;
+
+    const { path: sourcePath, name: itemName } = draggedItem;
+    setDraggedItem(null);
+
+    const targetPath = itemName;
+    if (sourcePath === targetPath) return;
+
+    await executeMove(sourcePath, targetPath, itemName, 'raiz');
+  };
+
+  const executeMove = async (old_path: string, new_path: string, itemName: string, destinationLabel: string) => {
+    try {
+      const res = await API.renameProjectFile({ old_path, new_path });
+      if (res.ok && res.data?.success) {
+        await loadTree();
+        if (activeFile === old_path) {
+          onOpenFile(new_path);
+        } else if (activeFile && activeFile.startsWith(`${old_path}/`)) {
+          const rel = activeFile.slice(old_path.length);
+          onOpenFile(`${new_path}${rel}`);
+        }
+        showToast(`"${itemName}" movido para ${destinationLabel === 'raiz' ? 'a raiz' : `"${destinationLabel}"`}.`, 'info');
+      } else {
+        showToast(`Erro ao mover: ${res.data?.error || 'Falha ao mover item'}`, 'warning');
+      }
+    } catch (err) {
+      showToast('Erro ao conectar ao servidor para mover o item.', 'warning');
+    }
   };
 
   // Rename Modal State
@@ -360,12 +544,20 @@ export const FileTree: React.FC<FileTreeProps> = ({
     const isDir = node.type === 'dir' || node.type === 'directory' || node.is_directory;
     const isCollapsedFolder = !!collapsedFolders[node.path];
     const isFolderSelected = selectedFolder === node.path;
+    const isDraggingThis = draggedItem?.path === node.path;
+    const isDragOverThis = dragOverTarget === node.path;
 
     if (isDir) {
       return (
-        <div key={node.path} className="tree-node">
+        <div key={node.path} className={`tree-node ${isDraggingThis ? 'is-dragging' : ''}`}>
           <div
-            className={`tree-folder ${isFolderSelected ? 'selected' : ''}`}
+            className={`tree-folder ${isFolderSelected ? 'selected' : ''} ${isDraggingThis ? 'is-dragging' : ''} ${isDragOverThis ? 'drag-over' : ''}`}
+            draggable
+            onDragStart={(e) => handleDragStart(e, node, true)}
+            onDragEnd={handleDragEnd}
+            onDragOver={(e) => handleDragOverFolder(e, node.path)}
+            onDragLeave={(e) => handleDragLeaveFolder(e, node.path)}
+            onDrop={(e) => handleDropOnFolder(e, node.path)}
             onClick={(e) => toggleFolder(node.path, e)}
           >
             <div className="tree-folder-left">
@@ -445,10 +637,20 @@ export const FileTree: React.FC<FileTreeProps> = ({
 
     const badgeClass = node.badge ? node.badge.toLowerCase() : 't1';
 
+    const gitFile = gitStatus?.files?.find(f => f.path === node.path || f.path.endsWith(node.path));
+    const pendingChange = pendingChanges?.find(c => c.path === node.path);
+    const gitStatusCode = gitFile ? (gitFile.status === '??' ? 'U' : gitFile.status) : (pendingChange ? (pendingChange.type === 'ADDED' ? 'A' : 'M') : null);
+
     return (
-      <div key={node.path} className="tree-node">
+      <div key={node.path} className={`tree-node ${isDraggingThis ? 'is-dragging' : ''}`}>
         <div
-          className={`tree-file-item ${isFileActive ? 'active' : ''} ${!isMarkdown ? 'non-markdown' : ''}`}
+          className={`tree-file-item ${isFileActive ? 'active' : ''} ${!isMarkdown ? 'non-markdown' : ''} ${isDraggingThis ? 'is-dragging' : ''} ${isDragOverThis ? 'drag-over' : ''}`}
+          draggable
+          onDragStart={(e) => handleDragStart(e, node, false)}
+          onDragEnd={handleDragEnd}
+          onDragOver={(e) => handleDragOverFile(e, node.path)}
+          onDragLeave={(e) => handleDragLeaveFile(e, node.path)}
+          onDrop={(e) => handleDropOnFile(e, node.path)}
           onClick={() => handleFileClick(node.path, node.name)}
           title={isMarkdown ? `Abrir ${node.name}` : `Arquivo (${fileExt || 'não markdown'}). Apenas arquivos .md são abertos no editor.`}
         >
@@ -459,6 +661,25 @@ export const FileTree: React.FC<FileTreeProps> = ({
               <FileCode size={13} color="#94a3b8" style={{ flexShrink: 0 }} />
             )}
             <span className="tree-file-name">{node.name}</span>
+            {gitStatusCode && (
+              <span
+                className="tree-git-status-badge"
+                title={gitStatusCode === 'M' ? 'Modificado no Git' : gitStatusCode === 'A' ? 'Adicionado no Git' : gitStatusCode === 'U' ? 'Novo / Não rastreado no Git' : 'Alterado'}
+                style={{
+                  fontSize: '9.5px',
+                  fontWeight: 800,
+                  padding: '1px 4px',
+                  borderRadius: '3px',
+                  fontFamily: 'var(--font-mono)',
+                  background: gitStatusCode === 'M' ? 'rgba(234, 179, 8, 0.2)' : gitStatusCode === 'A' || gitStatusCode === 'U' ? 'rgba(34, 197, 94, 0.2)' : 'rgba(239, 68, 68, 0.2)',
+                  color: gitStatusCode === 'M' ? '#d97706' : gitStatusCode === 'A' || gitStatusCode === 'U' ? '#16a34a' : '#dc2626',
+                  marginLeft: '4px',
+                  lineHeight: '1.2'
+                }}
+              >
+                {gitStatusCode}
+              </span>
+            )}
           </div>
           <div className="tree-file-right">
             {!isMarkdown && fileExt && (
@@ -594,8 +815,13 @@ export const FileTree: React.FC<FileTreeProps> = ({
         </div>
 
         {/* Tree Hierarchy Container */}
-        <div className="tree-scroll-container">
-          <div id="tree-nodes-container" className="antigravity-tree-root">
+        <div 
+          className="tree-scroll-container"
+          onDragOver={handleDragOverRoot}
+          onDragLeave={handleDragLeaveRoot}
+          onDrop={handleDropOnRoot}
+        >
+          <div id="tree-nodes-container" className={`antigravity-tree-root ${isDragOverRoot ? 'drag-over-root' : ''}`}>
             {/* Inline input at Root Level */}
             {renderInlineCreateInput('')}
 

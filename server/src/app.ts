@@ -16,6 +16,7 @@ import { prsRoutes } from './modules/prs/prs.routes.js';
 import { settingsRoutes } from './modules/settings/settings.routes.js';
 import { tutorialsRoutes } from './modules/tutorials/tutorials.routes.js';
 import { aiRoutes } from './modules/ai/ai.routes.js';
+import { gitRoutes } from './modules/git/git.routes.js';
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = fastify({
@@ -51,6 +52,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(settingsRoutes);
   await app.register(tutorialsRoutes);
   await app.register(aiRoutes);
+  await app.register(gitRoutes);
 
   // 3. Static Assets & SPA Fallback (Serving ui/dist or ui/)
   const staticRoot = fs.existsSync(UI_DIST_DIR) ? UI_DIST_DIR : UI_DIR;

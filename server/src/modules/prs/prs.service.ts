@@ -1,8 +1,22 @@
+import path from 'node:path';
+import { PROJECTS_DIR } from '../../config/constants.js';
 import { loadConfig, saveConfig, clearWorkspaceChanges } from '../../config/storage.js';
-import { callGitHubAPI } from '../../utils/git.js';
+import {
+  callGitHubAPI,
+  ensureGitRepo,
+  commitChanges,
+  createAndCheckoutBranch,
+  executeGitCommand,
+} from '../../utils/git.js';
 import { computeDiff } from '../../utils/diff.js';
 
 export class PRsService {
+  private getRepoDir(repoName?: string): string {
+    const cfg = loadConfig();
+    const activeRepoName = repoName || cfg.active_repo?.name || 'local';
+    return path.join(PROJECTS_DIR, activeRepoName);
+  }
+
   getPRs() {
     const cfg = loadConfig();
     const activeRepo = cfg.active_repo;
@@ -64,9 +78,52 @@ export class PRsService {
 
     if (!cfg.prs) cfg.prs = [];
 
+    const repoDir = this.getRepoDir(repoName);
+    const remoteUrl = activeRepo?.html_url;
+    await ensureGitRepo(repoDir, cfg.user, remoteUrl, cfg.token);
+
     const newId = cfg.prs.length + 1;
     const branchName = payload.branch || `gov/update-${Date.now().toString().slice(-4)}`;
     const now = new Date().toISOString();
+
+    // 1. Create and checkout new Git branch
+    await createAndCheckoutBranch(repoDir, branchName);
+
+    // 2. Commit changes to Git branch
+    const commitMsg = payload.title || `Atualização de Governança #${newId}`;
+    await commitChanges(repoDir, commitMsg);
+
+    // 3. GitHub Remote PR (if authenticated and remote repo)
+    let githubPRData: any = null;
+    let prHtmlUrl = activeRepo?.html_url ? `${activeRepo.html_url}/pull/${newId}` : '';
+
+    if (cfg.authenticated && cfg.token && activeRepo?.full_name && !activeRepo?.is_local) {
+      try {
+        // Push branch to remote
+        await executeGitCommand(`git push -u origin "${branchName}"`, repoDir);
+
+        // Open real PR on GitHub
+        const defaultBranch = activeRepo.default_branch || 'main';
+        const ghRes = await callGitHubAPI(
+          `/repos/${activeRepo.full_name}/pulls`,
+          cfg.token,
+          'POST',
+          {
+            title: payload.title,
+            body: payload.description || `Atualização de governança Context OS`,
+            head: branchName,
+            base: defaultBranch,
+          }
+        );
+
+        if (ghRes.statusCode === 201 && ghRes.data) {
+          githubPRData = ghRes.data;
+          prHtmlUrl = ghRes.data.html_url || prHtmlUrl;
+        }
+      } catch (err) {
+        console.warn('[PRsService] Aviso ao abrir PR no GitHub remoto:', err);
+      }
+    }
 
     const detailedChanges = rawChanges.map((c) => {
       const diffData = computeDiff(c.old_content || '', c.new_content || '', c.path);
@@ -82,7 +139,9 @@ export class PRsService {
     });
 
     const newPR: any = {
-      id: newId,
+      id: githubPRData?.number || newId,
+      github_id: githubPRData?.id,
+      github_number: githubPRData?.number,
       repo_name: repoName,
       title: payload.title || `Atualização de Governança #${newId}`,
       description: payload.description || '',
@@ -96,7 +155,7 @@ export class PRsService {
       layer: payload.layer || 'Geral',
       domain: payload.domain || '',
       files: detailedChanges,
-      html_url: activeRepo?.html_url ? `${activeRepo.html_url}/pull/${newId}` : '',
+      html_url: prHtmlUrl,
     };
 
     cfg.prs.unshift(newPR);
@@ -106,11 +165,11 @@ export class PRsService {
     return {
       success: true,
       pr: newPR,
-      message: `Pull Request #${newId} criado com sucesso na branch '${branchName}'!`,
+      message: `Pull Request #${newPR.id} criado com sucesso na branch '${branchName}'!`,
     };
   }
 
-  approvePR(prId: number | string, approverName?: string) {
+  async approvePR(prId: number | string, approverName?: string) {
     const cfg = loadConfig();
     const prs = cfg.prs || [];
     const target = prs.find((p: any) => String(p.id) === String(prId));
@@ -132,6 +191,7 @@ export class PRsService {
     }
 
     if (target.approvals.length >= minApprovals) {
+      await this.executeMerge(target);
       target.status = 'MERGED';
       target.merged_at = new Date().toISOString();
       saveConfig(cfg);
@@ -140,7 +200,7 @@ export class PRsService {
         success: true,
         auto_merged: true,
         pr: target,
-        message: `🎉 Quórum de aprovação atingido (${target.approvals.length}/${minApprovals})! O PR #${prId} foi aprovado e o merge foi executado automaticamente na branch main.`,
+        message: `🎉 Quórum de aprovação atingido (${target.approvals.length}/${minApprovals})! O PR #${prId} foi aprovado e mesclado automaticamente na branch main.`,
       };
     } else {
       target.status = 'OPEN';
@@ -155,7 +215,7 @@ export class PRsService {
     }
   }
 
-  mergePR(prId: number | string) {
+  async mergePR(prId: number | string) {
     const cfg = loadConfig();
     const prs = cfg.prs || [];
     const target = prs.find((p: any) => String(p.id) === String(prId));
@@ -164,6 +224,7 @@ export class PRsService {
       throw new Error(`PR #${prId} não encontrado.`);
     }
 
+    await this.executeMerge(target);
     target.status = 'MERGED';
     target.merged_at = new Date().toISOString();
     saveConfig(cfg);
@@ -173,6 +234,39 @@ export class PRsService {
       pr: target,
       message: `PR #${prId} mesclado com sucesso na branch main!`,
     };
+  }
+
+  private async executeMerge(targetPR: any) {
+    const cfg = loadConfig();
+    const activeRepo = cfg.active_repo;
+    const repoName = targetPR.repo_name || activeRepo?.name || 'local';
+    const repoDir = this.getRepoDir(repoName);
+    const targetBranch = targetPR.target_branch || 'main';
+
+    try {
+      // 1. Local Git Merge
+      await executeGitCommand(`git checkout ${targetBranch}`, repoDir);
+      if (targetPR.branch) {
+        await executeGitCommand(`git merge "${targetPR.branch}" --no-ff -m "Merge PR #${targetPR.id}: ${targetPR.title}"`, repoDir);
+      }
+
+      // 2. Remote GitHub Merge (if GitHub PR)
+      if (cfg.authenticated && cfg.token && activeRepo?.full_name && targetPR.github_number) {
+        await callGitHubAPI(
+          `/repos/${activeRepo.full_name}/pulls/${targetPR.github_number}/merge`,
+          cfg.token,
+          'PUT',
+          {
+            commit_title: `Merge PR #${targetPR.id}: ${targetPR.title}`,
+            merge_method: 'merge',
+          }
+        );
+        // Push local main to remote
+        await executeGitCommand(`git push origin ${targetBranch}`, repoDir);
+      }
+    } catch (err) {
+      console.warn(`[PRsService] Aviso ao executar merge de Git:`, err);
+    }
   }
 }
 

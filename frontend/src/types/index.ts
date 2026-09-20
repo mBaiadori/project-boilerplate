@@ -146,3 +146,30 @@ export interface ChatMessage {
   contextBadges?: string[];
   isStreaming?: boolean;
 }
+
+export interface GitFileStatus {
+  path: string;
+  status: 'M' | 'A' | 'D' | 'U' | 'R' | 'C' | '??';
+  staged: boolean;
+}
+
+export interface GitStatus {
+  isRepo: boolean;
+  branch: string;
+  tracking?: string;
+  ahead: number;
+  behind: number;
+  isClean: boolean;
+  files: GitFileStatus[];
+  remoteUrl?: string;
+  repo_name?: string;
+}
+
+export interface GitCommitInfo {
+  hash: string;
+  shortHash: string;
+  author: string;
+  date: string;
+  message: string;
+}
+
