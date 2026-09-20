@@ -32,7 +32,17 @@ export async function prsRoutes(fastify: FastifyInstance) {
   fastify.post('/api/prs/merge', async (request, reply) => {
     const body = request.body as { id?: number | string };
     try {
-      const result = prsService.mergePR(body.id || '');
+      const result = await prsService.mergePR(body.id || '');
+      return reply.send(result);
+    } catch (err: any) {
+      return reply.status(400).send({ error: err.message });
+    }
+  });
+
+  fastify.post('/api/prs/reject', async (request, reply) => {
+    const body = request.body as { id?: number | string; reason?: string };
+    try {
+      const result = await prsService.rejectPR(body.id || '', body.reason);
       return reply.send(result);
     } catch (err: any) {
       return reply.status(400).send({ error: err.message });

@@ -1,16 +1,18 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import type { Repo } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { API } from '../services/api';
 
 interface ReposViewProps {
-  onSelectRepo: (repo: Repo) => void;
+  onSelectRepo?: (repo: Repo) => void;
 }
 
 export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
+  const navigate = useNavigate();
   const { user, logout } = useAuth();
-  const { repos, loadRepos, isLoading } = useWorkspace();
+  const { repos, loadRepos, selectRepo, isLoading } = useWorkspace();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedOrg, setSelectedOrg] = useState('all');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
@@ -23,6 +25,14 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
   const [newRepoProtection, setNewRepoProtection] = useState(true);
   const [newRepoPrivate, setNewRepoPrivate] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleOpenRepo = async (repo: Repo) => {
+    if (onSelectRepo) {
+      onSelectRepo(repo);
+    }
+    await selectRepo(repo);
+    navigate(`/repo/${encodeURIComponent(repo.name)}/editor`);
+  };
 
   const handleCreateRepo = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,7 +53,7 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
         await loadRepos();
         setIsCreatingRepo(false);
         setNewRepoName('');
-        onSelectRepo(res.data.repo);
+        await handleOpenRepo(res.data.repo);
       }
     } catch (err) {
       console.error('[ReposView] Erro ao criar repositório:', err);
@@ -330,7 +340,7 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
                     role="button"
                     tabIndex={0}
                     title={`Abrir Dashboard do projeto ${repo.full_name || repo.name}`}
-                    onClick={() => onSelectRepo(repo)}
+                    onClick={() => handleOpenRepo(repo)}
                   >
                     <div className="repo-card-main">
                       <div className="repo-top">

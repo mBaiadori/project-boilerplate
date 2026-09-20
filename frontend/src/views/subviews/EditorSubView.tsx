@@ -11,12 +11,14 @@ interface EditorSubViewProps {
   onOpenScaffoldWizard: () => void;
   onOpenDiffModal: () => void;
   onToggleCopilot: () => void;
+  onOpenFile?: (path: string) => void;
 }
 
 export const EditorSubView: React.FC<EditorSubViewProps> = ({
   onOpenScaffoldWizard,
   onOpenDiffModal,
-  onToggleCopilot
+  onToggleCopilot,
+  onOpenFile
 }) => {
   const { activeFile, fileContent, setFileContent, loadFile, isLoadingFile } = useWorkspace();
   const { sendMessage } = useAI();
@@ -83,7 +85,10 @@ export const EditorSubView: React.FC<EditorSubViewProps> = ({
       <div className="workbench-layout">
         {/* PANEL 1: DOCUMENT TREE EXPLORER (DOCKABLE / RESIZABLE) */}
         <FileTree
-          onOpenFile={(path) => loadFile(path)}
+          onOpenFile={(path) => {
+            loadFile(path);
+            onOpenFile?.(path);
+          }}
           isCollapsed={isTreeCollapsed}
           onToggleCollapse={() => setIsTreeCollapsed(!isTreeCollapsed)}
           width={treeWidth}
@@ -110,7 +115,10 @@ export const EditorSubView: React.FC<EditorSubViewProps> = ({
               content={fileContent}
               onChange={setFileContent}
               filePath={activeFile}
-              onNavigateFile={(path) => loadFile(path)}
+              onNavigateFile={(path) => {
+                loadFile(path);
+                onOpenFile?.(path);
+              }}
               onReload={() => activeFile && loadFile(activeFile)}
               onOpenDiffModal={onOpenDiffModal}
               onToggleCopilot={onToggleCopilot}

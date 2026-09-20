@@ -236,6 +236,43 @@ export class PRsService {
     };
   }
 
+  async rejectPR(prId: number | string, reason?: string) {
+    const cfg = loadConfig();
+    const prs = cfg.prs || [];
+    const target = prs.find((p: any) => String(p.id) === String(prId));
+
+    if (!target) {
+      throw new Error(`PR #${prId} não encontrado.`);
+    }
+
+    target.status = 'CLOSED';
+    target.closed_at = new Date().toISOString();
+    target.rejection_reason = reason || 'Proposta rejeitada pelo revisor.';
+
+    // If GitHub PR exists, close it on GitHub
+    const activeRepo = cfg.active_repo;
+    if (cfg.authenticated && cfg.token && activeRepo?.full_name && target.github_number) {
+      try {
+        await callGitHubAPI(
+          `/repos/${activeRepo.full_name}/pulls/${target.github_number}`,
+          cfg.token,
+          'PATCH',
+          { state: 'closed' }
+        );
+      } catch (err) {
+        console.warn(`[PRsService] Aviso ao fechar PR no GitHub:`, err);
+      }
+    }
+
+    saveConfig(cfg);
+
+    return {
+      success: true,
+      pr: target,
+      message: `PR #${prId} foi rejeitado e fechado.`,
+    };
+  }
+
   private async executeMerge(targetPR: any) {
     const cfg = loadConfig();
     const activeRepo = cfg.active_repo;

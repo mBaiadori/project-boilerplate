@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { TopHeader } from '../components/layout/TopHeader';
 import { SidebarNav, type SubViewType } from '../components/layout/SidebarNav';
 import { AICopilotPanel } from '../components/copilot/AICopilotPanel';
@@ -12,7 +12,7 @@ import { GitModal } from '../components/modals/GitModal';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { useAI } from '../context/AIContext';
 
-// Subviews
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { EditorSubView } from './subviews/EditorSubView';
 import { WikiSubView } from './subviews/WikiSubView';
 import { DictionarySubView } from './subviews/DictionarySubView';
@@ -22,19 +22,48 @@ import { TutorialsSubView } from './subviews/TutorialsSubView';
 import { SettingsSubView } from './subviews/SettingsSubView';
 
 interface DashboardViewProps {
-  onBackToRepos: () => void;
+  onBackToRepos?: () => void;
 }
 
 const AI_WIDTH_STORAGE_KEY = 'spec_ai_pane_width';
 const DEFAULT_AI_WIDTH = 360;
 
+const VALID_SUBVIEWS: SubViewType[] = ['editor', 'dictionary', 'wiki', 'templates', 'prs', 'settings', 'tutorials'];
+
 export const DashboardView: React.FC<DashboardViewProps> = ({ onBackToRepos }) => {
-  const [activeSubView, setActiveSubView] = useState<SubViewType>('editor');
+  const { repoName, subview } = useParams<{ repoName: string; subview?: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
+
+  const activeSubView: SubViewType = (subview && VALID_SUBVIEWS.includes(subview as SubViewType))
+    ? (subview as SubViewType)
+    : 'editor';
+
   const [isCopilotOpen, setIsCopilotOpen] = useState(false);
   const [activeCopilotSidebar, setActiveCopilotSidebar] = useState<'prompt' | 'history' | 'raw' | null>(null);
   const [isDiffModalOpen, setIsDiffModalOpen] = useState(false);
   const [isScaffoldModalOpen, setIsScaffoldModalOpen] = useState(false);
   const [isGitModalOpen, setIsGitModalOpen] = useState(false);
+
+  const { activeFile, activeRepo, fileContent, selectRepoByName, loadFile } = useWorkspace();
+  const { messages, aiSettings, openSettingsModal } = useAI();
+  const [systemPrompt, setSystemPrompt] = useState('');
+
+  // Sync Repo from URL parameter
+  useEffect(() => {
+    if (repoName && (!activeRepo || activeRepo.name.toLowerCase() !== repoName.toLowerCase())) {
+      const fileParam = searchParams.get('file') || undefined;
+      selectRepoByName(repoName, fileParam);
+    }
+  }, [repoName, activeRepo, selectRepoByName, searchParams]);
+
+  // Sync File from search parameter ?file=...
+  useEffect(() => {
+    const fileParam = searchParams.get('file');
+    if (fileParam && fileParam !== activeFile && activeRepo) {
+      loadFile(fileParam);
+    }
+  }, [searchParams, activeFile, activeRepo, loadFile]);
 
   const [aiWidth, setAiWidth] = useState<number>(() => {
     try {
@@ -63,7 +92,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onBackToRepos }) =
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
       if (!isAiDraggingRef.current) return;
-      // Dragging AI resizer to the left increases AI width
       const deltaX = moveEvent.clientX - startAiXRef.current;
       const newWidth = Math.max(240, Math.min(750, startAiWidthRef.current - deltaX));
       setAiWidth(newWidth);
@@ -89,10 +117,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onBackToRepos }) =
     window.addEventListener('mouseup', handleMouseUp);
   };
 
-  const { activeFile, activeRepo, fileContent } = useWorkspace();
-  const { messages, aiSettings, openSettingsModal } = useAI();
-  const [systemPrompt, setSystemPrompt] = useState('');
-
   const toggleCopilot = () => {
     if (isCopilotOpen) {
       setIsCopilotOpen(false);
@@ -102,11 +126,32 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onBackToRepos }) =
     }
   };
 
+  const handleSelectView = (view: SubViewType) => {
+    const currentRepoName = repoName || activeRepo?.name || 'default';
+    if (view === 'editor' && activeFile) {
+      navigate(`/repo/${encodeURIComponent(currentRepoName)}/${view}?file=${encodeURIComponent(activeFile)}`);
+    } else {
+      navigate(`/repo/${encodeURIComponent(currentRepoName)}/${view}`);
+    }
+  };
+
+  const handleBackToRepos = () => {
+    if (onBackToRepos) {
+      onBackToRepos();
+    } else {
+      navigate('/repos');
+    }
+  };
+
+  const handleOpenFile = (path: string) => {
+    setSearchParams({ file: path });
+  };
+
   return (
     <div id="view-dashboard" className="screen-view" style={{ display: 'flex' }}>
       {/* Top Global Header */}
       <TopHeader
-        onBackToRepos={onBackToRepos}
+        onBackToRepos={handleBackToRepos}
         onOpenDiffModal={() => setIsDiffModalOpen(true)}
         onToggleCopilot={toggleCopilot}
         onOpenGitModal={() => setIsGitModalOpen(true)}
@@ -117,7 +162,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onBackToRepos }) =
         {/* Primary Global Left Sidebar */}
         <SidebarNav
           activeView={activeSubView}
-          onSelectView={(view) => setActiveSubView(view)}
+          onSelectView={handleSelectView}
         />
 
         {/* Main Views Container */}
@@ -127,6 +172,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onBackToRepos }) =
               onOpenScaffoldWizard={() => setIsScaffoldModalOpen(true)}
               onOpenDiffModal={() => setIsDiffModalOpen(true)}
               onToggleCopilot={toggleCopilot}
+              onOpenFile={handleOpenFile}
             />
           )}
 
@@ -139,7 +185,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onBackToRepos }) =
           )}
 
           {activeSubView === 'templates' && (
-            <TemplatesSubView onApplyTemplate={() => setActiveSubView('editor')} />
+            <TemplatesSubView onApplyTemplate={() => handleSelectView('editor')} />
           )}
 
           {activeSubView === 'prs' && (
@@ -151,7 +197,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onBackToRepos }) =
           )}
 
           {activeSubView === 'tutorials' && (
-            <TutorialsSubView onOpenEditor={() => setActiveSubView('editor')} />
+            <TutorialsSubView onOpenEditor={() => handleSelectView('editor')} />
           )}
         </main>
 
@@ -232,18 +278,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onBackToRepos }) =
       <DiffModal
         isOpen={isDiffModalOpen}
         onClose={() => setIsDiffModalOpen(false)}
-        onPROpened={() => setActiveSubView('prs')}
+        onPROpened={() => handleSelectView('prs')}
       />
 
       <ScaffoldModal
         isOpen={isScaffoldModalOpen}
         onClose={() => setIsScaffoldModalOpen(false)}
-        onCreated={() => setActiveSubView('editor')}
+        onCreated={() => handleSelectView('editor')}
       />
 
       <GitModal
         isOpen={isGitModalOpen}
         onClose={() => setIsGitModalOpen(false)}
+        onOpenDiffModal={() => setIsDiffModalOpen(true)}
       />
     </div>
   );

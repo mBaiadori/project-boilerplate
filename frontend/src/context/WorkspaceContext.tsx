@@ -33,7 +33,8 @@ interface WorkspaceContextType {
   gitStatus: GitStatus | null;
   gitLog: GitCommitInfo[];
   loadRepos: () => Promise<void>;
-  selectRepo: (repo: Repo) => Promise<void>;
+  selectRepo: (repo: Repo, initialFile?: string) => Promise<void>;
+  selectRepoByName: (repoName: string, initialFile?: string) => Promise<boolean>;
   loadTree: () => Promise<void>;
   loadFile: (filePath: string) => Promise<void>;
   setFileContent: (content: string) => void;
@@ -164,7 +165,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     setFileMetadataState(meta);
   };
 
-  const selectRepo = async (repo: Repo) => {
+  const selectRepo = async (repo: Repo, initialFile?: string) => {
     setActiveRepo(repo);
     await API.selectRepo(repo);
     const data = await API.getProjectTree();
@@ -173,15 +174,39 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     await refreshGitStatus();
     await refreshGitLog(15);
 
-    const firstFile = findFirstMdFile(data.tree || []);
-    if (firstFile) {
-      await loadFile(firstFile);
+    const fileToOpen = initialFile || findFirstMdFile(data.tree || []);
+    if (fileToOpen) {
+      await loadFile(fileToOpen);
     } else {
       setActiveFile('');
       setFileContentState('');
       setOriginalContent('');
       setFileMetadataState({});
     }
+  };
+
+  const selectRepoByName = async (repoName: string, initialFile?: string): Promise<boolean> => {
+    let currentRepos = repos;
+    if (currentRepos.length === 0) {
+      try {
+        const res = await API.getRepos();
+        if (res.ok && res.data.repos) {
+          currentRepos = res.data.repos;
+          setRepos(currentRepos);
+        }
+      } catch (err) {
+        console.error('[WorkspaceContext] Erro ao carregar repos:', err);
+      }
+    }
+
+    const found = currentRepos.find(r => r.name.toLowerCase() === repoName.toLowerCase());
+    if (found) {
+      await selectRepo(found, initialFile);
+      return true;
+    }
+    const fallbackRepo: Repo = { id: 0, name: repoName, full_name: repoName, is_local: true };
+    await selectRepo(fallbackRepo, initialFile);
+    return true;
   };
 
   const saveCurrentFile = async (metaOverride?: Record<string, any>) => {
@@ -292,6 +317,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         gitLog,
         loadRepos,
         selectRepo,
+        selectRepoByName,
         loadTree,
         loadFile,
         setFileContent,

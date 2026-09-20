@@ -356,6 +356,15 @@ export const API = {
     return { ok: res.ok, data: await res.json() };
   },
 
+  async rejectPR(id: number, reason?: string): Promise<ApiResponse<any>> {
+    const res = await fetch('/api/prs/reject', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, reason })
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
   // Tutorials
   async getTutorials(): Promise<{ tutorials: TutorialItem[] }> {
     const res = await fetch('/api/tutorials');

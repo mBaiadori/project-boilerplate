@@ -4,9 +4,10 @@ import { useWorkspace } from '../../context/WorkspaceContext';
 interface GitModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onOpenDiffModal?: () => void;
 }
 
-export const GitModal: React.FC<GitModalProps> = ({ isOpen, onClose }) => {
+export const GitModal: React.FC<GitModalProps> = ({ isOpen, onClose, onOpenDiffModal }) => {
   const {
     activeRepo,
     gitStatus,
@@ -290,30 +291,61 @@ export const GitModal: React.FC<GitModalProps> = ({ isOpen, onClose }) => {
                 )}
               </div>
 
-              {/* Commit Form */}
-              <form onSubmit={handleCommit} style={{ border: '1px solid var(--border-color)', borderRadius: '8px', padding: '16px', background: 'var(--bg-surface)' }}>
-                <h4 style={{ margin: '0 0 10px 0', fontSize: '14px', fontWeight: 600 }}>Criar Commit Local</h4>
-                <div className="form-group" style={{ marginBottom: '12px' }}>
-                  <input
-                    type="text"
-                    className="form-input"
-                    placeholder="feat: descreva a alteração realizada..."
-                    value={commitMsg}
-                    onChange={e => setCommitMsg(e.target.value)}
-                    disabled={isCommitting || isClean}
-                  />
+              {/* Protection & PR Flow vs Branch Commit */}
+              {currentBranch === 'main' ? (
+                <div style={{ border: '1px solid var(--border-color)', borderRadius: '8px', padding: '16px', background: 'var(--bg-surface-secondary, #f8fafc)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                    <span className="material-symbols-outlined" style={{ color: 'var(--primary, #3b82f6)', fontSize: '20px' }}>
+                      lock
+                    </span>
+                    <strong style={{ fontSize: '13.5px' }}>Branch <code>main</code> Protegida por Governança</strong>
+                  </div>
+                  <p style={{ margin: '0 0 12px 0', fontSize: '12.5px', color: 'var(--text-muted)', lineHeight: '1.4' }}>
+                    Para garantir a colaboração e revisão por pares, commits diretos na <code>main</code> não são permitidos. Suas alterações são submetidas como um <strong>Pull Request</strong> oficial.
+                  </p>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-sm"
+                      onClick={() => {
+                        onClose();
+                        if (onOpenDiffModal) onOpenDiffModal();
+                      }}
+                      disabled={isClean}
+                    >
+                      <span className="material-symbols-outlined icon-xs">call_split</span>
+                      Propor Pull Request Oficial
+                    </button>
+                  </div>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-                  <button
-                    type="submit"
-                    className="btn btn-primary btn-sm"
-                    disabled={isCommitting || isClean || !commitMsg.trim()}
-                  >
-                    <span className="material-symbols-outlined icon-xs">check</span>
-                    {isCommitting ? 'Commitando...' : 'Fazer Commit (git commit)'}
-                  </button>
-                </div>
-              </form>
+              ) : (
+                /* Commit Form for working branches */
+                <form onSubmit={handleCommit} style={{ border: '1px solid var(--border-color)', borderRadius: '8px', padding: '16px', background: 'var(--bg-surface)' }}>
+                  <h4 style={{ margin: '0 0 10px 0', fontSize: '14px', fontWeight: 600 }}>
+                    Commit na Branch <code>{currentBranch}</code>
+                  </h4>
+                  <div className="form-group" style={{ marginBottom: '12px' }}>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="feat: descreva a alteração realizada..."
+                      value={commitMsg}
+                      onChange={e => setCommitMsg(e.target.value)}
+                      disabled={isCommitting || isClean}
+                    />
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                    <button
+                      type="submit"
+                      className="btn btn-primary btn-sm"
+                      disabled={isCommitting || isClean || !commitMsg.trim()}
+                    >
+                      <span className="material-symbols-outlined icon-xs">check</span>
+                      {isCommitting ? 'Commitando...' : 'Fazer Commit'}
+                    </button>
+                  </div>
+                </form>
+              )}
             </div>
           )}
 
