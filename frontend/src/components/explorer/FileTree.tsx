@@ -49,7 +49,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
   onToggleCollapse,
   width
 }) => {
-  const { tree, activeFile, loadTree, gitStatus, pendingChanges } = useWorkspace();
+  const { tree, activeFile, loadTree, gitStatus, pendingChanges, refreshPendingChanges, refreshGitStatus } = useWorkspace();
   const [searchTerm, setSearchTerm] = useState('');
   const [collapsedFolders, setCollapsedFolders] = useState<Record<string, boolean>>({});
   const [selectedFolder, setSelectedFolder] = useState<string>('');
@@ -129,7 +129,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
     }
   };
 
-  const handleDropOnFolder = async (e: React.DragEvent, folderPath: string) => {
+  const handleDropOnFolder = async (e: React.DragEvent, targetFolderPath: string) => {
     e.preventDefault();
     e.stopPropagation();
     setDragOverTarget(null);
@@ -140,16 +140,20 @@ export const FileTree: React.FC<FileTreeProps> = ({
     const { path: sourcePath, name: itemName, isFolder } = draggedItem;
     setDraggedItem(null);
 
-    if (sourcePath === folderPath) return;
-    if (isFolder && (folderPath === sourcePath || folderPath.startsWith(`${sourcePath}/`))) {
+    if (sourcePath === targetFolderPath) return;
+    if (isFolder && (folderPathEqualOrChild(targetFolderPath, sourcePath))) {
       showToast('Não é possível mover uma pasta para dentro de si mesma.', 'warning');
       return;
     }
 
-    const targetPath = `${folderPath}/${itemName}`;
+    const targetPath = `${targetFolderPath}/${itemName}`;
     if (sourcePath === targetPath) return;
 
-    await executeMove(sourcePath, targetPath, itemName, folderPath);
+    await executeMove(sourcePath, targetPath, itemName, targetFolderPath);
+  };
+
+  const folderPathEqualOrChild = (target: string, source: string) => {
+    return target === source || target.startsWith(`${source}/`);
   };
 
   const handleDragOverFile = (e: React.DragEvent, filePath: string) => {
@@ -200,11 +204,10 @@ export const FileTree: React.FC<FileTreeProps> = ({
   const handleDragOverRoot = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!draggedItem) return;
-    if (!draggedItem.path.includes('/')) return;
-    e.dataTransfer.dropEffect = 'move';
-    setDragOverTarget(null);
-    setIsDragOverRoot(true);
+    if (draggedItem) {
+      setIsDragOverRoot(true);
+      setDragOverTarget(null);
+    }
   };
 
   const handleDragLeaveRoot = (e: React.DragEvent) => {
@@ -216,12 +219,16 @@ export const FileTree: React.FC<FileTreeProps> = ({
   const handleDropOnRoot = async (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
+
     setIsDragOverRoot(false);
     setDragOverTarget(null);
+
     if (!draggedItem) return;
 
-    const { path: sourcePath, name: itemName } = draggedItem;
-    setDraggedItem(null);
+    const sourcePath = draggedItem.path;
+    const itemName = sourcePath.split('/').pop() || sourcePath;
+
+    if (!sourcePath.includes('/')) return;
 
     const targetPath = itemName;
     if (sourcePath === targetPath) return;
@@ -234,6 +241,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
       const res = await API.renameProjectFile({ old_path, new_path });
       if (res.ok && res.data?.success) {
         await loadTree();
+        await Promise.all([refreshPendingChanges(), refreshGitStatus()]);
         if (activeFile === old_path) {
           onOpenFile(new_path);
         } else if (activeFile && activeFile.startsWith(`${old_path}/`)) {
@@ -264,7 +272,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
   }, [inlineCreating]);
 
   // Start Inline Creation (VS Code style)
-  const startInlineCreate = (parentPath: string, isFolder: boolean, e?: React.MouseEvent) => {
+  const startInlineCreate = (parentPath: string = '', isFolder: boolean = false, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
 
     // Ensure parent folder is expanded so inline input is visible
@@ -282,7 +290,6 @@ export const FileTree: React.FC<FileTreeProps> = ({
   // Confirm Inline Creation
   const handleConfirmInlineCreate = async () => {
     if (!inlineCreating) return;
-
     const rawName = inlineValue.trim();
     if (!rawName) {
       setInlineCreating(null);
@@ -290,23 +297,18 @@ export const FileTree: React.FC<FileTreeProps> = ({
     }
 
     const { parentPath, isFolder } = inlineCreating;
-    
-    // Normalize path and handle nested directories if user typed slashes
-    let targetPath = rawName.replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, '');
-    if (parentPath) {
-      targetPath = `${parentPath}/${targetPath}`;
+    let fileName = rawName;
+
+    const isMarkdown = !isFolder && (fileName.endsWith('.md') || fileName.endsWith('.markdown') || !fileName.includes('.'));
+    if (!isFolder && !fileName.includes('.')) {
+      fileName = `${fileName}.md`;
     }
 
-    // Auto-append .md for files if no extension provided
-    if (!isFolder && !targetPath.includes('.')) {
-      targetPath = `${targetPath}.md`;
-    }
-
-    const isMarkdown = targetPath.endsWith('.md') || targetPath.endsWith('.markdown');
+    const targetPath = parentPath ? `${parentPath}/${fileName}` : fileName;
 
     let initialContent = '';
     if (!isFolder && isMarkdown) {
-      const docTitle = targetPath.split('/').pop()?.replace(/\.md$/, '') || 'Documento';
+      const docTitle = rawName.replace(/\.md$/i, '').replace(/\.markdown$/i, '');
       initialContent = `# ${docTitle}\n\nDocumento gerado no workspace.\n`;
     }
 
@@ -321,6 +323,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
         setInlineCreating(null);
         setInlineValue('');
         await loadTree();
+        await Promise.all([refreshPendingChanges(), refreshGitStatus()]);
 
         if (isFolder) {
           showToast(`Pasta "${rawName}" criada com sucesso.`, 'info');
@@ -396,6 +399,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
       if (res.ok && res.data?.success) {
         setRenameModalOpen(false);
         await loadTree();
+        await Promise.all([refreshPendingChanges(), refreshGitStatus()]);
         if (activeFile === old_path) {
           const isMd = new_path.endsWith('.md') || new_path.endsWith('.markdown');
           if (isMd) {
@@ -425,6 +429,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
         const res = await API.deleteProjectFile(path);
         if (res.ok && res.data?.success) {
           await loadTree();
+          await Promise.all([refreshPendingChanges(), refreshGitStatus()]);
           if (activeFile === path || activeFile.startsWith(`${path}/`)) {
             onOpenFile('');
           }

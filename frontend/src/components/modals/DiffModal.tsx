@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useWorkspace } from '../../context/WorkspaceContext';
 import { API } from '../../services/api';
+import { VisualMarkdownDiff } from '../editor/VisualMarkdownDiff';
 
 interface DiffModalProps {
   isOpen: boolean;
@@ -15,6 +16,7 @@ export const DiffModal: React.FC<DiffModalProps> = ({ isOpen, onClose, onPROpene
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [expandedDiffs, setExpandedDiffs] = useState<Record<string, boolean>>({});
+  const [diffViewMode, setDiffViewMode] = useState<'visual' | 'raw'>('visual');
 
   useEffect(() => {
     if (isOpen) {
@@ -80,7 +82,7 @@ export const DiffModal: React.FC<DiffModalProps> = ({ isOpen, onClose, onPROpene
 
   return (
     <div id="workspace-diff-modal" className="modal-backdrop" style={{ display: 'flex' }}>
-      <div className="modal-box" style={{ maxWidth: '850px', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
+      <div className="modal-box" style={{ maxWidth: '920px', maxHeight: '92vh', display: 'flex', flexDirection: 'column' }}>
         <div className="modal-header">
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -89,7 +91,7 @@ export const DiffModal: React.FC<DiffModalProps> = ({ isOpen, onClose, onPROpene
                 {guardrailStatus === 'CLEAN' ? 'Conforme' : guardrailStatus}
               </span>
             </div>
-            <span className="subtitle">Revise os diffs antes de submeter a proposta oficial de Pull Request</span>
+            <span className="subtitle">Revise as alterações visualmente antes de submeter a proposta de Pull Request</span>
           </div>
           <button className="btn-close" aria-label="Fechar" onClick={onClose}>
             <span className="material-symbols-outlined icon-sm">close</span>
@@ -97,22 +99,58 @@ export const DiffModal: React.FC<DiffModalProps> = ({ isOpen, onClose, onPROpene
         </div>
 
         <div className="modal-body" style={{ overflowY: 'auto', flex: 1, gap: '16px' }}>
-          {/* Stats Bar */}
-          <div style={{ display: 'flex', gap: '12px', alignItems: 'center', background: 'var(--color-surface-container)', padding: '10px 14px', borderRadius: '8px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span className="material-symbols-outlined" style={{ fontSize: '18px', color: 'var(--color-primary)' }}>description</span>
+          {/* Stats Bar & View Mode Toggle */}
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'center', justifyContent: 'space-between', background: 'var(--color-surface-container, #f8fafc)', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border-color, #e2e8f0)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span className="material-symbols-outlined" style={{ fontSize: '18px', color: 'var(--color-primary, #2563eb)' }}>description</span>
               <strong>{pendingChanges.length} arquivo(s) modificado(s)</strong>
+              <div style={{ display: 'flex', gap: '8px', fontSize: '12.5px', marginLeft: '8px' }}>
+                <span style={{ color: '#16a34a', fontWeight: 600 }}>+{totalAdditions} adições</span>
+                <span style={{ color: '#dc2626', fontWeight: 600 }}>-{totalDeletions} exclusões</span>
+              </div>
             </div>
-            <div style={{ marginLeft: 'auto', display: 'flex', gap: '12px', fontSize: '13px' }}>
-              <span style={{ color: 'var(--color-success)', fontWeight: 600 }}>+{totalAdditions} adições</span>
-              <span style={{ color: 'var(--color-error)', fontWeight: 600 }}>-{totalDeletions} exclusões</span>
+
+            {/* Toggle Visual vs Raw */}
+            <div style={{ display: 'inline-flex', background: '#e2e8f0', padding: '2px', borderRadius: '6px' }}>
+              <button
+                type="button"
+                onClick={() => setDiffViewMode('visual')}
+                style={{
+                  padding: '3px 8px',
+                  border: 'none',
+                  borderRadius: '4px',
+                  fontSize: '11.5px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  background: diffViewMode === 'visual' ? '#ffffff' : 'transparent',
+                  color: diffViewMode === 'visual' ? 'var(--primary, #2563eb)' : '#64748b'
+                }}
+              >
+                Visual Formatado (Doc)
+              </button>
+              <button
+                type="button"
+                onClick={() => setDiffViewMode('raw')}
+                style={{
+                  padding: '3px 8px',
+                  border: 'none',
+                  borderRadius: '4px',
+                  fontSize: '11.5px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  background: diffViewMode === 'raw' ? '#ffffff' : 'transparent',
+                  color: diffViewMode === 'raw' ? 'var(--primary, #2563eb)' : '#64748b'
+                }}
+              >
+                Patch Git (Código)
+              </button>
             </div>
           </div>
 
           {/* Diffs List */}
-          <div className="diff-files-container" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <div className="diff-files-container" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             {pendingChanges.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '24px', color: 'var(--color-outline)' }}>
+              <div style={{ textAlign: 'center', padding: '32px', color: 'var(--color-outline, #64748b)' }}>
                 Nenhuma alteração pendente no workspace.
               </div>
             ) : (
@@ -122,10 +160,10 @@ export const DiffModal: React.FC<DiffModalProps> = ({ isOpen, onClose, onPROpene
                   <div
                     key={change.path}
                     style={{
-                      border: '1px solid var(--color-outline-variant)',
+                      border: '1px solid var(--color-outline-variant, #e2e8f0)',
                       borderRadius: '8px',
                       overflow: 'hidden',
-                      background: 'var(--color-surface)'
+                      background: 'var(--color-surface, #ffffff)'
                     }}
                   >
                     <div
@@ -135,7 +173,7 @@ export const DiffModal: React.FC<DiffModalProps> = ({ isOpen, onClose, onPROpene
                         alignItems: 'center',
                         justifyContent: 'space-between',
                         padding: '8px 12px',
-                        background: 'var(--color-surface-container-low)',
+                        background: 'var(--color-surface-container-low, #f8fafc)',
                         cursor: 'pointer',
                         userSelect: 'none'
                       }}
@@ -156,27 +194,41 @@ export const DiffModal: React.FC<DiffModalProps> = ({ isOpen, onClose, onPROpene
                           className="btn btn-ghost btn-xs"
                           title="Descartar este arquivo"
                           onClick={(e) => handleDiscardFile(change.path, e)}
-                          style={{ color: 'var(--color-error)' }}
+                          style={{ color: 'var(--color-error, #dc2626)' }}
                         >
                           <span className="material-symbols-outlined icon-xs">delete</span>
                         </button>
                       </div>
                     </div>
 
-                    {isExpanded && change.diff && (
-                      <pre
-                        style={{
-                          margin: 0,
-                          padding: '12px',
-                          fontSize: '12px',
-                          fontFamily: 'var(--font-mono)',
-                          background: 'var(--color-surface-container-lowest)',
-                          overflowX: 'auto',
-                          lineHeight: '1.5'
-                        }}
-                      >
-                        {change.diff}
-                      </pre>
+                    {isExpanded && (
+                      <div style={{ borderTop: '1px solid var(--border-color, #e2e8f0)' }}>
+                        {diffViewMode === 'visual' ? (
+                          <div style={{ maxHeight: '380px', overflowY: 'auto' }}>
+                            <VisualMarkdownDiff
+                              oldContent={change.old_content || ''}
+                              newContent={change.new_content || ''}
+                              fileName={change.path}
+                            />
+                          </div>
+                        ) : (
+                          <pre
+                            style={{
+                              margin: 0,
+                              padding: '12px',
+                              fontSize: '12px',
+                              fontFamily: 'var(--font-mono)',
+                              background: '#0d1117',
+                              color: '#e6edf3',
+                              overflowX: 'auto',
+                              maxHeight: '300px',
+                              lineHeight: '1.5'
+                            }}
+                          >
+                            {change.diff_text || change.diff || 'Sem patch de código'}
+                          </pre>
+                        )}
+                      </div>
                     )}
                   </div>
                 );
@@ -228,7 +280,7 @@ export const DiffModal: React.FC<DiffModalProps> = ({ isOpen, onClose, onPROpene
         <div className="modal-footer" style={{ display: 'flex', justifyContent: 'space-between' }}>
           <button
             className="btn btn-ghost btn-sm"
-            style={{ color: 'var(--color-error)' }}
+            style={{ color: 'var(--color-error, #dc2626)' }}
             onClick={handleDiscardAll}
             disabled={pendingChanges.length === 0}
           >

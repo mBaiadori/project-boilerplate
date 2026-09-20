@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import type { PR } from '../../types';
 import { API } from '../../services/api';
+import { VisualMarkdownDiff } from '../../components/editor/VisualMarkdownDiff';
 
 interface PRsSubViewProps {
   onOpenDiffModal: () => void;
@@ -12,6 +13,7 @@ export const PRsSubView: React.FC<PRsSubViewProps> = ({ onOpenDiffModal }) => {
   const [activeStatus, setActiveStatus] = useState<'all' | 'open' | 'merged' | 'closed'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedPRs, setExpandedPRs] = useState<Record<number | string, boolean>>({});
+  const [prViewModes, setPrViewModes] = useState<Record<string, 'visual' | 'raw'>>({});
   const [actionFeedback, setActionFeedback] = useState<{ id: number; message: string; type: 'success' | 'error' } | null>(null);
 
   const loadPRs = useCallback(async () => {
@@ -315,49 +317,102 @@ export const PRsSubView: React.FC<PRsSubViewProps> = ({ onOpenDiffModal }) => {
 
                       {isExpanded && (
                         <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                          {prFiles.map((f: any, fIdx: number) => (
-                            <div
-                              key={fIdx}
-                              style={{
-                                border: '1px solid var(--border-color)',
-                                borderRadius: '6px',
-                                overflow: 'hidden',
-                                fontSize: '12px'
-                              }}
-                            >
+                          {prFiles.map((f: any, fIdx: number) => {
+                            const fileKey = `${pr.id}-${f.path || fIdx}`;
+                            const isVisual = prViewModes[fileKey] !== 'raw'; // Default visual
+
+                            return (
                               <div
+                                key={fIdx}
                                 style={{
-                                  padding: '6px 10px',
-                                  background: 'var(--bg-surface-secondary, #f8fafc)',
-                                  display: 'flex',
-                                  justifyContent: 'space-between',
-                                  alignItems: 'center',
-                                  fontFamily: 'var(--font-mono)'
+                                  border: '1px solid var(--border-color)',
+                                  borderRadius: '6px',
+                                  overflow: 'hidden',
+                                  fontSize: '12px',
+                                  background: 'var(--bg-surface)'
                                 }}
                               >
-                                <span>{f.path}</span>
-                                <div style={{ display: 'flex', gap: '8px', fontSize: '11px' }}>
-                                  <span style={{ color: 'var(--color-success, #16a34a)', fontWeight: 600 }}>+{f.additions || 0}</span>
-                                  <span style={{ color: 'var(--color-error, #dc2626)', fontWeight: 600 }}>-{f.deletions || 0}</span>
-                                </div>
-                              </div>
-                              {f.diff_text && (
-                                <pre
+                                <div
                                   style={{
-                                    margin: 0,
-                                    padding: '8px 10px',
-                                    fontSize: '11.5px',
-                                    background: 'var(--bg-surface-lowest, #1e293b)',
-                                    color: '#f8fafc',
-                                    overflowX: 'auto',
+                                    padding: '8px 12px',
+                                    background: 'var(--bg-surface-secondary, #f8fafc)',
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
                                     fontFamily: 'var(--font-mono)'
                                   }}
                                 >
-                                  {f.diff_text}
-                                </pre>
-                              )}
-                            </div>
-                          ))}
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <span className="material-symbols-outlined icon-xs" style={{ color: 'var(--primary)' }}>description</span>
+                                    <strong>{f.path}</strong>
+                                    <span style={{ color: 'var(--color-success, #16a34a)', fontWeight: 600 }}>+{f.additions || 0}</span>
+                                    <span style={{ color: 'var(--color-error, #dc2626)', fontWeight: 600 }}>-{f.deletions || 0}</span>
+                                  </div>
+
+                                  <div style={{ display: 'inline-flex', background: '#e2e8f0', padding: '2px', borderRadius: '4px' }}>
+                                    <button
+                                      type="button"
+                                      onClick={() => setPrViewModes(prev => ({ ...prev, [fileKey]: 'visual' }))}
+                                      style={{
+                                        padding: '2px 6px',
+                                        border: 'none',
+                                        borderRadius: '3px',
+                                        fontSize: '11px',
+                                        fontWeight: 600,
+                                        cursor: 'pointer',
+                                        background: isVisual ? '#ffffff' : 'transparent',
+                                        color: isVisual ? 'var(--primary, #2563eb)' : '#64748b'
+                                      }}
+                                    >
+                                      Visual (Doc)
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setPrViewModes(prev => ({ ...prev, [fileKey]: 'raw' }))}
+                                      style={{
+                                        padding: '2px 6px',
+                                        border: 'none',
+                                        borderRadius: '3px',
+                                        fontSize: '11px',
+                                        fontWeight: 600,
+                                        cursor: 'pointer',
+                                        background: !isVisual ? '#ffffff' : 'transparent',
+                                        color: !isVisual ? 'var(--primary, #2563eb)' : '#64748b'
+                                      }}
+                                    >
+                                      Patch Git
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {isVisual && (f.old_content || f.new_content) ? (
+                                  <div style={{ maxHeight: '350px', overflowY: 'auto' }}>
+                                    <VisualMarkdownDiff
+                                      oldContent={f.old_content || ''}
+                                      newContent={f.new_content || ''}
+                                      fileName={f.path}
+                                    />
+                                  </div>
+                                ) : (
+                                  f.diff_text && (
+                                    <pre
+                                      style={{
+                                        margin: 0,
+                                        padding: '8px 10px',
+                                        fontSize: '11.5px',
+                                        background: '#0d1117',
+                                        color: '#f8fafc',
+                                        overflowX: 'auto',
+                                        fontFamily: 'var(--font-mono)'
+                                      }}
+                                    >
+                                      {f.diff_text}
+                                    </pre>
+                                  )
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
                     </div>

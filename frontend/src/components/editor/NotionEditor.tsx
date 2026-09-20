@@ -4,7 +4,9 @@ import { parseFrontmatter } from '../../services/frontmatter';
 import { NotionEditorEngine } from './notion-editor-engine';
 import { API } from '../../services/api';
 import { useWorkspace } from '../../context/WorkspaceContext';
-import { useEditorGitWatcher } from '../../hooks/useEditorGitWatcher';
+import { VisualMarkdownDiff } from './VisualMarkdownDiff';
+import { DocumentHistoryDrawer } from './DocumentHistoryDrawer';
+import type { GitCommitInfo, DocumentMetadataItem } from '../../types';
 
 interface NotionEditorProps {
   content: string;
@@ -28,11 +30,18 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
   onOpenScaffoldWizard,
   onSendSelectionToCopilot
 }) => {
-  const { originalContent, refreshPendingChanges } = useWorkspace();
-  const [isAuditMode, setIsAuditMode] = useState(false);
+  const { originalContent, refreshPendingChanges, refreshGitStatus, activeRepo } = useWorkspace();
   const [saveStatus, setSaveStatus] = useState<'Pronto' | 'Salvando...' | 'Salvo no workspace'>('Pronto');
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [importText, setImportText] = useState('');
+
+  // Git Mode, Visual Diff & Document History Drawer State
+  const [isGitMode, setIsGitMode] = useState(false);
+  const [isHistoryDrawerOpen, setIsHistoryDrawerOpen] = useState(false);
+  const [selectedCommit, setSelectedCommit] = useState<GitCommitInfo | null>(null);
+  const [historicalContent, setHistoricalContent] = useState<string>('');
+  const [blameData, setBlameData] = useState<any[]>([]);
+  const [docMetadata, setDocMetadata] = useState<DocumentMetadataItem | null>(null);
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<NotionEditorEngine | null>(null);
@@ -41,38 +50,72 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
   const parsed = parseFrontmatter(content || '');
   const body = parsed.body || content || '';
 
-  // High-performance watcher for real-time Git diffs and debounced background sync
-  const {
-    liveDiff,
-    isDirty,
-    isSyncing,
-    flushSync
-  } = useEditorGitWatcher({
-    filePath,
-    content: body,
-    originalContent: originalContent || '',
-    debounceMs: 700,
-  });
+  // Load document metadata and blame when file changes or git mode is opened
+  useEffect(() => {
+    if (!filePath) return;
 
+    // Load metadata
+    API.getProjectMetadata(activeRepo?.name).then(res => {
+      if (res.ok && Array.isArray(res.data)) {
+        const found = res.data.find(d => d.path === filePath || d.path.replace(/^\/+/, '') === filePath.replace(/^\/+/, ''));
+        if (found) setDocMetadata(found);
+      }
+    }).catch(() => {});
+
+    // Reset commit selection when switching file
+    setSelectedCommit(null);
+    setHistoricalContent('');
+  }, [filePath, activeRepo]);
+
+  // Load Blame info when entering Git / Audit Mode
+  useEffect(() => {
+    if (isGitMode && filePath) {
+      API.getFileBlame(filePath).then(res => {
+        if (res.ok && res.data?.blame) {
+          setBlameData(res.data.blame);
+        }
+      }).catch(() => {});
+    }
+  }, [isGitMode, filePath]);
+
+  // Load Historical Content when selecting a past commit
+  useEffect(() => {
+    if (!selectedCommit || !filePath) {
+      setHistoricalContent('');
+      return;
+    }
+
+    API.getFileVersion(filePath, selectedCommit.hash).then(res => {
+      if (res.ok && res.data?.success) {
+        setHistoricalContent(res.data.content);
+      }
+    }).catch(err => {
+      console.error('[NotionEditor] Erro ao carregar versão do commit:', err);
+    });
+  }, [selectedCommit, filePath]);
+
+  // Save document and re-sync Git status strictly on save event
   const handleSave = useCallback(async () => {
     if (!filePath) return;
     setSaveStatus('Salvando...');
     try {
       const currentBody = engineRef.current ? engineRef.current.getMarkdown() : body;
-      await flushSync();
       await API.saveProjectFile({ path: filePath, content: currentBody });
-      await refreshPendingChanges();
+      await Promise.all([
+        refreshPendingChanges(),
+        refreshGitStatus()
+      ]);
       setSaveStatus('Salvo no workspace');
       setTimeout(() => setSaveStatus('Pronto'), 2500);
     } catch (e) {
       console.error('Erro ao salvar documento:', e);
       setSaveStatus('Pronto');
     }
-  }, [filePath, body, flushSync, refreshPendingChanges]);
+  }, [filePath, body, refreshPendingChanges, refreshGitStatus]);
 
   // Initialize & Mount NotionEditorEngine
   useEffect(() => {
-    if (!canvasRef.current) return;
+    if (!canvasRef.current || isGitMode) return;
 
     const engine = new NotionEditorEngine({
       canvasElement: canvasRef.current,
@@ -99,7 +142,7 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
       engine.destroy();
       engineRef.current = null;
     };
-  }, []);
+  }, [isGitMode]);
 
   // Sync external content changes into the editor canvas
   useEffect(() => {
@@ -150,20 +193,6 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
     URL.revokeObjectURL(url);
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const text = event.target?.result as string;
-      if (text) {
-        onChange(text);
-        setIsImportModalOpen(false);
-      }
-    };
-    reader.readAsText(file);
-  };
-
   const handleConfirmPasteImport = () => {
     if (importText.trim()) {
       onChange(importText);
@@ -172,8 +201,21 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
     }
   };
 
+  const handleRestoreHistoricalVersion = async () => {
+    if (!historicalContent) return;
+    if (window.confirm(`Deseja restaurar o documento para o commit ${selectedCommit?.shortHash || 'selecionado'}?`)) {
+      onChange(historicalContent);
+      setIsGitMode(false);
+      setSelectedCommit(null);
+      await API.saveProjectFile({ path: filePath!, content: historicalContent });
+      await refreshPendingChanges();
+      await refreshGitStatus();
+    }
+  };
+
   const wordCount = body.trim() ? body.trim().split(/\s+/).length : 0;
   const lineCount = body ? body.split(/\r?\n/).length : 0;
+  const isDirty = originalContent !== body;
 
   if (!filePath) {
     return (
@@ -217,211 +259,229 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
     );
   }
 
+  const comparisonOldContent = selectedCommit ? historicalContent : (originalContent || '');
+  const comparisonOldTitle = selectedCommit 
+    ? `Commit ${selectedCommit.shortHash} (${selectedCommit.author})` 
+    : 'Versão Base (HEAD)';
+
   return (
-    <>
-      {/* 1. Document Header & Toolbar (Exact Original Layout with SVG Icons) */}
-      <div className="editor-top-toolbar">
-        <div className="doc-meta-left">
-          <div className="doc-breadcrumbs">
-            <input
-              type="text"
-              id="doc-path-input"
-              className="doc-path-input"
-              value={filePath || ''}
-              readOnly
-              placeholder="Selecione ou crie um documento..."
-              spellCheck="false"
-              title="Caminho do documento no workspace"
-            />
-            <button
-              id="btn-copy-doc-path"
-              className="btn-icon-subtle"
-              type="button"
-              title="Copiar caminho do arquivo"
-              onClick={handleCopyPath}
-            >
-              <svg width="12.5" height="12.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-              </svg>
-            </button>
-          </div>
-        </div>
-
-        <div className="editor-actions-right">
-          <div className="doc-icon-actions">
-            <button
-              id="btn-copy-doc-full"
-              className="btn-icon-action"
-              type="button"
-              title="Copiar Markdown completo"
-              onClick={handleCopyFullDoc}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-              </svg>
-            </button>
-            <button
-              id="btn-export-md-file"
-              className="btn-icon-action"
-              type="button"
-              title="Exportar arquivo .md"
-              onClick={handleExportMarkdown}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                <polyline points="7 10 12 15 17 10"></polyline>
-                <line x1="12" y1="15" x2="12" y2="3"></line>
-              </svg>
-            </button>
-            <button
-              id="btn-import-doc"
-              className="btn-icon-action"
-              type="button"
-              title="Importar documento (.md ou colar)"
-              onClick={() => setIsImportModalOpen(true)}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                <polyline points="17 8 12 3 7 8"></polyline>
-                <line x1="12" y1="3" x2="12" y2="15"></line>
-              </svg>
-            </button>
+    <div style={{ display: 'flex', width: '100%', height: '100%', overflow: 'hidden' }}>
+      
+      {/* Center Main Editor / Git Visual Diff Canvas */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', minWidth: 0 }}>
+        
+        {/* 1. Document Header & Toolbar */}
+        <div className="editor-top-toolbar">
+          <div className="doc-meta-left">
+            <div className="doc-breadcrumbs">
+              <input
+                type="text"
+                id="doc-path-input"
+                className="doc-path-input"
+                value={filePath || ''}
+                readOnly
+                placeholder="Selecione ou crie um documento..."
+                spellCheck="false"
+                title="Caminho do documento no workspace"
+              />
+              <button
+                id="btn-copy-doc-path"
+                className="btn-icon-subtle"
+                type="button"
+                title="Copiar caminho do arquivo"
+                onClick={handleCopyPath}
+              >
+                <svg width="12.5" height="12.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+              </button>
+            </div>
           </div>
 
-          <div className="toolbar-divider"></div>
+          <div className="editor-actions-right">
+            <div className="doc-icon-actions">
+              <button
+                id="btn-copy-doc-full"
+                className="btn-icon-action"
+                type="button"
+                title="Copiar Markdown completo"
+                onClick={handleCopyFullDoc}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+              </button>
+              <button
+                id="btn-export-md-file"
+                className="btn-icon-action"
+                type="button"
+                title="Exportar arquivo .md"
+                onClick={handleExportMarkdown}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="7 10 12 15 17 10"></polyline>
+                  <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
+              </button>
+              <button
+                id="btn-import-doc"
+                className="btn-icon-action"
+                type="button"
+                title="Importar documento (.md ou colar)"
+                onClick={() => setIsImportModalOpen(true)}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="17 8 12 3 7 8"></polyline>
+                  <line x1="12" y1="3" x2="12" y2="15"></line>
+                </svg>
+              </button>
+            </div>
 
-          {/* Live Diff Pill Indicator */}
-          {liveDiff.hasChanges && (
+            <div className="toolbar-divider"></div>
+
+            {/* Alternador de Modo Git & Versões ("Olhinho" / Diffs) */}
             <button
+              id="btn-toggle-git-mode"
+              className={`btn-icon-action ${isGitMode ? 'active' : ''}`}
               type="button"
-              className="badge"
+              title={isGitMode ? 'Voltar para Modo de Edição' : 'Modo Git & Auditoria (Ver alterações formatadas, quem editou e versões)'}
               style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '5px',
-                padding: '4px 8px',
-                cursor: onOpenDiffModal ? 'pointer' : 'default',
-                borderRadius: '6px',
-                border: '1px solid #bfdbfe',
-                background: '#eff6ff',
-                fontSize: '11.5px',
-                fontFamily: 'var(--font-mono)'
+                color: isGitMode ? '#ffffff' : 'var(--primary, #2563eb)',
+                background: isGitMode ? 'var(--primary, #2563eb)' : '#eff6ff',
+                borderColor: '#bfdbfe'
               }}
-              onClick={onOpenDiffModal}
-              title="Modificações detectadas neste documento (Clique para ver Diffs / Propor PR)"
+              onClick={() => {
+                const nextMode = !isGitMode;
+                setIsGitMode(nextMode);
+                if (nextMode) setIsHistoryDrawerOpen(true);
+              }}
             >
-              <span className="material-symbols-outlined" style={{ fontSize: '14px', color: 'var(--primary, #2563eb)' }}>
-                difference
-              </span>
-              {liveDiff.additions > 0 && (
-                <span style={{ color: '#16a34a', fontWeight: 700 }}>+{liveDiff.additions}</span>
-              )}
-              {liveDiff.deletions > 0 && (
-                <span style={{ color: '#dc2626', fontWeight: 700 }}>-{liveDiff.deletions}</span>
-              )}
+              <span className="material-symbols-outlined icon-xs">visibility</span>
             </button>
-          )}
 
-          {/* Botão Salvar (Ícone Disquete) */}
-          <button
-            id="btn-save-draft"
-            className="btn-icon-action"
-            type="button"
-            title="Salvar no workspace (Ctrl+S)"
-            style={{
-              color: 'var(--primary, #2563eb)',
-              borderColor: '#bfdbfe',
-              background: '#eff6ff'
-            }}
-            onClick={handleSave}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
-              <polyline points="17 21 17 13 7 13 7 21"></polyline>
-              <polyline points="7 3 7 8 15 8"></polyline>
-            </svg>
-          </button>
-
-          {/* Botão Diffs & PR (Ícone Git PR) */}
-          {onOpenDiffModal && (
+            {/* Botão Gaveta de Histórico */}
             <button
-              id="btn-review-diff-direct"
-              className="btn-icon-action"
+              id="btn-toggle-history-drawer"
+              className={`btn-icon-action ${isHistoryDrawerOpen ? 'active' : ''}`}
               type="button"
-              title="Revisar alterações e propor PR"
-              onClick={onOpenDiffModal}
+              title="Linha do Tempo de Commits & Versões deste documento"
+              onClick={() => setIsHistoryDrawerOpen(!isHistoryDrawerOpen)}
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="18" cy="18" r="3"></circle>
-                <circle cx="6" cy="6" r="3"></circle>
-                <path d="M13 6h3a2 2 0 0 1 2 2v7"></path>
-                <line x1="6" y1="9" x2="6" y2="21"></line>
-              </svg>
+              <span className="material-symbols-outlined icon-xs">history</span>
             </button>
-          )}
 
-          {/* Botão Modo Auditoria */}
-          <button
-            id="btn-toggle-audit-mode"
-            className={`btn-icon-action ${isAuditMode ? 'active' : ''}`}
-            type="button"
-            title="Modo Auditoria & GitLens (Ver autor e aprovador de cada seção)"
-            onClick={() => setIsAuditMode(!isAuditMode)}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path>
-              <circle cx="12" cy="12" r="3"></circle>
-            </svg>
-          </button>
+            {/* Botão Salvar (Ícone Disquete) */}
+            {!isGitMode && (
+              <button
+                id="btn-save-draft"
+                className="btn-icon-action"
+                type="button"
+                title="Salvar no workspace e atualizar Git (Ctrl+S)"
+                style={{
+                  color: 'var(--primary, #2563eb)',
+                  borderColor: '#bfdbfe',
+                  background: '#eff6ff'
+                }}
+                onClick={handleSave}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                  <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                  <polyline points="7 3 7 8 15 8"></polyline>
+                </svg>
+              </button>
+            )}
+
+            {/* Botão Central de Diffs & PR */}
+            {onOpenDiffModal && (
+              <button
+                id="btn-review-diff-direct"
+                className="btn-icon-action"
+                type="button"
+                title="Revisar alterações e propor PR Oficial"
+                onClick={onOpenDiffModal}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="18" cy="18" r="3"></circle>
+                  <circle cx="6" cy="6" r="3"></circle>
+                  <path d="M13 6h3a2 2 0 0 1 2 2v7"></path>
+                  <line x1="6" y1="9" x2="6" y2="21"></line>
+                </svg>
+              </button>
+            )}
+          </div>
         </div>
-      </div>
 
-      {/* 2. Notion-like Canvas Body */}
-      <div className="notion-editor-wrapper" id="notion-editor-wrapper">
-        <div className="notion-editor-scroll-container">
-          <div
-            ref={canvasRef}
-            id="notion-editor-canvas"
-            className="notion-canvas"
-          />
-        </div>
-      </div>
+        {/* 2. Body: Either Visual Markdown Diff (Git Mode) or Notion Live Editor */}
+        {isGitMode ? (
+          <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            <VisualMarkdownDiff
+              oldContent={comparisonOldContent}
+              newContent={body}
+              oldTitle={comparisonOldTitle}
+              newTitle="Versão Atual (Working Copy)"
+              fileName={filePath || undefined}
+              blameData={blameData}
+              showAuthorship={true}
+              onRestoreOldVersion={selectedCommit ? handleRestoreHistoricalVersion : undefined}
+              onClose={() => setIsGitMode(false)}
+            />
+          </div>
+        ) : (
+          <div className="notion-editor-wrapper" id="notion-editor-wrapper">
+            <div className="notion-editor-scroll-container">
+              <div
+                ref={canvasRef}
+                id="notion-editor-canvas"
+                className="notion-canvas"
+              />
+            </div>
+          </div>
+        )}
 
-      {/* 5. Editor Status Footer */}
-      <footer className="editor-bottom-bar">
-        <div className="editor-status-left" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span id="save-draft-status" className="status-indicator">
-            {isSyncing ? 'Sincronizando Git...' : isDirty ? 'Modificado (ao vivo)' : saveStatus}
-          </span>
-          {isDirty && (
-            <span
-              className="badge badge-neutral"
-              style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', padding: '1px 5px' }}
-            >
-              +{liveDiff.additions} / -{liveDiff.deletions}
+        {/* 3. Editor Status Footer */}
+        <footer className="editor-bottom-bar">
+          <div className="editor-status-left" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span id="save-draft-status" className="status-indicator">
+              {isGitMode ? 'Modo Git & Auditoria Ativo' : isDirty ? 'Modificações não salvas' : saveStatus}
             </span>
-          )}
-          <span className="status-divider">&bull;</span>
-          <span id="doc-word-count">{wordCount} palavras</span>
-          <span className="status-divider">&bull;</span>
-          <span id="doc-line-count">{lineCount} linhas</span>
-        </div>
-        <div className="editor-status-right">
-          <span style={{ fontSize: '11px', color: 'var(--text-dim)' }}>
-            Atalho: <code>Ctrl+S</code> / <code>Cmd+S</code>
-          </span>
-          <button
-            id="btn-reload-doc"
-            className="btn-icon-subtle"
-            title="Recarregar do disco"
-            onClick={onReload}
-          >
-            <span className="material-symbols-outlined icon-xs">refresh</span>
-          </button>
-        </div>
-      </footer>
+            <span className="status-divider">&bull;</span>
+            <span id="doc-word-count">{wordCount} palavras</span>
+            <span className="status-divider">&bull;</span>
+            <span id="doc-line-count">{lineCount} linhas</span>
+          </div>
+          <div className="editor-status-right">
+            <span style={{ fontSize: '11px', color: 'var(--text-dim)' }}>
+              Atalho: <code>Ctrl+S</code> / <code>Cmd+S</code>
+            </span>
+            <button
+              id="btn-reload-doc"
+              className="btn-icon-subtle"
+              title="Recarregar do disco"
+              onClick={onReload}
+            >
+              <span className="material-symbols-outlined icon-xs">refresh</span>
+            </button>
+          </div>
+        </footer>
+      </div>
+
+      {/* Right Drawer: Document History Timeline & Governance */}
+      <DocumentHistoryDrawer
+        isOpen={isHistoryDrawerOpen}
+        onClose={() => setIsHistoryDrawerOpen(false)}
+        filePath={filePath}
+        selectedCommitHash={selectedCommit ? selectedCommit.hash : null}
+        onSelectCommit={(commit) => {
+          setSelectedCommit(commit);
+          setIsGitMode(true);
+        }}
+        documentMeta={docMetadata}
+      />
 
       {/* Import Doc Modal */}
       {isImportModalOpen && (
@@ -437,53 +497,26 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
               </button>
             </div>
             <div className="modal-body" style={{ padding: '18px 22px', gap: '14px' }}>
-              <div className="import-dropzone" id="import-dropzone">
-                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                  <polyline points="17 8 12 3 7 8"></polyline>
-                  <line x1="12" y1="3" x2="12" y2="15"></line>
-                </svg>
-                <div style={{ marginTop: '8px', fontSize: '13px', fontWeight: 500, color: '#334155' }}>
-                  Arraste um arquivo <code style={{ fontSize: '11.5px', background: '#f1f5f9', padding: '2px 5px', borderRadius: '4px' }}>.md</code> aqui ou{' '}
-                  <label htmlFor="import-file-input" style={{ color: 'var(--primary, #2563eb)', textDecoration: 'underline', cursor: 'pointer' }}>
-                    clique para selecionar
-                  </label>
-                </div>
-                <input
-                  type="file"
-                  id="import-file-input"
-                  accept=".md,.markdown,.txt"
-                  style={{ display: 'none' }}
-                  onChange={handleFileUpload}
+              <div className="import-paste-box">
+                <textarea
+                  id="import-paste-textarea"
+                  rows={8}
+                  placeholder="Ou cole seu texto Markdown aqui diretamente..."
+                  value={importText}
+                  onChange={(e) => setImportText(e.target.value)}
+                  style={{ width: '100%', fontFamily: 'var(--font-mono)' }}
                 />
               </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#94a3b8', fontSize: '11px', fontWeight: 600 }}>
-                <div style={{ flex: 1, height: '1px', background: '#e2e8f0' }}></div>
-                <span>OU COLE O CONTEÚDO MARKDOWN</span>
-                <div style={{ flex: 1, height: '1px', background: '#e2e8f0' }}></div>
-              </div>
-
-              <textarea
-                id="import-paste-textarea"
-                className="import-paste-textarea"
-                placeholder="Cole aqui o conteúdo Markdown com ou sem metadados YAML..."
-                spellCheck="false"
-                value={importText}
-                onChange={e => setImportText(e.target.value)}
-              />
             </div>
-            <div className="modal-footer" style={{ padding: '12px 22px' }}>
-              <button id="btn-cancel-import" className="btn btn-ghost btn-sm" type="button" onClick={() => setIsImportModalOpen(false)}>
-                Cancelar
-              </button>
-              <button id="btn-confirm-import" className="btn btn-primary btn-sm" type="button" onClick={handleConfirmPasteImport}>
-                Importar para o Editor
+            <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+              <button className="btn btn-secondary btn-sm" onClick={() => setIsImportModalOpen(false)}>Cancelar</button>
+              <button className="btn btn-primary btn-sm" onClick={handleConfirmPasteImport} disabled={!importText.trim()}>
+                Importar
               </button>
             </div>
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 };
