@@ -86,7 +86,46 @@ export async function gitRoutes(app: FastifyInstance) {
     }
   });
 
-  // 8. Get Git Diagnostic / Version
+  // 8. Get Specific File History (Commits)
+  app.get('/api/git/file-history', async (req, reply) => {
+    try {
+      const { path, limit } = req.query as { path: string; limit?: string };
+      if (!path) {
+        return reply.status(400).send({ error: 'Caminho do arquivo é obrigatório' });
+      }
+      const res = await gitService.getFileHistory(path, limit ? parseInt(limit, 10) : 30);
+      return res;
+    } catch (err: any) {
+      return reply.status(500).send({ error: err.message || 'Erro ao obter histórico do arquivo' });
+    }
+  });
+
+  // 9. Get Specific File Content at Historical Commit
+  app.get('/api/git/file-version', async (req, reply) => {
+    try {
+      const { path, hash } = req.query as { path: string; hash: string };
+      if (!path || !hash) {
+        return reply.status(400).send({ error: 'Parâmetros path e hash são obrigatórios' });
+      }
+      const res = await gitService.getFileVersion(path, hash);
+      return res;
+    } catch (err: any) {
+      return reply.status(500).send({ error: err.message || 'Erro ao obter versão do arquivo' });
+    }
+  });
+
+  // 10. Get File / Working Tree Diff
+  app.get('/api/git/diff', async (req, reply) => {
+    try {
+      const { path } = req.query as { path?: string };
+      const data = await gitService.getDiff(path);
+      return data;
+    } catch (err: any) {
+      return reply.status(500).send({ error: err.message || 'Erro ao obter diff do Git' });
+    }
+  });
+
+  // 11. Get Git Diagnostic / Version
   app.get('/api/git/diagnostic', async (req, reply) => {
     try {
       const res = await gitService.getGitVersion();

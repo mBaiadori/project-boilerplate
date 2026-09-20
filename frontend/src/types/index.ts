@@ -45,6 +45,8 @@ export interface WorkspaceChange {
   type?: 'MODIFIED' | 'ADDED' | 'DELETED';
   guardrail?: string;
   diff?: string;
+  diff_text?: string;
+  timestamp?: string;
 }
 
 export interface TreeNode {
@@ -56,6 +58,24 @@ export interface TreeNode {
   status?: string;
   badge?: string;
   desc?: string;
+}
+
+export interface DocumentMetadataItem {
+  id: string;
+  name: string;
+  title?: string;
+  ext: string;
+  path: string;
+  status: string;
+  category: string;
+  layer: string;
+  badge: string;
+  tags: string[];
+  updated_at: string;
+  approvers: string[];
+  links: string[];
+  templateId: string;
+  [key: string]: any;
 }
 
 export interface PR {

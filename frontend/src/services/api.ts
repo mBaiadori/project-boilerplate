@@ -2,7 +2,7 @@
 import type { 
   WorkspaceStatus, Repo, WorkspaceChange, TreeNode, 
   PR, TemplateItem, TutorialItem, AISettingsState, DictionaryTerm, User,
-  GitStatus, GitCommitInfo
+  GitStatus, GitCommitInfo, DocumentMetadataItem
 } from '../types';
 
 export interface ApiResponse<T = any> {
@@ -93,6 +93,11 @@ export const API = {
   async getProjectTree(): Promise<{ repo: Repo; tree: TreeNode[] }> {
     const res = await fetch('/api/project/tree');
     return res.json();
+  },
+
+  async getProjectMetadata(repo?: string): Promise<ApiResponse<DocumentMetadataItem[]>> {
+    const res = await fetch(`/api/project/metadata${repo ? `?repo=${encodeURIComponent(repo)}` : ''}`);
+    return { ok: res.ok, data: await res.json() };
   },
 
   async getDocumentContext(path: string): Promise<any> {
@@ -436,6 +441,16 @@ export const API = {
     return { ok: res.ok, data: await res.json() };
   },
 
+  async getFileGitHistory(path: string, limit = 30): Promise<ApiResponse<{ repo_name: string; file_path: string; commits: GitCommitInfo[] }>> {
+    const res = await fetch(`/api/git/file-history?path=${encodeURIComponent(path)}&limit=${limit}`);
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async getFileVersion(path: string, hash: string): Promise<ApiResponse<{ success: boolean; content: string; error?: string }>> {
+    const res = await fetch(`/api/git/file-version?path=${encodeURIComponent(path)}&hash=${encodeURIComponent(hash)}`);
+    return { ok: res.ok, data: await res.json() };
+  },
+
   // Git Core Management
   async getGitStatus(): Promise<ApiResponse<GitStatus>> {
     const res = await fetch('/api/git/status');
@@ -476,6 +491,12 @@ export const API = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ branch })
     });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async getGitDiff(path?: string): Promise<ApiResponse<{ diff: string }>> {
+    const url = path ? `/api/git/diff?path=${encodeURIComponent(path)}` : '/api/git/diff';
+    const res = await fetch(url);
     return { ok: res.ok, data: await res.json() };
   },
 

@@ -1,13 +1,10 @@
-// =============================================================================
-// COMPONENT: NOTION-LIKE LIVE INTERACTIVE MARKDOWN EDITOR (PRO NOTION UX)
-// Exact DOM layout, SVG toolbar icons, connectivity pills, and metadata inspector
-// =============================================================================
-
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { FileText, Plus, Sparkles } from 'lucide-react';
 import { parseFrontmatter } from '../../services/frontmatter';
 import { NotionEditorEngine } from './notion-editor-engine';
 import { API } from '../../services/api';
+import { useWorkspace } from '../../context/WorkspaceContext';
+import { useEditorGitWatcher } from '../../hooks/useEditorGitWatcher';
 
 interface NotionEditorProps {
   content: string;
@@ -31,6 +28,7 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
   onOpenScaffoldWizard,
   onSendSelectionToCopilot
 }) => {
+  const { originalContent, refreshPendingChanges } = useWorkspace();
   const [isAuditMode, setIsAuditMode] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'Pronto' | 'Salvando...' | 'Salvo no workspace'>('Pronto');
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
@@ -43,19 +41,34 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
   const parsed = parseFrontmatter(content || '');
   const body = parsed.body || content || '';
 
+  // High-performance watcher for real-time Git diffs and debounced background sync
+  const {
+    liveDiff,
+    isDirty,
+    isSyncing,
+    flushSync
+  } = useEditorGitWatcher({
+    filePath,
+    content: body,
+    originalContent: originalContent || '',
+    debounceMs: 700,
+  });
+
   const handleSave = useCallback(async () => {
     if (!filePath) return;
     setSaveStatus('Salvando...');
     try {
       const currentBody = engineRef.current ? engineRef.current.getMarkdown() : body;
+      await flushSync();
       await API.saveProjectFile({ path: filePath, content: currentBody });
+      await refreshPendingChanges();
       setSaveStatus('Salvo no workspace');
       setTimeout(() => setSaveStatus('Pronto'), 2500);
     } catch (e) {
       console.error('Erro ao salvar documento:', e);
       setSaveStatus('Pronto');
     }
-  }, [filePath, body]);
+  }, [filePath, body, flushSync, refreshPendingChanges]);
 
   // Initialize & Mount NotionEditorEngine
   useEffect(() => {
@@ -279,6 +292,38 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
 
           <div className="toolbar-divider"></div>
 
+          {/* Live Diff Pill Indicator */}
+          {liveDiff.hasChanges && (
+            <button
+              type="button"
+              className="badge"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                padding: '4px 8px',
+                cursor: onOpenDiffModal ? 'pointer' : 'default',
+                borderRadius: '6px',
+                border: '1px solid #bfdbfe',
+                background: '#eff6ff',
+                fontSize: '11.5px',
+                fontFamily: 'var(--font-mono)'
+              }}
+              onClick={onOpenDiffModal}
+              title="Modificações detectadas neste documento (Clique para ver Diffs / Propor PR)"
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: '14px', color: 'var(--primary, #2563eb)' }}>
+                difference
+              </span>
+              {liveDiff.additions > 0 && (
+                <span style={{ color: '#16a34a', fontWeight: 700 }}>+{liveDiff.additions}</span>
+              )}
+              {liveDiff.deletions > 0 && (
+                <span style={{ color: '#dc2626', fontWeight: 700 }}>-{liveDiff.deletions}</span>
+              )}
+            </button>
+          )}
+
           {/* Botão Salvar (Ícone Disquete) */}
           <button
             id="btn-save-draft"
@@ -346,8 +391,18 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
 
       {/* 5. Editor Status Footer */}
       <footer className="editor-bottom-bar">
-        <div className="editor-status-left">
-          <span id="save-draft-status" className="status-indicator">{saveStatus}</span>
+        <div className="editor-status-left" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span id="save-draft-status" className="status-indicator">
+            {isSyncing ? 'Sincronizando Git...' : isDirty ? 'Modificado (ao vivo)' : saveStatus}
+          </span>
+          {isDirty && (
+            <span
+              className="badge badge-neutral"
+              style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', padding: '1px 5px' }}
+            >
+              +{liveDiff.additions} / -{liveDiff.deletions}
+            </span>
+          )}
           <span className="status-divider">&bull;</span>
           <span id="doc-word-count">{wordCount} palavras</span>
           <span className="status-divider">&bull;</span>

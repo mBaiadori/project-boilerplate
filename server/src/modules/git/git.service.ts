@@ -10,6 +10,10 @@ import {
   createAndCheckoutBranch,
   syncGit,
   getGitBlame,
+  getGitDiff,
+  getFileGitLog,
+  getFileContentAtCommit,
+  getFileBlameDetails,
   executeGitCommand,
 } from '../../utils/git.js';
 
@@ -43,6 +47,14 @@ export class GitService {
     };
   }
 
+  async getDiff(filePath?: string) {
+    await this.ensureActiveRepoGit();
+    const cfg = loadConfig();
+    const repoName = cfg.active_repo?.name || 'local';
+    const repoDir = this.getRepoDir(repoName);
+    return await getGitDiff(repoDir, filePath);
+  }
+
   async getLog(limit: number = 20) {
     await this.ensureActiveRepoGit();
     const cfg = loadConfig();
@@ -54,6 +66,28 @@ export class GitService {
       repo_name: repoName,
       commits,
     };
+  }
+
+  async getFileHistory(filePath: string, limit: number = 30) {
+    await this.ensureActiveRepoGit();
+    const cfg = loadConfig();
+    const repoName = cfg.active_repo?.name || 'local';
+    const repoDir = this.getRepoDir(repoName);
+    const commits = await getFileGitLog(repoDir, filePath, limit);
+
+    return {
+      repo_name: repoName,
+      file_path: filePath,
+      commits,
+    };
+  }
+
+  async getFileVersion(filePath: string, commitHash: string) {
+    await this.ensureActiveRepoGit();
+    const cfg = loadConfig();
+    const repoName = cfg.active_repo?.name || 'local';
+    const repoDir = this.getRepoDir(repoName);
+    return await getFileContentAtCommit(repoDir, filePath, commitHash);
   }
 
   async getBranches() {
@@ -94,7 +128,7 @@ export class GitService {
     const cfg = loadConfig();
     const repoName = cfg.active_repo?.name || 'local';
     const repoDir = this.getRepoDir(repoName);
-    return await getGitBlame(repoDir, filePath);
+    return await getFileBlameDetails(repoDir, filePath);
   }
 
   async getGitVersion() {

@@ -23,6 +23,7 @@ interface WorkspaceContextType {
   tree: TreeNode[];
   activeFile: string;
   fileContent: string;
+  originalContent: string;
   fileMetadata: Record<string, any>;
   pendingChanges: WorkspaceChange[];
   guardrailStatus: string;
@@ -306,6 +307,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         tree,
         activeFile,
         fileContent,
+        originalContent,
         fileMetadata,
         pendingChanges,
         guardrailStatus,

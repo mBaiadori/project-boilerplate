@@ -417,3 +417,144 @@ export async function getGitBlame(repoDir: string, filePath: string): Promise<an
     raw: blameRes.stdout,
   };
 }
+
+export async function getGitDiff(
+  repoDir: string,
+  filePath?: string
+): Promise<{ diff: string }> {
+  const isRepo = await isGitRepo(repoDir);
+  if (!isRepo) return { diff: '' };
+
+  const cleanPath = filePath ? filePath.trim().replace(/^\/+/, '') : '';
+  const pathArg = cleanPath ? ` -- "${cleanPath}"` : '';
+
+  // 1. Try git diff HEAD (covers both staged and unstaged modifications against last commit)
+  let diffRes = await executeGitCommand(`git diff HEAD${pathArg}`, repoDir);
+  if (diffRes.success && diffRes.stdout) {
+    return { diff: diffRes.stdout };
+  }
+
+  // 2. Try working tree diff
+  diffRes = await executeGitCommand(`git diff${pathArg}`, repoDir);
+  if (diffRes.success && diffRes.stdout) {
+    return { diff: diffRes.stdout };
+  }
+
+  // 3. Try cached/staged diff
+  diffRes = await executeGitCommand(`git diff --cached${pathArg}`, repoDir);
+  if (diffRes.success && diffRes.stdout) {
+    return { diff: diffRes.stdout };
+  }
+
+  // 4. If filePath is untracked, read the file content and format as added lines
+  if (cleanPath) {
+    const fullPath = path.join(repoDir, cleanPath);
+    if (fs.existsSync(fullPath) && !fs.statSync(fullPath).isDirectory()) {
+      try {
+        const content = fs.readFileSync(fullPath, 'utf-8');
+        const lines = content.split('\n');
+        const diffHeader = `--- /dev/null\n+++ b/${cleanPath}\n@@ -0,0 +1,${lines.length} @@\n`;
+        const diffBody = lines.map((line) => `+${line}`).join('\n');
+        return { diff: diffHeader + diffBody };
+      } catch {}
+    }
+  }
+
+  return { diff: '' };
+}
+
+export async function getFileGitLog(
+  repoDir: string,
+  filePath: string,
+  limit: number = 30
+): Promise<GitCommitInfo[]> {
+  const isRepo = await isGitRepo(repoDir);
+  if (!isRepo) return [];
+
+  const cleanPath = filePath.trim().replace(/^\/+/, '');
+  const format = '%H|%h|%an|%ad|%s';
+  const logRes = await executeGitCommand(
+    `git log -n ${limit} --follow --date=short --pretty=format:"${format}" -- "${cleanPath}"`,
+    repoDir
+  );
+
+  if (!logRes.success || !logRes.stdout) return [];
+
+  const lines = logRes.stdout.split('\n').filter(Boolean);
+  return lines.map((line) => {
+    const [hash, shortHash, author, date, ...msgParts] = line.split('|');
+    return {
+      hash: hash || '',
+      shortHash: shortHash || '',
+      author: author || 'Desconhecido',
+      date: date || '',
+      message: msgParts.join('|') || '',
+    };
+  });
+}
+
+export async function getFileContentAtCommit(
+  repoDir: string,
+  filePath: string,
+  commitHash: string
+): Promise<{ success: boolean; content: string; error?: string }> {
+  const isRepo = await isGitRepo(repoDir);
+  if (!isRepo) return { success: false, content: '', error: 'Repositório não encontrado' };
+
+  const cleanPath = filePath.trim().replace(/^\/+/, '');
+  const cleanHash = commitHash.trim();
+
+  const showRes = await executeGitCommand(
+    `git show ${cleanHash}:"${cleanPath}"`,
+    repoDir
+  );
+
+  if (!showRes.success) {
+    return { success: false, content: '', error: showRes.stderr || 'Versão não encontrada' };
+  }
+
+  return { success: true, content: showRes.stdout };
+}
+
+export async function getFileBlameDetails(
+  repoDir: string,
+  filePath: string
+): Promise<{ success: boolean; blame: Array<{ line: number; author: string; date: string; commit: string; content: string }> }> {
+  const isRepo = await isGitRepo(repoDir);
+  if (!isRepo) return { success: false, blame: [] };
+
+  const cleanPath = filePath.trim().replace(/^\/+/, '');
+  const blameRes = await executeGitCommand(`git blame --date=short -e -l "${cleanPath}"`, repoDir);
+
+  if (!blameRes.success || !blameRes.stdout) {
+    return { success: false, blame: [] };
+  }
+
+  const lines = blameRes.stdout.split('\n').filter(Boolean);
+  const result: Array<{ line: number; author: string; date: string; commit: string; content: string }> = [];
+
+  for (let idx = 0; idx < lines.length; idx++) {
+    const rawLine = lines[idx];
+    // Format: hash (<author-email> date line) content
+    const match = rawLine.match(/^([0-9a-fA-F]+)\s+\(<([^>]+)>\s+([0-9\-]+)\s+(\d+)\)\s?(.*)$/);
+    if (match) {
+      result.push({
+        commit: match[1].slice(0, 7),
+        author: match[2].split('@')[0],
+        date: match[3],
+        line: parseInt(match[4], 10),
+        content: match[5] || '',
+      });
+    } else {
+      result.push({
+        commit: 'HEAD',
+        author: 'Autor',
+        date: '',
+        line: idx + 1,
+        content: rawLine,
+      });
+    }
+  }
+
+  return { success: true, blame: result };
+}

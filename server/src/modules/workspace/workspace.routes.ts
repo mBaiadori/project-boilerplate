@@ -23,6 +23,16 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
     }
   });
 
+  fastify.get('/api/project/metadata', async (request, reply) => {
+    try {
+      const query = request.query as { repo?: string };
+      const repoName = query.repo || '';
+      return reply.send(workspaceService.loadDocsMetadata(repoName));
+    } catch (err: any) {
+      return reply.status(500).send({ error: err.message });
+    }
+  });
+
   fastify.post('/api/workspace/save', async (request, reply) => {
     const body = request.body as { path?: string; content?: string; meta?: any };
     if (!body.path) {

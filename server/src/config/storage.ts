@@ -291,7 +291,7 @@ export function ensureDefaultRepoFiles(repoName: string): void {
     };
     fs.writeFileSync(path.join(defaultDir, '.project.config.json'), JSON.stringify(defaultCfg, null, 2), 'utf-8');
     fs.writeFileSync(path.join(defaultDir, '.dictionary.json'), JSON.stringify({ version: '1.0.0', terms: [], domains: [] }, null, 2), 'utf-8');
-    fs.writeFileSync(path.join(defaultDir, '.docs.metadata.json'), JSON.stringify({ version: '1.0.0', updated_at: new Date().toISOString(), documents: {} }, null, 2), 'utf-8');
+    fs.writeFileSync(path.join(defaultDir, '.docs.metadata.json'), JSON.stringify([], null, 2), 'utf-8');
     fs.writeFileSync(path.join(defaultDir, '.spec-memory', '_meta.yaml'), 'version: 1.0\ninitialized: true\n', 'utf-8');
   }
 
