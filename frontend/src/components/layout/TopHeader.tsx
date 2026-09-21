@@ -112,18 +112,6 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
         </button>
 
         <button
-          id="btn-open-onboarding-tour"
-          className="btn-dash-tour"
-          type="button"
-          title="Guia Interativo & Tour do Projeto"
-          onClick={onOpenTour}
-        >
-          <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>
-            explore
-          </span>
-        </button>
-
-        <button
           id="btn-open-workspace-diff"
           className="btn btn-warning btn-sm"
           style={{ display: pendingChanges.length > 0 ? 'inline-flex' : 'none' }}
@@ -131,6 +119,20 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
         >
           <span className="dot warning-dot"></span>
           <span id="pending-changes-badge-text">{pendingChanges.length} alterações</span> &bull; Revisar PR
+        </button>
+
+        <button
+          id="btn-open-onboarding-tour"
+          className="btn-dash-tour"
+          type="button"
+          title="Guia Rápido & Funcionalidades do Sistema"
+          onClick={onOpenTour}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+        >
+          <span className="material-symbols-outlined" style={{ fontSize: '17px', color: 'var(--primary, #3b82f6)' }}>
+            explore
+          </span>
+          <span style={{ fontSize: '12px', fontWeight: 600 }}>Guia</span>
         </button>
 
         <button

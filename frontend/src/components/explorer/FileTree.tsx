@@ -77,6 +77,68 @@ export const FileTree: React.FC<FileTreeProps> = ({
     }, 3500);
   };
 
+  // Listen for Spec/Document Reveal in Tree events
+  useEffect(() => {
+    const handleReveal = (e: Event) => {
+      const customEvent = e as CustomEvent<{ path: string }>;
+      const targetPath = customEvent.detail?.path;
+      if (!targetPath) return;
+
+      // 1. Uncollapse tree sidebar if collapsed
+      if (isCollapsed) {
+        onToggleCollapse();
+      }
+
+      // 2. Clear search filter if active to make sure full tree is rendered
+      if (searchTerm) {
+        setSearchTerm('');
+      }
+
+      // 3. Compute all ancestor folder paths
+      const parts = targetPath.split('/');
+      parts.pop(); // remove file name
+      const parentPaths: string[] = [];
+      let currentAcc = '';
+      for (const part of parts) {
+        currentAcc = currentAcc ? `${currentAcc}/${part}` : part;
+        parentPaths.push(currentAcc);
+      }
+
+      // 4. Expand all ancestor folders
+      if (parentPaths.length > 0) {
+        setCollapsedFolders(prev => {
+          const updated = { ...prev };
+          for (const p of parentPaths) {
+            updated[p] = false;
+          }
+          return updated;
+        });
+      }
+
+      // 5. Smoothly scroll target element into center view and flash reveal animation
+      setTimeout(() => {
+        try {
+          const safeSelector = `[data-tree-path="${CSS.escape(targetPath)}"]`;
+          const element = document.querySelector(safeSelector) as HTMLElement;
+          if (element) {
+            element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            element.classList.add('is-revealed');
+            setTimeout(() => {
+              element.classList.remove('is-revealed');
+            }, 2000);
+          }
+        } catch (err) {
+          console.warn('[FileTree] Falha ao rolar para elemento:', err);
+        }
+      }, 150);
+    };
+
+    window.addEventListener('spec:reveal-in-tree', handleReveal);
+    return () => {
+      window.removeEventListener('spec:reveal-in-tree', handleReveal);
+    };
+  }, [isCollapsed, onToggleCollapse, searchTerm]);
+
   // Drag and Drop Handlers
   const handleDragStart = (e: React.DragEvent, node: TreeNode, isFolder: boolean) => {
     e.stopPropagation();
@@ -557,6 +619,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
         <div key={node.path} className={`tree-node ${isDraggingThis ? 'is-dragging' : ''}`}>
           <div
             className={`tree-folder ${isFolderSelected ? 'selected' : ''} ${isDraggingThis ? 'is-dragging' : ''} ${isDragOverThis ? 'drag-over' : ''}`}
+            data-tree-path={node.path}
             draggable
             onDragStart={(e) => handleDragStart(e, node, true)}
             onDragEnd={handleDragEnd}
@@ -650,6 +713,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
       <div key={node.path} className={`tree-node ${isDraggingThis ? 'is-dragging' : ''}`}>
         <div
           className={`tree-file-item ${isFileActive ? 'active' : ''} ${!isMarkdown ? 'non-markdown' : ''} ${isDraggingThis ? 'is-dragging' : ''} ${isDragOverThis ? 'drag-over' : ''}`}
+          data-tree-path={node.path}
           draggable
           onDragStart={(e) => handleDragStart(e, node, false)}
           onDragEnd={handleDragEnd}

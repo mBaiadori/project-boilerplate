@@ -9,6 +9,7 @@ import { DiffModal } from '../components/modals/DiffModal';
 import { ScaffoldModal } from '../components/modals/ScaffoldModal';
 import { AISettingsModal } from '../components/modals/AISettingsModal';
 import { GitModal } from '../components/modals/GitModal';
+import { OnboardingModal } from '../components/modals/OnboardingModal';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { useAI } from '../context/AIContext';
 
@@ -18,7 +19,6 @@ import { WikiSubView } from './subviews/WikiSubView';
 import { DictionarySubView } from './subviews/DictionarySubView';
 import { PRsSubView } from './subviews/PRsSubView';
 import { TemplatesSubView } from './subviews/TemplatesSubView';
-import { TutorialsSubView } from './subviews/TutorialsSubView';
 import { SettingsSubView } from './subviews/SettingsSubView';
 
 interface DashboardViewProps {
@@ -28,7 +28,7 @@ interface DashboardViewProps {
 const AI_WIDTH_STORAGE_KEY = 'spec_ai_pane_width';
 const DEFAULT_AI_WIDTH = 360;
 
-const VALID_SUBVIEWS: SubViewType[] = ['editor', 'dictionary', 'wiki', 'templates', 'prs', 'settings', 'tutorials'];
+const VALID_SUBVIEWS: SubViewType[] = ['editor', 'dictionary', 'wiki', 'templates', 'prs', 'settings'];
 
 export const DashboardView: React.FC<DashboardViewProps> = ({ onBackToRepos }) => {
   const { repoName, subview } = useParams<{ repoName: string; subview?: string }>();
@@ -44,6 +44,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onBackToRepos }) =
   const [isDiffModalOpen, setIsDiffModalOpen] = useState(false);
   const [isScaffoldModalOpen, setIsScaffoldModalOpen] = useState(false);
   const [isGitModalOpen, setIsGitModalOpen] = useState(false);
+  const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
 
   const { activeFile, activeRepo, fileContent, selectRepoByName, loadFile } = useWorkspace();
   const { messages, aiSettings, openSettingsModal } = useAI();
@@ -155,6 +156,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onBackToRepos }) =
         onOpenDiffModal={() => setIsDiffModalOpen(true)}
         onToggleCopilot={toggleCopilot}
         onOpenGitModal={() => setIsGitModalOpen(true)}
+        onOpenTour={() => setIsOnboardingOpen(true)}
       />
 
       {/* Main Workspace Layout */}
@@ -194,10 +196,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onBackToRepos }) =
 
           {activeSubView === 'settings' && (
             <SettingsSubView />
-          )}
-
-          {activeSubView === 'tutorials' && (
-            <TutorialsSubView onOpenEditor={() => handleSelectView('editor')} />
           )}
         </main>
 
@@ -291,6 +289,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onBackToRepos }) =
         isOpen={isGitModalOpen}
         onClose={() => setIsGitModalOpen(false)}
         onOpenDiffModal={() => setIsDiffModalOpen(true)}
+      />
+
+      <OnboardingModal
+        isOpen={isOnboardingOpen}
+        onClose={() => setIsOnboardingOpen(false)}
+        onNavigateView={handleSelectView}
+        onToggleCopilot={toggleCopilot}
+        onOpenGitModal={() => setIsGitModalOpen(true)}
       />
     </div>
   );

@@ -101,7 +101,7 @@ export const App: React.FC = () => {
                   }
                 />
 
-                {/* Dashboard com subviews: editor, dictionary, wiki, templates, prs, settings, tutorials */}
+                {/* Dashboard com subviews: editor, dictionary, wiki, templates, prs, settings */}
                 <Route
                   path="/repo/:repoName/:subview"
                   element={

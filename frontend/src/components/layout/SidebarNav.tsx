@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-export type SubViewType = 'editor' | 'dictionary' | 'wiki' | 'templates' | 'prs' | 'settings' | 'tutorials';
+export type SubViewType = 'editor' | 'dictionary' | 'wiki' | 'templates' | 'prs' | 'settings';
 
 interface SidebarNavProps {
   activeView: SubViewType;
@@ -115,19 +115,6 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({ activeView, onSelectView
             <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
           </svg>
           <span className="nav-label">Configurações</span>
-        </button>
-
-        {/* 7. Tutoriais */}
-        <button
-          className={`dash-nav-item ${activeView === 'tutorials' ? 'active' : ''}`}
-          data-view="tutorials"
-          title="Guia & Tutoriais: DDD, SDD, BDD, TDD"
-          onClick={() => onSelectView('tutorials')}
-        >
-          <span className="material-symbols-outlined nav-icon" style={{ fontSize: '21px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
-            school
-          </span>
-          <span className="nav-label">Tutoriais</span>
         </button>
       </div>
 

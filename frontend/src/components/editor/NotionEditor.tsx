@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { FileText, Plus, Sparkles } from 'lucide-react';
+import { FileText, Plus, Sparkles, FolderTree } from 'lucide-react';
 import { parseFrontmatter } from '../../services/frontmatter';
 import { NotionEditorEngine } from './notion-editor-engine';
 import { API } from '../../services/api';
@@ -176,6 +176,11 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
     }
   };
 
+  const handleRevealInTree = useCallback(() => {
+    if (!filePath) return;
+    window.dispatchEvent(new CustomEvent('spec:reveal-in-tree', { detail: { path: filePath } }));
+  }, [filePath]);
+
   const handleCopyFullDoc = () => {
     navigator.clipboard.writeText(content);
   };
@@ -215,7 +220,8 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
 
   const wordCount = body.trim() ? body.trim().split(/\s+/).length : 0;
   const lineCount = body ? body.split(/\r?\n/).length : 0;
-  const isDirty = originalContent !== body;
+  const originalBody = parseFrontmatter(originalContent || '').body || originalContent || '';
+  const isDirty = (originalBody || '').trim() !== (body || '').trim();
 
   if (!filePath) {
     return (
@@ -296,6 +302,15 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
                   <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
                 </svg>
               </button>
+              <button
+                id="btn-reveal-in-tree"
+                className="btn-icon-subtle"
+                type="button"
+                title="Expandir pastas e revelar na árvore de documentos"
+                onClick={handleRevealInTree}
+              >
+                <FolderTree size={13} />
+              </button>
             </div>
           </div>
 
@@ -349,11 +364,6 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
               className={`btn-icon-action ${isGitMode ? 'active' : ''}`}
               type="button"
               title={isGitMode ? 'Voltar para Modo de Edição' : 'Modo Git & Auditoria (Ver alterações formatadas, quem editou e versões)'}
-              style={{
-                color: isGitMode ? '#ffffff' : 'var(--primary, #2563eb)',
-                background: isGitMode ? 'var(--primary, #2563eb)' : '#eff6ff',
-                borderColor: '#bfdbfe'
-              }}
               onClick={() => {
                 const nextMode = !isGitMode;
                 setIsGitMode(nextMode);
@@ -378,21 +388,35 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
             {!isGitMode && (
               <button
                 id="btn-save-draft"
-                className="btn-icon-action"
+                className={`btn-icon-action ${saveStatus === 'Salvando...' ? 'is-saving' : saveStatus === 'Salvo no workspace' ? 'saved-success' : isDirty ? 'has-unsaved' : ''}`}
                 type="button"
-                title="Salvar no workspace e atualizar Git (Ctrl+S)"
-                style={{
-                  color: 'var(--primary, #2563eb)',
-                  borderColor: '#bfdbfe',
-                  background: '#eff6ff'
-                }}
+                title={
+                  saveStatus === 'Salvando...'
+                    ? 'Salvando no workspace...'
+                    : saveStatus === 'Salvo no workspace'
+                    ? 'Documento salvo!'
+                    : isDirty
+                    ? 'Salvar alterações no workspace e atualizar Git (Ctrl+S)'
+                    : 'Nenhuma alteração pendente (Ctrl+S)'
+                }
                 onClick={handleSave}
+                disabled={saveStatus === 'Salvando...'}
               >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
-                  <polyline points="17 21 17 13 7 13 7 21"></polyline>
-                  <polyline points="7 3 7 8 15 8"></polyline>
-                </svg>
+                {saveStatus === 'Salvando...' ? (
+                  <span className="material-symbols-outlined icon-xs" style={{ animation: 'spin 1s linear infinite' }}>
+                    progress_activity
+                  </span>
+                ) : saveStatus === 'Salvo no workspace' ? (
+                  <span className="material-symbols-outlined icon-xs" style={{ color: '#10b981' }}>
+                    check
+                  </span>
+                ) : (
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                    <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                    <polyline points="7 3 7 8 15 8"></polyline>
+                  </svg>
+                )}
               </button>
             )}
 
