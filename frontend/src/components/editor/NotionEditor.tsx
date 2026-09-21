@@ -6,6 +6,7 @@ import { API } from '../../services/api';
 import { useWorkspace } from '../../context/WorkspaceContext';
 import { VisualMarkdownDiff } from './VisualMarkdownDiff';
 import { DocumentHistoryDrawer } from './DocumentHistoryDrawer';
+import { DocConnectivityBar } from './DocConnectivityBar';
 import type { GitCommitInfo, DocumentMetadataItem } from '../../types';
 
 interface NotionEditorProps {
@@ -24,6 +25,7 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
   content,
   onChange,
   filePath,
+  onNavigateFile,
   onReload = () => {},
   onOpenDiffModal,
   onToggleCopilot,
@@ -42,6 +44,7 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
   const [historicalContent, setHistoricalContent] = useState<string>('');
   const [blameData, setBlameData] = useState<any[]>([]);
   const [docMetadata, setDocMetadata] = useState<DocumentMetadataItem | null>(null);
+  const [editorToast, setEditorToast] = useState<{ text: string; type: 'info' | 'success' | 'warning' } | null>(null);
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<NotionEditorEngine | null>(null);
@@ -119,6 +122,8 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
 
     const engine = new NotionEditorEngine({
       canvasElement: canvasRef.current,
+      filePath: filePath,
+      onNavigateFile: onNavigateFile,
       onChange: () => {
         if (!engineRef.current) return;
         const currentBody = engineRef.current.getMarkdown();
@@ -132,17 +137,40 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
         if (onSendSelectionToCopilot) {
           onSendSelectionToCopilot(text);
         }
+      },
+      onToast: (msg, type) => {
+        setEditorToast({ text: msg, type: type || 'info' });
+        setTimeout(() => setEditorToast(null), 3800);
       }
     });
 
     engineRef.current = engine;
     engine.setMarkdown(body);
 
+    const hash = window.location.hash;
+    if (hash && hash.includes(':~:text=')) {
+      setTimeout(() => {
+        engine.scrollToFragment(hash);
+      }, 250);
+    }
+
     return () => {
       engine.destroy();
       engineRef.current = null;
     };
   }, [isGitMode]);
+
+  useEffect(() => {
+    if (engineRef.current) {
+      engineRef.current.filePath = filePath;
+      const hash = window.location.hash;
+      if (hash && hash.includes(':~:text=')) {
+        setTimeout(() => {
+          engineRef.current?.scrollToFragment(hash);
+        }, 250);
+      }
+    }
+  }, [filePath]);
 
   // Sync external content changes into the editor canvas
   useEffect(() => {
@@ -439,6 +467,36 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
             )}
           </div>
         </div>
+
+        {/* Floating Toast Notification */}
+        {editorToast && (
+          <div
+            className={`editor-floating-toast toast-${editorToast.type}`}
+            style={{
+              position: 'absolute',
+              top: '52px',
+              right: '24px',
+              zIndex: 999,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '7px 14px',
+              borderRadius: '6px',
+              fontSize: '12px',
+              fontWeight: 500,
+              boxShadow: '0 4px 16px rgba(0,0,0,0.22)',
+              animation: 'fadeIn 0.2s ease-out'
+            }}
+          >
+            <span className="material-symbols-outlined icon-xs">
+              {editorToast.type === 'success' ? 'check_circle' : editorToast.type === 'warning' ? 'warning' : 'info'}
+            </span>
+            <span>{editorToast.text}</span>
+          </div>
+        )}
+
+        {/* Top Context & Connectivity Bar */}
+        <DocConnectivityBar filePath={filePath} onNavigateFile={onNavigateFile || (() => {})} />
 
         {/* 2. Body: Either Visual Markdown Diff (Git Mode) or Notion Live Editor */}
         {isGitMode ? (

@@ -3,10 +3,14 @@
 // Oferece formatação rápida (Negrito, Itálico, Código, Link, Cores Notion) ao selecionar texto.
 // =============================================================================
 
+import { createTextFragmentFromSelection, formatTextFragmentUrl } from '../../utils/text-fragment';
+
 export class BubbleMenuEngine {
   container: HTMLElement;
   onFormat: (action: string) => void;
   onAskCopilot?: (text: string) => void;
+  getFilePath?: () => string | null;
+  onCopyLink?: (url: string) => void;
   element: HTMLElement | null = null;
   colorPicker: HTMLElement | null = null;
   isVisible = false;
@@ -32,15 +36,21 @@ export class BubbleMenuEngine {
   constructor({
     container,
     onFormat,
-    onAskCopilot
+    onAskCopilot,
+    getFilePath,
+    onCopyLink
   }: {
     container: HTMLElement;
     onFormat?: (action: string) => void;
     onAskCopilot?: (text: string) => void;
+    getFilePath?: () => string | null;
+    onCopyLink?: (url: string) => void;
   }) {
     this.container = container;
     this.onFormat = onFormat || (() => {});
     this.onAskCopilot = onAskCopilot;
+    this.getFilePath = getFilePath;
+    this.onCopyLink = onCopyLink;
 
     this.onSelectionChangeHandler = () => this.updatePosition();
     this.onResizeHandler = () => this.updatePosition();
@@ -61,6 +71,11 @@ export class BubbleMenuEngine {
       <button type="button" class="bubble-btn" data-action="code" title="Código inline"><code>&lt;/&gt;</code></button>
       <button type="button" class="bubble-btn" data-action="link" title="Inserir Link (Ctrl+K)"><span class="material-symbols-outlined icon-xs">link</span></button>
       <button type="button" class="bubble-btn" data-action="color" title="Cor & Destaque"><span class="material-symbols-outlined icon-xs">palette</span></button>
+      <div class="bubble-divider"></div>
+      <button type="button" class="bubble-btn fragment-btn" data-action="copy-fragment-link" title="Copiar Link Resiliente do Trecho (W3C Deep Link)" style="display: inline-flex; align-items: center; gap: 3px; font-size: 11px; padding: 2px 7px;">
+        <span class="material-symbols-outlined icon-xs">share_location</span>
+        <span>Link do Trecho</span>
+      </button>
       <div class="bubble-divider"></div>
       <button type="button" class="bubble-btn ai-btn" data-action="ask-ai" title="Consultar / Refatorar com IA Copilot" style="color: var(--primary, #2563eb); display: inline-flex; align-items: center; gap: 3px; font-weight: 600; font-size: 11.5px; padding: 2px 7px;">
         <span class="material-symbols-outlined icon-xs">auto_awesome</span>
@@ -87,6 +102,28 @@ export class BubbleMenuEngine {
           if (this.colorPicker) {
             const isShown = this.colorPicker.style.display === 'flex';
             this.colorPicker.style.display = isShown ? 'none' : 'flex';
+          }
+        } else if (action === 'copy-fragment-link') {
+          const selection = window.getSelection();
+          if (selection) {
+            const fragment = createTextFragmentFromSelection(selection);
+            if (fragment) {
+              const currentPath = (this.getFilePath ? this.getFilePath() : '') || 'documento.md';
+              const url = formatTextFragmentUrl(currentPath, fragment);
+              navigator.clipboard.writeText(url).then(() => {
+                const span = (btn as HTMLElement).querySelector('span:last-child');
+                if (span) {
+                  const orig = span.textContent;
+                  span.textContent = 'Copiado!';
+                  setTimeout(() => { span.textContent = orig; }, 1600);
+                }
+              }).catch(() => {
+                prompt('Link Resiliente do Trecho:', url);
+              });
+              if (this.onCopyLink) {
+                this.onCopyLink(url);
+              }
+            }
           }
         } else if (action === 'ask-ai') {
           const selection = window.getSelection();

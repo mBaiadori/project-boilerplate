@@ -7,6 +7,11 @@
 import { SlashMenuEngine } from './slash-menu';
 import { BubbleMenuEngine } from './bubble-menu';
 import { NotionTable } from './notion-table';
+import {
+  parseTextFragmentUrl,
+  findTextFragmentInElement,
+  type TextFragmentQuery
+} from '../../utils/text-fragment';
 
 declare const mermaid: any;
 
@@ -22,9 +27,12 @@ function escapeHtml(text: string): string {
 
 export class NotionEditorEngine {
   canvas: HTMLElement;
+  filePath: string | null = null;
   onChange: () => void;
   onSave: () => void;
+  onNavigateFile?: (path: string) => void;
   onSendSelectionToCopilot?: (text: string) => void;
+  onToast?: (msg: string, type?: 'info' | 'success' | 'warning') => void;
 
   undoStack: string[] = [];
   redoStack: string[] = [];
@@ -56,19 +64,28 @@ export class NotionEditorEngine {
 
   constructor({
     canvasElement,
+    filePath,
     onChange,
     onSave,
-    onSendSelectionToCopilot
+    onNavigateFile,
+    onSendSelectionToCopilot,
+    onToast
   }: {
     canvasElement: HTMLElement;
+    filePath?: string | null;
     onChange?: () => void;
     onSave?: () => void;
+    onNavigateFile?: (path: string) => void;
     onSendSelectionToCopilot?: (text: string) => void;
+    onToast?: (msg: string, type?: 'info' | 'success' | 'warning') => void;
   }) {
     this.canvas = canvasElement;
+    this.filePath = filePath || null;
     this.onChange = onChange || (() => {});
     this.onSave = onSave || (() => {});
+    this.onNavigateFile = onNavigateFile;
     this.onSendSelectionToCopilot = onSendSelectionToCopilot;
+    this.onToast = onToast;
 
     this.boundOnKeyDown = (e) => this.handleKeyDown(e);
     this.boundOnKeyUp = (e) => this.handleKeyUp(e);
@@ -102,10 +119,16 @@ export class NotionEditorEngine {
 
     this.bubbleMenu = new BubbleMenuEngine({
       container: this.canvas,
+      getFilePath: () => this.filePath,
       onFormat: () => this.recordChange(),
       onAskCopilot: (text) => {
         if (this.onSendSelectionToCopilot) {
           this.onSendSelectionToCopilot(text);
+        }
+      },
+      onCopyLink: () => {
+        if (this.onToast) {
+          this.onToast('Link resiliente do trecho copiado para a área de transferência!', 'success');
         }
       }
     });
@@ -336,6 +359,32 @@ export class NotionEditorEngine {
     const target = e.target as HTMLElement | null;
     if (!target) return;
 
+    // Tratar clique em links para navegação interna ou deep link de fragmento
+    const anchor = target.closest('a') as HTMLAnchorElement | null;
+    if (anchor) {
+      const href = anchor.getAttribute('href') || '';
+      if (href) {
+        if (href.startsWith('http://') || href.startsWith('https://')) {
+          // Links externos abrem normalmente
+          return;
+        }
+
+        e.preventDefault();
+
+        // Se for âncora/fragmento no mesmo documento
+        if (href.startsWith('#') || href.startsWith(':~:text=')) {
+          this.scrollToFragment(href);
+          return;
+        }
+
+        // Se contiver caminho para outro arquivo (com ou sem fragmento)
+        if (this.onNavigateFile) {
+          this.onNavigateFile(href);
+        }
+        return;
+      }
+    }
+
     if (target.classList.contains('notion-todo-checkbox')) {
       const item = target.closest('.notion-todo-item') as HTMLElement | null;
       if (item) {
@@ -345,6 +394,75 @@ export class NotionEditorEngine {
     } else if (target.classList.contains('notion-callout-icon')) {
       this.toggleCalloutType(target.closest('.notion-callout') as HTMLElement | null);
     }
+  }
+
+  /**
+   * Rola suavemente até o trecho especificado por um W3C TextFragment ou texto exato,
+   * aplicando um efeito visual de destaque luminoso (pulsing highlight).
+   */
+  scrollToFragment(target: TextFragmentQuery | string): boolean {
+    let query: TextFragmentQuery | null = null;
+    if (typeof target === 'string') {
+      query = parseTextFragmentUrl(target);
+      if (!query) {
+        const cleanText = target.replace(/^#/, '').replace(/^\/?/, '').trim();
+        if (cleanText) {
+          query = { exact: cleanText };
+        }
+      }
+    } else {
+      query = target;
+    }
+
+    if (!query || !query.exact) return false;
+
+    this.clearFragmentHighlights();
+
+    const match = findTextFragmentInElement(this.canvas, query);
+    if (!match) {
+      if (this.onToast) {
+        this.onToast(`Trecho "${query.exact.slice(0, 32)}..." não foi localizado (pode ter sido excluído ou alterado).`, 'warning');
+      }
+      return false;
+    }
+
+    try {
+      // Rolagem suave até o elemento centralizando no viewport
+      match.element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+      // Aplicar destaque visual com classe CSS animada
+      match.element.classList.add('notion-fragment-highlight-block');
+      if (!match.isExact) {
+        match.element.classList.add('is-fuzzy-match');
+        match.element.setAttribute('data-fragment-note', 'Trecho localizado por aproximação');
+      }
+
+      // Remover o highlight após 4 segundos
+      setTimeout(() => {
+        this.clearFragmentHighlights();
+      }, 4500);
+
+      if (!match.isExact && this.onToast) {
+        this.onToast('Trecho localizado com pequenas modificações no texto original.', 'info');
+      }
+
+      return true;
+    } catch (err) {
+      console.warn('[NotionEditorEngine] Erro ao aplicar highlight:', err);
+      match.element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return true;
+    }
+  }
+
+  /**
+   * Remove marcações de destaque de fragmentos
+   */
+  clearFragmentHighlights() {
+    const highlightedBlocks = this.canvas.querySelectorAll('.notion-fragment-highlight-block, .is-fuzzy-match');
+    highlightedBlocks.forEach(b => {
+      b.classList.remove('notion-fragment-highlight-block', 'is-fuzzy-match');
+      b.removeAttribute('data-fragment-note');
+    });
   }
 
   hideFloatingMenus() {
@@ -1177,6 +1295,23 @@ export class NotionEditorEngine {
       case 'h3':
         this.insertBlockHtml('<h3>Título 3</h3>');
         break;
+      case 'link': {
+        const url = prompt('Insira a URL / Link:');
+        if (url) {
+          const text = prompt('Texto de exibição do link:', url) || url;
+          this.insertBlockHtml(`<p><a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(text)}</a></p>`);
+        }
+        break;
+      }
+      case 'doc-link': {
+        const docPath = prompt('Insira o caminho do documento ou link do trecho (ex: pasta/doc.md#:~:text=...):');
+        if (docPath) {
+          const defaultLabel = docPath.split('/').pop()?.split('#')[0] || docPath;
+          const title = prompt('Texto de exibição do link:', defaultLabel) || defaultLabel;
+          this.insertBlockHtml(`<p><a href="${escapeHtml(docPath)}" class="notion-doc-link" title="Abrir referência: ${escapeHtml(docPath)}"><span class="material-symbols-outlined" style="font-size:13px; vertical-align:middle; margin-right:3px;">description</span>${escapeHtml(title)}</a></p>`);
+        }
+        break;
+      }
       case 'table':
         this.insertBlockHtml(this.createTableHtml(2, 3));
         break;

@@ -60,7 +60,25 @@ export class SlashMenuEngine {
       keywords: ['h3', 'topico', 'header', 'pequeno']
     },
 
-    // 2. Tabelas & Estrutura
+    // 2. Links & Referências
+    {
+      id: 'link',
+      category: 'Links & Referências',
+      title: 'Inserir Link',
+      desc: 'Adicionar hiperlink externo ou URL web',
+      icon: '<span class="material-symbols-outlined icon-sm">link</span>',
+      keywords: ['link', 'url', 'href', 'hiperlink', 'endereco', 'web', 'site']
+    },
+    {
+      id: 'doc-link',
+      category: 'Links & Referências',
+      title: 'Link para Documento / Trecho',
+      desc: 'Inserir referência a outro documento ou deep link de trecho (#:~:text=)',
+      icon: '<span class="material-symbols-outlined icon-sm" style="color: var(--primary, #2563eb)">share_location</span>',
+      keywords: ['doc', 'documento', 'deeplink', 'trecho', 'fragment', 'referencia', 'link', 'arquivo', 'contrato']
+    },
+
+    // 3. Tabelas & Estrutura
     {
       id: 'table',
       category: 'Tabelas & Estrutura',

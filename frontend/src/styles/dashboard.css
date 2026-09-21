@@ -8076,3 +8076,113 @@ input[type="text"].icon-picker-search-input:focus {
   padding: 2px 8px;
   border-radius: 12px;
 }
+
+/* ==========================================================================
+   W3C TEXT FRAGMENTS & DEEP LINKING HIGHLIGHT STYLES
+   ========================================================================== */
+
+@keyframes fragmentPulse {
+  0% {
+    background-color: rgba(245, 158, 11, 0.45);
+    box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.35);
+  }
+  50% {
+    background-color: rgba(245, 158, 11, 0.25);
+    box-shadow: 0 0 0 6px rgba(245, 158, 11, 0.18);
+  }
+  100% {
+    background-color: rgba(245, 158, 11, 0.12);
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0);
+  }
+}
+
+@keyframes fragmentFuzzyPulse {
+  0% {
+    background-color: rgba(59, 130, 246, 0.35);
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.25);
+  }
+  100% {
+    background-color: rgba(59, 130, 246, 0.1);
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
+  }
+}
+
+.notion-fragment-highlight-block {
+  animation: fragmentPulse 1.8s ease-in-out infinite alternate;
+  border-left: 3px solid #f59e0b !important;
+  padding-left: 8px !important;
+  border-radius: 4px;
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.notion-fragment-highlight-block.is-fuzzy-match {
+  border-left-color: #3b82f6 !important;
+  animation-name: fragmentFuzzyPulse;
+}
+
+.notion-fragment-highlight-block.is-fuzzy-match::after {
+  content: attr(data-fragment-note);
+  position: absolute;
+  top: -18px;
+  right: 8px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #1d4ed8;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  padding: 1px 6px;
+  border-radius: 4px;
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* Floating Toast Notifications in Editor */
+.editor-floating-toast {
+  background: #ffffff;
+  color: #0f172a;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease;
+}
+
+.editor-floating-toast.toast-success {
+  background: #ecfdf5;
+  color: #065f46;
+  border-color: #a7f3d0;
+}
+
+.editor-floating-toast.toast-warning {
+  background: #fffbeb;
+  color: #92400e;
+  border-color: #fde68a;
+}
+
+.editor-floating-toast.toast-info {
+  background: #eff6ff;
+  color: #1e40af;
+  border-color: #bfdbfe;
+}
+
+/* Document & Deep Link Pills inside Notion Canvas */
+.notion-canvas a.notion-doc-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #f1f5f9;
+  color: var(--primary, #2563eb);
+  padding: 2px 7px;
+  border-radius: 4px;
+  text-decoration: none;
+  font-weight: 500;
+  font-size: 0.95em;
+  border: 1px solid #cbd5e1;
+  transition: all 0.15s ease;
+  cursor: pointer;
+}
+
+.notion-canvas a.notion-doc-link:hover {
+  background: #eff6ff;
+  border-color: var(--primary, #2563eb);
+  text-decoration: none;
+}
+

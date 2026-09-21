@@ -131,18 +131,30 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   }, [activeRepo]);
 
-  const loadFile = useCallback(async (filePath: string) => {
-    if (!activeRepo || !filePath) return;
-    const isMd = filePath.endsWith('.md') || filePath.endsWith('.markdown');
+  const loadFile = useCallback(async (rawFilePath: string) => {
+    if (!activeRepo || !rawFilePath) return;
+
+    const hashIndex = rawFilePath.indexOf('#');
+    const cleanPath = hashIndex !== -1 ? rawFilePath.slice(0, hashIndex) : rawFilePath;
+    const hash = hashIndex !== -1 ? rawFilePath.slice(hashIndex) : '';
+
+    const isMd = cleanPath.endsWith('.md') || cleanPath.endsWith('.markdown');
     if (!isMd) {
-      console.warn('[WorkspaceContext] Arquivo não é markdown, abertura ignorada:', filePath);
+      console.warn('[WorkspaceContext] Arquivo não é markdown, abertura ignorada:', cleanPath);
       return;
     }
+
+    if (hash) {
+      try {
+        window.location.hash = hash;
+      } catch (e) {}
+    }
+
     setIsLoadingFile(true);
-    setActiveFile(filePath);
+    setActiveFile(cleanPath);
     try {
-      const data = await API.getProjectFile(filePath);
-      const draft = DraftStore.getDocDraft(activeRepo.name, filePath);
+      const data = await API.getProjectFile(cleanPath);
+      const draft = DraftStore.getDocDraft(activeRepo.name, cleanPath);
       
       const content = draft ? draft.rawContent : (data.content || '');
       setFileContentState(content);
