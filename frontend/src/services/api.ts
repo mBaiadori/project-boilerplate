@@ -100,6 +100,34 @@ export const API = {
     return { ok: res.ok, data: await res.json() };
   },
 
+  async getProjectMetadataOptions(repo?: string): Promise<ApiResponse<{ categories: string[]; statuses: Array<{ key: string; label: string; badge?: string }>; tags: string[] }>> {
+    const res = await fetch(`/api/project/metadata/options${repo ? `?repo=${encodeURIComponent(repo)}` : ''}`);
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async getProjectConfig(repo?: string): Promise<ApiResponse<any>> {
+    const res = await fetch(`/api/project/config${repo ? `?repo=${encodeURIComponent(repo)}` : ''}`);
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async saveProjectConfig(configData: any, repo?: string): Promise<ApiResponse<any>> {
+    const res = await fetch('/api/project/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ config: configData, repo })
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async updateDocumentMetadataItem(payload: { path: string; meta: Partial<DocumentMetadataItem>; repo?: string }): Promise<ApiResponse<{ success: boolean; meta: DocumentMetadataItem; tree: TreeNode[] }>> {
+    const res = await fetch('/api/project/metadata/item', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
   async getDocumentContext(path: string): Promise<any> {
     const res = await fetch(`/api/project/document-context?path=${encodeURIComponent(path)}`);
     return res.json();

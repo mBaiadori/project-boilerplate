@@ -33,9 +33,19 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
   onOpenScaffoldWizard,
   onSendSelectionToCopilot
 }) => {
-  const { originalContent, refreshPendingChanges, refreshGitStatus, activeRepo, saveStatus, saveCurrentFile } = useWorkspace();
+  const {
+    originalContent,
+    refreshPendingChanges,
+    refreshGitStatus,
+    activeRepo,
+    saveStatus,
+    saveCurrentFile,
+    fileMetadata,
+    updateDocumentTitle
+  } = useWorkspace();
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [importText, setImportText] = useState('');
+  const [titleValue, setTitleValue] = useState<string>('');
 
   // Git Mode, Visual Diff & Document History Drawer State
   const [isGitMode, setIsGitMode] = useState(false);
@@ -46,6 +56,7 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
   const [docMetadata, setDocMetadata] = useState<DocumentMetadataItem | null>(null);
   const [editorToast, setEditorToast] = useState<{ text: string; type: 'info' | 'success' | 'warning' } | null>(null);
   const [fragmentAlert, setFragmentAlert] = useState<FragmentStatusInfo | null>(null);
+  const titleDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Link Insertion Modal State
   const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
@@ -95,6 +106,22 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
     setHistoricalContent('');
     setFragmentAlert(null);
   }, [filePath, activeRepo]);
+
+  // Sincronizar o título local com os metadados do documento
+  useEffect(() => {
+    const metaTitle = fileMetadata?.title !== undefined ? fileMetadata.title : (docMetadata?.title || '');
+    setTitleValue(metaTitle);
+  }, [fileMetadata?.title, docMetadata?.title, filePath]);
+
+  const handleTitleChange = (newVal: string) => {
+    setTitleValue(newVal);
+    if (titleDebounceTimerRef.current) {
+      clearTimeout(titleDebounceTimerRef.current);
+    }
+    titleDebounceTimerRef.current = setTimeout(() => {
+      updateDocumentTitle(newVal);
+    }, 400);
+  };
 
   // Load Blame info when entering Git / Audit Mode
   useEffect(() => {
@@ -633,6 +660,49 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
         ) : (
           <div className="notion-editor-wrapper" id="notion-editor-wrapper">
             <div className="notion-editor-scroll-container">
+              {/* Título H1 Separado do Markdown */}
+              <div className="notion-doc-header-block" id="notion-doc-header-block">
+                <div className="notion-doc-title-row">
+                  <input
+                    type="text"
+                    id="notion-doc-title-input"
+                    className="notion-doc-title-input"
+                    placeholder="Sem título..."
+                    value={titleValue}
+                    onChange={(e) => handleTitleChange(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (canvasRef.current) {
+                          const firstBlock = canvasRef.current.querySelector('[contenteditable="true"]') as HTMLElement;
+                          if (firstBlock) firstBlock.focus();
+                        }
+                      }
+                    }}
+                    title="Título principal do documento (.docs.metadata.json)"
+                  />
+                </div>
+                <div className="notion-doc-title-meta">
+                  <span className="notion-title-status-indicator">
+                    {titleValue.trim() ? (
+                      <>
+                        <span className="material-symbols-outlined icon-xs" style={{ color: '#10b981', fontSize: '13px' }}>
+                          check_circle
+                        </span>
+                        <span style={{ color: '#64748b' }}>Título vinculado ao <code>.docs.metadata.json</code></span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="material-symbols-outlined icon-xs" style={{ color: '#f59e0b', fontSize: '13px' }}>
+                          info
+                        </span>
+                        <span style={{ color: '#d97706', fontWeight: 500 }}>Sem título definido no metadata</span>
+                      </>
+                    )}
+                  </span>
+                </div>
+              </div>
+
               <div
                 ref={canvasRef}
                 id="notion-editor-canvas"

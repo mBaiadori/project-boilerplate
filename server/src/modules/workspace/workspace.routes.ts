@@ -1,5 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { workspaceService } from './workspace.service.js';
+import { docsMetadataService } from './docs-metadata.service.js';
+import { loadConfig } from '../../config/storage.js';
 
 export async function workspaceRoutes(fastify: FastifyInstance) {
   fastify.get('/api/project/tree', async (_request, reply) => {
@@ -26,10 +28,67 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
   fastify.get('/api/project/metadata', async (request, reply) => {
     try {
       const query = request.query as { repo?: string };
-      const repoName = query.repo || '';
-      return reply.send(workspaceService.loadDocsMetadata(repoName));
+      const cfg = loadConfig();
+      const repoName = query.repo || cfg.active_repo?.name || 'local';
+      return reply.send(docsMetadataService.loadDocsMetadata(repoName));
     } catch (err: any) {
       return reply.status(500).send({ error: err.message });
+    }
+  });
+
+  fastify.get('/api/project/metadata/options', async (request, reply) => {
+    try {
+      const query = request.query as { repo?: string };
+      const cfg = loadConfig();
+      const repoName = query.repo || cfg.active_repo?.name || 'local';
+      return reply.send(docsMetadataService.getProjectMetadataOptions(repoName));
+    } catch (err: any) {
+      return reply.status(500).send({ error: err.message });
+    }
+  });
+
+  fastify.get('/api/project/config', async (request, reply) => {
+    try {
+      const query = request.query as { repo?: string };
+      const cfg = loadConfig();
+      const repoName = query.repo || cfg.active_repo?.name || 'local';
+      return reply.send(docsMetadataService.getProjectConfig(repoName));
+    } catch (err: any) {
+      return reply.status(500).send({ error: err.message });
+    }
+  });
+
+  fastify.post('/api/project/config', async (request, reply) => {
+    try {
+      const body = request.body as { config?: any; repo?: string } | any;
+      const configData = body.config || body;
+      const cfg = loadConfig();
+      const repoName = body.repo || cfg.active_repo?.name || 'local';
+      const result = docsMetadataService.saveProjectConfig(repoName, configData);
+      return reply.send(result);
+    } catch (err: any) {
+      return reply.status(400).send({ error: err.message });
+    }
+  });
+
+  fastify.patch('/api/project/metadata/item', async (request, reply) => {
+    const body = request.body as { path?: string; meta?: any; repo?: string };
+    const cleanPath = (body.path || '').trim().replace(/^\/+/, '');
+    if (!cleanPath) {
+      return reply.status(400).send({ error: 'Parâmetro path é obrigatório' });
+    }
+    try {
+      const cfg = loadConfig();
+      const repoName = body.repo || cfg.active_repo?.name || 'local';
+      const result = docsMetadataService.updateDocMetadataItem(repoName, cleanPath, body.meta || {});
+      const tree = workspaceService.getTree().tree;
+      return reply.send({
+        success: true,
+        meta: result.meta,
+        tree,
+      });
+    } catch (err: any) {
+      return reply.status(400).send({ error: err.message });
     }
   });
 
@@ -128,7 +187,11 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
     const fullRelPath = `${folder}/${filename}`;
 
     try {
-      const created = workspaceService.createFile(fullRelPath, `# ${body.title || 'Nova Especificação'}\n\nEspecificação estruturada.`);
+      const created = workspaceService.createFile(fullRelPath, `# ${body.title || 'Nova Especificação'}\n\nEspecificação estruturada.`, false, {
+        title: body.title || 'Nova Especificação',
+        categories: 'geral',
+        status: 'draft',
+      });
       return reply.send({
         success: true,
         path: fullRelPath,

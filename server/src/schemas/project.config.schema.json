@@ -20,6 +20,10 @@
       "type": "array",
       "items": { "type": "string" }
     },
+    "categories": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
     "statuses": {
       "type": "array",
       "items": {

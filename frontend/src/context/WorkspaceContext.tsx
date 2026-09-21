@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import type { Repo, WorkspaceChange, TreeNode, GitStatus, GitCommitInfo } from '../types';
+import type { Repo, WorkspaceChange, TreeNode, GitStatus, GitCommitInfo, DocumentMetadataItem, ProjectMetadataOptions } from '../types';
 import { API } from '../services/api';
 import { DraftStore } from '../services/draft-store';
 import { useAuth } from './AuthContext';
@@ -43,6 +43,13 @@ interface WorkspaceContextType {
   loadFile: (filePath: string) => Promise<void>;
   setFileContent: (content: string) => void;
   setFileMetadata: (meta: Record<string, any>) => void;
+  updateFileMetadata: (partialMeta: Partial<DocumentMetadataItem>) => Promise<void>;
+  updateDocumentTitle: (newTitle: string) => Promise<void>;
+  projectMetaOptions: ProjectMetadataOptions | null;
+  loadProjectMetadataOptions: () => Promise<void>;
+  projectConfig: any;
+  loadProjectConfig: () => Promise<any>;
+  saveProjectConfig: (configData: any) => Promise<{ success: boolean; error?: string }>;
   saveCurrentFile: (meta?: Record<string, any>) => Promise<{ success: boolean; error?: string }>;
   flushPendingSave: () => Promise<void>;
   refreshPendingChanges: () => Promise<void>;
@@ -73,6 +80,8 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [isLoading, setIsLoading] = useState(false);
   const [gitStatus, setGitStatus] = useState<GitStatus | null>(null);
   const [gitLog, setGitLog] = useState<GitCommitInfo[]>([]);
+  const [projectMetaOptions, setProjectMetaOptions] = useState<ProjectMetadataOptions | null>(null);
+  const [projectConfig, setProjectConfig] = useState<any>(null);
 
   const activeFileRef = useRef<string>('');
   const fileContentRef = useRef<string>('');
@@ -316,10 +325,81 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   }, [performDiskSave]);
 
-  const setFileMetadata = (meta: Record<string, any>) => {
-    setFileMetadataState(meta);
-    fileMetadataRef.current = meta;
-  };
+  const loadProjectMetadataOptions = useCallback(async () => {
+    if (!activeRepoRef.current) return;
+    try {
+      const res = await API.getProjectMetadataOptions(activeRepoRef.current.name);
+      if (res.ok && res.data) {
+        setProjectMetaOptions(res.data);
+      }
+    } catch (err) {
+      console.warn('[WorkspaceContext] Erro ao carregar opções de metadados:', err);
+    }
+  }, []);
+
+  const loadProjectConfig = useCallback(async () => {
+    if (!activeRepoRef.current) return null;
+    try {
+      const res = await API.getProjectConfig(activeRepoRef.current.name);
+      if (res.ok && res.data) {
+        setProjectConfig(res.data);
+        return res.data;
+      }
+    } catch (err) {
+      console.warn('[WorkspaceContext] Erro ao carregar project.config:', err);
+    }
+    return null;
+  }, []);
+
+  const saveProjectConfig = useCallback(async (configData: any) => {
+    if (!activeRepoRef.current) return { success: false, error: 'Nenhum repositório ativo' };
+    try {
+      const res = await API.saveProjectConfig(configData, activeRepoRef.current.name);
+      if (res.ok) {
+        setProjectConfig(configData);
+        await loadProjectMetadataOptions();
+        return { success: true };
+      }
+      return { success: false, error: 'Falha ao salvar configurações do projeto' };
+    } catch (err: any) {
+      console.error('[WorkspaceContext] Erro ao salvar project.config:', err);
+      return { success: false, error: err.message || 'Erro ao salvar configurações' };
+    }
+  }, [loadProjectMetadataOptions]);
+
+  const updateFileMetadata = useCallback(async (partialMeta: Partial<DocumentMetadataItem>) => {
+    const currentFile = activeFileRef.current;
+    const currentRepo = activeRepoRef.current;
+    if (!currentFile || !currentRepo) return;
+
+    const merged = {
+      ...fileMetadataRef.current,
+      ...partialMeta,
+    };
+    setFileMetadataState(merged);
+    fileMetadataRef.current = merged;
+
+    try {
+      const res = await API.updateDocumentMetadataItem({
+        path: currentFile,
+        meta: partialMeta,
+        repo: currentRepo.name
+      });
+      if (res.ok && res.data?.meta) {
+        setFileMetadataState(res.data.meta);
+        fileMetadataRef.current = res.data.meta;
+        if (res.data.tree) {
+          setTree(res.data.tree);
+        }
+      }
+    } catch (err) {
+      console.error('[WorkspaceContext] Erro ao atualizar metadados:', err);
+    }
+  }, []);
+
+  const updateDocumentTitle = useCallback(async (newTitle: string) => {
+    await updateFileMetadata({ title: newTitle });
+  }, [updateFileMetadata]);
 
   const selectRepo = async (repo: Repo, initialFile?: string) => {
     await flushPendingSave();
@@ -328,6 +408,8 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     await API.selectRepo(repo);
     const data = await API.getProjectTree();
     setTree(data.tree || []);
+    await loadProjectMetadataOptions();
+    await loadProjectConfig();
     await refreshPendingChanges();
     await refreshGitStatus();
     await refreshGitLog(15);
@@ -510,7 +592,17 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         loadTree,
         loadFile,
         setFileContent,
-        setFileMetadata,
+        setFileMetadata: (meta: Record<string, any>) => {
+          setFileMetadataState(meta);
+          fileMetadataRef.current = meta;
+        },
+        updateFileMetadata,
+        updateDocumentTitle,
+        projectMetaOptions,
+        loadProjectMetadataOptions,
+        projectConfig,
+        loadProjectConfig,
+        saveProjectConfig,
         saveCurrentFile,
         flushPendingSave,
         refreshPendingChanges,

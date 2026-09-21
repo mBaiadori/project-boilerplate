@@ -22,6 +22,67 @@
   position: relative;
 }
 
+/* Notion Document Top Title Header */
+.notion-doc-header-block {
+  max-width: 860px;
+  margin: 0 auto 24px auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-bottom: 1px solid var(--border-subtle, #e2e8f0);
+  padding-bottom: 16px;
+}
+
+.notion-doc-title-row {
+  display: flex;
+  align-items: flex-start;
+  justifyContent: space-between;
+  gap: 12px;
+}
+
+.notion-doc-title-input {
+  width: 100%;
+  font-family: "Outfit", "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 2.1rem;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.025em;
+  color: var(--text-main, #0f172a);
+  background: transparent;
+  border: none;
+  outline: none;
+  padding: 0;
+  margin: 0;
+  resize: none;
+  transition: color 0.15s ease;
+}
+
+.notion-doc-title-input::placeholder {
+  color: var(--text-dim, #94a3b8);
+  font-weight: 600;
+  opacity: 0.6;
+}
+
+.notion-doc-title-input:focus::placeholder {
+  opacity: 0.3;
+}
+
+.notion-doc-title-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11.5px;
+  color: var(--text-muted, #64748b);
+}
+
+.notion-title-status-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
 /* Notion Canvas (ContentEditable & Blocks) */
 .notion-canvas {
   max-width: 860px;

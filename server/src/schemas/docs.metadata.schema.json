@@ -12,9 +12,7 @@
       "ext": { "type": "string" },
       "path": { "type": "string" },
       "status": { "type": "string" },
-      "category": { "type": "string" },
-      "layer": { "type": "string" },
-      "badge": { "type": "string" },
+      "categories": { "type": "string" },
       "tags": {
         "type": "array",
         "items": { "type": "string" }

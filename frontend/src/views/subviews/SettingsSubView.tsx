@@ -7,7 +7,7 @@ import { API } from '../../services/api';
 export const SettingsSubView: React.FC = () => {
   const { user, logout } = useAuth();
   const { aiSettings, saveSettings: saveAISettings } = useAI();
-  const { activeRepo, gitStatus, gitLog } = useWorkspace();
+  const { activeRepo, gitStatus, gitLog, loadProjectConfig, saveProjectConfig } = useWorkspace();
   const [gitDiagnostic, setGitDiagnostic] = useState<{ version: string; installed: boolean } | null>(null);
 
   // AI Provider State
@@ -21,6 +21,24 @@ export const SettingsSubView: React.FC = () => {
   const [tplCreatorPrompt, setTplCreatorPrompt] = useState<string>('');
   const [autoPROn, setAutoPROn] = useState<boolean>(true);
 
+  // Project Config State (.project.config.json)
+  const [projectName, setProjectName] = useState<string>('');
+  const [projectDescription, setProjectDescription] = useState<string>('');
+  const [projectVersion, setProjectVersion] = useState<string>('1.0.0');
+  const [projectLead, setProjectLead] = useState<string>('@usuario');
+  const [projectArchPattern, setProjectArchPattern] = useState<string>('Modular Specs');
+  const [projectRepoUrl, setProjectRepoUrl] = useState<string>('');
+  const [categories, setCategories] = useState<string[]>([]);
+  const [newCatInput, setNewCatInput] = useState<string>('');
+  const [tags, setTags] = useState<string[]>([]);
+  const [newTagInput, setNewTagInput] = useState<string>('');
+  const [statuses, setStatuses] = useState<Array<{ key: string; label: string; badge?: string }>>([]);
+  const [newStatusKey, setNewStatusKey] = useState<string>('');
+  const [newStatusLabel, setNewStatusLabel] = useState<string>('');
+  const [newStatusBadge, setNewStatusBadge] = useState<string>('badge-neutral');
+  const [projectAiPrompt, setProjectAiPrompt] = useState<string>('');
+  const [minApprovals, setMinApprovals] = useState<number>(1);
+
   // Status feedback
   const [saveStatus, setSaveStatus] = useState<string | null>(null);
 
@@ -32,8 +50,9 @@ export const SettingsSubView: React.FC = () => {
     }
   }, [aiSettings]);
 
-  const loadProjectSettings = useCallback(async () => {
+  const loadAllSettings = useCallback(async () => {
     try {
+      // 1. Carregar configurações gerais do sistema
       const res = await API.getSettings();
       if (res) {
         if (res.system_prompts?.global) {
@@ -47,6 +66,35 @@ export const SettingsSubView: React.FC = () => {
         }
       }
 
+      // 2. Carregar configurações customizadas do projeto (.project.config.json)
+      const pCfg = await loadProjectConfig();
+      if (pCfg) {
+        if (pCfg.project) {
+          setProjectName(pCfg.project.name || '');
+          setProjectDescription(pCfg.project.description || '');
+          setProjectVersion(pCfg.project.version || '1.0.0');
+          setProjectLead(pCfg.project.lead || '@usuario');
+          setProjectArchPattern(pCfg.project.architecture_pattern || 'Modular Specs');
+          setProjectRepoUrl(pCfg.project.repository_url || '');
+        }
+        if (Array.isArray(pCfg.categories)) {
+          setCategories(pCfg.categories);
+        }
+        if (Array.isArray(pCfg.tags)) {
+          setTags(pCfg.tags);
+        }
+        if (Array.isArray(pCfg.statuses)) {
+          setStatuses(pCfg.statuses);
+        }
+        if (pCfg.ai_assistant_prompt) {
+          setProjectAiPrompt(pCfg.ai_assistant_prompt);
+        }
+        if (pCfg.governance_rules?.min_approvals_default !== undefined) {
+          setMinApprovals(pCfg.governance_rules.min_approvals_default);
+        }
+      }
+
+      // 3. Diagnóstico do Git
       const diag = await API.getGitDiagnostic();
       if (diag.ok && diag.data) {
         setGitDiagnostic(diag.data);
@@ -54,12 +102,56 @@ export const SettingsSubView: React.FC = () => {
     } catch (err) {
       console.error('[SettingsSubView] Erro ao carregar configurações:', err);
     }
-  }, []);
+  }, [loadProjectConfig]);
 
   useEffect(() => {
-    loadProjectSettings();
-  }, [loadProjectSettings]);
+    loadAllSettings();
+  }, [loadAllSettings]);
 
+  // Handlers para Categorias
+  const handleAddCategory = () => {
+    const trimmed = newCatInput.trim().toLowerCase();
+    if (!trimmed || categories.includes(trimmed)) return;
+    setCategories([...categories, trimmed]);
+    setNewCatInput('');
+  };
+
+  const handleRemoveCategory = (catToRemove: string) => {
+    setCategories(categories.filter(c => c !== catToRemove));
+  };
+
+  // Handlers para Tags
+  const handleAddTag = () => {
+    const trimmed = newTagInput.trim().toLowerCase();
+    if (!trimmed || tags.includes(trimmed)) return;
+    setTags([...tags, trimmed]);
+    setNewTagInput('');
+  };
+
+  const handleRemoveTag = (tagToRemove: string) => {
+    setTags(tags.filter(t => t !== tagToRemove));
+  };
+
+  // Handlers para Status
+  const handleAddStatus = () => {
+    const keyTrimmed = newStatusKey.trim().toLowerCase();
+    const labelTrimmed = newStatusLabel.trim();
+    if (!keyTrimmed || !labelTrimmed || statuses.some(s => s.key === keyTrimmed)) return;
+    setStatuses([...statuses, { key: keyTrimmed, label: labelTrimmed, badge: newStatusBadge }]);
+    setNewStatusKey('');
+    setNewStatusLabel('');
+    setNewStatusBadge('badge-neutral');
+  };
+
+  const handleRemoveStatus = (keyToRemove: string) => {
+    setStatuses(statuses.filter(s => s.key !== keyToRemove));
+  };
+
+  const handleUpdateStatusLabel = (key: string, newLabel: string) => {
+    setStatuses(statuses.map(s => s.key === key ? { ...s, label: newLabel } : s));
+  };
+
+  // Salvamento das configurações de IA
   const handleSaveAISettings = async () => {
     setSaveStatus('Salvando configurações de IA...');
     try {
@@ -77,10 +169,43 @@ export const SettingsSubView: React.FC = () => {
     }
   };
 
+  // Salvamento das configurações específicas do projeto (.project.config.json)
+  const handleSaveProjectConfig = async () => {
+    setSaveStatus('Salvando configurações do projeto (.project.config.json)...');
+    const projectConfigPayload = {
+      project: {
+        name: projectName,
+        description: projectDescription,
+        version: projectVersion,
+        architecture_pattern: projectArchPattern,
+        repository_url: projectRepoUrl,
+        lead: projectLead,
+      },
+      categories: categories,
+      tags: tags,
+      statuses: statuses,
+      governance_rules: {
+        min_approvals_default: minApprovals,
+      },
+      reviewers: [],
+      ai_assistant_prompt: projectAiPrompt,
+    };
+
+    const res = await saveProjectConfig(projectConfigPayload);
+    if (res.success) {
+      setSaveStatus('Configurações do .project.config.json salvas com sucesso!');
+      setTimeout(() => setSaveStatus(null), 3500);
+    } else {
+      setSaveStatus(`Erro ao salvar projeto: ${res.error || 'Falha ao gravar'}`);
+    }
+  };
+
+  // Salvamento unificado de todas as configurações
   const handleSaveAllSettings = async () => {
     setSaveStatus('Salvando todas as configurações...');
     try {
       await handleSaveAISettings();
+      await handleSaveProjectConfig();
       await API.saveSettings({
         system_prompts: {
           global: globalPrompt,
@@ -104,7 +229,7 @@ export const SettingsSubView: React.FC = () => {
         <div style={{ marginBottom: '24px' }}>
           <h2>Configurações & Governança</h2>
           <p className="subtitle">
-            Gerencie o motor de Inteligência Artificial, prompts mestre, regras de governança e credenciais da conta.
+            Gerencie as configurações do projeto ativo (.project.config.json), motor de Inteligência Artificial, prompts mestre e regras de governança.
           </p>
         </div>
 
@@ -114,7 +239,351 @@ export const SettingsSubView: React.FC = () => {
           </div>
         )}
 
-        {/* SEÇÃO 1: MOTOR DE INTELIGÊNCIA ARTIFICIAL (IA) */}
+        {/* SEÇÃO 1: CONFIGURAÇÕES DO PROJETO ATIVO (.project.config.json) */}
+        <div className="gov-card" style={{ marginBottom: '24px' }} id="card-project-custom-config">
+          <div className="gov-card-header">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span className="material-symbols-outlined icon-lg" style={{ color: 'var(--primary, #2563eb)' }}>
+                folder_managed
+              </span>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '15px' }}>Configurações do Projeto (.project.config.json)</h3>
+                <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '2px 0 0 0' }}>
+                  Customizações de metadados, categorias, tags e status do repositório <strong>{activeRepo?.name || 'ativo'}</strong>.
+                </p>
+              </div>
+            </div>
+            <span className="badge badge-primary-subtle" style={{ fontSize: '11px' }}>
+              {activeRepo?.name || 'local'}
+            </span>
+          </div>
+
+          {/* Grid de Informações Básicas do Projeto */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px', marginTop: '16px' }}>
+            <div className="form-group">
+              <label htmlFor="cfg-proj-name">Nome do Projeto:</label>
+              <input
+                type="text"
+                id="cfg-proj-name"
+                value={projectName}
+                onChange={e => setProjectName(e.target.value)}
+                placeholder="Ex: Condominiums..."
+              />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="cfg-proj-version">Versão Semântica:</label>
+              <input
+                type="text"
+                id="cfg-proj-version"
+                value={projectVersion}
+                onChange={e => setProjectVersion(e.target.value)}
+                placeholder="1.0.0"
+              />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="cfg-proj-lead">Líder / Tech Lead:</label>
+              <input
+                type="text"
+                id="cfg-proj-lead"
+                value={projectLead}
+                onChange={e => setProjectLead(e.target.value)}
+                placeholder="@usuario"
+              />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="cfg-proj-pattern">Padrão de Arquitetura:</label>
+              <input
+                type="text"
+                id="cfg-proj-pattern"
+                value={projectArchPattern}
+                onChange={e => setProjectArchPattern(e.target.value)}
+                placeholder="Modular Specs / Clean Arch"
+              />
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '14px', marginTop: '10px' }}>
+            <div className="form-group">
+              <label htmlFor="cfg-proj-repo-url">URL do Repositório (Git):</label>
+              <input
+                type="text"
+                id="cfg-proj-repo-url"
+                value={projectRepoUrl}
+                onChange={e => setProjectRepoUrl(e.target.value)}
+                placeholder="https://github.com/org/repo.git"
+              />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="cfg-proj-desc">Descrição do Projeto:</label>
+              <textarea
+                id="cfg-proj-desc"
+                rows={2}
+                value={projectDescription}
+                onChange={e => setProjectDescription(e.target.value)}
+                placeholder="Descreva o propósito e o domínio do projeto..."
+              />
+            </div>
+          </div>
+
+          {/* Categorias Oficiais do Projeto */}
+          <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid var(--border-color)' }}>
+            <label style={{ fontSize: '13px', fontWeight: 600, display: 'block', marginBottom: '4px' }}>
+              Categorias Oficiais de Especificação (<code>categories</code>):
+            </label>
+            <p style={{ fontSize: '11.5px', color: 'var(--text-muted)', margin: '0 0 10px 0' }}>
+              Opções disponíveis nos seletores de metadados do documento (.docs.metadata.json).
+            </p>
+
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '10px', alignItems: 'center' }}>
+              {categories.map((cat) => (
+                <span
+                  key={cat}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    fontSize: '11.5px',
+                    padding: '3px 9px',
+                    borderRadius: '14px',
+                    background: 'rgba(37,99,235,0.1)',
+                    color: '#2563eb',
+                    fontWeight: 600,
+                  }}
+                >
+                  {cat}
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveCategory(cat)}
+                    style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, display: 'inline-flex', color: '#94a3b8' }}
+                    title={`Remover categoria ${cat}`}
+                  >
+                    <span className="material-symbols-outlined" style={{ fontSize: '13px' }}>close</span>
+                  </button>
+                </span>
+              ))}
+            </div>
+
+            <div style={{ display: 'flex', gap: '8px', maxWidth: '380px' }}>
+              <input
+                type="text"
+                className="form-input"
+                placeholder="Nova categoria (ex: financeiro, auth)..."
+                value={newCatInput}
+                onChange={e => setNewCatInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddCategory(); } }}
+                style={{ fontSize: '12px' }}
+              />
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={handleAddCategory}
+                disabled={!newCatInput.trim()}
+              >
+                + Adicionar
+              </button>
+            </div>
+          </div>
+
+          {/* Tags de Taxonomia do Projeto */}
+          <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid var(--border-color)' }}>
+            <label style={{ fontSize: '13px', fontWeight: 600, display: 'block', marginBottom: '4px' }}>
+              Tags de Taxonomia do Projeto (<code>tags</code>):
+            </label>
+            <p style={{ fontSize: '11.5px', color: 'var(--text-muted)', margin: '0 0 10px 0' }}>
+              Tags canônicas para categorização rápida de requisitos e especificações.
+            </p>
+
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '10px', alignItems: 'center' }}>
+              {tags.map((tag) => (
+                <span
+                  key={tag}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    fontSize: '11.5px',
+                    padding: '3px 9px',
+                    borderRadius: '14px',
+                    background: 'rgba(16,185,129,0.1)',
+                    color: '#059669',
+                    fontWeight: 600,
+                  }}
+                >
+                  #{tag}
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveTag(tag)}
+                    style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, display: 'inline-flex', color: '#94a3b8' }}
+                    title={`Remover tag ${tag}`}
+                  >
+                    <span className="material-symbols-outlined" style={{ fontSize: '13px' }}>close</span>
+                  </button>
+                </span>
+              ))}
+            </div>
+
+            <div style={{ display: 'flex', gap: '8px', maxWidth: '380px' }}>
+              <input
+                type="text"
+                className="form-input"
+                placeholder="Nova tag (ex: database, mobile)..."
+                value={newTagInput}
+                onChange={e => setNewTagInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddTag(); } }}
+                style={{ fontSize: '12px' }}
+              />
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={handleAddTag}
+                disabled={!newTagInput.trim()}
+              >
+                + Adicionar
+              </button>
+            </div>
+          </div>
+
+          {/* Ciclo de Vida de Status */}
+          <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid var(--border-color)' }}>
+            <label style={{ fontSize: '13px', fontWeight: 600, display: 'block', marginBottom: '4px' }}>
+              Ciclo de Vida & Status Permitidos (<code>statuses</code>):
+            </label>
+            <p style={{ fontSize: '11.5px', color: 'var(--text-muted)', margin: '0 0 10px 0' }}>
+              Estados de governança suportados pelo projeto no editor e no fluxo de aprovação.
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '14px' }}>
+              {statuses.map((st) => (
+                <div
+                  key={st.key}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '8px 12px',
+                    borderRadius: '6px',
+                    background: 'var(--bg-surface)',
+                    border: '1px solid var(--border-color)',
+                    gap: '12px'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
+                    <code style={{ fontSize: '12px', fontWeight: 700, minWidth: '90px' }}>{st.key}</code>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={st.label}
+                      onChange={e => handleUpdateStatusLabel(st.key, e.target.value)}
+                      style={{ fontSize: '12px', padding: '4px 8px', flex: 1 }}
+                      placeholder="Rótulo descritivo..."
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveStatus(st.key)}
+                    className="btn-icon-subtle"
+                    title={`Remover status ${st.key}`}
+                    style={{ color: '#ef4444' }}
+                  >
+                    <span className="material-symbols-outlined icon-xs">delete</span>
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            {/* Inserção de Novo Status */}
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <input
+                type="text"
+                className="form-input"
+                placeholder="Chave (ex: in_qa)"
+                value={newStatusKey}
+                onChange={e => setNewStatusKey(e.target.value)}
+                style={{ fontSize: '12px', width: '130px' }}
+              />
+              <input
+                type="text"
+                className="form-input"
+                placeholder="Rótulo (ex: Em Testes QA)"
+                value={newStatusLabel}
+                onChange={e => setNewStatusLabel(e.target.value)}
+                style={{ fontSize: '12px', flex: 1, minWidth: '160px' }}
+              />
+              <select
+                className="form-select"
+                value={newStatusBadge}
+                onChange={e => setNewStatusBadge(e.target.value)}
+                style={{ fontSize: '12px', width: '140px' }}
+              >
+                <option value="badge-neutral">badge-neutral</option>
+                <option value="badge-warning">badge-warning</option>
+                <option value="badge-info">badge-info</option>
+                <option value="badge-success">badge-success</option>
+                <option value="badge-secondary">badge-secondary</option>
+                <option value="badge-danger">badge-danger</option>
+              </select>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={handleAddStatus}
+                disabled={!newStatusKey.trim() || !newStatusLabel.trim()}
+              >
+                + Adicionar Status
+              </button>
+            </div>
+          </div>
+
+          {/* Prompt de IA Específico do Projeto */}
+          <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid var(--border-color)' }}>
+            <label htmlFor="cfg-proj-ai-prompt" style={{ fontSize: '13px', fontWeight: 600, display: 'block', marginBottom: '4px' }}>
+              Prompt do Assistente de IA do Projeto (<code>ai_assistant_prompt</code>):
+            </label>
+            <p style={{ fontSize: '11.5px', color: 'var(--text-muted)', margin: '0 0 6px 0' }}>
+              Instrução especializada injetada quando o Copilot atua neste repositório.
+            </p>
+            <textarea
+              id="cfg-proj-ai-prompt"
+              rows={3}
+              style={{ fontFamily: 'var(--font-mono)', fontSize: '12px' }}
+              value={projectAiPrompt}
+              onChange={e => setProjectAiPrompt(e.target.value)}
+              placeholder="Você é o assistente de IA do projeto..."
+            />
+          </div>
+
+          {/* Quórum de Aprovações */}
+          <div style={{ marginTop: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <label htmlFor="cfg-proj-min-approvals" style={{ fontSize: '12.5px', fontWeight: 600, color: 'var(--text-normal)' }}>
+              Quórum Mínimo de Aprovações (PRs):
+            </label>
+            <input
+              type="number"
+              id="cfg-proj-min-approvals"
+              min={1}
+              max={10}
+              value={minApprovals}
+              onChange={e => setMinApprovals(parseInt(e.target.value, 10) || 1)}
+              style={{ width: '70px', padding: '4px 8px', fontSize: '12px' }}
+            />
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '18px' }}>
+            <button
+              id="btn-save-project-config-direct"
+              className="btn btn-primary btn-sm"
+              type="button"
+              onClick={handleSaveProjectConfig}
+            >
+              Salvar Configurações do Projeto (.project.config.json)
+            </button>
+          </div>
+        </div>
+
+        {/* SEÇÃO 2: MOTOR DE INTELIGÊNCIA ARTIFICIAL (IA) */}
         <div className="gov-card" style={{ marginBottom: '24px' }}>
           <div className="gov-card-header">
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -260,7 +729,7 @@ export const SettingsSubView: React.FC = () => {
           </div>
         </div>
 
-        {/* SEÇÃO 2: PROMPTS MESTRE & GOVERNANÇA DA IA */}
+        {/* SEÇÃO 3: PROMPTS MESTRE DO SISTEMA */}
         <div className="gov-card" style={{ marginBottom: '24px' }}>
           <div className="gov-card-header">
             <div>
@@ -283,7 +752,7 @@ export const SettingsSubView: React.FC = () => {
             </p>
             <textarea
               id="sys-global-system-prompt"
-              rows={5}
+              rows={4}
               style={{ fontFamily: 'var(--font-mono)', fontSize: '12px' }}
               value={globalPrompt}
               onChange={e => setGlobalPrompt(e.target.value)}
@@ -300,7 +769,7 @@ export const SettingsSubView: React.FC = () => {
             </p>
             <textarea
               id="sys-template-creator-prompt"
-              rows={4}
+              rows={3}
               style={{ fontFamily: 'var(--font-mono)', fontSize: '12px' }}
               value={tplCreatorPrompt}
               onChange={e => setTplCreatorPrompt(e.target.value)}
@@ -309,7 +778,7 @@ export const SettingsSubView: React.FC = () => {
           </div>
         </div>
 
-        {/* SEÇÃO 3: REGRAS DE GOVERNANÇA & GIT */}
+        {/* SEÇÃO 4: REGRAS DE GOVERNANÇA & GIT */}
         <div className="gov-card" style={{ marginBottom: '24px' }}>
           <div className="gov-card-header">
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -373,7 +842,7 @@ export const SettingsSubView: React.FC = () => {
           </div>
         </div>
 
-        {/* SEÇÃO 4: CONTA GITHUB & CONEXÃO */}
+        {/* SEÇÃO 5: CONTA GITHUB & CONEXÃO */}
         <div className="gov-card">
           <div className="gov-card-header">
             <div>

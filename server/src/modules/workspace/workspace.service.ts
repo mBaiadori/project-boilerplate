@@ -3,7 +3,12 @@ import path from 'node:path';
 import { PROJECTS_DIR } from '../../config/constants.js';
 import { loadConfig, saveConfig, recordChange, ensureDefaultRepoFiles } from '../../config/storage.js';
 import { computeDiff } from '../../utils/diff.js';
-import { validateJsonSchema } from '../../utils/schema.validator.js';
+import {
+  docsMetadataService,
+  generateDocId,
+  extractDocLinksFromMarkdown,
+  type DocumentMetadataItem
+} from './docs-metadata.service.js';
 
 export interface TreeNode {
   name: string;
@@ -11,204 +16,26 @@ export interface TreeNode {
   type: 'file' | 'directory';
   children?: TreeNode[];
   title?: string;
+  categories?: string;
   category?: string;
-  layer?: string;
-  badge?: string;
   status?: string;
   last_modified?: number;
 }
 
-export interface DocumentMetadataItem {
-  id: string;
-  name: string;
-  title?: string;
-  ext: string;
-  path: string;
-  status: string;
-  category: string;
-  layer: string;
-  badge: string;
-  tags: string[];
-  updated_at: string;
-  approvers: string[];
-  links: string[];
-  templateId: string;
-  [key: string]: any;
-}
-
-export function generateDocId(filePath: string): string {
-  return filePath
-    .replace(/\.md$/, '')
-    .replace(/[\/\\]/g, '-')
-    .replace(/\s+/g, '-')
-    .toLowerCase();
-}
-
-function extractDocLinksFromMarkdown(content: string): string[] {
-  if (!content) return [];
-  const links: string[] = [];
-  const regex = /\[.*?\]\(([^)]+)\)/g;
-  let match;
-  while ((match = regex.exec(content)) !== null) {
-    const rawTarget = match[1].trim();
-    if (!rawTarget.startsWith('http://') && !rawTarget.startsWith('https://') && !rawTarget.startsWith('mailto:')) {
-      const cleanTarget = rawTarget.split('#')[0].replace(/^\.?\//, '');
-      if (
-        cleanTarget.endsWith('.md') ||
-        cleanTarget.endsWith('.markdown') ||
-        cleanTarget.length > 0 ||
-        rawTarget.startsWith('#') ||
-        rawTarget.startsWith(':~:text=')
-      ) {
-        if (!links.includes(rawTarget)) {
-          links.push(rawTarget);
-        }
-      }
-    }
-  }
-  return links;
-}
+export { generateDocId, extractDocLinksFromMarkdown };
+export type { DocumentMetadataItem };
 
 export class WorkspaceService {
   private getRepoDir(repoName: string): string {
     return path.join(PROJECTS_DIR, repoName || 'local');
   }
 
-  private getDocsMetadataPath(repoName: string): string {
-    const hiddenPath = path.join(this.getRepoDir(repoName), '.docs.metadata.json');
-    const legacyPath = path.join(this.getRepoDir(repoName), 'project', 'docs.metadata.json');
-    if (!fs.existsSync(hiddenPath) && fs.existsSync(legacyPath)) {
-      return legacyPath;
-    }
-    return hiddenPath;
-  }
-
   loadDocsMetadata(repoName: string): DocumentMetadataItem[] {
-    const metaPath = this.getDocsMetadataPath(repoName);
-    const repoDir = this.getRepoDir(repoName);
-    let metaList: DocumentMetadataItem[] = [];
-
-    if (fs.existsSync(metaPath)) {
-      try {
-        const raw = fs.readFileSync(metaPath, 'utf-8');
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) {
-          metaList = parsed;
-        } else if (parsed && typeof parsed === 'object' && parsed.documents) {
-          // Migração de formato legado ({ version: "...", documents: { ... } })
-          for (const [relPath, meta] of Object.entries(parsed.documents)) {
-            const m = (meta as any) || {};
-            const ext = path.extname(relPath).replace(/^\./, '') || 'md';
-            const name = path.basename(relPath, path.extname(relPath));
-            const id = generateDocId(relPath);
-            metaList.push({
-              id,
-              name,
-              title: m.title || name,
-              ext,
-              path: relPath,
-              status: m.status || 'draft',
-              category: m.category || '',
-              layer: m.layer || '',
-              badge: m.badge || '',
-              tags: Array.isArray(m.tags) ? m.tags : [],
-              updated_at: m.updated_at || new Date().toISOString(),
-              approvers: Array.isArray(m.approvers) ? m.approvers : [],
-              links: Array.isArray(m.links) ? m.links : [],
-              templateId: m.templateId || '',
-              ...m,
-            });
-          }
-        }
-      } catch (err) {
-        console.error(`[Workspace] Erro ao ler docs.metadata.json em ${metaPath}:`, err);
-      }
-    }
-
-    // Auto-Reconciliation: .docs.metadata.json como fonte centralizada de persistência
-    let changed = false;
-    if (fs.existsSync(repoDir)) {
-      const diskFiles: string[] = [];
-      const scanDir = (dir: string) => {
-        const entries = fs.readdirSync(dir, { withFileTypes: true });
-        for (const entry of entries) {
-          if (entry.name.startsWith('.') || entry.name === 'node_modules') continue;
-          const full = path.join(dir, entry.name);
-          if (entry.isDirectory()) {
-            scanDir(full);
-          } else if (entry.isFile() && (entry.name.endsWith('.md') || entry.name.endsWith('.markdown'))) {
-            diskFiles.push(path.relative(repoDir, full).replace(/\\/g, '/'));
-          }
-        }
-      };
-      try {
-        scanDir(repoDir);
-      } catch {}
-
-      // 1. Garantir que todo documento existente no workspace tenha metadados e links sincronizados
-      for (const relPath of diskFiles) {
-        const existingIdx = metaList.findIndex((d) => d.path === relPath);
-        const full = path.join(repoDir, relPath);
-        let content = '';
-        try {
-          content = fs.readFileSync(full, 'utf-8');
-        } catch {}
-        const extractedLinks = extractDocLinksFromMarkdown(content);
-
-        if (existingIdx >= 0) {
-          const item = metaList[existingIdx];
-          // Atualiza links se estiver vazio ou diferente dos links extraídos do markdown
-          if (!Array.isArray(item.links) || (item.links.length === 0 && extractedLinks.length > 0)) {
-            item.links = extractedLinks;
-            changed = true;
-          }
-        } else {
-          const name = path.basename(relPath, path.extname(relPath));
-          const ext = path.extname(relPath).replace(/^\./, '') || 'md';
-          metaList.push({
-            id: generateDocId(relPath),
-            name,
-            title: name,
-            ext,
-            path: relPath,
-            status: 'draft',
-            category: '',
-            layer: '',
-            badge: '',
-            tags: [],
-            updated_at: new Date().toISOString(),
-            approvers: [],
-            links: extractedLinks,
-            templateId: '',
-          });
-          changed = true;
-        }
-      }
-
-      // 2. Remover entradas órfãs (arquivos apagados manualmente no disco)
-      const validMetaList = metaList.filter((d) => diskFiles.includes(d.path));
-      if (validMetaList.length !== metaList.length) {
-        metaList = validMetaList;
-        changed = true;
-      }
-    }
-
-    if (changed || (!fs.existsSync(metaPath) && metaList.length > 0)) {
-      this.saveDocsMetadata(repoName, metaList);
-    }
-
-    return metaList;
+    return docsMetadataService.loadDocsMetadata(repoName);
   }
 
   saveDocsMetadata(repoName: string, metaList: DocumentMetadataItem[]): void {
-    const metaPath = this.getDocsMetadataPath(repoName);
-    const valRes = validateJsonSchema('docs.metadata', metaList);
-    if (!valRes.valid) {
-      console.warn(`[Workspace] Aviso de validação docs.metadata.json:`, valRes.errors);
-    }
-
-    fs.mkdirSync(path.dirname(metaPath), { recursive: true });
-    fs.writeFileSync(metaPath, JSON.stringify(metaList, null, 2), 'utf-8');
+    docsMetadataService.saveDocsMetadata(repoName, metaList);
   }
 
   buildTree(dir: string, baseDir: string, docsMetadata?: DocumentMetadataItem[]): TreeNode[] {
@@ -240,9 +67,8 @@ export class WorkspaceService {
           path: relPath,
           type: 'file',
           title: docMeta.title || docMeta.name || entry.name.replace(/\.[^/.]+$/, ''),
-          category: docMeta.category || docMeta.layer || '',
-          layer: docMeta.layer || '',
-          badge: docMeta.badge || '',
+          categories: docMeta.categories || '',
+          category: docMeta.categories || '',
           status: docMeta.status || '',
           last_modified: stat.mtimeMs,
         });
@@ -261,7 +87,7 @@ export class WorkspaceService {
     const repoDir = this.getRepoDir(repoName);
     ensureDefaultRepoFiles(repoName);
 
-    const docsMetadata = this.loadDocsMetadata(repoName);
+    const docsMetadata = docsMetadataService.loadDocsMetadata(repoName);
     const tree = this.buildTree(repoDir, repoDir, docsMetadata);
     return {
       repo: repoName,
@@ -280,23 +106,7 @@ export class WorkspaceService {
     }
 
     const content = fs.readFileSync(fullPath, 'utf-8');
-    const docsMetadata = this.loadDocsMetadata(repoName);
-    const meta = docsMetadata.find((d) => d.path === cleanPath) || {
-      id: generateDocId(cleanPath),
-      name: path.basename(cleanPath, path.extname(cleanPath)),
-      title: path.basename(cleanPath, path.extname(cleanPath)),
-      ext: path.extname(cleanPath).replace(/^\./, '') || 'md',
-      path: cleanPath,
-      status: 'draft',
-      category: '',
-      layer: '',
-      badge: '',
-      tags: [],
-      updated_at: new Date().toISOString(),
-      approvers: [],
-      links: [],
-      templateId: '',
-    };
+    const meta = docsMetadataService.getDocMetadata(repoName, cleanPath);
 
     return {
       path: cleanPath,
@@ -325,49 +135,19 @@ export class WorkspaceService {
     fs.writeFileSync(fullPath, content, 'utf-8');
     recordChange(repoName, cleanPath, changeType, oldContent, content);
 
-    // Update centralized metadata list
-    const docsMetadata = this.loadDocsMetadata(repoName);
-    const existingIdx = docsMetadata.findIndex((d) => d.path === cleanPath);
-    const ext = path.extname(cleanPath).replace(/^\./, '') || 'md';
-    const name = path.basename(cleanPath, path.extname(cleanPath));
-
-    let updatedMetaItem: DocumentMetadataItem;
     // Extrair links automaticamente do conteúdo markdown para enriquecer o .docs.metadata.json
     const extractedLinks = extractDocLinksFromMarkdown(content);
     const finalLinks = Array.from(new Set([...extractedLinks, ...(Array.isArray(meta?.links) ? meta.links : [])]));
 
-    if (existingIdx >= 0) {
-      updatedMetaItem = {
-        ...docsMetadata[existingIdx],
-        ...(meta && typeof meta === 'object' ? meta : {}),
-        links: finalLinks,
-        updated_at: new Date().toISOString(),
-      };
-      docsMetadata[existingIdx] = updatedMetaItem;
-    } else {
-      updatedMetaItem = {
-        id: generateDocId(cleanPath),
-        name,
-        title: meta?.title || name,
-        ext,
-        path: cleanPath,
-        status: meta?.status || 'draft',
-        category: meta?.category || '',
-        layer: meta?.layer || '',
-        badge: meta?.badge || '',
-        tags: Array.isArray(meta?.tags) ? meta.tags : [],
-        updated_at: new Date().toISOString(),
-        approvers: Array.isArray(meta?.approvers) ? meta.approvers : [],
-        links: finalLinks,
-        templateId: meta?.templateId || '',
-        ...(meta && typeof meta === 'object' ? meta : {}),
-      };
-      docsMetadata.push(updatedMetaItem);
-    }
+    const metaUpdatePayload = {
+      ...(meta && typeof meta === 'object' ? meta : {}),
+      links: finalLinks,
+    };
 
-    this.saveDocsMetadata(repoName, docsMetadata);
+    const { meta: updatedMetaItem } = docsMetadataService.updateDocMetadataItem(repoName, cleanPath, metaUpdatePayload);
 
     const repoDir = this.getRepoDir(repoName);
+    const docsMetadata = docsMetadataService.loadDocsMetadata(repoName);
     const newTree = this.buildTree(repoDir, repoDir, docsMetadata);
 
     return {
@@ -397,7 +177,7 @@ export class WorkspaceService {
       fs.mkdirSync(fullPath, { recursive: true });
       recordChange(repoName, cleanPath, 'ADDED', '', '');
 
-      const docsMetadata = this.loadDocsMetadata(repoName);
+      const docsMetadata = docsMetadataService.loadDocsMetadata(repoName);
       const newTree = this.buildTree(repoDir, repoDir, docsMetadata);
       return {
         success: true,
@@ -421,33 +201,15 @@ export class WorkspaceService {
 
     recordChange(repoName, cleanPath, 'ADDED', '', initialContent);
 
-    // Central metadata entry (flat array)
-    const ext = path.extname(cleanPath).replace(/^\./, '') || 'md';
-    const name = path.basename(cleanPath, path.extname(cleanPath));
     const extractedLinks = extractDocLinksFromMarkdown(initialContent);
-
-    const newItem: DocumentMetadataItem = {
-      id: generateDocId(cleanPath),
-      name,
-      title: meta?.title || name,
-      ext,
-      path: cleanPath,
-      status: meta?.status || 'draft',
-      category: meta?.category || '',
-      layer: meta?.layer || '',
-      badge: meta?.badge || '',
-      tags: Array.isArray(meta?.tags) ? meta.tags : [],
-      updated_at: new Date().toISOString(),
-      approvers: Array.isArray(meta?.approvers) ? meta.approvers : [],
-      links: Array.isArray(meta?.links) ? meta.links : extractedLinks,
-      templateId: meta?.templateId || '',
+    const metaPayload = {
       ...(meta && typeof meta === 'object' ? meta : {}),
+      links: Array.isArray(meta?.links) ? meta.links : extractedLinks,
     };
 
-    let docsMetadata = this.loadDocsMetadata(repoName).filter((d) => d.path !== cleanPath);
-    docsMetadata.push(newItem);
-    this.saveDocsMetadata(repoName, docsMetadata);
+    const { meta: newItem } = docsMetadataService.updateDocMetadataItem(repoName, cleanPath, metaPayload);
 
+    const docsMetadata = docsMetadataService.loadDocsMetadata(repoName);
     const newTree = this.buildTree(repoDir, repoDir, docsMetadata);
 
     return {
@@ -492,55 +254,10 @@ export class WorkspaceService {
       recordChange(repoName, cleanNew, 'ADDED', '', oldContent);
     }
 
-    // Update metadata list
-    const docsMetadata = this.loadDocsMetadata(repoName);
-    let changed = false;
-
-    if (!isDir) {
-      const found = docsMetadata.find((d) => d.path === cleanOld);
-      if (found) {
-        found.path = cleanNew;
-        found.name = path.basename(cleanNew, path.extname(cleanNew));
-        found.ext = path.extname(cleanNew).replace(/^\./, '') || 'md';
-        found.id = generateDocId(cleanNew);
-        found.updated_at = new Date().toISOString();
-        changed = true;
-      }
-    } else {
-      // Renomear pasta: atualiza todos os caminhos filhos
-      for (const item of docsMetadata) {
-        if (item.path === cleanOld || item.path.startsWith(cleanOld + '/')) {
-          const rest = item.path.slice(cleanOld.length);
-          item.path = `${cleanNew}${rest}`;
-          item.name = path.basename(item.path, path.extname(item.path));
-          item.ext = path.extname(item.path).replace(/^\./, '') || 'md';
-          item.id = generateDocId(item.path);
-          item.updated_at = new Date().toISOString();
-          changed = true;
-        }
-      }
-    }
-
-    // Atualizar referências de links em outros documentos que apontavam para oldPath
-    for (const doc of docsMetadata) {
-      if (Array.isArray(doc.links)) {
-        doc.links = doc.links.map(l => {
-          const hash = l.includes('#') ? l.slice(l.indexOf('#')) : '';
-          const lClean = l.split('#')[0].replace(/^\.?\//, '');
-          if (lClean === cleanOld) {
-            changed = true;
-            return `${cleanNew}${hash}`;
-          }
-          return l;
-        });
-      }
-    }
-
-    if (changed) {
-      this.saveDocsMetadata(repoName, docsMetadata);
-    }
+    docsMetadataService.renameDocMetadata(repoName, cleanOld, cleanNew);
 
     const repoDir = this.getRepoDir(repoName);
+    const docsMetadata = docsMetadataService.loadDocsMetadata(repoName);
     const newTree = this.buildTree(repoDir, repoDir, docsMetadata);
 
     return {
@@ -574,28 +291,10 @@ export class WorkspaceService {
 
     recordChange(repoName, cleanPath, 'DELETED', oldContent, '');
 
-    // Remove from metadata list (including nested files if folder)
-    let docsMetadata = this.loadDocsMetadata(repoName);
-    const initialLen = docsMetadata.length;
-    docsMetadata = docsMetadata.filter((d) => d.path !== cleanPath && !d.path.startsWith(cleanPath + '/'));
-
-    // Limpar links órfãos que apontavam para o arquivo apagado
-    const deletedBase = path.basename(cleanPath);
-    const deletedNoExt = path.basename(cleanPath, path.extname(cleanPath));
-    for (const doc of docsMetadata) {
-      if (Array.isArray(doc.links)) {
-        doc.links = doc.links.filter(l => {
-          const lClean = l.split('#')[0].replace(/^\.?\//, '');
-          return lClean !== cleanPath && lClean !== deletedBase && lClean !== deletedNoExt;
-        });
-      }
-    }
-
-    if (docsMetadata.length !== initialLen) {
-      this.saveDocsMetadata(repoName, docsMetadata);
-    }
+    docsMetadataService.deleteDocMetadata(repoName, cleanPath);
 
     const repoDir = this.getRepoDir(repoName);
+    const docsMetadata = docsMetadataService.loadDocsMetadata(repoName);
     const newTree = this.buildTree(repoDir, repoDir, docsMetadata);
 
     return {
@@ -686,7 +385,7 @@ export class WorkspaceService {
     cfg.workspace_changes[repoName] = remainingChanges;
     saveConfig(cfg);
 
-    const docsMetadata = this.loadDocsMetadata(repoName);
+    const docsMetadata = docsMetadataService.loadDocsMetadata(repoName);
     const newTree = this.buildTree(repoDir, repoDir, docsMetadata);
     return {
       success: true,
@@ -700,7 +399,7 @@ export class WorkspaceService {
     const repoName = cfg.active_repo?.name || 'local';
     const cleanPath = (filePath || '').trim().replace(/^\/+/, '');
     const repoDir = this.getRepoDir(repoName);
-    const docsMetadata = this.loadDocsMetadata(repoName);
+    const docsMetadata = docsMetadataService.loadDocsMetadata(repoName);
 
     const docMeta = docsMetadata.find((d) => d.path === cleanPath) || ({} as Partial<DocumentMetadataItem>);
     
@@ -728,9 +427,9 @@ export class WorkspaceService {
         filePath: linkFilePath,
         hash,
         title: matchedMeta?.title || matchedMeta?.name || path.basename(linkFilePath, path.extname(linkFilePath)) || link,
-        layer: matchedMeta?.layer || '',
+        categories: matchedMeta?.categories || '',
+        category: matchedMeta?.categories || '',
         status: matchedMeta?.status || 'draft',
-        badge: matchedMeta?.badge || ''
       });
     }
 
@@ -767,9 +466,9 @@ export class WorkspaceService {
           path: doc.path,
           filePath: doc.path,
           title: doc.title || doc.name || doc.path,
-          layer: doc.layer || '',
+          categories: doc.categories || '',
+          category: doc.categories || '',
           status: doc.status || 'draft',
-          badge: doc.badge || ''
         });
       }
     }
@@ -791,8 +490,8 @@ export class WorkspaceService {
             contextItems.push({
               path: rel,
               title: itemMeta.title || itemMeta.name || entry.name.replace('.md', ''),
-              layer: itemMeta.layer || '',
-              badge: itemMeta.badge || '',
+              categories: itemMeta.categories || '',
+              category: itemMeta.categories || '',
               summary: content.slice(0, 300),
             });
           } catch {}
@@ -805,7 +504,9 @@ export class WorkspaceService {
     return {
       active_file: cleanPath,
       repo: repoName,
-      layer: docMeta.layer || '',
+      title: docMeta.title || docMeta.name || cleanPath,
+      categories: docMeta.categories || '',
+      category: docMeta.categories || '',
       status: docMeta.status || 'draft',
       dependencies,
       consumers,

@@ -18,8 +18,6 @@ export const FrontmatterHeader: React.FC<FrontmatterHeaderProps> = ({
     "superseded",
     "deprecated",
   ];
-  const typeOptions = [""];
-  const layerOptions = [""];
 
   const handleFieldChange = (field: string, value: any) => {
     onChange({
@@ -64,7 +62,7 @@ export const FrontmatterHeader: React.FC<FrontmatterHeaderProps> = ({
           className="badge badge-primary-subtle"
           style={{ fontSize: "11px" }}
         >
-          {metadata.layer || ""}
+          {metadata.categories || metadata.category || ""}
         </span>
       </div>
 
@@ -83,7 +81,7 @@ export const FrontmatterHeader: React.FC<FrontmatterHeaderProps> = ({
           </span>
           <select
             className="form-select"
-            value={metadata.status || "s"}
+            value={metadata.status || "draft"}
             onChange={(e) => handleFieldChange("status", e.target.value)}
             style={{
               fontSize: "12px",
@@ -99,63 +97,18 @@ export const FrontmatterHeader: React.FC<FrontmatterHeaderProps> = ({
           </select>
         </div>
 
-        {/* Tipo */}
+        {/* Categoria */}
         <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
           <span style={{ fontSize: "12px", color: "var(--color-outline)" }}>
-            Tipo:
-          </span>
-          <select
-            className="form-select"
-            value={metadata.type || "spec"}
-            onChange={(e) => handleFieldChange("type", e.target.value)}
-            style={{
-              fontSize: "12px",
-              padding: "3px 8px",
-              borderRadius: "4px",
-            }}
-          >
-            {typeOptions.map((opt) => (
-              <option key={opt} value={opt}>
-                {opt.toUpperCase()}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Camada */}
-        <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-          <span style={{ fontSize: "12px", color: "var(--color-outline)" }}>
-            Camada:
-          </span>
-          <select
-            className="form-select"
-            value={metadata.layer || ""}
-            onChange={(e) => handleFieldChange("layer", e.target.value)}
-            style={{
-              fontSize: "12px",
-              padding: "3px 8px",
-              borderRadius: "4px",
-            }}
-          >
-            {layerOptions.map((opt) => (
-              <option key={opt} value={opt}>
-                {opt}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Versão */}
-        <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-          <span style={{ fontSize: "12px", color: "var(--color-outline)" }}>
-            v:
+            Categoria:
           </span>
           <input
             type="text"
             className="form-input"
-            value={metadata.version || "1.0.0"}
-            onChange={(e) => handleFieldChange("version", e.target.value)}
-            style={{ fontSize: "12px", width: "70px", padding: "3px 6px" }}
+            value={metadata.categories || metadata.category || ""}
+            onChange={(e) => handleFieldChange("categories", e.target.value)}
+            style={{ fontSize: "12px", width: "110px", padding: "3px 6px" }}
+            placeholder="geral..."
           />
         </div>
       </div>

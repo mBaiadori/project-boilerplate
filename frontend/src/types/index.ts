@@ -67,15 +67,20 @@ export interface DocumentMetadataItem {
   ext: string;
   path: string;
   status: string;
-  category: string;
-  layer: string;
-  badge: string;
+  categories: string;
+  category?: string;
   tags: string[];
   updated_at: string;
   approvers: string[];
   links: string[];
   templateId: string;
   [key: string]: any;
+}
+
+export interface ProjectMetadataOptions {
+  categories: string[];
+  statuses: Array<{ key: string; label: string; badge?: string }>;
+  tags: string[];
 }
 
 export interface PR {
