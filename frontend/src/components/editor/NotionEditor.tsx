@@ -1,12 +1,13 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { FileText, Plus, Sparkles, FolderTree } from 'lucide-react';
 import { parseFrontmatter } from '../../services/frontmatter';
-import { NotionEditorEngine } from './notion-editor-engine';
+import { NotionEditorEngine, type FragmentStatusInfo } from './notion-editor-engine';
 import { API } from '../../services/api';
 import { useWorkspace } from '../../context/WorkspaceContext';
 import { VisualMarkdownDiff } from './VisualMarkdownDiff';
 import { DocumentHistoryDrawer } from './DocumentHistoryDrawer';
 import { DocConnectivityBar } from './DocConnectivityBar';
+import { InsertLinkModal } from '../modals/InsertLinkModal';
 import type { GitCommitInfo, DocumentMetadataItem } from '../../types';
 
 interface NotionEditorProps {
@@ -45,6 +46,20 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
   const [blameData, setBlameData] = useState<any[]>([]);
   const [docMetadata, setDocMetadata] = useState<DocumentMetadataItem | null>(null);
   const [editorToast, setEditorToast] = useState<{ text: string; type: 'info' | 'success' | 'warning' } | null>(null);
+  const [fragmentAlert, setFragmentAlert] = useState<FragmentStatusInfo | null>(null);
+
+  // Link Insertion Modal State
+  const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
+  const [linkModalInitialText, setLinkModalInitialText] = useState('');
+  const [linkModalInitialUrl, setLinkModalInitialUrl] = useState('');
+  const linkModalCallbackRef = useRef<((url: string, text: string) => void) | null>(null);
+
+  const handleOpenLinkModal = useCallback((defaultText: string, callback: (url: string, text: string) => void, initialUrl: string = '') => {
+    setLinkModalInitialText(defaultText || '');
+    setLinkModalInitialUrl(initialUrl || '');
+    linkModalCallbackRef.current = callback;
+    setIsLinkModalOpen(true);
+  }, []);
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<NotionEditorEngine | null>(null);
@@ -68,6 +83,7 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
     // Reset commit selection when switching file
     setSelectedCommit(null);
     setHistoricalContent('');
+    setFragmentAlert(null);
   }, [filePath, activeRepo]);
 
   // Load Blame info when entering Git / Audit Mode
@@ -141,6 +157,10 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
       onToast: (msg, type) => {
         setEditorToast({ text: msg, type: type || 'info' });
         setTimeout(() => setEditorToast(null), 3800);
+      },
+      onOpenLinkModal: handleOpenLinkModal,
+      onFragmentStatus: (status) => {
+        setFragmentAlert(status);
       }
     });
 
@@ -172,6 +192,34 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
     }
   }, [filePath]);
 
+  // Listeners para navegação e atualização de fragmentos de texto (Deep Linking)
+  useEffect(() => {
+    const handleFragmentNav = (e: any) => {
+      const targetHash = e.detail?.hash || window.location.hash;
+      if (targetHash && (targetHash.includes(':~:text=') || targetHash.startsWith('#'))) {
+        setTimeout(() => {
+          engineRef.current?.scrollToFragment(targetHash);
+        }, 80);
+      }
+    };
+
+    const handleHashChange = () => {
+      const hash = window.location.hash;
+      if (hash && (hash.includes(':~:text=') || hash.startsWith('#'))) {
+        setTimeout(() => {
+          engineRef.current?.scrollToFragment(hash);
+        }, 80);
+      }
+    };
+
+    window.addEventListener('workspace:navigate-fragment', handleFragmentNav);
+    window.addEventListener('hashchange', handleHashChange);
+    return () => {
+      window.removeEventListener('workspace:navigate-fragment', handleFragmentNav);
+      window.removeEventListener('hashchange', handleHashChange);
+    };
+  }, []);
+
   // Sync external content changes into the editor canvas
   useEffect(() => {
     if (isInternalChangeRef.current) {
@@ -182,6 +230,12 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
       const currentEngineMd = engineRef.current.getMarkdown();
       if (currentEngineMd !== body) {
         engineRef.current.setMarkdown(body);
+        const hash = window.location.hash;
+        if (hash && (hash.includes(':~:text=') || hash.startsWith('#'))) {
+          setTimeout(() => {
+            engineRef.current?.scrollToFragment(hash);
+          }, 120);
+        }
       }
     }
   }, [body]);
@@ -197,6 +251,17 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleSave]);
+
+  // Listener para erros de abertura de documentos inexistentes no workspace
+  useEffect(() => {
+    const handleFileLoadError = (e: any) => {
+      const msg = e.detail?.message || 'Documento referenciado não foi encontrado no workspace.';
+      setEditorToast({ text: msg, type: 'warning' });
+      setTimeout(() => setEditorToast(null), 4500);
+    };
+    window.addEventListener('workspace:file-load-error', handleFileLoadError);
+    return () => window.removeEventListener('workspace:file-load-error', handleFileLoadError);
+  }, []);
 
   const handleCopyPath = () => {
     if (filePath) {
@@ -498,6 +563,51 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
         {/* Top Context & Connectivity Bar */}
         <DocConnectivityBar filePath={filePath} onNavigateFile={onNavigateFile || (() => {})} />
 
+        {/* Fragment Not Found / Snippet Alert Banner */}
+        {fragmentAlert && fragmentAlert.type === 'not_found' && (
+          <div className="fragment-not-found-banner" id="fragment-not-found-alert">
+            <div className="fragment-alert-header">
+              <div className="fragment-alert-title-row">
+                <span className="material-symbols-outlined fragment-alert-icon">link_off</span>
+                <span className="fragment-alert-title">Trecho referenciado não encontrado</span>
+              </div>
+              <button
+                className="fragment-alert-close-btn"
+                title="Dispensar alerta"
+                onClick={() => setFragmentAlert(null)}
+              >
+                <span className="material-symbols-outlined icon-xs">close</span>
+              </button>
+            </div>
+            <p className="fragment-alert-description">
+              O link apontava para um trecho específico que foi substancialmente modificado ou excluído deste documento.
+            </p>
+            <div className="fragment-alert-original-box">
+              <div className="fragment-alert-box-label">
+                <span>Texto que estava lá originalmente:</span>
+                <button
+                  type="button"
+                  className="btn-copy-original-fragment"
+                  title="Copiar texto original para a área de transferência"
+                  onClick={() => {
+                    navigator.clipboard.writeText(fragmentAlert.exact);
+                    setEditorToast({ text: 'Texto original copiado!', type: 'success' });
+                    setTimeout(() => setEditorToast(null), 3000);
+                  }}
+                >
+                  <span className="material-symbols-outlined icon-xs">content_copy</span>
+                  Copiar texto
+                </button>
+              </div>
+              <div className="fragment-alert-box-quote">
+                {fragmentAlert.prefix && <span className="fragment-quote-context">...{fragmentAlert.prefix} </span>}
+                <span className="fragment-quote-exact">{fragmentAlert.exact}</span>
+                {fragmentAlert.suffix && <span className="fragment-quote-context"> {fragmentAlert.suffix}...</span>}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* 2. Body: Either Visual Markdown Diff (Git Mode) or Notion Live Editor */}
         {isGitMode ? (
           <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
@@ -563,6 +673,20 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
           setIsGitMode(true);
         }}
         documentMeta={docMetadata}
+      />
+
+      {/* Insert / Edit Link Modal */}
+      <InsertLinkModal
+        isOpen={isLinkModalOpen}
+        initialText={linkModalInitialText}
+        initialUrl={linkModalInitialUrl}
+        onClose={() => setIsLinkModalOpen(false)}
+        onConfirm={(url, text) => {
+          if (linkModalCallbackRef.current) {
+            linkModalCallbackRef.current(url, text);
+          }
+          setIsLinkModalOpen(false);
+        }}
       />
 
       {/* Import Doc Modal */}

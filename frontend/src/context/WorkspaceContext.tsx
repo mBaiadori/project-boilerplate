@@ -150,22 +150,49 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       } catch (e) {}
     }
 
+    // Se o arquivo já for o ativo atual, apenas disparar a navegação de fragmento sem recarregar o arquivo do zero
+    if (cleanPath === activeFile) {
+      if (hash) {
+        window.dispatchEvent(new CustomEvent('workspace:navigate-fragment', {
+          detail: { hash, filePath: cleanPath }
+        }));
+      }
+      return;
+    }
+
     setIsLoadingFile(true);
     setActiveFile(cleanPath);
     try {
       const data = await API.getProjectFile(cleanPath);
+      if (!data || (data as any).error) {
+        throw new Error((data as any).error || 'Arquivo não encontrado');
+      }
       const draft = DraftStore.getDocDraft(activeRepo.name, cleanPath);
       
       const content = draft ? draft.rawContent : (data.content || '');
       setFileContentState(content);
       setOriginalContent(data.content || '');
       setFileMetadataState(data.meta || {});
-    } catch (err) {
+
+      if (hash) {
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('workspace:navigate-fragment', {
+            detail: { hash, filePath: cleanPath }
+          }));
+        }, 150);
+      }
+    } catch (err: any) {
       console.error('[WorkspaceContext] Erro ao carregar arquivo:', err);
+      window.dispatchEvent(new CustomEvent('workspace:file-load-error', {
+        detail: {
+          path: cleanPath,
+          message: `Documento "${cleanPath}" não foi encontrado no workspace.`
+        }
+      }));
     } finally {
       setIsLoadingFile(false);
     }
-  }, [activeRepo]);
+  }, [activeRepo, activeFile]);
 
   const setFileContent = (content: string) => {
     setFileContentState(content);

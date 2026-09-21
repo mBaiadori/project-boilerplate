@@ -60,11 +60,11 @@ export function formatTextFragmentUrl(filePath: string, fragment: TextFragmentQu
   const parts: string[] = [];
 
   if (fragment.prefix) {
-    parts.push(`${encodeURIComponent(fragment.prefix)}-`);
+    parts.push(`${encodeURIComponent(fragment.prefix)}-,`);
   }
   parts.push(encodeURIComponent(fragment.exact));
   if (fragment.suffix) {
-    parts.push(`-${encodeURIComponent(fragment.suffix)}`);
+    parts.push(`,-${encodeURIComponent(fragment.suffix)}`);
   }
 
   return `${filePath}#:~:text=${parts.join('')}`;
@@ -79,26 +79,28 @@ export function parseTextFragmentUrl(urlOrHash: string): TextFragmentQuery | nul
   }
 
   try {
-    const rawFragment = urlOrHash.split(':~:text=')[1];
+    const rawFragment = urlOrHash.split(':~:text=')[1]?.split('&')[0];
     if (!rawFragment) return null;
 
-    const decoded = decodeURIComponent(rawFragment);
+    const decoded = decodeURIComponent(rawFragment.replace(/\+/g, ' '));
     
-    // Padrão: [prefix-,]exact[,-suffix]
+    // Padrão W3C: [prefix-,]textStart[,textEnd][,-suffix]
     let prefix = '';
     let suffix = '';
     let exact = decoded;
 
-    const prefixMatch = exact.match(/^([^-]+)-(.*)$/);
-    if (prefixMatch && prefixMatch[2]) {
-      prefix = prefixMatch[1].trim();
-      exact = prefixMatch[2].trim();
+    // Prefixo delimitado por '-, ' ou '-,'
+    const prefixIdx = exact.indexOf('-,');
+    if (prefixIdx !== -1) {
+      prefix = exact.slice(0, prefixIdx).trim();
+      exact = exact.slice(prefixIdx + 2).trim();
     }
 
-    const suffixMatch = exact.match(/^(.*)-([^-]+)$/);
-    if (suffixMatch && suffixMatch[1]) {
-      exact = suffixMatch[1].trim();
-      suffix = suffixMatch[2].trim();
+    // Sufixo delimitado por ',-'
+    const suffixIdx = exact.lastIndexOf(',-');
+    if (suffixIdx !== -1) {
+      suffix = exact.slice(suffixIdx + 2).trim();
+      exact = exact.slice(0, suffixIdx).trim();
     }
 
     return {
@@ -160,24 +162,26 @@ export function findTextFragmentInElement(
   container: HTMLElement,
   fragment: TextFragmentQuery
 ): { element: HTMLElement; range: Range; isExact: boolean } | null {
-  const exact = fragment.exact.trim().toLowerCase();
+  const exact = fragment.exact.trim().replace(/\s+/g, ' ').toLowerCase();
   if (!exact) return null;
 
   // 1. Coletar todos os blocos editáveis e parágrafos do documento
-  const blocks = Array.from(container.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li, blockquote, pre, div.callout-content, td, th')) as HTMLElement[];
+  const blocks = Array.from(
+    container.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li, blockquote, pre, div.callout-content, td, th, div.notion-toggle-content, summary')
+  ) as HTMLElement[];
   if (blocks.length === 0 && container.innerText) {
     blocks.push(container);
   }
 
   // ETAPA 1: Busca Exata (com suporte a prefixo/sufixo para desempate)
   for (const block of blocks) {
-    const text = block.innerText || '';
-    const lower = text.toLowerCase();
+    const rawText = block.innerText || block.textContent || '';
+    const textNorm = rawText.replace(/\s+/g, ' ');
+    const lower = textNorm.toLowerCase();
     
     const index = lower.indexOf(exact);
     if (index !== -1) {
-      // Se houver prefixo, verificar se está contido próximo
-      if (fragment.prefix && !lower.includes(fragment.prefix.toLowerCase())) {
+      if (fragment.prefix && !lower.includes(fragment.prefix.toLowerCase().replace(/\s+/g, ' '))) {
         continue;
       }
 
@@ -188,8 +192,9 @@ export function findTextFragmentInElement(
 
   // ETAPA 1.5: Busca Exata ignorando prefixo (caso prefixo tenha sido alterado)
   for (const block of blocks) {
-    const text = block.innerText || '';
-    const lower = text.toLowerCase();
+    const rawText = block.innerText || block.textContent || '';
+    const textNorm = rawText.replace(/\s+/g, ' ');
+    const lower = textNorm.toLowerCase();
     const index = lower.indexOf(exact);
     if (index !== -1) {
       const range = createRangeFromNodeAndOffsets(block, index, index + exact.length);
@@ -199,26 +204,27 @@ export function findTextFragmentInElement(
 
   // ETAPA 2: Busca Resiliente (Fuzzy Matching para pequenas edições ou correções)
   let bestMatch: { element: HTMLElement; score: number } | null = null;
-  const targetWords = exact.split(/\s+/);
+  const targetWords = exact.split(/\s+/).filter(Boolean);
 
   for (const block of blocks) {
-    const text = (block.innerText || '').trim();
-    if (!text) continue;
+    const rawText = (block.innerText || block.textContent || '').trim();
+    if (!rawText) continue;
 
-    const blockWords = text.split(/\s+/);
+    const textNorm = rawText.replace(/\s+/g, ' ');
+    const blockWords = textNorm.split(/\s+/).filter(Boolean);
     if (blockWords.length === 0) continue;
 
-    const windowSize = Math.max(targetWords.length, 3);
-    for (let i = 0; i <= blockWords.length - windowSize + 1; i++) {
+    const windowSize = Math.max(targetWords.length, 2);
+    for (let i = 0; i <= blockWords.length - 1; i++) {
       const windowStr = blockWords.slice(i, i + windowSize).join(' ').toLowerCase();
       const sim = calculateSimilarity(exact, windowStr);
-      if (sim > 0.75 && (!bestMatch || sim > bestMatch.score)) {
+      if (sim >= 0.70 && (!bestMatch || sim > bestMatch.score)) {
         bestMatch = { element: block, score: sim };
       }
     }
   }
 
-  if (bestMatch && bestMatch.score >= 0.75) {
+  if (bestMatch && bestMatch.score >= 0.70) {
     const range = document.createRange();
     range.selectNodeContents(bestMatch.element);
     return { element: bestMatch.element, range, isExact: false };

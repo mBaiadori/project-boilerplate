@@ -25,6 +25,14 @@ function escapeHtml(text: string): string {
     .replace(/'/g, '&#039;');
 }
 
+export interface FragmentStatusInfo {
+  type: 'not_found' | 'fuzzy_match';
+  exact: string;
+  prefix?: string;
+  suffix?: string;
+  currentFoundText?: string;
+}
+
 export class NotionEditorEngine {
   canvas: HTMLElement;
   filePath: string | null = null;
@@ -33,6 +41,8 @@ export class NotionEditorEngine {
   onNavigateFile?: (path: string) => void;
   onSendSelectionToCopilot?: (text: string) => void;
   onToast?: (msg: string, type?: 'info' | 'success' | 'warning') => void;
+  onOpenLinkModal?: (defaultText: string, callback: (url: string, text: string) => void, initialUrl?: string) => void;
+  onFragmentStatus?: (info: FragmentStatusInfo | null) => void;
 
   undoStack: string[] = [];
   redoStack: string[] = [];
@@ -44,6 +54,8 @@ export class NotionEditorEngine {
   bubbleMenu: BubbleMenuEngine | null = null;
   sideHandle: HTMLElement | null = null;
   blockMenu: HTMLElement | null = null;
+  linkPopover: HTMLElement | null = null;
+  activeAnchor: HTMLAnchorElement | null = null;
   dropIndicator: HTMLElement | null = null;
   hoveredBlock: HTMLElement | null = null;
   draggedBlock: HTMLElement | null = null;
@@ -69,7 +81,9 @@ export class NotionEditorEngine {
     onSave,
     onNavigateFile,
     onSendSelectionToCopilot,
-    onToast
+    onToast,
+    onOpenLinkModal,
+    onFragmentStatus
   }: {
     canvasElement: HTMLElement;
     filePath?: string | null;
@@ -78,6 +92,8 @@ export class NotionEditorEngine {
     onNavigateFile?: (path: string) => void;
     onSendSelectionToCopilot?: (text: string) => void;
     onToast?: (msg: string, type?: 'info' | 'success' | 'warning') => void;
+    onOpenLinkModal?: (defaultText: string, callback: (url: string, text: string) => void, initialUrl?: string) => void;
+    onFragmentStatus?: (info: FragmentStatusInfo | null) => void;
   }) {
     this.canvas = canvasElement;
     this.filePath = filePath || null;
@@ -86,6 +102,8 @@ export class NotionEditorEngine {
     this.onNavigateFile = onNavigateFile;
     this.onSendSelectionToCopilot = onSendSelectionToCopilot;
     this.onToast = onToast;
+    this.onOpenLinkModal = onOpenLinkModal;
+    this.onFragmentStatus = onFragmentStatus;
 
     this.boundOnKeyDown = (e) => this.handleKeyDown(e);
     this.boundOnKeyUp = (e) => this.handleKeyUp(e);
@@ -100,6 +118,9 @@ export class NotionEditorEngine {
     this.boundDocClick = (e) => {
       if (this.blockMenu && !this.blockMenu.contains(e.target as Node)) {
         this.blockMenu.style.display = 'none';
+      }
+      if (this.linkPopover && !this.linkPopover.contains(e.target as Node) && !(e.target as HTMLElement).closest('a')) {
+        this.hideLinkPopover();
       }
     };
 
@@ -121,6 +142,7 @@ export class NotionEditorEngine {
       container: this.canvas,
       getFilePath: () => this.filePath,
       onFormat: () => this.recordChange(),
+      onOpenLinkModal: this.onOpenLinkModal,
       onAskCopilot: (text) => {
         if (this.onSendSelectionToCopilot) {
           this.onSendSelectionToCopilot(text);
@@ -135,6 +157,7 @@ export class NotionEditorEngine {
 
     // 2. Side Handle e Menu de Contexto
     this.initSideHandles();
+    this.initLinkPopover();
 
     // 3. Event Listeners
     this.canvas.addEventListener('keydown', this.boundOnKeyDown);
@@ -287,6 +310,152 @@ export class NotionEditorEngine {
     });
   }
 
+  initLinkPopover() {
+    this.linkPopover = document.createElement('div');
+    this.linkPopover.className = 'notion-link-popover';
+    this.linkPopover.style.display = 'none';
+    this.linkPopover.innerHTML = `
+      <div class="link-popover-info">
+        <span class="material-symbols-outlined link-popover-type-icon">description</span>
+        <a class="link-popover-url-text" target="_blank" rel="noopener noreferrer"></a>
+      </div>
+      <div class="link-popover-divider"></div>
+      <button type="button" class="link-popover-btn" data-action="open-link" title="Abrir / Navegar">
+        <span class="material-symbols-outlined icon-xs">open_in_new</span>
+        <span>Abrir</span>
+      </button>
+      <button type="button" class="link-popover-btn" data-action="edit-link" title="Editar texto ou destino do link">
+        <span class="material-symbols-outlined icon-xs">edit</span>
+        <span>Editar</span>
+      </button>
+      <button type="button" class="link-popover-btn" data-action="copy-link" title="Copiar endereço do link">
+        <span class="material-symbols-outlined icon-xs">content_copy</span>
+        <span>Copiar</span>
+      </button>
+      <button type="button" class="link-popover-btn danger" data-action="unlink" title="Remover link (manter texto)">
+        <span class="material-symbols-outlined icon-xs">link_off</span>
+        <span>Remover</span>
+      </button>
+    `;
+    document.body.appendChild(this.linkPopover);
+
+    this.linkPopover.addEventListener('mousedown', (e) => {
+      e.stopPropagation();
+    });
+
+    this.linkPopover.querySelectorAll('.link-popover-btn').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const action = (btn as HTMLElement).dataset.action;
+        if (!this.activeAnchor) return;
+
+        if (action === 'open-link') {
+          const href = this.activeAnchor.getAttribute('href') || '';
+          this.hideLinkPopover();
+          if (href.startsWith('http://') || href.startsWith('https://')) {
+            window.open(href, '_blank');
+          } else if (href.startsWith('#') || href.startsWith(':~:text=')) {
+            this.scrollToFragment(href);
+          } else {
+            const hashIndex = href.indexOf('#');
+            const linkFile = hashIndex !== -1 ? href.slice(0, hashIndex).replace(/^\.?\//, '') : href.replace(/^\.?\//, '');
+            const hash = hashIndex !== -1 ? href.slice(hashIndex) : '';
+            const currentFile = (this.filePath || '').replace(/^\.?\//, '');
+            
+            if (linkFile === currentFile || !linkFile) {
+              if (hash) {
+                this.scrollToFragment(hash);
+              }
+            } else if (this.onNavigateFile) {
+              this.onNavigateFile(href);
+            }
+          }
+        } else if (action === 'edit-link') {
+          const anchor = this.activeAnchor;
+          const href = anchor.getAttribute('href') || '';
+          const currentText = anchor.textContent || '';
+          this.hideLinkPopover();
+          if (this.onOpenLinkModal) {
+            this.onOpenLinkModal(currentText, (newUrl, newText) => {
+              if (anchor && anchor.isConnected) {
+                anchor.setAttribute('href', newUrl);
+                anchor.textContent = newText || newUrl;
+                const isDoc = newUrl.endsWith('.md') || newUrl.includes('.md#') || newUrl.includes(':~:text=');
+                if (isDoc) {
+                  anchor.classList.add('notion-doc-link');
+                } else {
+                  anchor.classList.remove('notion-doc-link');
+                }
+                this.recordChange();
+                if (this.onToast) {
+                  this.onToast('Link atualizado com sucesso!', 'success');
+                }
+              }
+            }, href);
+          }
+        } else if (action === 'copy-link') {
+          const href = this.activeAnchor.getAttribute('href') || '';
+          if (href) {
+            navigator.clipboard.writeText(href);
+            if (this.onToast) {
+              this.onToast('Link copiado para a área de transferência!', 'success');
+            }
+          }
+          this.hideLinkPopover();
+        } else if (action === 'unlink') {
+          const anchor = this.activeAnchor;
+          const textNode = document.createTextNode(anchor.textContent || '');
+          anchor.parentNode?.replaceChild(textNode, anchor);
+          this.hideLinkPopover();
+          this.recordChange();
+          if (this.onToast) {
+            this.onToast('Link removido.', 'info');
+          }
+        }
+      });
+    });
+  }
+
+  showLinkPopover(anchor: HTMLAnchorElement) {
+    if (!this.linkPopover) return;
+    this.activeAnchor = anchor;
+    const href = anchor.getAttribute('href') || '';
+    const isDoc = href.endsWith('.md') || href.includes('.md#') || href.includes(':~:text=');
+    
+    const typeIcon = this.linkPopover.querySelector('.link-popover-type-icon') as HTMLElement | null;
+    if (typeIcon) {
+      typeIcon.textContent = isDoc ? 'description' : href.startsWith('http') ? 'public' : 'link';
+    }
+
+    const urlText = this.linkPopover.querySelector('.link-popover-url-text') as HTMLAnchorElement | null;
+    if (urlText) {
+      urlText.textContent = href;
+      urlText.title = href;
+      urlText.href = href;
+    }
+
+    this.linkPopover.style.display = 'flex';
+    const rect = anchor.getBoundingClientRect();
+    const popWidth = this.linkPopover.offsetWidth || 320;
+    const left = Math.max(10, Math.min(rect.left + (rect.width / 2) - (popWidth / 2), window.innerWidth - popWidth - 10));
+    
+    let top = rect.bottom + 6;
+    if (top + 45 > window.innerHeight && rect.top - 45 > 0) {
+      top = rect.top - 45;
+    }
+
+    this.linkPopover.style.left = `${left}px`;
+    this.linkPopover.style.top = `${top}px`;
+  }
+
+  hideLinkPopover() {
+    if (this.linkPopover) {
+      this.linkPopover.style.display = 'none';
+    }
+    this.activeAnchor = null;
+  }
+
   handleMouseMove(e: MouseEvent) {
     if (this.draggedBlock) return;
     if (!this.canvas.offsetParent) {
@@ -359,28 +528,36 @@ export class NotionEditorEngine {
     const target = e.target as HTMLElement | null;
     if (!target) return;
 
-    // Tratar clique em links para navegação interna ou deep link de fragmento
+    // Tratar clique em links para popover de edição/ações ou navegação direta com Ctrl/Cmd
     const anchor = target.closest('a') as HTMLAnchorElement | null;
-    if (anchor) {
+    if (anchor && this.canvas.contains(anchor)) {
       const href = anchor.getAttribute('href') || '';
       if (href) {
-        if (href.startsWith('http://') || href.startsWith('https://')) {
-          // Links externos abrem normalmente
+        if (e.ctrlKey || e.metaKey) {
+          if (href.startsWith('http://') || href.startsWith('https://')) return;
+          e.preventDefault();
+          if (href.startsWith('#') || href.startsWith(':~:text=')) {
+            this.scrollToFragment(href);
+          } else {
+            const hashIndex = href.indexOf('#');
+            const linkFile = hashIndex !== -1 ? href.slice(0, hashIndex).replace(/^\.?\//, '') : href.replace(/^\.?\//, '');
+            const hash = hashIndex !== -1 ? href.slice(hashIndex) : '';
+            const currentFile = (this.filePath || '').replace(/^\.?\//, '');
+            
+            if (linkFile === currentFile || !linkFile) {
+              if (hash) {
+                this.scrollToFragment(hash);
+              }
+            } else if (this.onNavigateFile) {
+              this.onNavigateFile(href);
+            }
+          }
           return;
         }
 
+        // Clique normal abre o menu flutuante de ações do link (Abrir, Editar, Copiar, Remover)
         e.preventDefault();
-
-        // Se for âncora/fragmento no mesmo documento
-        if (href.startsWith('#') || href.startsWith(':~:text=')) {
-          this.scrollToFragment(href);
-          return;
-        }
-
-        // Se contiver caminho para outro arquivo (com ou sem fragmento)
-        if (this.onNavigateFile) {
-          this.onNavigateFile(href);
-        }
+        this.showLinkPopover(anchor);
         return;
       }
     }
@@ -420,13 +597,37 @@ export class NotionEditorEngine {
 
     const match = findTextFragmentInElement(this.canvas, query);
     if (!match) {
+      if (this.onFragmentStatus) {
+        this.onFragmentStatus({
+          type: 'not_found',
+          exact: query.exact,
+          prefix: query.prefix,
+          suffix: query.suffix
+        });
+      }
       if (this.onToast) {
-        this.onToast(`Trecho "${query.exact.slice(0, 32)}..." não foi localizado (pode ter sido excluído ou alterado).`, 'warning');
+        this.onToast(`Trecho "${query.exact.slice(0, 32)}..." não foi localizado no documento atual.`, 'warning');
       }
       return false;
     }
 
     try {
+      if (match.isExact) {
+        if (this.onFragmentStatus) {
+          this.onFragmentStatus(null);
+        }
+      } else {
+        if (this.onFragmentStatus) {
+          this.onFragmentStatus({
+            type: 'fuzzy_match',
+            exact: query.exact,
+            prefix: query.prefix,
+            suffix: query.suffix,
+            currentFoundText: match.element.textContent?.trim()
+          });
+        }
+      }
+
       // Rolagem suave até o elemento centralizando no viewport
       match.element.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
@@ -437,10 +638,10 @@ export class NotionEditorEngine {
         match.element.setAttribute('data-fragment-note', 'Trecho localizado por aproximação');
       }
 
-      // Remover o highlight após 4 segundos
+      // Remover o highlight após 5 segundos
       setTimeout(() => {
         this.clearFragmentHighlights();
-      }, 4500);
+      }, 5500);
 
       if (!match.isExact && this.onToast) {
         this.onToast('Trecho localizado com pequenas modificações no texto original.', 'info');
@@ -448,9 +649,8 @@ export class NotionEditorEngine {
 
       return true;
     } catch (err) {
-      console.warn('[NotionEditorEngine] Erro ao aplicar highlight:', err);
-      match.element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      return true;
+      console.warn('[NotionEditorEngine] Erro ao aplicar highlight no elemento:', err);
+      return false;
     }
   }
 
@@ -471,6 +671,7 @@ export class NotionEditorEngine {
     if (this.dropIndicator) this.dropIndicator.style.display = 'none';
     if (this.bubbleMenu) this.bubbleMenu.hide();
     if (this.slashMenu) this.slashMenu.hide();
+    this.hideLinkPopover();
   }
 
   findTopLevelBlock(node: Node | null): HTMLElement | null {
@@ -725,6 +926,15 @@ export class NotionEditorEngine {
     this.renderAllMermaidBlocks();
     this.attachInteractiveListeners();
     this.pushSnapshot(true);
+
+    if (typeof window !== 'undefined') {
+      const hash = window.location.hash;
+      if (hash && hash.includes(':~:text=')) {
+        setTimeout(() => {
+          this.scrollToFragment(hash);
+        }, 180);
+      }
+    }
   }
 
   // ===========================================================================
@@ -830,7 +1040,12 @@ export class NotionEditorEngine {
       .replace(/\*(.*?)\*/g, '<em>$1</em>')
       .replace(/~~(.*?)~~/g, '<s>$1</s>')
       .replace(/`([^`]+)`/g, '<code>$1</code>')
-      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_match, label, href) => {
+        // Remover prefixo residual 'description' decorrente da ligature do ícone
+        const cleanLabel = (label || '').replace(/^description(?=[a-zA-Z0-9_\sÀ-ÿ])/i, '').trim() || label;
+        const isDoc = href.endsWith('.md') || href.includes('.md#') || href.includes(':~:text=') || href.startsWith('#');
+        return `<a href="${href}" class="${isDoc ? 'notion-doc-link' : ''}" target="${isDoc ? '_self' : '_blank'}">${cleanLabel}</a>`;
+      });
   }
 
   serializeInline(element: HTMLElement | null): string {
@@ -843,6 +1058,18 @@ export class NotionEditorEngine {
       } else if (child.nodeType === Node.ELEMENT_NODE) {
         const el = child as HTMLElement;
         const tag = el.tagName.toLowerCase();
+        
+        // Ignorar ícones (Material Symbols / SVG) para nunca serializar o nome do ícone como texto no Markdown
+        if (
+          el.classList.contains('material-symbols-outlined') || 
+          el.classList.contains('notion-icon') || 
+          el.classList.contains('icon-xs') ||
+          el.classList.contains('icon-sm') ||
+          tag === 'svg'
+        ) {
+          return;
+        }
+
         if (tag === 'strong' || tag === 'b') {
           result += `**${this.serializeInline(el)}**`;
         } else if (tag === 'em' || tag === 'i') {
@@ -853,7 +1080,9 @@ export class NotionEditorEngine {
           result += `\`${el.textContent}\``;
         } else if (tag === 'a') {
           const href = el.getAttribute('href') || '#';
-          result += `[${this.serializeInline(el)}](${href})`;
+          let label = this.serializeInline(el);
+          label = label.replace(/^description(?=[a-zA-Z0-9_\sÀ-ÿ])/i, '').trim() || label;
+          result += `[${label}](${href})`;
         } else if (tag === 'br') {
           result += '\n';
         } else {
@@ -1144,9 +1373,68 @@ export class NotionEditorEngine {
     const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
     const modifier = isMac ? e.metaKey : e.ctrlKey;
 
+    if (e.key === 'Escape') {
+      this.hideLinkPopover();
+    }
+
     if (modifier && (e.key === 's' || e.key === 'S')) {
       e.preventDefault();
       this.onSave();
+      return;
+    }
+
+    if (modifier && (e.key === 'k' || e.key === 'K')) {
+      e.preventDefault();
+      const selection = window.getSelection();
+      let existingAnchor: HTMLAnchorElement | null = null;
+      if (selection && selection.anchorNode) {
+        const parentEl = selection.anchorNode.nodeType === Node.ELEMENT_NODE 
+          ? (selection.anchorNode as HTMLElement) 
+          : selection.anchorNode.parentElement;
+        existingAnchor = (parentEl?.closest('a') as HTMLAnchorElement) || null;
+      }
+      const initialUrl = existingAnchor ? existingAnchor.getAttribute('href') || '' : '';
+      const selectedText = selection ? selection.toString().trim() : '';
+      const initialText = selectedText || (existingAnchor ? existingAnchor.textContent || '' : '');
+      const savedRange = selection && selection.rangeCount > 0 ? selection.getRangeAt(0).cloneRange() : null;
+
+      if (this.onOpenLinkModal) {
+        this.onOpenLinkModal(initialText, (newUrl, newText) => {
+          const isDoc = newUrl.endsWith('.md') || newUrl.includes('.md#') || newUrl.includes(':~:text=') || newUrl.startsWith('#');
+          if (existingAnchor && existingAnchor.isConnected) {
+            existingAnchor.setAttribute('href', newUrl);
+            existingAnchor.textContent = newText || newUrl;
+            if (isDoc) {
+              existingAnchor.classList.add('notion-doc-link');
+              existingAnchor.target = '_self';
+            } else {
+              existingAnchor.classList.remove('notion-doc-link');
+              existingAnchor.target = '_blank';
+            }
+          } else if (savedRange) {
+            const sel = window.getSelection();
+            if (sel) {
+              sel.removeAllRanges();
+              sel.addRange(savedRange);
+            }
+            const anchor = document.createElement('a');
+            anchor.setAttribute('href', newUrl);
+            if (isDoc) {
+              anchor.className = 'notion-doc-link';
+              anchor.target = '_self';
+            } else {
+              anchor.target = '_blank';
+            }
+            anchor.textContent = newText || newUrl;
+            savedRange.deleteContents();
+            savedRange.insertNode(anchor);
+          } else {
+            document.execCommand('createLink', false, newUrl);
+          }
+          this.attachInteractiveListeners();
+          this.recordChange();
+        }, initialUrl);
+      }
       return;
     }
 
@@ -1296,19 +1584,19 @@ export class NotionEditorEngine {
         this.insertBlockHtml('<h3>Título 3</h3>');
         break;
       case 'link': {
-        const url = prompt('Insira a URL / Link:');
-        if (url) {
-          const text = prompt('Texto de exibição do link:', url) || url;
-          this.insertBlockHtml(`<p><a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(text)}</a></p>`);
+        if (this.onOpenLinkModal) {
+          this.onOpenLinkModal('', (url, text) => {
+            const isDoc = url.endsWith('.md') || url.includes('.md#') || url.includes(':~:text=');
+            this.insertBlockHtml(`<p><a href="${escapeHtml(url)}" class="${isDoc ? 'notion-doc-link' : ''}" target="${isDoc ? '_self' : '_blank'}">${escapeHtml(text || url)}</a></p>`);
+          });
         }
         break;
       }
       case 'doc-link': {
-        const docPath = prompt('Insira o caminho do documento ou link do trecho (ex: pasta/doc.md#:~:text=...):');
-        if (docPath) {
-          const defaultLabel = docPath.split('/').pop()?.split('#')[0] || docPath;
-          const title = prompt('Texto de exibição do link:', defaultLabel) || defaultLabel;
-          this.insertBlockHtml(`<p><a href="${escapeHtml(docPath)}" class="notion-doc-link" title="Abrir referência: ${escapeHtml(docPath)}"><span class="material-symbols-outlined" style="font-size:13px; vertical-align:middle; margin-right:3px;">description</span>${escapeHtml(title)}</a></p>`);
+        if (this.onOpenLinkModal) {
+          this.onOpenLinkModal('', (url, text) => {
+            this.insertBlockHtml(`<p><a href="${escapeHtml(url)}" class="notion-doc-link">${escapeHtml(text || url)}</a></p>`);
+          });
         }
         break;
       }
@@ -1385,7 +1673,9 @@ export class NotionEditorEngine {
       this.canvas.appendChild(element);
     }
 
+    this.attachInteractiveListeners();
     this.placeCursorIn(element);
+    this.recordChange();
   }
 
   placeCursorIn(element: HTMLElement) {
@@ -1475,6 +1765,7 @@ export class NotionEditorEngine {
     if (this.bubbleMenu) this.bubbleMenu.destroy();
     if (this.sideHandle) this.sideHandle.remove();
     if (this.blockMenu) this.blockMenu.remove();
+    if (this.linkPopover) this.linkPopover.remove();
     if (this.dropIndicator) this.dropIndicator.remove();
   }
 }

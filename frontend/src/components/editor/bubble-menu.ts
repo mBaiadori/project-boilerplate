@@ -14,6 +14,7 @@ export class BubbleMenuEngine {
   onAskCopilot?: (text: string) => void;
   getFilePath?: () => string | null;
   onCopyLink?: (url: string) => void;
+  onOpenLinkModal?: (defaultText: string, callback: (url: string, text: string) => void, initialUrl?: string) => void;
   element: HTMLElement | null = null;
   colorPicker: HTMLElement | null = null;
   isVisible = false;
@@ -42,18 +43,21 @@ export class BubbleMenuEngine {
     onAskCopilot,
     getFilePath,
     onCopyLink,
+    onOpenLinkModal,
   }: {
     container: HTMLElement;
     onFormat?: (action: string) => void;
     onAskCopilot?: (text: string) => void;
     getFilePath?: () => string | null;
     onCopyLink?: (url: string) => void;
+    onOpenLinkModal?: (defaultText: string, callback: (url: string, text: string) => void, initialUrl?: string) => void;
   }) {
     this.container = container;
     this.onFormat = onFormat || (() => {});
     this.onAskCopilot = onAskCopilot;
     this.getFilePath = getFilePath;
     this.onCopyLink = onCopyLink;
+    this.onOpenLinkModal = onOpenLinkModal;
 
     this.onSelectionChangeHandler = () => this.updatePosition();
     this.onResizeHandler = () => this.updatePosition();
@@ -226,11 +230,65 @@ export class BubbleMenuEngine {
         this.wrapSelectionWithTag("code");
         break;
       case "link": {
-        const url = prompt("Insira o link / URL:");
-        if (url) {
-          document.execCommand("createLink", false, url);
+        const selection = window.getSelection();
+        let existingAnchor: HTMLAnchorElement | null = null;
+        if (selection && selection.anchorNode) {
+          const parentEl = selection.anchorNode.nodeType === Node.ELEMENT_NODE 
+            ? (selection.anchorNode as HTMLElement) 
+            : selection.anchorNode.parentElement;
+          existingAnchor = (parentEl?.closest('a') as HTMLAnchorElement) || null;
         }
-        break;
+        if (!existingAnchor && this.savedRange) {
+          const common = this.savedRange.commonAncestorContainer;
+          const parentEl = common.nodeType === Node.ELEMENT_NODE ? (common as HTMLElement) : common.parentElement;
+          existingAnchor = (parentEl?.closest('a') as HTMLAnchorElement) || null;
+        }
+
+        const selectedText = selection ? selection.toString().trim() : "";
+        const initialText = selectedText || (existingAnchor ? existingAnchor.textContent || "" : "");
+        const initialUrl = existingAnchor ? existingAnchor.getAttribute("href") || "" : "";
+        const savedRange = this.savedRange?.cloneRange() || (selection && selection.rangeCount > 0 ? selection.getRangeAt(0).cloneRange() : null);
+
+        this.hide();
+        if (this.onOpenLinkModal) {
+          this.onOpenLinkModal(initialText, (url, text) => {
+            const isDoc = url.endsWith(".md") || url.includes(".md#") || url.includes(":~:text=") || url.startsWith("#");
+            if (existingAnchor && existingAnchor.isConnected) {
+              existingAnchor.setAttribute("href", url);
+              existingAnchor.textContent = text || url;
+              if (isDoc) {
+                existingAnchor.classList.add("notion-doc-link");
+                existingAnchor.target = "_self";
+              } else {
+                existingAnchor.classList.remove("notion-doc-link");
+                existingAnchor.target = "_blank";
+              }
+            } else {
+              if (savedRange) {
+                const sel = window.getSelection();
+                if (sel) {
+                  sel.removeAllRanges();
+                  sel.addRange(savedRange);
+                }
+                const anchor = document.createElement("a");
+                anchor.setAttribute("href", url);
+                if (isDoc) {
+                  anchor.className = "notion-doc-link";
+                  anchor.target = "_self";
+                } else {
+                  anchor.target = "_blank";
+                }
+                anchor.textContent = text || url;
+                savedRange.deleteContents();
+                savedRange.insertNode(anchor);
+              } else {
+                document.execCommand("createLink", false, url);
+              }
+            }
+            this.onFormat("link");
+          }, initialUrl);
+        }
+        return;
       }
     }
 
