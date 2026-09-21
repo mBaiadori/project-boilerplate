@@ -21,11 +21,33 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
   const barRef = useRef<HTMLDivElement>(null);
   const propDropdownRef = useRef<HTMLDivElement>(null);
 
+  const loadContext = React.useCallback(async () => {
+    if (!filePath) return;
+    try {
+      const data = await API.getDocumentContext(filePath);
+      setContextData(data);
+    } catch (err) {
+      console.warn("[DocConnectivityBar] Erro ao carregar contexto:", err);
+    }
+  }, [filePath]);
+
   useEffect(() => {
     if (filePath) {
       loadContext();
     }
-  }, [filePath]);
+  }, [filePath, loadContext]);
+
+  // Atualização em tempo real das dependências e consumidores ao salvar documento ou metadados
+  useEffect(() => {
+    const handleDocumentSaved = (e: any) => {
+      const savedPath = e.detail?.filePath;
+      if (!savedPath || !filePath || savedPath === filePath || savedPath === filePath.split('#')[0] || filePath.startsWith(savedPath)) {
+        loadContext();
+      }
+    };
+    window.addEventListener("workspace:document-saved", handleDocumentSaved);
+    return () => window.removeEventListener("workspace:document-saved", handleDocumentSaved);
+  }, [filePath, loadContext]);
 
   useEffect(() => {
     const handleOutsideClick = (e: MouseEvent) => {
@@ -38,15 +60,6 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
     document.addEventListener("mousedown", handleOutsideClick);
     return () => document.removeEventListener("mousedown", handleOutsideClick);
   }, []);
-
-  const loadContext = async () => {
-    try {
-      const data = await API.getDocumentContext(filePath);
-      setContextData(data);
-    } catch (err) {
-      console.warn("[DocConnectivityBar] Erro ao carregar contexto:", err);
-    }
-  };
 
   const cleanPath = filePath.split('#')[0];
   const segments = cleanPath.split("/").filter(Boolean);

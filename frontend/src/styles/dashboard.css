@@ -494,7 +494,8 @@ body.is-resizing .dash-sidebar-nav {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-top: 2px;
+  padding: 4px 2px 6px 2px;
+  margin-bottom: 4px;
 }
 
 .tree-toolbar-label {
@@ -511,15 +512,15 @@ body.is-resizing .dash-sidebar-nav {
 .tree-toolbar-icons {
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
 }
 
 .btn-tree-tool {
   background: transparent;
   border: 1px solid transparent;
   color: #64748b;
-  width: 25px;
-  height: 25px;
+  width: 26px;
+  height: 26px;
   border-radius: 4px;
   display: inline-flex;
   align-items: center;
@@ -732,20 +733,23 @@ body.is-resizing .pane-resizer {
 .tree-node {
   display: flex;
   flex-direction: column;
+  margin: 0;
 }
 
 .tree-folder {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 5px 6px;
-  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  margin: 0;
+  border-radius: var(--radius-sm, 6px);
   cursor: pointer;
   user-select: none;
   font-size: 12.5px;
   font-weight: 600;
   color: var(--text-heading);
-  transition: background 0.1s ease;
+  min-height: 24px;
+  transition: background 0.12s ease;
 }
 
 .tree-folder:hover {
@@ -779,7 +783,7 @@ body.is-resizing .pane-resizer {
 .tree-file-actions {
   display: none;
   align-items: center;
-  gap: 2px;
+  gap: 1px;
 }
 
 .tree-folder:hover .tree-folder-actions,
@@ -792,10 +796,14 @@ body.is-resizing .pane-resizer {
   border: none;
   font-size: 11px;
   cursor: pointer;
-  padding: 1px 4px;
-  border-radius: 3px;
+  padding: 3px 5px;
+  border-radius: 4px;
   color: var(--text-muted);
-  line-height: 1.2;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.1s ease;
 }
 
 .btn-tree-action:hover {
@@ -809,12 +817,14 @@ body.is-resizing .pane-resizer {
 }
 
 .tree-children {
-  padding-left: 12px;
+  padding-left: 8px;
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 3px;
   border-left: 1px solid #e2e8f0;
-  margin-left: 8px;
+  margin-left: 9px;
+  margin-top: 2px;
+  margin-bottom: 2px;
 }
 
 .tree-children.collapsed {
@@ -825,13 +835,15 @@ body.is-resizing .pane-resizer {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 4px 6px;
-  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  margin: 1px 0;
+  border-radius: var(--radius-sm, 6px);
   cursor: pointer;
-  font-size: 12px;
+  font-size: 12.5px;
   color: var(--text-main);
-  transition: all 0.1s ease;
-  height: 26px;
+  transition: all 0.12s ease;
+  min-height: 30px;
+  height: auto;
 }
 
 .tree-file-item:hover {
@@ -8182,8 +8194,8 @@ input[type="text"].icon-picker-search-input:focus {
 }
 
 .notion-canvas a.notion-doc-link::before {
-  content: 'description';
-  font-family: 'Material Symbols Outlined';
+  content: "description";
+  font-family: "Material Symbols Outlined";
   font-size: 13px;
   line-height: 1;
   vertical-align: -2px;
@@ -8324,6 +8336,3 @@ input[type="text"].icon-picker-search-input:focus {
   color: #94a3b8;
   font-style: italic;
 }
-
-
-

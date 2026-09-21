@@ -16,7 +16,7 @@
 .notion-editor-scroll-container {
   flex: 1;
   overflow-y: auto;
-  padding: 40px 60px;
+  padding: 20px;
   background: var(--bg-surface, #ffffff);
   scroll-behavior: smooth;
   position: relative;
@@ -25,46 +25,77 @@
 /* Notion Document Top Title Header */
 .notion-doc-header-block {
   max-width: 860px;
-  margin: 0 auto 24px auto;
+  margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  border-bottom: 1px solid var(--border-subtle, #e2e8f0);
-  padding-bottom: 16px;
+  padding: 0;
+  border: none;
+  cursor: text;
 }
 
 .notion-doc-title-row {
   display: flex;
   align-items: flex-start;
-  justifyContent: space-between;
-  gap: 12px;
+  justify-content: space-between;
+  width: 100%;
+  cursor: text;
 }
 
 .notion-doc-title-input {
   width: 100%;
-  font-family: "Outfit", "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
-  font-size: 2.1rem;
+  font-family:
+    "Outfit",
+    "Inter",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+  font-size: 2.25rem;
   font-weight: 700;
   line-height: 1.25;
   letter-spacing: -0.025em;
   color: var(--text-main, #0f172a);
   background: transparent;
-  border: none;
-  outline: none;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
   padding: 0;
   margin: 0;
   resize: none;
+  overflow: hidden;
+  display: block;
+  box-sizing: border-box;
+  cursor: text;
   transition: color 0.15s ease;
+  word-break: break-word;
 }
 
 .notion-doc-title-input::placeholder {
   color: var(--text-dim, #94a3b8);
-  font-weight: 600;
-  opacity: 0.6;
+  font-weight: 700;
+  opacity: 0.35;
+  cursor: text;
+}
+
+.notion-doc-title-input:focus {
+  outline: none !important;
+  box-shadow: none !important;
+  border: none !important;
 }
 
 .notion-doc-title-input:focus::placeholder {
-  opacity: 0.3;
+  opacity: 0.2;
+}
+
+/* Divider separando Título H1 do corpo Markdown (.md) */
+.notion-doc-title-divider {
+  max-width: 860px;
+  margin: 16px auto;
+  height: 1px;
+  background: var(--border-subtle, #e2e8f0);
+  border: none;
+  opacity: 0.75;
 }
 
 .notion-doc-title-meta {
@@ -1178,4 +1209,3 @@
   background: #fee2e2;
   color: #dc2626;
 }
-

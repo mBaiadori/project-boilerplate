@@ -192,6 +192,9 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         }
         DraftStore.clearDocDraft(repo.name, file);
         setSaveStatus('Salvo no disco');
+        window.dispatchEvent(new CustomEvent('workspace:document-saved', {
+          detail: { filePath: file, meta: res.data?.meta }
+        }));
         if (statusTimerRef.current) clearTimeout(statusTimerRef.current);
         statusTimerRef.current = setTimeout(() => {
           setSaveStatus('Pronto');
@@ -391,6 +394,9 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         if (res.data.tree) {
           setTree(res.data.tree);
         }
+        window.dispatchEvent(new CustomEvent('workspace:document-saved', {
+          detail: { filePath: currentFile, meta: res.data.meta }
+        }));
       }
     } catch (err) {
       console.error('[WorkspaceContext] Erro ao atualizar metadados:', err);

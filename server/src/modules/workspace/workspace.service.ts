@@ -137,11 +137,10 @@ export class WorkspaceService {
 
     // Extrair links automaticamente do conteúdo markdown para enriquecer o .docs.metadata.json
     const extractedLinks = extractDocLinksFromMarkdown(content);
-    const finalLinks = Array.from(new Set([...extractedLinks, ...(Array.isArray(meta?.links) ? meta.links : [])]));
 
     const metaUpdatePayload = {
       ...(meta && typeof meta === 'object' ? meta : {}),
-      links: finalLinks,
+      links: extractedLinks,
     };
 
     const { meta: updatedMetaItem } = docsMetadataService.updateDocMetadataItem(repoName, cleanPath, metaUpdatePayload);
@@ -204,7 +203,7 @@ export class WorkspaceService {
     const extractedLinks = extractDocLinksFromMarkdown(initialContent);
     const metaPayload = {
       ...(meta && typeof meta === 'object' ? meta : {}),
-      links: Array.isArray(meta?.links) ? meta.links : extractedLinks,
+      links: extractedLinks,
     };
 
     const { meta: newItem } = docsMetadataService.updateDocMetadataItem(repoName, cleanPath, metaPayload);
@@ -413,7 +412,7 @@ export class WorkspaceService {
     }
     
     const extractedActiveLinks = extractDocLinksFromMarkdown(activeContent);
-    const rawOutgoingLinks = Array.from(new Set([...(docMeta.links || []), ...extractedActiveLinks]));
+    const rawOutgoingLinks = extractedActiveLinks;
 
     // 1. Dependencies (Outgoing links from this document)
     const dependencies: any[] = [];

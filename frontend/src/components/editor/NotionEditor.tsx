@@ -1,14 +1,17 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { FileText, Plus, Sparkles, FolderTree } from 'lucide-react';
-import { parseFrontmatter } from '../../services/frontmatter';
-import { NotionEditorEngine, type FragmentStatusInfo } from './notion-editor-engine';
-import { API } from '../../services/api';
-import { useWorkspace } from '../../context/WorkspaceContext';
-import { VisualMarkdownDiff } from './VisualMarkdownDiff';
-import { DocumentHistoryDrawer } from './DocumentHistoryDrawer';
-import { DocConnectivityBar } from './DocConnectivityBar';
-import { InsertLinkModal } from '../modals/InsertLinkModal';
-import type { GitCommitInfo, DocumentMetadataItem } from '../../types';
+import React, { useState, useRef, useEffect, useCallback } from "react";
+import { FileText, Plus, Sparkles, FolderTree } from "lucide-react";
+import { parseFrontmatter } from "../../services/frontmatter";
+import {
+  NotionEditorEngine,
+  type FragmentStatusInfo,
+} from "./notion-editor-engine";
+import { API } from "../../services/api";
+import { useWorkspace } from "../../context/WorkspaceContext";
+import { VisualMarkdownDiff } from "./VisualMarkdownDiff";
+import { DocumentHistoryDrawer } from "./DocumentHistoryDrawer";
+import { DocConnectivityBar } from "./DocConnectivityBar";
+import { InsertLinkModal } from "../modals/InsertLinkModal";
+import type { GitCommitInfo, DocumentMetadataItem } from "../../types";
 
 interface NotionEditorProps {
   content: string;
@@ -31,7 +34,7 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
   onOpenDiffModal,
   onToggleCopilot,
   onOpenScaffoldWizard,
-  onSendSelectionToCopilot
+  onSendSelectionToCopilot,
 }) => {
   const {
     originalContent,
@@ -41,49 +44,78 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
     saveStatus,
     saveCurrentFile,
     fileMetadata,
-    updateDocumentTitle
+    updateDocumentTitle,
   } = useWorkspace();
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
-  const [importText, setImportText] = useState('');
-  const [titleValue, setTitleValue] = useState<string>('');
+  const [importText, setImportText] = useState("");
+  const [titleValue, setTitleValue] = useState<string>("");
 
   // Git Mode, Visual Diff & Document History Drawer State
   const [isGitMode, setIsGitMode] = useState(false);
   const [isHistoryDrawerOpen, setIsHistoryDrawerOpen] = useState(false);
-  const [selectedCommit, setSelectedCommit] = useState<GitCommitInfo | null>(null);
-  const [historicalContent, setHistoricalContent] = useState<string>('');
+  const [selectedCommit, setSelectedCommit] = useState<GitCommitInfo | null>(
+    null,
+  );
+  const [historicalContent, setHistoricalContent] = useState<string>("");
   const [blameData, setBlameData] = useState<any[]>([]);
-  const [docMetadata, setDocMetadata] = useState<DocumentMetadataItem | null>(null);
-  const [editorToast, setEditorToast] = useState<{ text: string; type: 'info' | 'success' | 'warning' } | null>(null);
-  const [fragmentAlert, setFragmentAlert] = useState<FragmentStatusInfo | null>(null);
-  const titleDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [docMetadata, setDocMetadata] = useState<DocumentMetadataItem | null>(
+    null,
+  );
+  const [editorToast, setEditorToast] = useState<{
+    text: string;
+    type: "info" | "success" | "warning";
+  } | null>(null);
+  const [fragmentAlert, setFragmentAlert] = useState<FragmentStatusInfo | null>(
+    null,
+  );
+  const titleDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
 
   // Link Insertion Modal State
   const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
-  const [linkModalInitialText, setLinkModalInitialText] = useState('');
-  const [linkModalInitialUrl, setLinkModalInitialUrl] = useState('');
-  const linkModalCallbackRef = useRef<((url: string, text: string) => void) | null>(null);
+  const [linkModalInitialText, setLinkModalInitialText] = useState("");
+  const [linkModalInitialUrl, setLinkModalInitialUrl] = useState("");
+  const linkModalCallbackRef = useRef<
+    ((url: string, text: string) => void) | null
+  >(null);
 
-  const handleOpenLinkModal = useCallback((defaultText: string, callback: (url: string, text: string) => void, initialUrl: string = '') => {
-    setLinkModalInitialText(defaultText || '');
-    setLinkModalInitialUrl(initialUrl || '');
-    linkModalCallbackRef.current = callback;
-    setIsLinkModalOpen(true);
-  }, []);
+  const handleOpenLinkModal = useCallback(
+    (
+      defaultText: string,
+      callback: (url: string, text: string) => void,
+      initialUrl: string = "",
+    ) => {
+      setLinkModalInitialText(defaultText || "");
+      setLinkModalInitialUrl(initialUrl || "");
+      linkModalCallbackRef.current = callback;
+      setIsLinkModalOpen(true);
+    },
+    [],
+  );
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<NotionEditorEngine | null>(null);
+  const titleTextareaRef = useRef<HTMLTextAreaElement>(null);
   const isInternalChangeRef = useRef(false);
 
-  const parsed = parseFrontmatter(content || '');
-  const body = parsed.body || content || '';
+  const parsed = parseFrontmatter(content || "");
+  const body = parsed.body || content || "";
+
+  // Auto-resize title textarea to fit content organically like a heading
+  useEffect(() => {
+    if (titleTextareaRef.current) {
+      titleTextareaRef.current.style.height = "auto";
+      titleTextareaRef.current.style.height = `${titleTextareaRef.current.scrollHeight}px`;
+    }
+  }, [titleValue]);
 
   // Toast de alerta caso ocorra falha de salvamento
   useEffect(() => {
-    if (saveStatus === 'Erro') {
+    if (saveStatus === "Erro") {
       setEditorToast({
-        text: 'Não foi possível gravar no disco. Rascunho temporário mantido na sessão.',
-        type: 'warning'
+        text: "Não foi possível gravar no disco. Rascunho temporário mantido na sessão.",
+        type: "warning",
       });
       setTimeout(() => setEditorToast(null), 5000);
     }
@@ -94,22 +126,31 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
     if (!filePath) return;
 
     // Load metadata
-    API.getProjectMetadata(activeRepo?.name).then(res => {
-      if (res.ok && Array.isArray(res.data)) {
-        const found = res.data.find(d => d.path === filePath || d.path.replace(/^\/+/, '') === filePath.replace(/^\/+/, ''));
-        if (found) setDocMetadata(found);
-      }
-    }).catch(() => {});
+    API.getProjectMetadata(activeRepo?.name)
+      .then((res) => {
+        if (res.ok && Array.isArray(res.data)) {
+          const found = res.data.find(
+            (d) =>
+              d.path === filePath ||
+              d.path.replace(/^\/+/, "") === filePath.replace(/^\/+/, ""),
+          );
+          if (found) setDocMetadata(found);
+        }
+      })
+      .catch(() => {});
 
     // Reset commit selection when switching file
     setSelectedCommit(null);
-    setHistoricalContent('');
+    setHistoricalContent("");
     setFragmentAlert(null);
   }, [filePath, activeRepo]);
 
   // Sincronizar o título local com os metadados do documento
   useEffect(() => {
-    const metaTitle = fileMetadata?.title !== undefined ? fileMetadata.title : (docMetadata?.title || '');
+    const metaTitle =
+      fileMetadata?.title !== undefined
+        ? fileMetadata.title
+        : docMetadata?.title || "";
     setTitleValue(metaTitle);
   }, [fileMetadata?.title, docMetadata?.title, filePath]);
 
@@ -126,28 +167,32 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
   // Load Blame info when entering Git / Audit Mode
   useEffect(() => {
     if (isGitMode && filePath) {
-      API.getFileBlame(filePath).then(res => {
-        if (res.ok && res.data?.blame) {
-          setBlameData(res.data.blame);
-        }
-      }).catch(() => {});
+      API.getFileBlame(filePath)
+        .then((res) => {
+          if (res.ok && res.data?.blame) {
+            setBlameData(res.data.blame);
+          }
+        })
+        .catch(() => {});
     }
   }, [isGitMode, filePath]);
 
   // Load Historical Content when selecting a past commit
   useEffect(() => {
     if (!selectedCommit || !filePath) {
-      setHistoricalContent('');
+      setHistoricalContent("");
       return;
     }
 
-    API.getFileVersion(filePath, selectedCommit.hash).then(res => {
-      if (res.ok && res.data?.success) {
-        setHistoricalContent(res.data.content);
-      }
-    }).catch(err => {
-      console.error('[NotionEditor] Erro ao carregar versão do commit:', err);
-    });
+    API.getFileVersion(filePath, selectedCommit.hash)
+      .then((res) => {
+        if (res.ok && res.data?.success) {
+          setHistoricalContent(res.data.content);
+        }
+      })
+      .catch((err) => {
+        console.error("[NotionEditor] Erro ao carregar versão do commit:", err);
+      });
   }, [selectedCommit, filePath]);
 
   // Manual save trigger (Ctrl+S ou clique) que faz o flush imediato
@@ -155,7 +200,10 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
     if (!filePath) return;
     const res = await saveCurrentFile();
     if (res?.success) {
-      setEditorToast({ text: 'Alterações gravadas no disco!', type: 'success' });
+      setEditorToast({
+        text: "Alterações gravadas no disco!",
+        type: "success",
+      });
       setTimeout(() => setEditorToast(null), 2500);
     }
   }, [filePath, saveCurrentFile]);
@@ -183,20 +231,20 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
         }
       },
       onToast: (msg, type) => {
-        setEditorToast({ text: msg, type: type || 'info' });
+        setEditorToast({ text: msg, type: type || "info" });
         setTimeout(() => setEditorToast(null), 3800);
       },
       onOpenLinkModal: handleOpenLinkModal,
       onFragmentStatus: (status) => {
         setFragmentAlert(status);
-      }
+      },
     });
 
     engineRef.current = engine;
     engine.setMarkdown(body);
 
     const hash = window.location.hash;
-    if (hash && hash.includes(':~:text=')) {
+    if (hash && hash.includes(":~:text=")) {
       setTimeout(() => {
         engine.scrollToFragment(hash);
       }, 250);
@@ -212,7 +260,7 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
     if (engineRef.current) {
       engineRef.current.filePath = filePath;
       const hash = window.location.hash;
-      if (hash && hash.includes(':~:text=')) {
+      if (hash && hash.includes(":~:text=")) {
         setTimeout(() => {
           engineRef.current?.scrollToFragment(hash);
         }, 250);
@@ -224,7 +272,10 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
   useEffect(() => {
     const handleFragmentNav = (e: any) => {
       const targetHash = e.detail?.hash || window.location.hash;
-      if (targetHash && (targetHash.includes(':~:text=') || targetHash.startsWith('#'))) {
+      if (
+        targetHash &&
+        (targetHash.includes(":~:text=") || targetHash.startsWith("#"))
+      ) {
         setTimeout(() => {
           engineRef.current?.scrollToFragment(targetHash);
         }, 80);
@@ -233,18 +284,21 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
 
     const handleHashChange = () => {
       const hash = window.location.hash;
-      if (hash && (hash.includes(':~:text=') || hash.startsWith('#'))) {
+      if (hash && (hash.includes(":~:text=") || hash.startsWith("#"))) {
         setTimeout(() => {
           engineRef.current?.scrollToFragment(hash);
         }, 80);
       }
     };
 
-    window.addEventListener('workspace:navigate-fragment', handleFragmentNav);
-    window.addEventListener('hashchange', handleHashChange);
+    window.addEventListener("workspace:navigate-fragment", handleFragmentNav);
+    window.addEventListener("hashchange", handleHashChange);
     return () => {
-      window.removeEventListener('workspace:navigate-fragment', handleFragmentNav);
-      window.removeEventListener('hashchange', handleHashChange);
+      window.removeEventListener(
+        "workspace:navigate-fragment",
+        handleFragmentNav,
+      );
+      window.removeEventListener("hashchange", handleHashChange);
     };
   }, []);
 
@@ -259,7 +313,7 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
       if (currentEngineMd !== body) {
         engineRef.current.setMarkdown(body);
         const hash = window.location.hash;
-        if (hash && (hash.includes(':~:text=') || hash.startsWith('#'))) {
+        if (hash && (hash.includes(":~:text=") || hash.startsWith("#"))) {
           setTimeout(() => {
             engineRef.current?.scrollToFragment(hash);
           }, 120);
@@ -271,24 +325,30 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
   // Keyboard shortcut Ctrl+S / Cmd+S
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
+      if ((e.ctrlKey || e.metaKey) && (e.key === "s" || e.key === "S")) {
         e.preventDefault();
         handleSave();
       }
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, [handleSave]);
 
   // Listener para erros de abertura de documentos inexistentes no workspace
   useEffect(() => {
     const handleFileLoadError = (e: any) => {
-      const msg = e.detail?.message || 'Documento referenciado não foi encontrado no workspace.';
-      setEditorToast({ text: msg, type: 'warning' });
+      const msg =
+        e.detail?.message ||
+        "Documento referenciado não foi encontrado no workspace.";
+      setEditorToast({ text: msg, type: "warning" });
       setTimeout(() => setEditorToast(null), 4500);
     };
-    window.addEventListener('workspace:file-load-error', handleFileLoadError);
-    return () => window.removeEventListener('workspace:file-load-error', handleFileLoadError);
+    window.addEventListener("workspace:file-load-error", handleFileLoadError);
+    return () =>
+      window.removeEventListener(
+        "workspace:file-load-error",
+        handleFileLoadError,
+      );
   }, []);
 
   const handleCopyPath = () => {
@@ -299,7 +359,9 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
 
   const handleRevealInTree = useCallback(() => {
     if (!filePath) return;
-    window.dispatchEvent(new CustomEvent('spec:reveal-in-tree', { detail: { path: filePath } }));
+    window.dispatchEvent(
+      new CustomEvent("spec:reveal-in-tree", { detail: { path: filePath } }),
+    );
   }, [filePath]);
 
   const handleCopyFullDoc = () => {
@@ -307,12 +369,12 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
   };
 
   const handleExportMarkdown = () => {
-    const filename = (filePath || 'document').split('/').pop() || 'document.md';
-    const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
+    const filename = (filePath || "document").split("/").pop() || "document.md";
+    const blob = new Blob([content], { type: "text/markdown;charset=utf-8" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
+    const a = document.createElement("a");
     a.href = url;
-    a.download = filename.endsWith('.md') ? filename : `${filename}.md`;
+    a.download = filename.endsWith(".md") ? filename : `${filename}.md`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -323,17 +385,24 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
     if (importText.trim()) {
       onChange(importText);
       setIsImportModalOpen(false);
-      setImportText('');
+      setImportText("");
     }
   };
 
   const handleRestoreHistoricalVersion = async () => {
     if (!historicalContent) return;
-    if (window.confirm(`Deseja restaurar o documento para o commit ${selectedCommit?.shortHash || 'selecionado'}?`)) {
+    if (
+      window.confirm(
+        `Deseja restaurar o documento para o commit ${selectedCommit?.shortHash || "selecionado"}?`,
+      )
+    ) {
       onChange(historicalContent);
       setIsGitMode(false);
       setSelectedCommit(null);
-      await API.saveProjectFile({ path: filePath!, content: historicalContent });
+      await API.saveProjectFile({
+        path: filePath!,
+        content: historicalContent,
+      });
       await refreshPendingChanges();
       await refreshGitStatus();
     }
@@ -341,8 +410,9 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
 
   const wordCount = body.trim() ? body.trim().split(/\s+/).length : 0;
   const lineCount = body ? body.split(/\r?\n/).length : 0;
-  const originalBody = parseFrontmatter(originalContent || '').body || originalContent || '';
-  const isDirty = (originalBody || '').trim() !== (body || '').trim();
+  const originalBody =
+    parseFrontmatter(originalContent || "").body || originalContent || "";
+  const isDirty = (originalBody || "").trim() !== (body || "").trim();
 
   if (!filePath) {
     return (
@@ -351,18 +421,41 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
           <div className="empty-icon-circle">
             <FileText size={32} color="var(--primary, #2563eb)" />
           </div>
-          <h2 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-heading, #0f172a)', margin: '14px 0 6px' }}>
+          <h2
+            style={{
+              fontSize: "18px",
+              fontWeight: 600,
+              color: "var(--text-heading, #0f172a)",
+              margin: "14px 0 6px",
+            }}
+          >
             Nenhum Documento Selecionado
           </h2>
-          <p style={{ fontSize: '13px', color: 'var(--text-muted, #64748b)', margin: '0 0 22px', lineHeight: 1.5, maxWidth: '380px' }}>
-            Selecione uma especificação na árvore lateral ou inicie a modelagem de um novo domínio de arquitetura.
+          <p
+            style={{
+              fontSize: "13px",
+              color: "var(--text-muted, #64748b)",
+              margin: "0 0 22px",
+              lineHeight: 1.5,
+              maxWidth: "380px",
+            }}
+          >
+            Selecione uma especificação na árvore lateral ou inicie a modelagem
+            de um novo domínio de arquitetura.
           </p>
-          <div className="empty-state-actions" style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+          <div
+            className="empty-state-actions"
+            style={{ display: "flex", gap: "10px", justifyContent: "center" }}
+          >
             {onOpenScaffoldWizard && (
               <button
                 id="btn-empty-new-spec"
                 className="btn btn-primary btn-sm"
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                }}
                 onClick={onOpenScaffoldWizard}
               >
                 <Plus size={15} />
@@ -373,7 +466,11 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
               <button
                 id="btn-empty-open-copilot"
                 className="btn btn-secondary btn-sm"
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                }}
                 onClick={onToggleCopilot}
               >
                 <Sparkles size={15} />
@@ -386,17 +483,32 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
     );
   }
 
-  const comparisonOldContent = selectedCommit ? historicalContent : (originalContent || '');
-  const comparisonOldTitle = selectedCommit 
-    ? `Commit ${selectedCommit.shortHash} (${selectedCommit.author})` 
-    : 'Versão Base (HEAD)';
+  const comparisonOldContent = selectedCommit
+    ? historicalContent
+    : originalContent || "";
+  const comparisonOldTitle = selectedCommit
+    ? `Commit ${selectedCommit.shortHash} (${selectedCommit.author})`
+    : "Versão Base (HEAD)";
 
   return (
-    <div style={{ display: 'flex', width: '100%', height: '100%', overflow: 'hidden' }}>
-      
+    <div
+      style={{
+        display: "flex",
+        width: "100%",
+        height: "100%",
+        overflow: "hidden",
+      }}
+    >
       {/* Center Main Editor / Git Visual Diff Canvas */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', minWidth: 0 }}>
-        
+      <div
+        style={{
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+          height: "100%",
+          minWidth: 0,
+        }}
+      >
         {/* 1. Document Header & Toolbar */}
         <div className="editor-top-toolbar">
           <div className="doc-meta-left">
@@ -405,7 +517,7 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
                 type="text"
                 id="doc-path-input"
                 className="doc-path-input"
-                value={filePath || ''}
+                value={filePath || ""}
                 readOnly
                 placeholder="Selecione ou crie um documento..."
                 spellCheck="false"
@@ -418,7 +530,16 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
                 title="Copiar caminho do arquivo"
                 onClick={handleCopyPath}
               >
-                <svg width="12.5" height="12.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg
+                  width="12.5"
+                  height="12.5"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
                   <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                   <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
                 </svg>
@@ -444,7 +565,16 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
                 title="Copiar Markdown completo"
                 onClick={handleCopyFullDoc}
               >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
                   <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                   <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
                 </svg>
@@ -456,7 +586,16 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
                 title="Exportar arquivo .md"
                 onClick={handleExportMarkdown}
               >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                   <polyline points="7 10 12 15 17 10"></polyline>
                   <line x1="12" y1="15" x2="12" y2="3"></line>
@@ -469,7 +608,16 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
                 title="Importar documento (.md ou colar)"
                 onClick={() => setIsImportModalOpen(true)}
               >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                   <polyline points="17 8 12 3 7 8"></polyline>
                   <line x1="12" y1="3" x2="12" y2="15"></line>
@@ -482,22 +630,28 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
             {/* Alternador de Modo Git & Versões ("Olhinho" / Diffs) */}
             <button
               id="btn-toggle-git-mode"
-              className={`btn-icon-action ${isGitMode ? 'active' : ''}`}
+              className={`btn-icon-action ${isGitMode ? "active" : ""}`}
               type="button"
-              title={isGitMode ? 'Voltar para Modo de Edição' : 'Modo Git & Auditoria (Ver alterações formatadas, quem editou e versões)'}
+              title={
+                isGitMode
+                  ? "Voltar para Modo de Edição"
+                  : "Modo Git & Auditoria (Ver alterações formatadas, quem editou e versões)"
+              }
               onClick={() => {
                 const nextMode = !isGitMode;
                 setIsGitMode(nextMode);
                 if (nextMode) setIsHistoryDrawerOpen(true);
               }}
             >
-              <span className="material-symbols-outlined icon-xs">visibility</span>
+              <span className="material-symbols-outlined icon-xs">
+                visibility
+              </span>
             </button>
 
             {/* Botão Gaveta de Histórico */}
             <button
               id="btn-toggle-history-drawer"
-              className={`btn-icon-action ${isHistoryDrawerOpen ? 'active' : ''}`}
+              className={`btn-icon-action ${isHistoryDrawerOpen ? "active" : ""}`}
               type="button"
               title="Linha do Tempo de Commits & Versões deste documento"
               onClick={() => setIsHistoryDrawerOpen(!isHistoryDrawerOpen)}
@@ -509,36 +663,57 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
             {!isGitMode && (
               <button
                 id="btn-save-draft"
-                className={`btn-icon-action ${saveStatus === 'Salvando...' ? 'is-saving' : saveStatus === 'Salvo no disco' ? 'saved-success' : saveStatus === 'Erro' ? 'has-error' : isDirty ? 'has-unsaved' : ''}`}
+                className={`btn-icon-action ${saveStatus === "Salvando..." ? "is-saving" : saveStatus === "Salvo no disco" ? "saved-success" : saveStatus === "Erro" ? "has-error" : isDirty ? "has-unsaved" : ""}`}
                 type="button"
                 title={
-                  saveStatus === 'Salvando...'
-                    ? 'Gravando alterações no disco da máquina...'
-                    : saveStatus === 'Salvo no disco'
-                    ? 'Salvo no disco com sucesso!'
-                    : saveStatus === 'Erro'
-                    ? 'Erro ao gravar no disco. Rascunho preservado.'
-                    : isDirty
-                    ? 'Gravando automaticamente no disco (ou clique/Ctrl+S para forçar gravação imediata)'
-                    : 'Arquivo sincronizado no disco (Ctrl+S)'
+                  saveStatus === "Salvando..."
+                    ? "Gravando alterações no disco da máquina..."
+                    : saveStatus === "Salvo no disco"
+                      ? "Salvo no disco com sucesso!"
+                      : saveStatus === "Erro"
+                        ? "Erro ao gravar no disco. Rascunho preservado."
+                        : isDirty
+                          ? "Gravando automaticamente no disco (ou clique/Ctrl+S para forçar gravação imediata)"
+                          : "Arquivo sincronizado no disco (Ctrl+S)"
                 }
                 onClick={handleSave}
-                disabled={saveStatus === 'Salvando...'}
+                disabled={saveStatus === "Salvando..."}
               >
-                {saveStatus === 'Salvando...' ? (
-                  <span className="material-symbols-outlined icon-xs" style={{ animation: 'spin 1s linear infinite', color: 'var(--primary, #2563eb)' }}>
+                {saveStatus === "Salvando..." ? (
+                  <span
+                    className="material-symbols-outlined icon-xs"
+                    style={{
+                      animation: "spin 1s linear infinite",
+                      color: "var(--primary, #2563eb)",
+                    }}
+                  >
                     progress_activity
                   </span>
-                ) : saveStatus === 'Salvo no disco' ? (
-                  <span className="material-symbols-outlined icon-xs" style={{ color: '#10b981' }}>
+                ) : saveStatus === "Salvo no disco" ? (
+                  <span
+                    className="material-symbols-outlined icon-xs"
+                    style={{ color: "#10b981" }}
+                  >
                     check
                   </span>
-                ) : saveStatus === 'Erro' ? (
-                  <span className="material-symbols-outlined icon-xs" style={{ color: '#ef4444' }}>
+                ) : saveStatus === "Erro" ? (
+                  <span
+                    className="material-symbols-outlined icon-xs"
+                    style={{ color: "#ef4444" }}
+                  >
                     error
                   </span>
                 ) : (
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
                     <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
                     <polyline points="17 21 17 13 7 13 7 21"></polyline>
                     <polyline points="7 3 7 8 15 8"></polyline>
@@ -556,7 +731,16 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
                 title="Revisar alterações e propor PR Oficial"
                 onClick={onOpenDiffModal}
               >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
                   <circle cx="18" cy="18" r="3"></circle>
                   <circle cx="6" cy="6" r="3"></circle>
                   <path d="M13 6h3a2 2 0 0 1 2 2v7"></path>
@@ -572,38 +756,52 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
           <div
             className={`editor-floating-toast toast-${editorToast.type}`}
             style={{
-              position: 'absolute',
-              top: '52px',
-              right: '24px',
+              position: "absolute",
+              top: "52px",
+              right: "24px",
               zIndex: 999,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              padding: '7px 14px',
-              borderRadius: '6px',
-              fontSize: '12px',
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              padding: "7px 14px",
+              borderRadius: "6px",
+              fontSize: "12px",
               fontWeight: 500,
-              boxShadow: '0 4px 16px rgba(0,0,0,0.22)',
-              animation: 'fadeIn 0.2s ease-out'
+              boxShadow: "0 4px 16px rgba(0,0,0,0.22)",
+              animation: "fadeIn 0.2s ease-out",
             }}
           >
             <span className="material-symbols-outlined icon-xs">
-              {editorToast.type === 'success' ? 'check_circle' : editorToast.type === 'warning' ? 'warning' : 'info'}
+              {editorToast.type === "success"
+                ? "check_circle"
+                : editorToast.type === "warning"
+                  ? "warning"
+                  : "info"}
             </span>
             <span>{editorToast.text}</span>
           </div>
         )}
 
         {/* Top Context & Connectivity Bar */}
-        <DocConnectivityBar filePath={filePath} onNavigateFile={onNavigateFile || (() => {})} />
+        <DocConnectivityBar
+          filePath={filePath}
+          onNavigateFile={onNavigateFile || (() => {})}
+        />
 
         {/* Fragment Not Found / Snippet Alert Banner */}
-        {fragmentAlert && fragmentAlert.type === 'not_found' && (
-          <div className="fragment-not-found-banner" id="fragment-not-found-alert">
+        {fragmentAlert && fragmentAlert.type === "not_found" && (
+          <div
+            className="fragment-not-found-banner"
+            id="fragment-not-found-alert"
+          >
             <div className="fragment-alert-header">
               <div className="fragment-alert-title-row">
-                <span className="material-symbols-outlined fragment-alert-icon">link_off</span>
-                <span className="fragment-alert-title">Trecho referenciado não encontrado</span>
+                <span className="material-symbols-outlined fragment-alert-icon">
+                  link_off
+                </span>
+                <span className="fragment-alert-title">
+                  Trecho referenciado não encontrado
+                </span>
               </div>
               <button
                 className="fragment-alert-close-btn"
@@ -614,7 +812,8 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
               </button>
             </div>
             <p className="fragment-alert-description">
-              O link apontava para um trecho específico que foi substancialmente modificado ou excluído deste documento.
+              O link apontava para um trecho específico que foi substancialmente
+              modificado ou excluído deste documento.
             </p>
             <div className="fragment-alert-original-box">
               <div className="fragment-alert-box-label">
@@ -625,18 +824,34 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
                   title="Copiar texto original para a área de transferência"
                   onClick={() => {
                     navigator.clipboard.writeText(fragmentAlert.exact);
-                    setEditorToast({ text: 'Texto original copiado!', type: 'success' });
+                    setEditorToast({
+                      text: "Texto original copiado!",
+                      type: "success",
+                    });
                     setTimeout(() => setEditorToast(null), 3000);
                   }}
                 >
-                  <span className="material-symbols-outlined icon-xs">content_copy</span>
+                  <span className="material-symbols-outlined icon-xs">
+                    content_copy
+                  </span>
                   Copiar texto
                 </button>
               </div>
               <div className="fragment-alert-box-quote">
-                {fragmentAlert.prefix && <span className="fragment-quote-context">...{fragmentAlert.prefix} </span>}
-                <span className="fragment-quote-exact">{fragmentAlert.exact}</span>
-                {fragmentAlert.suffix && <span className="fragment-quote-context"> {fragmentAlert.suffix}...</span>}
+                {fragmentAlert.prefix && (
+                  <span className="fragment-quote-context">
+                    ...{fragmentAlert.prefix}{" "}
+                  </span>
+                )}
+                <span className="fragment-quote-exact">
+                  {fragmentAlert.exact}
+                </span>
+                {fragmentAlert.suffix && (
+                  <span className="fragment-quote-context">
+                    {" "}
+                    {fragmentAlert.suffix}...
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -644,7 +859,14 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
 
         {/* 2. Body: Either Visual Markdown Diff (Git Mode) or Notion Live Editor */}
         {isGitMode ? (
-          <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          <div
+            style={{
+              flex: 1,
+              overflow: "hidden",
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
             <VisualMarkdownDiff
               oldContent={comparisonOldContent}
               newContent={body}
@@ -653,7 +875,9 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
               fileName={filePath || undefined}
               blameData={blameData}
               showAuthorship={true}
-              onRestoreOldVersion={selectedCommit ? handleRestoreHistoricalVersion : undefined}
+              onRestoreOldVersion={
+                selectedCommit ? handleRestoreHistoricalVersion : undefined
+              }
               onClose={() => setIsGitMode(false)}
             />
           </div>
@@ -661,20 +885,31 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
           <div className="notion-editor-wrapper" id="notion-editor-wrapper">
             <div className="notion-editor-scroll-container">
               {/* Título H1 Separado do Markdown */}
-              <div className="notion-doc-header-block" id="notion-doc-header-block">
+              <div
+                className="notion-doc-header-block"
+                id="notion-doc-header-block"
+                onClick={() => titleTextareaRef.current?.focus()}
+              >
                 <div className="notion-doc-title-row">
-                  <input
-                    type="text"
+                  <textarea
+                    ref={titleTextareaRef}
                     id="notion-doc-title-input"
                     className="notion-doc-title-input"
+                    rows={1}
                     placeholder="Sem título..."
                     value={titleValue}
-                    onChange={(e) => handleTitleChange(e.target.value)}
+                    onChange={(e) => {
+                      handleTitleChange(e.target.value);
+                      e.target.style.height = "auto";
+                      e.target.style.height = `${e.target.scrollHeight}px`;
+                    }}
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
+                      if (e.key === "Enter") {
                         e.preventDefault();
                         if (canvasRef.current) {
-                          const firstBlock = canvasRef.current.querySelector('[contenteditable="true"]') as HTMLElement;
+                          const firstBlock = canvasRef.current.querySelector(
+                            '[contenteditable="true"]',
+                          ) as HTMLElement;
                           if (firstBlock) firstBlock.focus();
                         }
                       }
@@ -682,26 +917,13 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
                     title="Título principal do documento (.docs.metadata.json)"
                   />
                 </div>
-                <div className="notion-doc-title-meta">
-                  <span className="notion-title-status-indicator">
-                    {titleValue.trim() ? (
-                      <>
-                        <span className="material-symbols-outlined icon-xs" style={{ color: '#10b981', fontSize: '13px' }}>
-                          check_circle
-                        </span>
-                        <span style={{ color: '#64748b' }}>Título vinculado ao <code>.docs.metadata.json</code></span>
-                      </>
-                    ) : (
-                      <>
-                        <span className="material-symbols-outlined icon-xs" style={{ color: '#f59e0b', fontSize: '13px' }}>
-                          info
-                        </span>
-                        <span style={{ color: '#d97706', fontWeight: 500 }}>Sem título definido no metadata</span>
-                      </>
-                    )}
-                  </span>
-                </div>
               </div>
+
+              {/* Divider separador entre o Título e o conteúdo .md */}
+              <div
+                className="notion-doc-title-divider"
+                id="notion-doc-title-divider"
+              />
 
               <div
                 ref={canvasRef}
@@ -714,28 +936,62 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
 
         {/* 3. Editor Status Footer */}
         <footer className="editor-bottom-bar">
-          <div className="editor-status-left" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span id="save-draft-status" className="status-indicator" style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+          <div
+            className="editor-status-left"
+            style={{ display: "flex", alignItems: "center", gap: "8px" }}
+          >
+            <span
+              id="save-draft-status"
+              className="status-indicator"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "5px",
+              }}
+            >
               {isGitMode ? (
                 <span>Modo Git & Auditoria Ativo</span>
-              ) : saveStatus === 'Salvando...' ? (
+              ) : saveStatus === "Salvando..." ? (
                 <>
-                  <span className="material-symbols-outlined icon-xs" style={{ animation: 'spin 1s linear infinite', color: 'var(--primary, #2563eb)' }}>progress_activity</span>
+                  <span
+                    className="material-symbols-outlined icon-xs"
+                    style={{
+                      animation: "spin 1s linear infinite",
+                      color: "var(--primary, #2563eb)",
+                    }}
+                  >
+                    progress_activity
+                  </span>
                   <span>Salvando no disco...</span>
                 </>
-              ) : saveStatus === 'Salvo no disco' ? (
+              ) : saveStatus === "Salvo no disco" ? (
                 <>
-                  <span className="material-symbols-outlined icon-xs" style={{ color: '#10b981' }}>check_circle</span>
-                  <span style={{ color: '#10b981' }}>Salvo no disco</span>
+                  <span
+                    className="material-symbols-outlined icon-xs"
+                    style={{ color: "#10b981" }}
+                  >
+                    check_circle
+                  </span>
+                  <span style={{ color: "#10b981" }}>Salvo no disco</span>
                 </>
-              ) : saveStatus === 'Erro' ? (
+              ) : saveStatus === "Erro" ? (
                 <>
-                  <span className="material-symbols-outlined icon-xs" style={{ color: '#ef4444' }}>error</span>
-                  <span style={{ color: '#ef4444' }}>Erro ao gravar</span>
+                  <span
+                    className="material-symbols-outlined icon-xs"
+                    style={{ color: "#ef4444" }}
+                  >
+                    error
+                  </span>
+                  <span style={{ color: "#ef4444" }}>Erro ao gravar</span>
                 </>
               ) : (
                 <>
-                  <span className="material-symbols-outlined icon-xs" style={{ color: '#10b981' }}>cloud_done</span>
+                  <span
+                    className="material-symbols-outlined icon-xs"
+                    style={{ color: "#10b981" }}
+                  >
+                    cloud_done
+                  </span>
                   <span>Sincronizado</span>
                 </>
               )}
@@ -746,7 +1002,7 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
             <span id="doc-line-count">{lineCount} linhas</span>
           </div>
           <div className="editor-status-right">
-            <span style={{ fontSize: '11px', color: 'var(--text-dim)' }}>
+            <span style={{ fontSize: "11px", color: "var(--text-dim)" }}>
               Atalho: <code>Ctrl+S</code> / <code>Cmd+S</code>
             </span>
             <button
@@ -783,6 +1039,10 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
         onConfirm={(url, text) => {
           if (linkModalCallbackRef.current) {
             linkModalCallbackRef.current(url, text);
+            // Salvar imediatamente no disco para atualizar dependências e metadados em tempo real
+            setTimeout(() => {
+              saveCurrentFile();
+            }, 80);
           }
           setIsLinkModalOpen(false);
         }}
@@ -790,18 +1050,41 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
 
       {/* Import Doc Modal */}
       {isImportModalOpen && (
-        <div id="import-doc-modal" className="modal-backdrop" style={{ display: 'flex' }}>
-          <div className="modal-box" style={{ maxWidth: '580px' }}>
+        <div
+          id="import-doc-modal"
+          className="modal-backdrop"
+          style={{ display: "flex" }}
+        >
+          <div className="modal-box" style={{ maxWidth: "580px" }}>
             <div className="modal-header">
               <div>
-                <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 600, color: '#0f172a' }}>Importar Documento</h3>
-                <span style={{ fontSize: '11.5px', color: '#64748b' }}>Upload de arquivo .md ou colar texto</span>
+                <h3
+                  style={{
+                    margin: 0,
+                    fontSize: "15px",
+                    fontWeight: 600,
+                    color: "#0f172a",
+                  }}
+                >
+                  Importar Documento
+                </h3>
+                <span style={{ fontSize: "11.5px", color: "#64748b" }}>
+                  Upload de arquivo .md ou colar texto
+                </span>
               </div>
-              <button id="btn-close-import-modal" className="btn-close" aria-label="Fechar" onClick={() => setIsImportModalOpen(false)}>
+              <button
+                id="btn-close-import-modal"
+                className="btn-close"
+                aria-label="Fechar"
+                onClick={() => setIsImportModalOpen(false)}
+              >
                 <span className="material-symbols-outlined icon-sm">close</span>
               </button>
             </div>
-            <div className="modal-body" style={{ padding: '18px 22px', gap: '14px' }}>
+            <div
+              className="modal-body"
+              style={{ padding: "18px 22px", gap: "14px" }}
+            >
               <div className="import-paste-box">
                 <textarea
                   id="import-paste-textarea"
@@ -809,13 +1092,29 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
                   placeholder="Ou cole seu texto Markdown aqui diretamente..."
                   value={importText}
                   onChange={(e) => setImportText(e.target.value)}
-                  style={{ width: '100%', fontFamily: 'var(--font-mono)' }}
+                  style={{ width: "100%", fontFamily: "var(--font-mono)" }}
                 />
               </div>
             </div>
-            <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-              <button className="btn btn-secondary btn-sm" onClick={() => setIsImportModalOpen(false)}>Cancelar</button>
-              <button className="btn btn-primary btn-sm" onClick={handleConfirmPasteImport} disabled={!importText.trim()}>
+            <div
+              className="modal-footer"
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: "8px",
+              }}
+            >
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={() => setIsImportModalOpen(false)}
+              >
+                Cancelar
+              </button>
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={handleConfirmPasteImport}
+                disabled={!importText.trim()}
+              >
                 Importar
               </button>
             </div>

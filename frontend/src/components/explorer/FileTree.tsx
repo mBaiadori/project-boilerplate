@@ -368,17 +368,23 @@ export const FileTree: React.FC<FileTreeProps> = ({
 
     const targetPath = parentPath ? `${parentPath}/${fileName}` : fileName;
 
-    let initialContent = '';
-    if (!isFolder && isMarkdown) {
-      const docTitle = rawName.replace(/\.md$/i, '').replace(/\.markdown$/i, '');
-      initialContent = `# ${docTitle}\n\nDocumento gerado no workspace.\n`;
-    }
+    const docTitle = rawName.replace(/\.md$/i, '').replace(/\.markdown$/i, '');
+    const initialContent = '';
 
     try {
       const res = await API.createProjectFile({
         path: targetPath,
         is_folder: isFolder,
-        content: initialContent
+        content: initialContent,
+        meta: !isFolder ? {
+          title: docTitle,
+          status: 'draft',
+          categories: 'geral',
+          tags: [],
+          approvers: [],
+          links: [],
+          templateId: ''
+        } : undefined
       });
 
       if (res.ok) {

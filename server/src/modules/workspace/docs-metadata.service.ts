@@ -216,7 +216,9 @@ export class DocsMetadataService {
         if (existingIdx >= 0) {
           const item = metaList[existingIdx];
           let itemModified = false;
-          if (!Array.isArray(item.links) || (item.links.length === 0 && extractedLinks.length > 0)) {
+          const currentLinksJson = JSON.stringify(Array.isArray(item.links) ? item.links : []);
+          const extractedLinksJson = JSON.stringify(extractedLinks);
+          if (currentLinksJson !== extractedLinksJson) {
             item.links = extractedLinks;
             itemModified = true;
           }
