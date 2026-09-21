@@ -3,7 +3,10 @@
 // Oferece formatação rápida (Negrito, Itálico, Código, Link, Cores Notion) ao selecionar texto.
 // =============================================================================
 
-import { createTextFragmentFromSelection, formatTextFragmentUrl } from '../../utils/text-fragment';
+import {
+  createTextFragmentFromSelection,
+  formatTextFragmentUrl,
+} from "../../utils/text-fragment";
 
 export class BubbleMenuEngine {
   container: HTMLElement;
@@ -17,16 +20,16 @@ export class BubbleMenuEngine {
   savedRange: Range | null = null;
 
   notionColors = [
-    { name: 'Padrão', color: 'inherit', bg: 'transparent' },
-    { name: 'Cinza', color: '#64748b', bg: '#f1f5f9' },
-    { name: 'Marrom', color: '#78350f', bg: '#fef3c7' },
-    { name: 'Laranja', color: '#c2410c', bg: '#ffedd5' },
-    { name: 'Amarelo', color: '#854d0e', bg: '#fef9c3' },
-    { name: 'Verde', color: '#15803d', bg: '#dcfce7' },
-    { name: 'Azul', color: '#1d4ed8', bg: '#dbeafe' },
-    { name: 'Roxo', color: '#7e22ce', bg: '#f3e8ff' },
-    { name: 'Rosa', color: '#be185d', bg: '#fce7f3' },
-    { name: 'Vermelho', color: '#b91c1c', bg: '#fee2e2' }
+    { name: "Padrão", color: "inherit", bg: "transparent" },
+    { name: "Cinza", color: "#64748b", bg: "#f1f5f9" },
+    { name: "Marrom", color: "#78350f", bg: "#fef3c7" },
+    { name: "Laranja", color: "#c2410c", bg: "#ffedd5" },
+    { name: "Amarelo", color: "#854d0e", bg: "#fef9c3" },
+    { name: "Verde", color: "#15803d", bg: "#dcfce7" },
+    { name: "Azul", color: "#1d4ed8", bg: "#dbeafe" },
+    { name: "Roxo", color: "#7e22ce", bg: "#f3e8ff" },
+    { name: "Rosa", color: "#be185d", bg: "#fce7f3" },
+    { name: "Vermelho", color: "#b91c1c", bg: "#fee2e2" },
   ];
 
   private onSelectionChangeHandler: () => void;
@@ -38,7 +41,7 @@ export class BubbleMenuEngine {
     onFormat,
     onAskCopilot,
     getFilePath,
-    onCopyLink
+    onCopyLink,
   }: {
     container: HTMLElement;
     onFormat?: (action: string) => void;
@@ -60,9 +63,9 @@ export class BubbleMenuEngine {
   }
 
   init() {
-    this.element = document.createElement('div');
-    this.element.className = 'bubble-menu-popover';
-    this.element.style.display = 'none';
+    this.element = document.createElement("div");
+    this.element.className = "bubble-menu-popover";
+    this.element.style.display = "none";
     this.element.innerHTML = `
       <button type="button" class="bubble-btn" data-action="bold" title="Negrito (Ctrl+B)"><strong>B</strong></button>
       <button type="button" class="bubble-btn" data-action="italic" title="Itálico (Ctrl+I)"><em>I</em></button>
@@ -72,7 +75,7 @@ export class BubbleMenuEngine {
       <button type="button" class="bubble-btn" data-action="link" title="Inserir Link (Ctrl+K)"><span class="material-symbols-outlined icon-xs">link</span></button>
       <button type="button" class="bubble-btn" data-action="color" title="Cor & Destaque"><span class="material-symbols-outlined icon-xs">palette</span></button>
       <div class="bubble-divider"></div>
-      <button type="button" class="bubble-btn fragment-btn" data-action="copy-fragment-link" title="Copiar Link Resiliente do Trecho (W3C Deep Link)" style="display: inline-flex; align-items: center; gap: 3px; font-size: 11px; padding: 2px 7px;">
+      <button type="button" class="bubble-btn fragment-btn" data-action="copy-fragment-link" title="Copiar Link Resiliente do Trecho" style="display: inline-flex; align-items: center; gap: 3px; font-size: 11px; padding: 2px 7px;">
         <span class="material-symbols-outlined icon-xs">share_location</span>
         <span>Link do Trecho</span>
       </button>
@@ -84,74 +87,86 @@ export class BubbleMenuEngine {
     `;
 
     // Color Picker Popover
-    this.colorPicker = document.createElement('div');
-    this.colorPicker.className = 'bubble-color-picker';
-    this.colorPicker.style.display = 'none';
-    this.colorPicker.innerHTML = this.notionColors.map(c => `
+    this.colorPicker = document.createElement("div");
+    this.colorPicker.className = "bubble-color-picker";
+    this.colorPicker.style.display = "none";
+    this.colorPicker.innerHTML = this.notionColors
+      .map(
+        (c) => `
       <div class="color-swatch" style="background:${c.bg}; border-color:${c.color};" data-color="${c.color}" data-bg="${c.bg}" title="${c.name}"></div>
-    `).join('');
+    `,
+      )
+      .join("");
 
     this.element.appendChild(this.colorPicker);
     document.body.appendChild(this.element);
 
-    this.element.querySelectorAll('.bubble-btn').forEach(btn => {
-      btn.addEventListener('mousedown', (e) => {
+    this.element.querySelectorAll(".bubble-btn").forEach((btn) => {
+      btn.addEventListener("mousedown", (e) => {
         e.preventDefault();
         const action = (btn as HTMLElement).dataset.action;
-        if (action === 'color') {
+        if (action === "color") {
           if (this.colorPicker) {
-            const isShown = this.colorPicker.style.display === 'flex';
-            this.colorPicker.style.display = isShown ? 'none' : 'flex';
+            const isShown = this.colorPicker.style.display === "flex";
+            this.colorPicker.style.display = isShown ? "none" : "flex";
           }
-        } else if (action === 'copy-fragment-link') {
+        } else if (action === "copy-fragment-link") {
           const selection = window.getSelection();
           if (selection) {
             const fragment = createTextFragmentFromSelection(selection);
             if (fragment) {
-              const currentPath = (this.getFilePath ? this.getFilePath() : '') || 'documento.md';
+              const currentPath =
+                (this.getFilePath ? this.getFilePath() : "") || "documento.md";
               const url = formatTextFragmentUrl(currentPath, fragment);
-              navigator.clipboard.writeText(url).then(() => {
-                const span = (btn as HTMLElement).querySelector('span:last-child');
-                if (span) {
-                  const orig = span.textContent;
-                  span.textContent = 'Copiado!';
-                  setTimeout(() => { span.textContent = orig; }, 1600);
-                }
-              }).catch(() => {
-                prompt('Link Resiliente do Trecho:', url);
-              });
+              navigator.clipboard
+                .writeText(url)
+                .then(() => {
+                  const span = (btn as HTMLElement).querySelector(
+                    "span:last-child",
+                  );
+                  if (span) {
+                    const orig = span.textContent;
+                    span.textContent = "Copiado!";
+                    setTimeout(() => {
+                      span.textContent = orig;
+                    }, 1600);
+                  }
+                })
+                .catch(() => {
+                  prompt("Link Resiliente do Trecho:", url);
+                });
               if (this.onCopyLink) {
                 this.onCopyLink(url);
               }
             }
           }
-        } else if (action === 'ask-ai') {
+        } else if (action === "ask-ai") {
           const selection = window.getSelection();
-          const text = selection ? selection.toString().trim() : '';
+          const text = selection ? selection.toString().trim() : "";
           this.hide();
           if (text && this.onAskCopilot) {
             this.onAskCopilot(text);
           }
         } else {
-          if (this.colorPicker) this.colorPicker.style.display = 'none';
+          if (this.colorPicker) this.colorPicker.style.display = "none";
           if (action) this.handleAction(action);
         }
       });
     });
 
-    this.colorPicker.querySelectorAll('.color-swatch').forEach(swatch => {
-      swatch.addEventListener('mousedown', (e) => {
+    this.colorPicker.querySelectorAll(".color-swatch").forEach((swatch) => {
+      swatch.addEventListener("mousedown", (e) => {
         e.preventDefault();
-        const color = (swatch as HTMLElement).dataset.color || 'inherit';
-        const bg = (swatch as HTMLElement).dataset.bg || 'transparent';
+        const color = (swatch as HTMLElement).dataset.color || "inherit";
+        const bg = (swatch as HTMLElement).dataset.bg || "transparent";
         this.applyColor(color, bg);
-        if (this.colorPicker) this.colorPicker.style.display = 'none';
+        if (this.colorPicker) this.colorPicker.style.display = "none";
       });
     });
 
-    document.addEventListener('selectionchange', this.onSelectionChangeHandler);
-    window.addEventListener('resize', this.onResizeHandler);
-    window.addEventListener('scroll', this.onScrollHandler, true);
+    document.addEventListener("selectionchange", this.onSelectionChangeHandler);
+    window.addEventListener("resize", this.onResizeHandler);
+    window.addEventListener("scroll", this.onScrollHandler, true);
   }
 
   updatePosition() {
@@ -181,9 +196,15 @@ export class BubbleMenuEngine {
     }
 
     if (this.element) {
-      this.element.style.display = 'flex';
+      this.element.style.display = "flex";
       const menuWidth = this.element.offsetWidth || 300;
-      const left = Math.max(10, Math.min(rect.left + rect.width / 2 - menuWidth / 2, window.innerWidth - menuWidth - 10));
+      const left = Math.max(
+        10,
+        Math.min(
+          rect.left + rect.width / 2 - menuWidth / 2,
+          window.innerWidth - menuWidth - 10,
+        ),
+      );
       this.element.style.left = `${left}px`;
       this.element.style.top = `${rect.top - 46}px`;
     }
@@ -192,22 +213,22 @@ export class BubbleMenuEngine {
 
   handleAction(action: string) {
     switch (action) {
-      case 'bold':
-        document.execCommand('bold', false, undefined);
+      case "bold":
+        document.execCommand("bold", false, undefined);
         break;
-      case 'italic':
-        document.execCommand('italic', false, undefined);
+      case "italic":
+        document.execCommand("italic", false, undefined);
         break;
-      case 'strike':
-        document.execCommand('strikeThrough', false, undefined);
+      case "strike":
+        document.execCommand("strikeThrough", false, undefined);
         break;
-      case 'code':
-        this.wrapSelectionWithTag('code');
+      case "code":
+        this.wrapSelectionWithTag("code");
         break;
-      case 'link': {
-        const url = prompt('Insira o link / URL:');
+      case "link": {
+        const url = prompt("Insira o link / URL:");
         if (url) {
-          document.execCommand('createLink', false, url);
+          document.execCommand("createLink", false, url);
         }
         break;
       }
@@ -234,25 +255,28 @@ export class BubbleMenuEngine {
   }
 
   applyColor(color: string, bg: string) {
-    if (bg && bg !== 'transparent') {
-      document.execCommand('hiliteColor', false, bg);
+    if (bg && bg !== "transparent") {
+      document.execCommand("hiliteColor", false, bg);
     }
-    if (color && color !== 'inherit') {
-      document.execCommand('foreColor', false, color);
+    if (color && color !== "inherit") {
+      document.execCommand("foreColor", false, color);
     }
-    this.onFormat('color');
+    this.onFormat("color");
   }
 
   hide() {
-    if (this.element) this.element.style.display = 'none';
-    if (this.colorPicker) this.colorPicker.style.display = 'none';
+    if (this.element) this.element.style.display = "none";
+    if (this.colorPicker) this.colorPicker.style.display = "none";
     this.isVisible = false;
   }
 
   destroy() {
-    document.removeEventListener('selectionchange', this.onSelectionChangeHandler);
-    window.removeEventListener('resize', this.onResizeHandler);
-    window.removeEventListener('scroll', this.onScrollHandler, true);
+    document.removeEventListener(
+      "selectionchange",
+      this.onSelectionChangeHandler,
+    );
+    window.removeEventListener("resize", this.onResizeHandler);
+    window.removeEventListener("scroll", this.onScrollHandler, true);
     if (this.element) {
       this.element.remove();
       this.element = null;

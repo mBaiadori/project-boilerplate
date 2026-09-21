@@ -1,4 +1,4 @@
-import * as yaml from 'js-yaml';
+import * as yaml from "js-yaml";
 
 export interface DocumentMetadata {
   id?: string;
@@ -26,29 +26,29 @@ export interface ParsedDocument {
 
 export function createDefaultMetadata(): DocumentMetadata {
   return {
-    id: '',
-    title: '',
-    type: 'spec',
-    version: '1.0.0',
-    status: 'draft',
-    layer: 'L4_ARTIFACT',
-    path: '',
-    parent: '',
+    id: "",
+    title: "",
+    type: "spec",
+    version: "1.0.0",
+    status: "",
+    layer: "",
+    path: "",
+    parent: "",
     lifecycle: {
-      stage: 'docs',
-      previous_stage: '',
-      next_stage: '',
-      feedback_loops: {}
-    }
+      stage: "docs",
+      previous_stage: "",
+      next_stage: "",
+      feedback_loops: {},
+    },
   };
 }
 
-export function parseFrontmatter(rawContent = ''): ParsedDocument {
-  if (!rawContent || typeof rawContent !== 'string') {
+export function parseFrontmatter(rawContent = ""): ParsedDocument {
+  if (!rawContent || typeof rawContent !== "string") {
     return {
       hasFrontmatter: false,
       metadata: createDefaultMetadata(),
-      body: ''
+      body: "",
     };
   }
 
@@ -57,12 +57,12 @@ export function parseFrontmatter(rawContent = ''): ParsedDocument {
     return {
       hasFrontmatter: false,
       metadata: createDefaultMetadata(),
-      body: rawContent
+      body: rawContent,
     };
   }
 
   const yamlBlock = match[1];
-  const body = match[2] || '';
+  const body = match[2] || "";
 
   try {
     const parsed = yaml.load(yamlBlock) as DocumentMetadata;
@@ -70,33 +70,38 @@ export function parseFrontmatter(rawContent = ''): ParsedDocument {
       hasFrontmatter: true,
       metadata: {
         ...createDefaultMetadata(),
-        ...(parsed && typeof parsed === 'object' ? parsed : {})
+        ...(parsed && typeof parsed === "object" ? parsed : {}),
       },
-      body
+      body,
     };
   } catch (e) {
-    console.warn('[Frontmatter] Erro ao analisar YAML:', e);
+    console.warn("[Frontmatter] Erro ao analisar YAML:", e);
     return {
       hasFrontmatter: false,
       metadata: createDefaultMetadata(),
-      body: rawContent
+      body: rawContent,
     };
   }
 }
 
-export function serializeFrontmatter(metadata: DocumentMetadata | null | undefined, body = ''): string {
+export function serializeFrontmatter(
+  metadata: DocumentMetadata | null | undefined,
+  body = "",
+): string {
   if (!metadata) return body;
 
   try {
-    const yamlString = yaml.dump(metadata, { lineWidth: -1, forceQuotes: false }).trim();
+    const yamlString = yaml
+      .dump(metadata, { lineWidth: -1, forceQuotes: false })
+      .trim();
     return `---\n${yamlString}\n---\n\n${body.trimStart()}`;
   } catch (e) {
-    console.error('[Frontmatter] Erro ao serializar YAML:', e);
+    console.error("[Frontmatter] Erro ao serializar YAML:", e);
     return body;
   }
 }
 
-export function stripFrontmatter(rawContent = ''): string {
+export function stripFrontmatter(rawContent = ""): string {
   const parsed = parseFrontmatter(rawContent);
   return parsed.body;
 }
