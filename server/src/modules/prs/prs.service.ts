@@ -159,7 +159,8 @@ export class PRsService {
     };
 
     cfg.prs.unshift(newPR);
-    clearWorkspaceChanges(repoName);
+    if (!cfg.workspace_changes) cfg.workspace_changes = {};
+    cfg.workspace_changes[repoName] = [];
     saveConfig(cfg);
 
     return {
@@ -301,6 +302,8 @@ export class PRsService {
         // Push local main to remote
         await executeGitCommand(`git push origin ${targetBranch}`, repoDir);
       }
+
+      clearWorkspaceChanges(repoName);
     } catch (err) {
       console.warn(`[PRsService] Aviso ao executar merge de Git:`, err);
     }

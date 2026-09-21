@@ -33,8 +33,7 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
   onOpenScaffoldWizard,
   onSendSelectionToCopilot
 }) => {
-  const { originalContent, refreshPendingChanges, refreshGitStatus, activeRepo } = useWorkspace();
-  const [saveStatus, setSaveStatus] = useState<'Pronto' | 'Salvando...' | 'Salvo no workspace'>('Pronto');
+  const { originalContent, refreshPendingChanges, refreshGitStatus, activeRepo, saveStatus, saveCurrentFile } = useWorkspace();
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [importText, setImportText] = useState('');
 
@@ -67,6 +66,17 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
 
   const parsed = parseFrontmatter(content || '');
   const body = parsed.body || content || '';
+
+  // Toast de alerta caso ocorra falha de salvamento
+  useEffect(() => {
+    if (saveStatus === 'Erro') {
+      setEditorToast({
+        text: 'Não foi possível gravar no disco. Rascunho temporário mantido na sessão.',
+        type: 'warning'
+      });
+      setTimeout(() => setEditorToast(null), 5000);
+    }
+  }, [saveStatus]);
 
   // Load document metadata and blame when file changes or git mode is opened
   useEffect(() => {
@@ -113,24 +123,15 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
     });
   }, [selectedCommit, filePath]);
 
-  // Save document and re-sync Git status strictly on save event
+  // Manual save trigger (Ctrl+S ou clique) que faz o flush imediato
   const handleSave = useCallback(async () => {
     if (!filePath) return;
-    setSaveStatus('Salvando...');
-    try {
-      const currentBody = engineRef.current ? engineRef.current.getMarkdown() : body;
-      await API.saveProjectFile({ path: filePath, content: currentBody });
-      await Promise.all([
-        refreshPendingChanges(),
-        refreshGitStatus()
-      ]);
-      setSaveStatus('Salvo no workspace');
-      setTimeout(() => setSaveStatus('Pronto'), 2500);
-    } catch (e) {
-      console.error('Erro ao salvar documento:', e);
-      setSaveStatus('Pronto');
+    const res = await saveCurrentFile();
+    if (res?.success) {
+      setEditorToast({ text: 'Alterações gravadas no disco!', type: 'success' });
+      setTimeout(() => setEditorToast(null), 2500);
     }
-  }, [filePath, body, refreshPendingChanges, refreshGitStatus]);
+  }, [filePath, saveCurrentFile]);
 
   // Initialize & Mount NotionEditorEngine
   useEffect(() => {
@@ -477,31 +478,37 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
               <span className="material-symbols-outlined icon-xs">history</span>
             </button>
 
-            {/* Botão Salvar (Ícone Disquete) */}
+            {/* Botão Sincronizar / Salvar no Disco */}
             {!isGitMode && (
               <button
                 id="btn-save-draft"
-                className={`btn-icon-action ${saveStatus === 'Salvando...' ? 'is-saving' : saveStatus === 'Salvo no workspace' ? 'saved-success' : isDirty ? 'has-unsaved' : ''}`}
+                className={`btn-icon-action ${saveStatus === 'Salvando...' ? 'is-saving' : saveStatus === 'Salvo no disco' ? 'saved-success' : saveStatus === 'Erro' ? 'has-error' : isDirty ? 'has-unsaved' : ''}`}
                 type="button"
                 title={
                   saveStatus === 'Salvando...'
-                    ? 'Salvando no workspace...'
-                    : saveStatus === 'Salvo no workspace'
-                    ? 'Documento salvo!'
+                    ? 'Gravando alterações no disco da máquina...'
+                    : saveStatus === 'Salvo no disco'
+                    ? 'Salvo no disco com sucesso!'
+                    : saveStatus === 'Erro'
+                    ? 'Erro ao gravar no disco. Rascunho preservado.'
                     : isDirty
-                    ? 'Salvar alterações no workspace e atualizar Git (Ctrl+S)'
-                    : 'Nenhuma alteração pendente (Ctrl+S)'
+                    ? 'Gravando automaticamente no disco (ou clique/Ctrl+S para forçar gravação imediata)'
+                    : 'Arquivo sincronizado no disco (Ctrl+S)'
                 }
                 onClick={handleSave}
                 disabled={saveStatus === 'Salvando...'}
               >
                 {saveStatus === 'Salvando...' ? (
-                  <span className="material-symbols-outlined icon-xs" style={{ animation: 'spin 1s linear infinite' }}>
+                  <span className="material-symbols-outlined icon-xs" style={{ animation: 'spin 1s linear infinite', color: 'var(--primary, #2563eb)' }}>
                     progress_activity
                   </span>
-                ) : saveStatus === 'Salvo no workspace' ? (
+                ) : saveStatus === 'Salvo no disco' ? (
                   <span className="material-symbols-outlined icon-xs" style={{ color: '#10b981' }}>
                     check
+                  </span>
+                ) : saveStatus === 'Erro' ? (
+                  <span className="material-symbols-outlined icon-xs" style={{ color: '#ef4444' }}>
+                    error
                   </span>
                 ) : (
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -638,8 +645,30 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
         {/* 3. Editor Status Footer */}
         <footer className="editor-bottom-bar">
           <div className="editor-status-left" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span id="save-draft-status" className="status-indicator">
-              {isGitMode ? 'Modo Git & Auditoria Ativo' : isDirty ? 'Modificações não salvas' : saveStatus}
+            <span id="save-draft-status" className="status-indicator" style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+              {isGitMode ? (
+                <span>Modo Git & Auditoria Ativo</span>
+              ) : saveStatus === 'Salvando...' ? (
+                <>
+                  <span className="material-symbols-outlined icon-xs" style={{ animation: 'spin 1s linear infinite', color: 'var(--primary, #2563eb)' }}>progress_activity</span>
+                  <span>Salvando no disco...</span>
+                </>
+              ) : saveStatus === 'Salvo no disco' ? (
+                <>
+                  <span className="material-symbols-outlined icon-xs" style={{ color: '#10b981' }}>check_circle</span>
+                  <span style={{ color: '#10b981' }}>Salvo no disco</span>
+                </>
+              ) : saveStatus === 'Erro' ? (
+                <>
+                  <span className="material-symbols-outlined icon-xs" style={{ color: '#ef4444' }}>error</span>
+                  <span style={{ color: '#ef4444' }}>Erro ao gravar</span>
+                </>
+              ) : (
+                <>
+                  <span className="material-symbols-outlined icon-xs" style={{ color: '#10b981' }}>cloud_done</span>
+                  <span>Sincronizado</span>
+                </>
+              )}
             </span>
             <span className="status-divider">&bull;</span>
             <span id="doc-word-count">{wordCount} palavras</span>

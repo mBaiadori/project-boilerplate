@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import type { Repo, WorkspaceChange, TreeNode, GitStatus, GitCommitInfo } from '../types';
 import { API } from '../services/api';
 import { DraftStore } from '../services/draft-store';
@@ -17,6 +17,8 @@ function findFirstMdFile(nodes: TreeNode[]): string | null {
   return null;
 }
 
+export type AutoSaveStatus = 'Pronto' | 'Salvando...' | 'Salvo no disco' | 'Erro';
+
 interface WorkspaceContextType {
   activeRepo: Repo | null;
   repos: Repo[];
@@ -28,6 +30,7 @@ interface WorkspaceContextType {
   pendingChanges: WorkspaceChange[];
   guardrailStatus: string;
   isSaving: boolean;
+  saveStatus: AutoSaveStatus;
   isLoadingFile: boolean;
   isLoading: boolean;
   hasUnsavedChanges: boolean;
@@ -41,6 +44,7 @@ interface WorkspaceContextType {
   setFileContent: (content: string) => void;
   setFileMetadata: (meta: Record<string, any>) => void;
   saveCurrentFile: (meta?: Record<string, any>) => Promise<{ success: boolean; error?: string }>;
+  flushPendingSave: () => Promise<void>;
   refreshPendingChanges: () => Promise<void>;
   discardChanges: (path?: string) => Promise<void>;
   refreshGitStatus: () => Promise<void>;
@@ -64,10 +68,39 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [pendingChanges, setPendingChanges] = useState<WorkspaceChange[]>([]);
   const [guardrailStatus, setGuardrailStatus] = useState<string>('CLEAN');
   const [isSaving, setIsSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<AutoSaveStatus>('Pronto');
   const [isLoadingFile, setIsLoadingFile] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [gitStatus, setGitStatus] = useState<GitStatus | null>(null);
   const [gitLog, setGitLog] = useState<GitCommitInfo[]>([]);
+
+  const activeFileRef = useRef<string>('');
+  const fileContentRef = useRef<string>('');
+  const originalContentRef = useRef<string>('');
+  const fileMetadataRef = useRef<Record<string, any>>({});
+  const activeRepoRef = useRef<Repo | null>(null);
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const statusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    activeFileRef.current = activeFile;
+  }, [activeFile]);
+
+  useEffect(() => {
+    fileContentRef.current = fileContent;
+  }, [fileContent]);
+
+  useEffect(() => {
+    originalContentRef.current = originalContent;
+  }, [originalContent]);
+
+  useEffect(() => {
+    fileMetadataRef.current = fileMetadata;
+  }, [fileMetadata]);
+
+  useEffect(() => {
+    activeRepoRef.current = activeRepo;
+  }, [activeRepo]);
 
   const hasUnsavedChanges = fileContent !== originalContent;
 
@@ -86,7 +119,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   }, []);
 
   const refreshGitStatus = useCallback(async () => {
-    if (!activeRepo) return;
+    if (!activeRepoRef.current) return;
     try {
       const res = await API.getGitStatus();
       if (res.ok && res.data) {
@@ -95,10 +128,10 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     } catch (err) {
       console.warn('[WorkspaceContext] Erro ao buscar status do Git:', err);
     }
-  }, [activeRepo]);
+  }, []);
 
   const refreshGitLog = useCallback(async (limit = 20) => {
-    if (!activeRepo) return;
+    if (!activeRepoRef.current) return;
     try {
       const res = await API.getGitLog(limit);
       if (res.ok && res.data?.commits) {
@@ -107,10 +140,10 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     } catch (err) {
       console.warn('[WorkspaceContext] Erro ao buscar histórico Git:', err);
     }
-  }, [activeRepo]);
+  }, []);
 
   const refreshPendingChanges = useCallback(async () => {
-    if (!activeRepo) return;
+    if (!activeRepoRef.current) return;
     try {
       const data = await API.getWorkspaceChanges();
       setPendingChanges(data.changes || []);
@@ -119,20 +152,79 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     } catch (err) {
       console.error('[WorkspaceContext] Erro ao buscar alterações pendentes:', err);
     }
-  }, [activeRepo, refreshGitStatus]);
+  }, [refreshGitStatus]);
+
+  const performDiskSave = useCallback(async (
+    targetPath?: string,
+    contentToSave?: string,
+    metaToSave?: Record<string, any>
+  ): Promise<{ success: boolean; error?: string }> => {
+    const file = targetPath || activeFileRef.current;
+    const content = contentToSave !== undefined ? contentToSave : fileContentRef.current;
+    const meta = metaToSave !== undefined ? metaToSave : fileMetadataRef.current;
+    const repo = activeRepoRef.current;
+
+    if (!repo || !file) {
+      return { success: false, error: 'Nenhum documento ativo para salvar' };
+    }
+
+    setIsSaving(true);
+    setSaveStatus('Salvando...');
+    try {
+      const res = await API.saveWorkspaceFile({ path: file, content, meta });
+      if (res.ok) {
+        if (file === activeFileRef.current) {
+          setOriginalContent(content);
+          originalContentRef.current = content;
+          if (res.data?.meta) {
+            setFileMetadataState(res.data.meta);
+            fileMetadataRef.current = res.data.meta;
+          }
+        }
+        DraftStore.clearDocDraft(repo.name, file);
+        setSaveStatus('Salvo no disco');
+        if (statusTimerRef.current) clearTimeout(statusTimerRef.current);
+        statusTimerRef.current = setTimeout(() => {
+          setSaveStatus('Pronto');
+        }, 2200);
+
+        refreshPendingChanges().catch(() => {});
+        return { success: true };
+      } else {
+        setSaveStatus('Erro');
+        return { success: false, error: 'Falha ao gravar no workspace' };
+      }
+    } catch (err: any) {
+      console.error('[WorkspaceContext] Erro ao gravar arquivo no disco:', err);
+      setSaveStatus('Erro');
+      return { success: false, error: err.message || 'Erro ao gravar no disco' };
+    } finally {
+      setIsSaving(false);
+    }
+  }, [refreshPendingChanges]);
+
+  const flushPendingSave = useCallback(async () => {
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+      autoSaveTimerRef.current = null;
+    }
+    if (activeFileRef.current && fileContentRef.current !== originalContentRef.current) {
+      await performDiskSave(activeFileRef.current, fileContentRef.current, fileMetadataRef.current);
+    }
+  }, [performDiskSave]);
 
   const loadTree = useCallback(async () => {
-    if (!activeRepo) return;
+    if (!activeRepoRef.current) return;
     try {
       const data = await API.getProjectTree();
       setTree(data.tree || []);
     } catch (err) {
       console.error('[WorkspaceContext] Erro ao buscar árvore:', err);
     }
-  }, [activeRepo]);
+  }, []);
 
   const loadFile = useCallback(async (rawFilePath: string) => {
-    if (!activeRepo || !rawFilePath) return;
+    if (!activeRepoRef.current || !rawFilePath) return;
 
     const hashIndex = rawFilePath.indexOf('#');
     const cleanPath = hashIndex !== -1 ? rawFilePath.slice(0, hashIndex) : rawFilePath;
@@ -151,7 +243,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
 
     // Se o arquivo já for o ativo atual, apenas disparar a navegação de fragmento sem recarregar o arquivo do zero
-    if (cleanPath === activeFile) {
+    if (cleanPath === activeFileRef.current) {
       if (hash) {
         window.dispatchEvent(new CustomEvent('workspace:navigate-fragment', {
           detail: { hash, filePath: cleanPath }
@@ -160,19 +252,27 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       return;
     }
 
+    // 1. Flush de segurança se o arquivo anterior possuía alterações não salvas
+    await flushPendingSave();
+
     setIsLoadingFile(true);
     setActiveFile(cleanPath);
+    activeFileRef.current = cleanPath;
     try {
       const data = await API.getProjectFile(cleanPath);
       if (!data || (data as any).error) {
         throw new Error((data as any).error || 'Arquivo não encontrado');
       }
-      const draft = DraftStore.getDocDraft(activeRepo.name, cleanPath);
+      const draft = DraftStore.getDocDraft(activeRepoRef.current.name, cleanPath);
       
       const content = draft ? draft.rawContent : (data.content || '');
       setFileContentState(content);
+      fileContentRef.current = content;
       setOriginalContent(data.content || '');
+      originalContentRef.current = data.content || '';
       setFileMetadataState(data.meta || {});
+      fileMetadataRef.current = data.meta || {};
+      setSaveStatus('Pronto');
 
       if (hash) {
         setTimeout(() => {
@@ -192,21 +292,39 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     } finally {
       setIsLoadingFile(false);
     }
-  }, [activeRepo, activeFile]);
+  }, [flushPendingSave]);
 
-  const setFileContent = (content: string) => {
+  const setFileContent = useCallback((content: string) => {
     setFileContentState(content);
-    if (activeRepo && activeFile) {
-      DraftStore.saveDocDraft(activeRepo.name, activeFile, { body: content, rawContent: content });
+    fileContentRef.current = content;
+
+    const currentRepo = activeRepoRef.current;
+    const currentFile = activeFileRef.current;
+
+    if (currentRepo && currentFile) {
+      DraftStore.saveDocDraft(currentRepo.name, currentFile, { body: content, rawContent: content });
+
+      if (content !== originalContentRef.current) {
+        setSaveStatus('Salvando...');
+        if (autoSaveTimerRef.current) {
+          clearTimeout(autoSaveTimerRef.current);
+        }
+        autoSaveTimerRef.current = setTimeout(() => {
+          performDiskSave(currentFile, content, fileMetadataRef.current);
+        }, 600);
+      }
     }
-  };
+  }, [performDiskSave]);
 
   const setFileMetadata = (meta: Record<string, any>) => {
     setFileMetadataState(meta);
+    fileMetadataRef.current = meta;
   };
 
   const selectRepo = async (repo: Repo, initialFile?: string) => {
+    await flushPendingSave();
     setActiveRepo(repo);
+    activeRepoRef.current = repo;
     await API.selectRepo(repo);
     const data = await API.getProjectTree();
     setTree(data.tree || []);
@@ -219,9 +337,13 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       await loadFile(fileToOpen);
     } else {
       setActiveFile('');
+      activeFileRef.current = '';
       setFileContentState('');
+      fileContentRef.current = '';
       setOriginalContent('');
+      originalContentRef.current = '';
       setFileMetadataState({});
+      fileMetadataRef.current = {};
     }
   };
 
@@ -250,26 +372,8 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   };
 
   const saveCurrentFile = async (metaOverride?: Record<string, any>) => {
-    if (!activeRepo || !activeFile) return { success: false, error: 'Nenhum arquivo ativo' };
-    setIsSaving(true);
-    try {
-      const meta = metaOverride !== undefined ? metaOverride : fileMetadata;
-      const res = await API.saveWorkspaceFile({ path: activeFile, content: fileContent, meta });
-      if (res.ok) {
-        setOriginalContent(fileContent);
-        if (res.data?.meta) {
-          setFileMetadataState(res.data.meta);
-        }
-        DraftStore.clearDocDraft(activeRepo.name, activeFile);
-        await refreshPendingChanges();
-        return { success: true };
-      }
-      return { success: false, error: 'Falha ao salvar no workspace' };
-    } catch (err: any) {
-      return { success: false, error: err.message || 'Erro ao salvar' };
-    } finally {
-      setIsSaving(false);
-    }
+    const meta = metaOverride !== undefined ? metaOverride : fileMetadataRef.current;
+    return performDiskSave(activeFileRef.current, fileContentRef.current, meta);
   };
 
   const discardChanges = async (path?: string) => {
@@ -315,6 +419,49 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     return res.data;
   };
 
+  // Lifecycle: Flush de alterações pendentes ao fechar aba, recarregar ou ocultar janela
+  useEffect(() => {
+    const handleUnloadOrHide = () => {
+      if (
+        activeRepoRef.current &&
+        activeFileRef.current &&
+        fileContentRef.current !== originalContentRef.current
+      ) {
+        try {
+          const payload = JSON.stringify({
+            path: activeFileRef.current,
+            content: fileContentRef.current,
+            meta: fileMetadataRef.current
+          });
+          fetch('/api/workspace/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: payload,
+            keepalive: true
+          });
+        } catch (e) {
+          console.warn('[WorkspaceContext] Falha no flush de fechamento de página:', e);
+        }
+      }
+    };
+
+    window.addEventListener('beforeunload', handleUnloadOrHide);
+    window.addEventListener('pagehide', handleUnloadOrHide);
+    
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        handleUnloadOrHide();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleUnloadOrHide);
+      window.removeEventListener('pagehide', handleUnloadOrHide);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
+
   // Carrega status inicial e eventos SSE de Fast Refresh
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -351,6 +498,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         pendingChanges,
         guardrailStatus,
         isSaving,
+        saveStatus,
         isLoadingFile,
         isLoading,
         hasUnsavedChanges,
@@ -364,6 +512,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         setFileContent,
         setFileMetadata,
         saveCurrentFile,
+        flushPendingSave,
         refreshPendingChanges,
         discardChanges,
         refreshGitStatus,

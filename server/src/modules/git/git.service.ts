@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { PROJECTS_DIR } from '../../config/constants.js';
-import { loadConfig } from '../../config/storage.js';
+import { loadConfig, clearWorkspaceChanges } from '../../config/storage.js';
 import {
   ensureGitRepo,
   getGitStatus,
@@ -120,7 +120,17 @@ export class GitService {
     const repoName = cfg.active_repo?.name || 'local';
     const repoDir = this.getRepoDir(repoName);
     const targetBranch = branch || cfg.active_repo?.default_branch || 'main';
-    return await syncGit(repoDir, 'origin', targetBranch);
+    const result = await syncGit(repoDir, 'origin', targetBranch);
+
+    // Reconcilia e limpa alterações se o git status estiver limpo
+    try {
+      const status = await getGitStatus(repoDir);
+      if (status.isClean && (!status.files || status.files.length === 0)) {
+        clearWorkspaceChanges(repoName);
+      }
+    } catch {}
+
+    return result;
   }
 
   async getBlame(filePath: string) {
