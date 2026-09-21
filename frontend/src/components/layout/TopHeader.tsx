@@ -1,5 +1,5 @@
-import React from 'react';
-import { useWorkspace } from '../../context/WorkspaceContext';
+import React from "react";
+import { useWorkspace } from "../../context/WorkspaceContext";
 
 interface TopHeaderProps {
   onBackToRepos: () => void;
@@ -14,11 +14,12 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
   onOpenDiffModal,
   onToggleCopilot,
   onOpenGitModal = () => {},
-  onOpenTour = () => {}
+  onOpenTour = () => {},
 }) => {
   const { activeRepo, pendingChanges, gitStatus } = useWorkspace();
 
-  const currentBranch = gitStatus?.branch || (activeRepo?.is_local ? 'local' : 'main');
+  const currentBranch =
+    gitStatus?.branch || (activeRepo?.is_local ? "local" : "main");
   const isGitClean = gitStatus?.isClean ?? true;
   const gitFilesCount = gitStatus?.files?.length || 0;
 
@@ -32,15 +33,18 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
           title="Voltar para a lista de Repositórios"
           onClick={onBackToRepos}
         >
-          <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>
+          <span
+            className="material-symbols-outlined"
+            style={{ fontSize: "20px" }}
+          >
             arrow_back
           </span>
         </button>
         <div className="dash-brand-divider"></div>
         <div className="dash-title-wrap">
           <div className="dash-title-row">
-            <h1 id="dash-repo-title">{activeRepo?.name || 'Projeto'}</h1>
-            
+            <h1 id="dash-repo-title">{activeRepo?.name || "Projeto"}</h1>
+
             {/* Git Branch & Status Pill */}
             <button
               id="btn-open-git-status-header"
@@ -49,27 +53,45 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
               title="Abrir Painel Git (Branch, Status, Histórico e Sync)"
               onClick={onOpenGitModal}
               style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '3px 8px',
-                borderRadius: '12px',
-                background: isGitClean ? 'var(--bg-surface, rgba(255,255,255,0.06))' : 'rgba(234, 179, 8, 0.15)',
-                border: `1px solid ${isGitClean ? 'var(--border-color, rgba(255,255,255,0.12))' : 'rgba(234, 179, 8, 0.4)'}`,
-                cursor: 'pointer'
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                padding: "3px 8px",
+                borderRadius: "12px",
+                background: isGitClean
+                  ? "var(--bg-surface, rgba(255,255,255,0.06))"
+                  : "rgba(234, 179, 8, 0.15)",
+                border: `1px solid ${isGitClean ? "var(--border-color, rgba(255,255,255,0.12))" : "rgba(234, 179, 8, 0.4)"}`,
+                cursor: "pointer",
               }}
             >
-              <span className="material-symbols-outlined" style={{ fontSize: '14px', color: isGitClean ? 'var(--primary, #3b82f6)' : '#eab308' }}>
+              <span
+                className="material-symbols-outlined"
+                style={{
+                  fontSize: "14px",
+                  color: isGitClean ? "var(--primary, #3b82f6)" : "#eab308",
+                }}
+              >
                 alt_route
               </span>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', fontWeight: 600, color: 'var(--text-normal)' }}>
+              <span
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "11px",
+                  fontWeight: 600,
+                  color: "var(--text-normal)",
+                }}
+              >
                 {currentBranch}
               </span>
               <span
-                className={`pill-dot ${isGitClean ? 'success' : 'warning'}`}
+                className={`pill-dot ${isGitClean ? "success" : "warning"}`}
                 style={{ margin: 0, padding: 0 }}
               >
-                <span className="dot" style={{ width: '6px', height: '6px' }}></span>
+                <span
+                  className="dot"
+                  style={{ width: "6px", height: "6px" }}
+                ></span>
               </span>
             </button>
           </div>
@@ -98,14 +120,25 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
           type="button"
           title="Abrir Painel de Controle Git"
           onClick={onOpenGitModal}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '12px' }}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "5px",
+            fontSize: "12px",
+          }}
         >
-          <span className="material-symbols-outlined icon-xs" style={{ color: isGitClean ? 'inherit' : '#eab308' }}>
+          <span
+            className="material-symbols-outlined icon-xs"
+            style={{ color: isGitClean ? "inherit" : "#eab308" }}
+          >
             commit
           </span>
           <span>Git</span>
           {gitFilesCount > 0 && (
-            <span className="badge badge-warning" style={{ fontSize: '10px', padding: '1px 5px' }}>
+            <span
+              className="badge badge-warning"
+              style={{ fontSize: "10px", padding: "1px 5px" }}
+            >
               {gitFilesCount}
             </span>
           )}
@@ -114,11 +147,16 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
         <button
           id="btn-open-workspace-diff"
           className="btn btn-warning btn-sm"
-          style={{ display: pendingChanges.length > 0 ? 'inline-flex' : 'none' }}
+          style={{
+            display: pendingChanges.length > 0 ? "inline-flex" : "none",
+          }}
           onClick={onOpenDiffModal}
         >
           <span className="dot warning-dot"></span>
-          <span id="pending-changes-badge-text">{pendingChanges.length} alterações</span> &bull; Revisar PR
+          <span id="pending-changes-badge-text">
+            {pendingChanges.length} alterações
+          </span>{" "}
+          &bull; Revisar PR
         </button>
 
         <button
@@ -127,12 +165,14 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
           type="button"
           title="Guia Rápido & Funcionalidades do Sistema"
           onClick={onOpenTour}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+          style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
         >
-          <span className="material-symbols-outlined" style={{ fontSize: '17px', color: 'var(--primary, #3b82f6)' }}>
+          <span
+            className="material-symbols-outlined"
+            style={{ fontSize: "17px", color: "var(--primary, #3b82f6)" }}
+          >
             explore
           </span>
-          <span style={{ fontSize: '12px', fontWeight: 600 }}>Guia</span>
         </button>
 
         <button
@@ -142,7 +182,9 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
           title="Abrir Assistente & Copilot IA em Qualquer Tela"
           onClick={onToggleCopilot}
         >
-          <span className="material-symbols-outlined ai-sparkle-icon">auto_awesome</span>
+          <span className="material-symbols-outlined ai-sparkle-icon">
+            auto_awesome
+          </span>
           <span className="ai-copilot-label">Copilot IA</span>
         </button>
       </div>

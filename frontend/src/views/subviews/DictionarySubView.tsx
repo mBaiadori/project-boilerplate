@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import type { DictionaryTerm } from '../../types';
 import { API } from '../../services/api';
+import { useAI } from '../../context/AIContext';
 
 export const DictionarySubView: React.FC = () => {
+  const { setDynamicContext } = useAI();
   const [terms, setTerms] = useState<DictionaryTerm[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -33,6 +35,19 @@ export const DictionarySubView: React.FC = () => {
   useEffect(() => {
     loadDictionary();
   }, [loadDictionary]);
+
+  useEffect(() => {
+    if (terms.length > 0) {
+      setDynamicContext({
+        filePath: 'dictionary.json',
+        content: JSON.stringify(terms, null, 2),
+        badge: '📚 Dicionário de Dados'
+      });
+    }
+    return () => {
+      setDynamicContext(null);
+    };
+  }, [terms, setDynamicContext]);
 
   const handleOpenNewTerm = () => {
     setEditingIndex(null);

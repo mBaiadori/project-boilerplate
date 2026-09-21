@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { marked } from 'marked';
 import { useWorkspace } from '../../context/WorkspaceContext';
+import { useAI } from '../../context/AIContext';
 import { API } from '../../services/api';
 
 const CATEGORY_META: Record<string, { label: string; short: string; badge: string; icon: string; color: string; bg: string; desc: string }> = {
@@ -76,6 +77,7 @@ interface WikiEntry {
 
 export const WikiSubView: React.FC = () => {
   const { activeRepo } = useWorkspace();
+  const { setDynamicContext } = useAI();
   const [activeCategory, setActiveCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [entries, setEntries] = useState<WikiEntry[]>([]);
@@ -111,6 +113,25 @@ export const WikiSubView: React.FC = () => {
   useEffect(() => {
     loadWikiEntries();
   }, [loadWikiEntries]);
+
+  useEffect(() => {
+    if (activeEntry) {
+      setDynamicContext({
+        filePath: `wiki/${activeEntry.category}/${activeEntry.slug}.md`,
+        content: `# ${activeEntry.title}\n\nCategoria: ${activeEntry.category}\n\n${activeEntry.content}`,
+        badge: `📖 Wiki: ${activeEntry.title}`
+      });
+    } else if (entries.length > 0) {
+      setDynamicContext({
+        filePath: 'wiki/summary.json',
+        content: JSON.stringify(entries, null, 2),
+        badge: '📖 Base de Conhecimento Wiki'
+      });
+    }
+    return () => {
+      setDynamicContext(null);
+    };
+  }, [activeEntry, entries, setDynamicContext]);
 
   const handleStartNewEntry = () => {
     setEditCategory(activeCategory === 'all' ? 'decisions' : activeCategory);

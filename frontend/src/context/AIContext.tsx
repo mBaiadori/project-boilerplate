@@ -3,11 +3,19 @@ import type { AISettingsState, ChatMessage } from '../types';
 import { API } from '../services/api';
 import { useWorkspace } from './WorkspaceContext';
 
+export interface DynamicContext {
+  filePath: string;
+  content: string;
+  badge?: string;
+}
+
 interface AIContextType {
   aiSettings: AISettingsState | null;
   isSettingsModalOpen: boolean;
   messages: ChatMessage[];
   isThinking: boolean;
+  dynamicContext: DynamicContext | null;
+  setDynamicContext: (ctx: DynamicContext | null) => void;
   openSettingsModal: () => void;
   closeSettingsModal: () => void;
   loadAISettings: () => Promise<void>;
@@ -26,6 +34,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isThinking, setIsThinking] = useState(false);
+  const [dynamicContext, setDynamicContext] = useState<DynamicContext | null>(null);
 
   const loadAISettings = useCallback(async () => {
     try {
@@ -59,12 +68,22 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
   const sendMessage = async (prompt: string, contextBadges: string[] = []) => {
     if (!prompt.trim()) return;
 
+    const effectivePath = dynamicContext?.filePath || activeFile || 'index.md';
+    const effectiveContent = dynamicContext?.content !== undefined ? dynamicContext.content : (fileContent || '');
+    const effectiveBadges = contextBadges.length > 0
+      ? contextBadges
+      : dynamicContext?.badge
+      ? [dynamicContext.badge]
+      : activeFile
+      ? [`📄 ${activeFile}`]
+      : [];
+
     const userMessage: ChatMessage = {
       id: `msg-${Date.now()}`,
       sender: 'user',
       content: prompt,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      contextBadges
+      contextBadges: effectiveBadges
     };
 
     setMessages(prev => [...prev, userMessage]);
@@ -78,8 +97,8 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
 
       const res = await API.sendChatMessage({
         prompt,
-        content: fileContent,
-        path: activeFile,
+        content: effectiveContent,
+        path: effectivePath,
         history: historyPayload,
         repo: activeRepo?.name || 'local'
       });
@@ -91,15 +110,15 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
           content: res.data.reply || 'Operação concluída com sucesso.',
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           diff: res.data.diff ? {
-            path: activeFile,
-            old_content: fileContent,
+            path: effectivePath,
+            old_content: effectiveContent,
             new_content: res.data.diff.new_content || ''
           } : undefined
         };
         setMessages(prev => [...prev, assistantMessage]);
 
         // Se houve modificação de arquivo aplicada
-        if (res.data.diff && res.data.diff.new_content) {
+        if (res.data.diff && res.data.diff.new_content && effectivePath === activeFile) {
           await loadFile(activeFile);
           await refreshPendingChanges();
         }
@@ -152,6 +171,8 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
         isSettingsModalOpen,
         messages,
         isThinking,
+        dynamicContext,
+        setDynamicContext,
         openSettingsModal: () => setIsSettingsModalOpen(true),
         closeSettingsModal: () => setIsSettingsModalOpen(false),
         loadAISettings,
