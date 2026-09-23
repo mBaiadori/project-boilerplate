@@ -120,19 +120,19 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
                 GitHub: {activeRepo.full_name} ↗
               </a>
             ) : (
-              <span id="dash-repo-link">Git Local Ativo</span>
+              <span id="dash-repo-link">Repositório Local Ativo</span>
             )}
           </span>
         </div>
       </div>
 
       <div className="dash-nav-right">
-        {/* Quick Git Control Button */}
+        {/* Quick Version & Evolution Control Button */}
         <button
           id="btn-quick-git-control"
           className="btn btn-secondary btn-sm"
           type="button"
-          title="Abrir Painel de Controle Git"
+          title="Central de Versões & Evolução da Documentação"
           onClick={onOpenGitModal}
           style={{
             display: "inline-flex",
@@ -145,15 +145,15 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
             className="material-symbols-outlined icon-xs"
             style={{ color: isGitClean ? "inherit" : "#eab308" }}
           >
-            commit
+            history_edu
           </span>
-          <span>Git</span>
+          <span>Versões</span>
           {gitFilesCount > 0 && (
             <span
               className="badge badge-warning"
               style={{ fontSize: "10px", padding: "1px 5px" }}
             >
-              {gitFilesCount}
+              {gitFilesCount} {gitFilesCount === 1 ? "rascunho" : "rascunhos"}
             </span>
           )}
         </button>
@@ -170,7 +170,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
           <span id="pending-changes-badge-text">
             {pendingChanges.length} alterações
           </span>{" "}
-          &bull; Revisar PR
+          &bull; Revisar Proposta
         </button>
 
         <button

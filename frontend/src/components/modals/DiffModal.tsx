@@ -20,7 +20,7 @@ export const DiffModal: React.FC<DiffModalProps> = ({ isOpen, onClose, onPROpene
 
   useEffect(() => {
     if (isOpen) {
-      setPrTitle(`Proposta de Alterações Oficiais (${pendingChanges.length} arquivos)`);
+      setPrTitle(`Proposta de Evolução Documental (${pendingChanges.length} arquivos)`);
       setPrDesc('');
     }
   }, [isOpen, pendingChanges.length]);
@@ -60,7 +60,7 @@ export const DiffModal: React.FC<DiffModalProps> = ({ isOpen, onClose, onPROpene
         onClose();
       }
     } catch (err) {
-      console.error('[DiffModal] Erro ao criar PR:', err);
+      console.error('[DiffModal] Erro ao criar proposta:', err);
     } finally {
       setIsSubmitting(false);
     }
@@ -86,12 +86,12 @@ export const DiffModal: React.FC<DiffModalProps> = ({ isOpen, onClose, onPROpene
         <div className="modal-header">
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <h3>Central de Alterações do Workspace</h3>
+              <h3>Central de Revisão de Alterações</h3>
               <span className={`badge ${guardrailStatus === 'CLEAN' ? 'badge-success' : 'badge-warning'}`}>
                 {guardrailStatus === 'CLEAN' ? 'Conforme' : guardrailStatus}
               </span>
             </div>
-            <span className="subtitle">Revise as alterações visualmente antes de submeter a proposta de Pull Request</span>
+            <span className="subtitle">Revise visualmente o que mudou antes de submeter a proposta para aprovação oficial</span>
           </div>
           <button className="btn-close" aria-label="Fechar" onClick={onClose}>
             <span className="material-symbols-outlined icon-sm">close</span>
@@ -103,10 +103,10 @@ export const DiffModal: React.FC<DiffModalProps> = ({ isOpen, onClose, onPROpene
           <div style={{ display: 'flex', gap: '12px', alignItems: 'center', justifyContent: 'space-between', background: 'var(--color-surface-container, #f8fafc)', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border-color, #e2e8f0)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span className="material-symbols-outlined" style={{ fontSize: '18px', color: 'var(--color-primary, #2563eb)' }}>description</span>
-              <strong>{pendingChanges.length} arquivo(s) modificado(s)</strong>
+              <strong>{pendingChanges.length} documento(s) com alterações</strong>
               <div style={{ display: 'flex', gap: '8px', fontSize: '12.5px', marginLeft: '8px' }}>
-                <span style={{ color: '#16a34a', fontWeight: 600 }}>+{totalAdditions} adições</span>
-                <span style={{ color: '#dc2626', fontWeight: 600 }}>-{totalDeletions} exclusões</span>
+                <span style={{ color: '#16a34a', fontWeight: 600 }}>+{totalAdditions} palavras/linhas</span>
+                <span style={{ color: '#dc2626', fontWeight: 600 }}>-{totalDeletions} excluídas</span>
               </div>
             </div>
 
@@ -142,7 +142,7 @@ export const DiffModal: React.FC<DiffModalProps> = ({ isOpen, onClose, onPROpene
                   color: diffViewMode === 'raw' ? 'var(--primary, #2563eb)' : '#64748b'
                 }}
               >
-                Patch Git (Código)
+                Patch Técnico (Código)
               </button>
             </div>
           </div>
@@ -186,7 +186,7 @@ export const DiffModal: React.FC<DiffModalProps> = ({ isOpen, onClose, onPROpene
                           {change.path}
                         </span>
                         <span className="badge badge-primary-subtle" style={{ fontSize: '11px' }}>
-                          {change.type || 'MODIFIED'}
+                          {change.type === 'ADDED' ? 'NOVO' : change.type === 'MODIFIED' ? 'ALTERADO' : change.type === 'DELETED' ? 'REMOVIDO' : 'ALTERADO'}
                         </span>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -240,7 +240,7 @@ export const DiffModal: React.FC<DiffModalProps> = ({ isOpen, onClose, onPROpene
           <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <label htmlFor="unified-pr-title-input" style={{ fontWeight: 600, fontSize: '13px' }}>
-                Título da Proposta (PR):
+                Título da Proposta de Evolução:
               </label>
               <button
                 type="button"
@@ -259,7 +259,7 @@ export const DiffModal: React.FC<DiffModalProps> = ({ isOpen, onClose, onPROpene
               className="form-input"
               value={prTitle}
               onChange={e => setPrTitle(e.target.value)}
-              placeholder="Descreva o propósito deste Pull Request..."
+              placeholder="Descreva o objetivo desta proposta de evolução..."
             />
 
             <label htmlFor="unified-pr-desc-input" style={{ fontWeight: 600, fontSize: '13px', marginTop: '4px' }}>
@@ -292,8 +292,15 @@ export const DiffModal: React.FC<DiffModalProps> = ({ isOpen, onClose, onPROpene
               className="btn btn-primary btn-sm"
               onClick={handleCreatePR}
               disabled={isSubmitting || pendingChanges.length === 0 || !prTitle.trim()}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
             >
-              {isSubmitting ? 'Criando PR...' : 'Criar Pull Request Oficial'}
+              <span
+                className="material-symbols-outlined icon-xs"
+                style={isSubmitting ? { animation: 'spin 1s linear infinite' } : {}}
+              >
+                {isSubmitting ? 'progress_activity' : 'send'}
+              </span>
+              {isSubmitting ? 'Submetendo Proposta...' : 'Enviar Proposta para Aprovação'}
             </button>
           </div>
         </div>

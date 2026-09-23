@@ -98,14 +98,14 @@ export const GitModal: React.FC<GitModalProps> = ({ isOpen, onClose, onOpenDiffM
     try {
       const res = await commitGit(commitMsg.trim());
       if (res.success) {
-        setFeedback({ type: 'success', message: `Commit realizado com sucesso (${res.commitHash || 'HEAD'})!` });
+        setFeedback({ type: 'success', message: `Nova versão registrada com sucesso (${res.commitHash ? res.commitHash.slice(0, 7) : 'v-atual'})!` });
         setCommitMsg('');
         await refreshPendingChanges();
       } else {
-        setFeedback({ type: 'error', message: res.message || 'Falha ao realizar commit.' });
+        setFeedback({ type: 'error', message: res.message || 'Falha ao registrar versão.' });
       }
     } catch (err: any) {
-      setFeedback({ type: 'error', message: err.message || 'Erro inesperado ao commitar.' });
+      setFeedback({ type: 'error', message: err.message || 'Erro inesperado ao registrar versão.' });
     } finally {
       setIsCommitting(false);
     }
@@ -117,13 +117,13 @@ export const GitModal: React.FC<GitModalProps> = ({ isOpen, onClose, onOpenDiffM
     try {
       const res = await syncGit();
       if (res.success) {
-        setFeedback({ type: 'success', message: `Sincronização concluída: ${res.message}` });
+        setFeedback({ type: 'success', message: `Sincronização com a equipe concluída: ${res.message}` });
         await refreshPendingChanges();
       } else {
         setFeedback({ type: 'error', message: `Aviso de sincronização: ${res.message}` });
       }
     } catch (err: any) {
-      setFeedback({ type: 'error', message: err.message || 'Erro ao sincronizar com remote.' });
+      setFeedback({ type: 'error', message: err.message || 'Erro ao sincronizar com o servidor remoto.' });
     } finally {
       setIsSyncing(false);
     }
@@ -143,7 +143,7 @@ export const GitModal: React.FC<GitModalProps> = ({ isOpen, onClose, onOpenDiffM
         setFeedback({ type: 'error', message: res.message });
       }
     } catch (err: any) {
-      setFeedback({ type: 'error', message: err.message || 'Erro ao criar branch.' });
+      setFeedback({ type: 'error', message: err.message || 'Erro ao alternar trilha de trabalho.' });
     }
   };
 
@@ -180,7 +180,7 @@ export const GitModal: React.FC<GitModalProps> = ({ isOpen, onClose, onOpenDiffM
           <span className="material-symbols-outlined icon-xs" style={{ animation: 'spin 1s linear infinite', verticalAlign: 'middle', marginRight: '6px' }}>
             progress_activity
           </span>
-          Carregando diff...
+          Carregando comparativo de mudanças...
         </div>
       );
     }
@@ -275,15 +275,15 @@ export const GitModal: React.FC<GitModalProps> = ({ isOpen, onClose, onOpenDiffM
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <span className="material-symbols-outlined" style={{ color: 'var(--md-sys-color-primary, #3b82f6)', fontSize: '24px' }}>
-                alt_route
+                history_edu
               </span>
-              <h3 style={{ margin: 0, fontSize: '18px' }}>Painel de Controle Git</h3>
+              <h3 style={{ margin: 0, fontSize: '18px' }}>Central de Versões & Evolução</h3>
               <span className="badge badge-primary-subtle" style={{ fontFamily: 'var(--font-mono)', fontSize: '12px' }}>
-                {currentBranch}
+                Trilha: {currentBranch}
               </span>
             </div>
             <span className="subtitle" style={{ marginTop: '4px', display: 'block' }}>
-              Repositório local: <code>{activeRepo?.name || 'local'}</code> {gitStatus?.remoteUrl ? `(${gitStatus.remoteUrl})` : '(Modo Local)'}
+              Repositório de Documentação: <code>{activeRepo?.name || 'local'}</code> {gitStatus?.remoteUrl ? `(${gitStatus.remoteUrl})` : '(Modo Local)'}
             </span>
           </div>
           <button className="btn-close" aria-label="Fechar" onClick={onClose}>
@@ -311,7 +311,7 @@ export const GitModal: React.FC<GitModalProps> = ({ isOpen, onClose, onOpenDiffM
             }}
           >
             <span className="material-symbols-outlined icon-xs">pending_actions</span>
-            Status & Diff {changedFiles.length > 0 && `(${changedFiles.length})`}
+            Rascunhos & Mudanças {changedFiles.length > 0 && `(${changedFiles.length})`}
           </button>
           <button
             type="button"
@@ -331,7 +331,7 @@ export const GitModal: React.FC<GitModalProps> = ({ isOpen, onClose, onOpenDiffM
             }}
           >
             <span className="material-symbols-outlined icon-xs">history</span>
-            Histórico ({gitLog.length})
+            Histórico de Versões ({gitLog.length})
           </button>
           <button
             type="button"
@@ -350,8 +350,8 @@ export const GitModal: React.FC<GitModalProps> = ({ isOpen, onClose, onOpenDiffM
               gap: '6px'
             }}
           >
-            <span className="material-symbols-outlined icon-xs">fork_right</span>
-            Branches
+            <span className="material-symbols-outlined icon-xs">alt_route</span>
+            Trilhas de Trabalho
           </button>
         </div>
 
@@ -383,10 +383,10 @@ export const GitModal: React.FC<GitModalProps> = ({ isOpen, onClose, onOpenDiffM
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--bg-surface-secondary, #f8fafc)', padding: '12px 16px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <span className={`pill-dot ${isClean ? 'success' : 'warning'}`}>
-                    <span className="dot"></span> {isClean ? 'Árvore de trabalho limpa' : `${changedFiles.length} arquivo(s) com alterações`}
+                    <span className="dot"></span> {isClean ? 'Documentação 100% Sincronizada' : `${changedFiles.length} documento(s) com rascunhos pendentes`}
                   </span>
                   {gitStatus?.ahead ? (
-                    <span className="badge badge-primary-subtle">{gitStatus.ahead} commit(s) à frente</span>
+                    <span className="badge badge-primary-subtle">{gitStatus.ahead} marco(s) não sincronizados</span>
                   ) : null}
                 </div>
 
@@ -395,7 +395,7 @@ export const GitModal: React.FC<GitModalProps> = ({ isOpen, onClose, onOpenDiffM
                     type="button"
                     className="btn btn-secondary btn-sm"
                     onClick={() => { refreshGitStatus(); refreshGitLog(); refreshPendingChanges(); }}
-                    title="Atualizar status e diffs"
+                    title="Atualizar status e comparativo"
                   >
                     <span className="material-symbols-outlined icon-xs">refresh</span>
                     Atualizar
@@ -405,10 +405,10 @@ export const GitModal: React.FC<GitModalProps> = ({ isOpen, onClose, onOpenDiffM
                     className="btn btn-primary btn-sm"
                     onClick={handleSync}
                     disabled={isSyncing}
-                    title="Sincronizar (Pull & Push com Remote)"
+                    title="Sincronizar com a equipe (baixar novidades e enviar contribuições)"
                   >
                     <span className="material-symbols-outlined icon-xs">sync</span>
-                    {isSyncing ? 'Sincronizando...' : 'Sincronizar Remote'}
+                    {isSyncing ? 'Sincronizando...' : 'Sincronizar com a Nuvem'}
                   </button>
                 </div>
               </div>
@@ -417,7 +417,7 @@ export const GitModal: React.FC<GitModalProps> = ({ isOpen, onClose, onOpenDiffM
               <div style={{ border: '1px solid var(--border-color)', borderRadius: '8px', overflow: 'hidden' }}>
                 <div style={{ padding: '10px 14px', background: 'var(--bg-surface-secondary, #f8fafc)', borderBottom: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <span style={{ fontWeight: 600, fontSize: '13px' }}>
-                    Arquivos no Working Tree &bull; Diffs desta versão
+                    Documentos em Edição &bull; Comparativo de Mudanças
                   </span>
                   {changedFiles.length > 0 && (
                     <div style={{ display: 'flex', gap: '6px' }}>
@@ -441,7 +441,7 @@ export const GitModal: React.FC<GitModalProps> = ({ isOpen, onClose, onOpenDiffM
                     <span className="material-symbols-outlined icon-md" style={{ color: 'var(--text-dim)', display: 'block', marginBottom: '6px' }}>
                       check_circle
                     </span>
-                    Nenhuma alteração pendente de commit. Todos os arquivos estão sincronizados.
+                    Nenhuma alteração pendente. Todos os documentos estão consolidados e sincronizados.
                   </div>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -536,7 +536,7 @@ export const GitModal: React.FC<GitModalProps> = ({ isOpen, onClose, onOpenDiffM
                                     file.status === 'D' ? '#b91c1c' : '#4338ca'
                                 }}
                               >
-                                {file.status === '??' ? 'UNTRACKED' : file.status === 'M' ? 'MODIFIED' : file.status === 'A' ? 'ADDED' : file.status === 'D' ? 'DELETED' : file.status}
+                                {file.status === '??' ? 'NOVO' : file.status === 'M' ? 'ALTERADO' : file.status === 'A' ? 'ADICIONADO' : file.status === 'D' ? 'REMOVIDO' : file.status}
                               </span>
                             </div>
 
@@ -563,7 +563,7 @@ export const GitModal: React.FC<GitModalProps> = ({ isOpen, onClose, onOpenDiffM
                                   gap: '2px'
                                 }}
                               >
-                                {isExpanded ? 'Ocultar diff' : 'Ver diff'}
+                                {isExpanded ? 'Ocultar mudanças' : 'Ver mudanças'}
                               </span>
                             </div>
                           </div>
@@ -586,17 +586,17 @@ export const GitModal: React.FC<GitModalProps> = ({ isOpen, onClose, onOpenDiffM
                 )}
               </div>
 
-              {/* Protection & PR Flow vs Branch Commit */}
+              {/* Protection & PR Flow vs Branch Versioning */}
               {currentBranch === 'main' ? (
                 <div style={{ border: '1px solid var(--border-color)', borderRadius: '8px', padding: '16px', background: 'var(--bg-surface-secondary, #f8fafc)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
                     <span className="material-symbols-outlined" style={{ color: 'var(--primary, #3b82f6)', fontSize: '20px' }}>
                       lock
                     </span>
-                    <strong style={{ fontSize: '13.5px' }}>Branch <code>main</code> Protegida por Governança</strong>
+                    <strong style={{ fontSize: '13.5px' }}>Trilha Oficial (<code>main</code>) Protegida por Governança</strong>
                   </div>
                   <p style={{ margin: '0 0 12px 0', fontSize: '12.5px', color: 'var(--text-muted)', lineHeight: '1.4' }}>
-                    Para garantir a colaboração e revisão por pares, commits diretos na <code>main</code> não são permitidos. Suas alterações são submetidas como um <strong>Pull Request</strong> oficial.
+                    Para garantir a qualidade, integridade e revisão por pares, alterações diretas na trilha oficial não são publicadas sem validação. Suas contribuições são submetidas como uma <strong>Proposta de Revisão e Aprovação</strong>.
                   </p>
                   <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
                     <button
@@ -608,22 +608,22 @@ export const GitModal: React.FC<GitModalProps> = ({ isOpen, onClose, onOpenDiffM
                       }}
                       disabled={isClean}
                     >
-                      <span className="material-symbols-outlined icon-xs">call_split</span>
-                      Propor Pull Request Oficial
+                      <span className="material-symbols-outlined icon-xs">rate_review</span>
+                      Propor Revisão & Aprovação Oficial
                     </button>
                   </div>
                 </div>
               ) : (
-                /* Commit Form for working branches */
+                /* Versioning Form for working branches */
                 <form onSubmit={handleCommit} style={{ border: '1px solid var(--border-color)', borderRadius: '8px', padding: '16px', background: 'var(--bg-surface)' }}>
                   <h4 style={{ margin: '0 0 10px 0', fontSize: '14px', fontWeight: 600 }}>
-                    Commit na Branch <code>{currentBranch}</code>
+                    Registrar Marco de Versão na Trilha <code>{currentBranch}</code>
                   </h4>
                   <div className="form-group" style={{ marginBottom: '12px' }}>
                     <input
                       type="text"
                       className="form-input"
-                      placeholder="feat: descreva a alteração realizada..."
+                      placeholder="Descreva a evolução realizada (ex: Atualização das políticas e requisitos)..."
                       value={commitMsg}
                       onChange={e => setCommitMsg(e.target.value)}
                       disabled={isCommitting || isClean}
@@ -634,9 +634,15 @@ export const GitModal: React.FC<GitModalProps> = ({ isOpen, onClose, onOpenDiffM
                       type="submit"
                       className="btn btn-primary btn-sm"
                       disabled={isCommitting || isClean || !commitMsg.trim()}
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
                     >
-                      <span className="material-symbols-outlined icon-xs">check</span>
-                      {isCommitting ? 'Commitando...' : 'Fazer Commit'}
+                      <span
+                        className="material-symbols-outlined icon-xs"
+                        style={isCommitting ? { animation: 'spin 1s linear infinite' } : {}}
+                      >
+                        {isCommitting ? 'progress_activity' : 'bookmark_add'}
+                      </span>
+                      {isCommitting ? 'Registrando versão...' : 'Salvar Nova Versão'}
                     </button>
                   </div>
                 </form>
@@ -644,12 +650,12 @@ export const GitModal: React.FC<GitModalProps> = ({ isOpen, onClose, onOpenDiffM
             </div>
           )}
 
-          {/* TAB 2: HISTORY (GIT LOG) */}
+          {/* TAB 2: HISTORY (TIMELINE OF VERSIONS) */}
           {activeTab === 'history' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {gitLog.length === 0 ? (
                 <div style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)' }}>
-                  Nenhum commit encontrado no histórico.
+                  Nenhuma versão anterior registrada no histórico.
                 </div>
               ) : (
                 gitLog.map((commit, idx) => (
@@ -669,16 +675,16 @@ export const GitModal: React.FC<GitModalProps> = ({ isOpen, onClose, onOpenDiffM
                     <div style={{ flex: 1 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
                         <span className="badge badge-neutral" style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', fontWeight: 600 }}>
-                          {commit.shortHash || commit.hash.slice(0, 7)}
+                          #{commit.shortHash || commit.hash.slice(0, 7)}
                         </span>
                         <strong style={{ fontSize: '13.5px', color: 'var(--text-heading)' }}>{commit.message}</strong>
                       </div>
                       <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                        Por <strong>{commit.author}</strong> em {commit.date}
+                        Contribuído por <strong>{commit.author}</strong> em {commit.date}
                       </div>
                     </div>
                     <span className="material-symbols-outlined" style={{ color: 'var(--text-dim)', fontSize: '18px' }}>
-                      commit
+                      history_edu
                     </span>
                   </div>
                 ))
@@ -686,33 +692,33 @@ export const GitModal: React.FC<GitModalProps> = ({ isOpen, onClose, onOpenDiffM
             </div>
           )}
 
-          {/* TAB 3: BRANCHES */}
+          {/* TAB 3: TRILHAS DE TRABALHO */}
           {activeTab === 'branches' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               {/* Create Branch Form */}
               <form onSubmit={handleCreateBranch} style={{ border: '1px solid var(--border-color)', borderRadius: '8px', padding: '16px', background: 'var(--bg-surface)' }}>
-                <h4 style={{ margin: '0 0 10px 0', fontSize: '14px', fontWeight: 600 }}>Criar ou Trocar de Branch</h4>
+                <h4 style={{ margin: '0 0 10px 0', fontSize: '14px', fontWeight: 600 }}>Criar ou Alternar Trilha de Trabalho</h4>
                 <div style={{ display: 'flex', gap: '8px' }}>
                   <input
                     type="text"
                     className="form-input"
-                    placeholder="ex: feature/nova-especificacao ou gov/regras"
+                    placeholder="ex: revisao-politicas ou especificacao-v2"
                     value={newBranchName}
                     onChange={e => setNewBranchName(e.target.value)}
                     style={{ flex: 1 }}
                   />
                   <button type="submit" className="btn btn-primary btn-sm" disabled={!newBranchName.trim()}>
-                    Trocar / Criar
+                    Alternar / Criar Trilha
                   </button>
                 </div>
               </form>
 
               <div style={{ border: '1px solid var(--border-color)', borderRadius: '8px', padding: '16px', background: 'var(--bg-surface)' }}>
-                <h4 style={{ margin: '0 0 12px 0', fontSize: '14px', fontWeight: 600 }}>Branch Atual</h4>
+                <h4 style={{ margin: '0 0 12px 0', fontSize: '14px', fontWeight: 600 }}>Trilha Ativa</h4>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <span className="material-symbols-outlined" style={{ color: 'var(--primary)' }}>done</span>
                   <code style={{ fontSize: '14px', fontWeight: 700 }}>{currentBranch}</code>
-                  <span className="badge badge-primary-subtle">Ativa</span>
+                  <span className="badge badge-primary-subtle">Em Edição</span>
                 </div>
               </div>
             </div>

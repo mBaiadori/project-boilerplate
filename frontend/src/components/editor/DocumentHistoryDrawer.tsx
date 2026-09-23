@@ -78,12 +78,12 @@ export const DocumentHistoryDrawer: React.FC<DocumentHistoryDrawerProps> = ({
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span className="material-symbols-outlined" style={{ color: 'var(--primary, #3b82f6)', fontSize: '20px' }}>
-            history
+            history_edu
           </span>
           <div>
-            <strong style={{ fontSize: '13.5px', color: 'var(--text-heading, #0f172a)' }}>Versões & Auditoria</strong>
+            <strong style={{ fontSize: '13.5px', color: 'var(--text-heading, #0f172a)' }}>Linha do Tempo de Versões</strong>
             <span style={{ fontSize: '11px', color: 'var(--text-muted, #64748b)', display: 'block' }}>
-              Histórico Git do arquivo
+              Evolução e auditoria do documento
             </span>
           </div>
         </div>
@@ -122,7 +122,7 @@ export const DocumentHistoryDrawer: React.FC<DocumentHistoryDrawerProps> = ({
       {/* Timeline List */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
         
-        {/* Working Copy (HEAD) Item */}
+        {/* Working Copy (Rascunho) Item */}
         <div
           onClick={() => onSelectCommit(null)}
           style={{
@@ -137,20 +137,20 @@ export const DocumentHistoryDrawer: React.FC<DocumentHistoryDrawerProps> = ({
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
               <span className="pill-dot primary">
-                <span className="dot"></span> <strong>Versão Atual (Working Copy)</strong>
+                <span className="dot"></span> <strong>Rascunho Atual (Em Edição)</strong>
               </span>
             </div>
             {selectedCommitHash === null && (
-              <span className="badge badge-primary-subtle" style={{ fontSize: '10px' }}>Ativa</span>
+              <span className="badge badge-primary-subtle" style={{ fontSize: '10px' }}>Ativo</span>
             )}
           </div>
           <p style={{ margin: '4px 0 0 0', fontSize: '11.5px', color: 'var(--text-muted)' }}>
-            Estado atual no editor e alterações em rascunho
+            Estado atual no editor com suas alterações em tempo real
           </p>
         </div>
 
         <div style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-dim)', margin: '8px 0 4px 0', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-          Commits Anteriores ({commits.length})
+          Versões Registradas ({commits.length})
         </div>
 
         {isLoading ? (
@@ -162,7 +162,7 @@ export const DocumentHistoryDrawer: React.FC<DocumentHistoryDrawerProps> = ({
           </div>
         ) : commits.length === 0 ? (
           <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px' }}>
-            Nenhum commit histórico registrado para este arquivo.
+            Nenhuma versão histórica registrada para este documento.
           </div>
         ) : (
           commits.map((commit) => {
@@ -184,7 +184,7 @@ export const DocumentHistoryDrawer: React.FC<DocumentHistoryDrawerProps> = ({
               >
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px', marginBottom: '4px' }}>
                   <span className="badge badge-neutral" style={{ fontFamily: 'var(--font-mono)', fontSize: '10.5px', fontWeight: 600 }}>
-                    {commit.shortHash || commit.hash.slice(0, 7)}
+                    #{commit.shortHash || commit.hash.slice(0, 7)}
                   </span>
                   <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
                     {commit.date}
@@ -212,7 +212,7 @@ export const DocumentHistoryDrawer: React.FC<DocumentHistoryDrawerProps> = ({
 
       {/* Footer */}
       <div style={{ padding: '10px 16px', borderTop: '1px solid var(--border-color, #e2e8f0)', background: 'var(--bg-surface-secondary, #f8fafc)', fontSize: '11px', color: 'var(--text-dim)', textAlign: 'center' }}>
-        Clique em um commit para comparar visualmente com a versão atual.
+        Clique em uma versão anterior para comparar visualmente com o rascunho atual.
       </div>
     </aside>
   );

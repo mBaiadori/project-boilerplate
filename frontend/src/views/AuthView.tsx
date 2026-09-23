@@ -59,7 +59,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
         </div>
         <h1>Governance Platform</h1>
         <p className="subtitle">
-          Conecte sua conta do GitHub para gerenciar documentos, domínios e aprovações de PRs.
+          Conecte sua conta do GitHub para gerenciar documentos, domínios e aprovações de propostas de evolução.
         </p>
 
         <div className="action-box">

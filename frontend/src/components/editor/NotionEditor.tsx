@@ -555,7 +555,7 @@ Mantenha um tom técnico, rigoroso e direto.`,
     if (!historicalContent) return;
     if (
       window.confirm(
-        `Deseja restaurar o documento para o commit ${selectedCommit?.shortHash || "selecionado"}?`,
+        `Deseja restaurar o documento para a Versão #${selectedCommit?.shortHash || selectedCommit?.hash.slice(0, 7) || "selecionada"} (${selectedCommit?.message || ""})?`,
       )
     ) {
       onChange(historicalContent);
@@ -650,8 +650,8 @@ Mantenha um tom técnico, rigoroso e direto.`,
     ? historicalContent
     : originalContent || "";
   const comparisonOldTitle = selectedCommit
-    ? `Commit ${selectedCommit.shortHash} (${selectedCommit.author})`
-    : "Versão Base (HEAD)";
+    ? `Versão #${selectedCommit.shortHash || selectedCommit.hash.slice(0, 7)} (${selectedCommit.author})`
+    : "Versão Base Publicada";
 
   return (
     <div
@@ -885,7 +885,7 @@ Mantenha um tom técnico, rigoroso e direto.`,
 
             <div className="toolbar-divider"></div>
 
-            {/* Alternador de Modo Git & Versões ("Olhinho" / Diffs) */}
+            {/* Alternador de Modo Comparativo & Versões ("Olhinho" / Diffs) */}
             <button
               id="btn-toggle-git-mode"
               className={`btn-icon-action ${isGitMode ? "active" : ""}`}
@@ -893,7 +893,7 @@ Mantenha um tom técnico, rigoroso e direto.`,
               title={
                 isGitMode
                   ? "Voltar para Modo de Edição"
-                  : "Modo Git & Auditoria (Ver alterações formatadas, quem editou e versões)"
+                  : "Modo Comparativo & Auditoria (Ver evolução do conteúdo, quem editou e versões)"
               }
               onClick={() => {
                 const nextMode = !isGitMode;
@@ -911,10 +911,10 @@ Mantenha um tom técnico, rigoroso e direto.`,
               id="btn-toggle-history-drawer"
               className={`btn-icon-action ${isHistoryDrawerOpen ? "active" : ""}`}
               type="button"
-              title="Linha do Tempo de Commits & Versões deste documento"
+              title="Linha do Tempo de Versões & Evolução deste documento"
               onClick={() => setIsHistoryDrawerOpen(!isHistoryDrawerOpen)}
             >
-              <span className="material-symbols-outlined icon-xs">history</span>
+              <span className="material-symbols-outlined icon-xs">history_edu</span>
             </button>
 
             {/* Botão Sincronizar / Salvar no Disco */}
@@ -1131,7 +1131,7 @@ Mantenha um tom técnico, rigoroso e direto.`,
               oldContent={comparisonOldContent}
               newContent={docBody}
               oldTitle={comparisonOldTitle}
-              newTitle="Versão Atual (Working Copy)"
+              newTitle="Rascunho Atual (Em Edição)"
               fileName={filePath || undefined}
               blameData={blameData}
               showAuthorship={true}

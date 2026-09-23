@@ -15,6 +15,7 @@ export const PRsSubView: React.FC<PRsSubViewProps> = ({ onOpenDiffModal }) => {
   const [expandedPRs, setExpandedPRs] = useState<Record<number | string, boolean>>({});
   const [prViewModes, setPrViewModes] = useState<Record<string, 'visual' | 'raw'>>({});
   const [actionFeedback, setActionFeedback] = useState<{ id: number; message: string; type: 'success' | 'error' } | null>(null);
+  const [actionLoading, setActionLoading] = useState<{ id: number; action: 'approve' | 'merge' | 'reject' } | null>(null);
 
   const loadPRs = useCallback(async () => {
     setIsLoading(true);
@@ -24,7 +25,7 @@ export const PRsSubView: React.FC<PRsSubViewProps> = ({ onOpenDiffModal }) => {
         setPrs(res.prs);
       }
     } catch (err) {
-      console.error('[PRsSubView] Erro ao carregar PRs:', err);
+      console.error('[PRsSubView] Erro ao carregar propostas:', err);
     } finally {
       setIsLoading(false);
     }
@@ -39,47 +40,59 @@ export const PRsSubView: React.FC<PRsSubViewProps> = ({ onOpenDiffModal }) => {
   };
 
   const handleApprove = async (id: number) => {
+    setActionLoading({ id, action: 'approve' });
+    setActionFeedback(null);
     try {
       const res = await API.approvePR(id);
       if (res.ok) {
         setActionFeedback({ id, message: res.data?.message || 'Aprovação registrada com sucesso!', type: 'success' });
         await loadPRs();
       } else {
-        setActionFeedback({ id, message: res.data?.error || 'Erro ao aprovar PR.', type: 'error' });
+        setActionFeedback({ id, message: res.data?.error || 'Erro ao aprovar proposta.', type: 'error' });
       }
     } catch (err: any) {
-      setActionFeedback({ id, message: err.message || 'Erro ao aprovar PR.', type: 'error' });
+      setActionFeedback({ id, message: err.message || 'Erro ao aprovar proposta.', type: 'error' });
+    } finally {
+      setActionLoading(null);
     }
   };
 
   const handleMerge = async (id: number) => {
+    setActionLoading({ id, action: 'merge' });
+    setActionFeedback(null);
     try {
       const res = await API.mergePR(id);
       if (res.ok) {
-        setActionFeedback({ id, message: res.data?.message || 'PR mesclado na main com sucesso!', type: 'success' });
+        setActionFeedback({ id, message: res.data?.message || 'Proposta publicada na versão oficial com sucesso!', type: 'success' });
         await loadPRs();
       } else {
-        setActionFeedback({ id, message: res.data?.error || 'Erro ao fazer merge.', type: 'error' });
+        setActionFeedback({ id, message: res.data?.error || 'Erro ao publicar versão.', type: 'error' });
       }
     } catch (err: any) {
-      setActionFeedback({ id, message: err.message || 'Erro ao fazer merge.', type: 'error' });
+      setActionFeedback({ id, message: err.message || 'Erro ao publicar versão.', type: 'error' });
+    } finally {
+      setActionLoading(null);
     }
   };
 
   const handleReject = async (id: number) => {
-    const reason = window.prompt('Informe o motivo da rejeição do Pull Request (opcional):');
+    const reason = window.prompt('Informe o motivo da rejeição da proposta (opcional):');
     if (reason === null) return; // cancelou
 
+    setActionLoading({ id, action: 'reject' });
+    setActionFeedback(null);
     try {
       const res = await API.rejectPR(id, reason || 'Rejeitado pelo revisor');
       if (res.ok) {
-        setActionFeedback({ id, message: 'Pull Request rejeitado e fechado.', type: 'success' });
+        setActionFeedback({ id, message: 'Proposta rejeitada e arquivada.', type: 'success' });
         await loadPRs();
       } else {
-        setActionFeedback({ id, message: res.data?.error || 'Erro ao rejeitar PR.', type: 'error' });
+        setActionFeedback({ id, message: res.data?.error || 'Erro ao rejeitar proposta.', type: 'error' });
       }
     } catch (err: any) {
-      setActionFeedback({ id, message: err.message || 'Erro ao rejeitar PR.', type: 'error' });
+      setActionFeedback({ id, message: err.message || 'Erro ao rejeitar proposta.', type: 'error' });
+    } finally {
+      setActionLoading(null);
     }
   };
 
@@ -116,19 +129,19 @@ export const PRsSubView: React.FC<PRsSubViewProps> = ({ onOpenDiffModal }) => {
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span className="material-symbols-outlined" style={{ fontSize: '26px', color: 'var(--primary, #3b82f6)' }}>
-                  call_split
+                  rate_review
                 </span>
-                <h2 style={{ margin: 0 }}>Central Colaborativa de Pull Requests</h2>
+                <h2 style={{ margin: 0 }}>Central de Revisão & Propostas de Evolução</h2>
               </div>
               <p className="subtitle" style={{ marginTop: '4px' }}>
-                Ambiente de revisão por pares: inspecione alterações propostas, aprove com quórum ou realize o merge na branch <code>main</code> protegida.
+                Ambiente de colaboração por pares: revise alterações propostas, aprove com quórum ou publique as mudanças na versão oficial da documentação.
               </p>
             </div>
             <div style={{ display: 'flex', gap: '8px' }}>
               <button
                 id="btn-refresh-prs"
                 className="btn btn-secondary btn-sm"
-                title="Recarregar PRs do repositório"
+                title="Recarregar propostas"
                 type="button"
                 onClick={loadPRs}
               >
@@ -141,7 +154,7 @@ export const PRsSubView: React.FC<PRsSubViewProps> = ({ onOpenDiffModal }) => {
                 onClick={onOpenDiffModal}
               >
                 <span className="material-symbols-outlined icon-xs">add</span>
-                Propor Novo PR
+                Nova Proposta de Evolução
               </button>
             </div>
           </div>
@@ -155,7 +168,7 @@ export const PRsSubView: React.FC<PRsSubViewProps> = ({ onOpenDiffModal }) => {
                 type="button"
                 onClick={() => setActiveStatus('all')}
               >
-                Todos (<span id="count-prs-all">{countAll}</span>)
+                Todas (<span id="count-prs-all">{countAll}</span>)
               </button>
               <button
                 className={`store-filter-chip ${activeStatus === 'open' ? 'active' : ''}`}
@@ -163,7 +176,7 @@ export const PRsSubView: React.FC<PRsSubViewProps> = ({ onOpenDiffModal }) => {
                 type="button"
                 onClick={() => setActiveStatus('open')}
               >
-                Abertos / Em Revisão (<span id="count-prs-open">{countOpen}</span>)
+                Em Revisão (<span id="count-prs-open">{countOpen}</span>)
               </button>
               <button
                 className={`store-filter-chip ${activeStatus === 'merged' ? 'active' : ''}`}
@@ -171,7 +184,7 @@ export const PRsSubView: React.FC<PRsSubViewProps> = ({ onOpenDiffModal }) => {
                 type="button"
                 onClick={() => setActiveStatus('merged')}
               >
-                Merged (<span id="count-prs-merged">{countMerged}</span>)
+                Publicadas / Aprovadas (<span id="count-prs-merged">{countMerged}</span>)
               </button>
               <button
                 className={`store-filter-chip ${activeStatus === 'closed' ? 'active' : ''}`}
@@ -179,7 +192,7 @@ export const PRsSubView: React.FC<PRsSubViewProps> = ({ onOpenDiffModal }) => {
                 type="button"
                 onClick={() => setActiveStatus('closed')}
               >
-                Fechados / Rejeitados (<span id="count-prs-closed">{countClosed}</span>)
+                Arquivadas / Rejeitadas (<span id="count-prs-closed">{countClosed}</span>)
               </button>
             </div>
 
@@ -187,7 +200,7 @@ export const PRsSubView: React.FC<PRsSubViewProps> = ({ onOpenDiffModal }) => {
               <input
                 type="text"
                 id="prs-search-input"
-                placeholder="Buscar por título, autor, branch ou #ID..."
+                placeholder="Buscar por título, autor, trilha ou #ID..."
                 spellCheck="false"
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
@@ -199,14 +212,14 @@ export const PRsSubView: React.FC<PRsSubViewProps> = ({ onOpenDiffModal }) => {
         {/* PRs List Grid */}
         <div id="prs-full-list" className="prs-full-grid" style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {isLoading ? (
-            <div className="loading-state">Carregando PRs...</div>
+            <div className="loading-state">Carregando propostas...</div>
           ) : filteredPRs.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '48px', color: 'var(--text-muted)', border: '1px dashed var(--border-color)', borderRadius: '8px', background: 'var(--bg-surface)' }}>
               <span className="material-symbols-outlined icon-lg" style={{ color: 'var(--text-dim)', marginBottom: '8px' }}>
                 inbox
               </span>
-              <div style={{ fontWeight: 600, fontSize: '14px' }}>Nenhum Pull Request encontrado</div>
-              <p style={{ fontSize: '12px', margin: '4px 0 0 0' }}>Faça alterações no editor e clique em "Propor Novo PR" para abrir uma proposta.</p>
+              <div style={{ fontWeight: 600, fontSize: '14px' }}>Nenhuma Proposta de Evolução encontrada</div>
+              <p style={{ fontSize: '12px', margin: '4px 0 0 0' }}>Faça alterações no editor e clique em "Nova Proposta de Evolução" para abrir uma revisão.</p>
             </div>
           ) : (
             filteredPRs.map(pr => {
@@ -217,6 +230,8 @@ export const PRsSubView: React.FC<PRsSubViewProps> = ({ onOpenDiffModal }) => {
               const isExpanded = !!expandedPRs[pr.id];
               const approvals = Array.isArray(pr.approvals) ? pr.approvals : [];
               const prFiles = Array.isArray((pr as any).files) ? (pr as any).files : [];
+
+              const statusText = isMerged ? 'PUBLICADA' : isClosed ? 'ARQUIVADA' : 'EM REVISÃO';
 
               return (
                 <div
@@ -243,21 +258,21 @@ export const PRsSubView: React.FC<PRsSubViewProps> = ({ onOpenDiffModal }) => {
                           fontSize: '22px'
                         }}
                       >
-                        {isMerged ? 'merge' : isClosed ? 'cancel' : 'call_split'}
+                        {isMerged ? 'check_circle' : isClosed ? 'cancel' : 'rate_review'}
                       </span>
                       <div>
                         <strong style={{ fontSize: '15px', color: 'var(--text-heading)' }}>
                           #{pr.id} {pr.title}
                         </strong>
                         <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                          Criado por <strong>{pr.author}</strong> em {pr.created_at} &bull; Branch: <code>{pr.branch}</code>
+                          Proposto por <strong>{pr.author}</strong> em {pr.created_at} &bull; Trilha: <code>{pr.branch}</code>
                         </div>
                       </div>
                     </div>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <span className={`pill-dot ${isMerged ? 'info' : isClosed ? 'danger' : 'success'}`}>
-                        <span className="dot"></span> {pr.status.toUpperCase()}
+                        <span className="dot"></span> {statusText}
                       </span>
                     </div>
                   </div>
@@ -312,7 +327,7 @@ export const PRsSubView: React.FC<PRsSubViewProps> = ({ onOpenDiffModal }) => {
                         <span className="material-symbols-outlined icon-xs">
                           {isExpanded ? 'expand_less' : 'expand_more'}
                         </span>
-                        {isExpanded ? 'Ocultar alterações dos arquivos' : `Ver ${prFiles.length} arquivo(s) modificado(s)`}
+                        {isExpanded ? 'Ocultar alterações dos documentos' : `Ver ${prFiles.length} documento(s) com alterações`}
                       </button>
 
                       {isExpanded && (
@@ -380,7 +395,7 @@ export const PRsSubView: React.FC<PRsSubViewProps> = ({ onOpenDiffModal }) => {
                                         color: !isVisual ? 'var(--primary, #2563eb)' : '#64748b'
                                       }}
                                     >
-                                      Patch Git
+                                      Patch Técnico
                                     </button>
                                   </div>
                                 </div>
@@ -446,34 +461,60 @@ export const PRsSubView: React.FC<PRsSubViewProps> = ({ onOpenDiffModal }) => {
                     </div>
 
                     {isOpen && (
-                      <div style={{ display: 'flex', gap: '8px' }}>
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                         <button
                           className="btn btn-secondary btn-xs"
                           type="button"
                           onClick={() => handleReject(pr.id)}
-                          style={{ color: 'var(--danger, #ef4444)' }}
-                          title="Rejeitar e fechar este Pull Request"
+                          disabled={actionLoading?.id === pr.id}
+                          style={{ color: 'var(--danger, #ef4444)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                          title="Rejeitar e arquivar esta proposta de evolução"
                         >
-                          <span className="material-symbols-outlined icon-xs">close</span>
-                          Rejeitar
+                          <span
+                            className="material-symbols-outlined icon-xs"
+                            style={actionLoading?.id === pr.id && actionLoading.action === 'reject' ? { animation: 'spin 1s linear infinite' } : {}}
+                          >
+                            {actionLoading?.id === pr.id && actionLoading.action === 'reject' ? 'progress_activity' : 'close'}
+                          </span>
+                          {actionLoading?.id === pr.id && actionLoading.action === 'reject' ? 'Rejeitando...' : 'Rejeitar'}
                         </button>
+
                         <button
                           className="btn btn-secondary btn-xs"
                           type="button"
                           onClick={() => handleApprove(pr.id)}
+                          disabled={actionLoading?.id === pr.id}
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}
                           title="Aprovar proposta como revisor"
                         >
-                          <span className="material-symbols-outlined icon-xs">thumb_up</span>
-                          Aprovar PR {approvals.length > 0 ? `(${approvals.length})` : ''}
+                          <span
+                            className="material-symbols-outlined icon-xs"
+                            style={actionLoading?.id === pr.id && actionLoading.action === 'approve' ? { animation: 'spin 1s linear infinite' } : {}}
+                          >
+                            {actionLoading?.id === pr.id && actionLoading.action === 'approve' ? 'progress_activity' : 'thumb_up'}
+                          </span>
+                          {actionLoading?.id === pr.id && actionLoading.action === 'approve'
+                            ? 'Aprovando...'
+                            : `Aprovar Proposta ${approvals.length > 0 ? `(${approvals.length})` : ''}`}
                         </button>
+
                         <button
                           className="btn btn-primary btn-xs"
                           type="button"
                           onClick={() => handleMerge(pr.id)}
-                          title="Fazer merge na branch main"
+                          disabled={actionLoading?.id === pr.id}
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                          title="Publicar alterações na versão oficial da documentação"
                         >
-                          <span className="material-symbols-outlined icon-xs">merge</span>
-                          Fazer Merge na Main
+                          <span
+                            className="material-symbols-outlined icon-xs"
+                            style={actionLoading?.id === pr.id && actionLoading.action === 'merge' ? { animation: 'spin 1s linear infinite' } : {}}
+                          >
+                            {actionLoading?.id === pr.id && actionLoading.action === 'merge' ? 'progress_activity' : 'publish'}
+                          </span>
+                          {actionLoading?.id === pr.id && actionLoading.action === 'merge'
+                            ? 'Publicando versão oficial...'
+                            : 'Publicar na Versão Oficial'}
                         </button>
                       </div>
                     )}

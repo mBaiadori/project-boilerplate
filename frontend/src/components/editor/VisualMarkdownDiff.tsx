@@ -17,8 +17,8 @@ interface VisualMarkdownDiffProps {
 export const VisualMarkdownDiff: React.FC<VisualMarkdownDiffProps> = ({
   oldContent,
   newContent,
-  oldTitle = 'Versão Base (HEAD)',
-  newTitle = 'Versão Atual (Working Copy)',
+  oldTitle = 'Versão Base Publicada',
+  newTitle = 'Rascunho Atual (Em Edição)',
   fileName,
   blameData,
   showAuthorship = false,
@@ -205,17 +205,17 @@ export const VisualMarkdownDiff: React.FC<VisualMarkdownDiffProps> = ({
           </div>
         )}
 
-        {/* Git Blame / Authorship Overlay */}
+        {/* Authorship & Contributors Overlay */}
         {showAuthorship && blameData && blameData.length > 0 && (
           <div style={{ marginTop: '32px', borderTop: '1px solid var(--border-color, #e2e8f0)', paddingTop: '16px' }}>
             <h4 style={{ margin: '0 0 12px 0', fontSize: '13px', fontWeight: 600, color: 'var(--text-heading)' }}>
-              Anotações de Autoria & Git Blame
+              Anotações de Autoria & Contribuidores
             </h4>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxHeight: '200px', overflowY: 'auto', fontFamily: 'var(--font-mono)', fontSize: '12px' }}>
               {blameData.map((b, idx) => (
                 <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '3px 8px', borderRadius: '4px', background: 'var(--bg-surface-secondary, #f8fafc)' }}>
                   <span style={{ color: 'var(--text-dim)', width: '32px' }}>L{b.line}</span>
-                  <span className="badge badge-neutral" style={{ fontSize: '11px' }}>{b.commit}</span>
+                  <span className="badge badge-neutral" style={{ fontSize: '11px' }}>#{b.commit.slice(0, 7)}</span>
                   <strong style={{ color: 'var(--text-heading)', minWidth: '120px' }}>{b.author}</strong>
                   <span style={{ color: 'var(--text-muted)', fontSize: '11px', minWidth: '80px' }}>{b.date}</span>
                   <span style={{ color: 'var(--text-normal)', flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>

@@ -1283,7 +1283,7 @@ export const SettingsSubView: React.FC = () => {
           </div>
         </div>
 
-        {/* SEÇÃO 4: REGRAS DE GOVERNANÇA & GIT */}
+        {/* SEÇÃO 4: REGRAS DE GOVERNANÇA & VERSÕES */}
         <div className="gov-card" style={{ marginBottom: "24px" }}>
           <div className="gov-card-header">
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
@@ -1291,11 +1291,11 @@ export const SettingsSubView: React.FC = () => {
                 className="material-symbols-outlined icon-lg"
                 style={{ color: "var(--md-sys-color-primary, #3b82f6)" }}
               >
-                alt_route
+                history_edu
               </span>
               <div>
                 <h3 style={{ margin: 0, fontSize: "15px" }}>
-                  Governança de Pull Requests & Git
+                  Governança de Versões & Repositório
                 </h3>
                 <p
                   style={{
@@ -1304,8 +1304,8 @@ export const SettingsSubView: React.FC = () => {
                     margin: "2px 0 0 0",
                   }}
                 >
-                  Status da integração local de Git, branches e fluxo de
-                  aprovação de PRs.
+                  Status do controle de versões, trilhas ativas e fluxo de
+                  aprovação de propostas.
                 </p>
               </div>
             </div>
@@ -1313,11 +1313,11 @@ export const SettingsSubView: React.FC = () => {
               className={`pill-dot ${gitDiagnostic?.installed ? "success" : "warning"}`}
             >
               <span className="dot"></span>{" "}
-              {gitDiagnostic?.installed ? "Git Conectado" : "Git Offline"}
+              {gitDiagnostic?.installed ? "Controle de Versões Ativo" : "Modo Offline"}
             </span>
           </div>
 
-          {/* Git Stats Panel */}
+          {/* Versões & Repositório Stats Panel */}
           <div
             style={{
               display: "grid",
@@ -1365,7 +1365,7 @@ export const SettingsSubView: React.FC = () => {
                   display: "block",
                 }}
               >
-                CLI do Git
+                Motor de Versionamento
               </span>
               <strong
                 style={{ fontSize: "13px", fontFamily: "var(--font-mono)" }}
@@ -1389,7 +1389,7 @@ export const SettingsSubView: React.FC = () => {
                   display: "block",
                 }}
               >
-                Branch Ativa
+                Trilha Ativa
               </span>
               <strong
                 style={{ fontSize: "13px", fontFamily: "var(--font-mono)" }}
@@ -1413,7 +1413,7 @@ export const SettingsSubView: React.FC = () => {
                   display: "block",
                 }}
               >
-                Remote Origin
+                Servidor Remoto (Nuvem)
               </span>
               <strong
                 style={{
@@ -1422,7 +1422,7 @@ export const SettingsSubView: React.FC = () => {
                   wordBreak: "break-all",
                 }}
               >
-                {gitStatus?.remoteUrl || "Local (Sem remote)"}
+                {gitStatus?.remoteUrl || "Local (Sem servidor remoto)"}
               </strong>
             </div>
 
@@ -1441,10 +1441,10 @@ export const SettingsSubView: React.FC = () => {
                   display: "block",
                 }}
               >
-                Commits Registrados
+                Versões Registradas
               </span>
               <strong style={{ fontSize: "13px" }}>
-                {gitLog.length} commits
+                {gitLog.length} {gitLog.length === 1 ? "versão" : "versões"}
               </strong>
             </div>
           </div>
@@ -1459,7 +1459,7 @@ export const SettingsSubView: React.FC = () => {
               />
               <span>
                 <strong>Modo Ágil:</strong> Permitir edição contínua no
-                workspace acumulando alterações em 1 único PR unificado
+                workspace acumulando alterações em 1 única proposta unificada
               </span>
             </label>
           </div>

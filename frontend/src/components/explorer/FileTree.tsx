@@ -950,11 +950,11 @@ export const FileTree: React.FC<FileTreeProps> = ({
                 className="tree-git-status-badge"
                 title={
                   gitStatusCode === "M"
-                    ? "Modificado no Git"
+                    ? "Documento Alterado (Rascunho)"
                     : gitStatusCode === "A"
-                      ? "Adicionado no Git"
+                      ? "Documento Adicionado"
                       : gitStatusCode === "U"
-                        ? "Novo / Não rastreado no Git"
+                        ? "Novo Documento"
                         : "Alterado"
                 }
                 style={{
