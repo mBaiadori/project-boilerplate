@@ -33,6 +33,7 @@ interface WorkspaceContextType {
   saveStatus: AutoSaveStatus;
   isLoadingFile: boolean;
   isLoading: boolean;
+  isLoadingWorkspace: boolean;
   hasUnsavedChanges: boolean;
   gitStatus: GitStatus | null;
   gitLog: GitCommitInfo[];
@@ -78,6 +79,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [saveStatus, setSaveStatus] = useState<AutoSaveStatus>('Pronto');
   const [isLoadingFile, setIsLoadingFile] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingWorkspace, setIsLoadingWorkspace] = useState(false);
   const [gitStatus, setGitStatus] = useState<GitStatus | null>(null);
   const [gitLog, setGitLog] = useState<GitCommitInfo[]>([]);
   const [projectMetaOptions, setProjectMetaOptions] = useState<ProjectMetadataOptions | null>(null);
@@ -408,30 +410,35 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   }, [updateFileMetadata]);
 
   const selectRepo = async (repo: Repo, initialFile?: string) => {
-    await flushPendingSave();
-    setActiveRepo(repo);
-    activeRepoRef.current = repo;
-    await API.selectRepo(repo);
-    const data = await API.getProjectTree();
-    setTree(data.tree || []);
-    await loadProjectMetadataOptions();
-    await loadProjectConfig();
-    await refreshPendingChanges();
-    await refreshGitStatus();
-    await refreshGitLog(15);
+    setIsLoadingWorkspace(true);
+    try {
+      await flushPendingSave();
+      setActiveRepo(repo);
+      activeRepoRef.current = repo;
+      await API.selectRepo(repo);
+      const data = await API.getProjectTree();
+      setTree(data.tree || []);
+      await loadProjectMetadataOptions();
+      await loadProjectConfig();
+      await refreshPendingChanges();
+      await refreshGitStatus();
+      await refreshGitLog(15);
 
-    const fileToOpen = initialFile || findFirstMdFile(data.tree || []);
-    if (fileToOpen) {
-      await loadFile(fileToOpen);
-    } else {
-      setActiveFile('');
-      activeFileRef.current = '';
-      setFileContentState('');
-      fileContentRef.current = '';
-      setOriginalContent('');
-      originalContentRef.current = '';
-      setFileMetadataState({});
-      fileMetadataRef.current = {};
+      const fileToOpen = initialFile || findFirstMdFile(data.tree || []);
+      if (fileToOpen) {
+        await loadFile(fileToOpen);
+      } else {
+        setActiveFile('');
+        activeFileRef.current = '';
+        setFileContentState('');
+        fileContentRef.current = '';
+        setOriginalContent('');
+        originalContentRef.current = '';
+        setFileMetadataState({});
+        fileMetadataRef.current = {};
+      }
+    } finally {
+      setIsLoadingWorkspace(false);
     }
   };
 
@@ -589,6 +596,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         saveStatus,
         isLoadingFile,
         isLoading,
+        isLoadingWorkspace,
         hasUnsavedChanges,
         gitStatus,
         gitLog,

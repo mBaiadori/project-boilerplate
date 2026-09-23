@@ -16,7 +16,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
   onOpenGitModal = () => {},
   onOpenTour = () => {},
 }) => {
-  const { activeRepo, pendingChanges, gitStatus } = useWorkspace();
+  const { activeRepo, pendingChanges, gitStatus, isLoadingWorkspace } = useWorkspace();
 
   const currentBranch =
     gitStatus?.branch || (activeRepo?.is_local ? "local" : "main");
@@ -24,7 +24,12 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
   const gitFilesCount = gitStatus?.files?.length || 0;
 
   return (
-    <header className="dashboard-navbar">
+    <header className="dashboard-navbar" style={{ position: 'relative' }}>
+      {isLoadingWorkspace && (
+        <div className="repos-linear-progress-track" style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '2.5px', zIndex: 10 }}>
+          <div className="repos-linear-progress-bar"></div>
+        </div>
+      )}
       <div className="dash-brand">
         <button
           id="btn-back-to-repos"
@@ -44,6 +49,15 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
         <div className="dash-title-wrap">
           <div className="dash-title-row">
             <h1 id="dash-repo-title">{activeRepo?.name || "Projeto"}</h1>
+            {isLoadingWorkspace && (
+              <span
+                className="material-symbols-outlined spinning"
+                style={{ fontSize: "16px", color: "var(--md-sys-color-primary, #1a73e8)" }}
+                title="Carregando workspace..."
+              >
+                progress_activity
+              </span>
+            )}
 
             {/* Git Branch & Status Pill */}
             <button

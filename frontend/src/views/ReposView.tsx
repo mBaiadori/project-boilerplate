@@ -16,6 +16,7 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedOrg, setSelectedOrg] = useState('all');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [openingRepoName, setOpeningRepoName] = useState<string | null>(null);
 
   // Create Repo Card
   const [isCreatingRepo, setIsCreatingRepo] = useState(false);
@@ -27,11 +28,18 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleOpenRepo = async (repo: Repo) => {
-    if (onSelectRepo) {
-      onSelectRepo(repo);
+    if (openingRepoName) return;
+    setOpeningRepoName(repo.name);
+    try {
+      if (onSelectRepo) {
+        onSelectRepo(repo);
+      }
+      await selectRepo(repo);
+      navigate(`/repo/${encodeURIComponent(repo.name)}/editor`);
+    } catch (err) {
+      console.error('[ReposView] Erro ao abrir repositório:', err);
+      setOpeningRepoName(null);
     }
-    await selectRepo(repo);
-    navigate(`/repo/${encodeURIComponent(repo.name)}/editor`);
   };
 
   const handleCreateRepo = async (e: React.FormEvent) => {
@@ -89,6 +97,23 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
     <div id="view-repos" className="screen-view" style={{ display: 'flex', flexDirection: 'column', height: '100%', width: '100%' }}>
       <div className="repos-wrapper" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
         
+        {/* Top Progress Bar & Notification when Opening Repo */}
+        {openingRepoName && (
+          <div className="repos-top-loading-banner" role="status" aria-live="polite">
+            <div className="repos-linear-progress-track">
+              <div className="repos-linear-progress-bar"></div>
+            </div>
+            <div className="repos-loading-content">
+              <span className="material-symbols-outlined spinning icon-sm" style={{ color: 'var(--md-sys-color-primary, #1a73e8)' }}>
+                progress_activity
+              </span>
+              <span className="repos-loading-label">
+                Carregando workspace do projeto <strong>{openingRepoName}</strong>...
+              </span>
+            </div>
+          </div>
+        )}
+
         {/* Navbar */}
         <header className="repos-navbar">
           <div className="user-badge" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -332,21 +357,34 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
               filteredRepos.map(repo => {
                 const owner = repo.owner || (repo.full_name ? repo.full_name.split('/')[0] : '');
                 const isOrg = owner && user?.login && owner.toLowerCase() !== user.login.toLowerCase();
+                const isOpening = openingRepoName === repo.name;
+                const isAnyOpening = Boolean(openingRepoName);
 
                 return (
                   <div
                     key={repo.id || repo.name}
-                    className="repo-card"
+                    className={`repo-card ${isOpening ? 'is-opening' : ''} ${isAnyOpening && !isOpening ? 'is-disabled' : ''}`}
                     role="button"
-                    tabIndex={0}
-                    title={`Abrir Dashboard do projeto ${repo.full_name || repo.name}`}
-                    onClick={() => handleOpenRepo(repo)}
+                    tabIndex={isAnyOpening ? -1 : 0}
+                    aria-busy={isOpening}
+                    aria-disabled={isAnyOpening && !isOpening}
+                    title={isOpening ? `Carregando ${repo.name}...` : `Abrir Dashboard do projeto ${repo.full_name || repo.name}`}
+                    onClick={() => !isAnyOpening && handleOpenRepo(repo)}
+                    onKeyDown={(e) => {
+                      if ((e.key === 'Enter' || e.key === ' ') && !isAnyOpening) {
+                        e.preventDefault();
+                        handleOpenRepo(repo);
+                      }
+                    }}
                   >
+                    {isOpening && <div className="repo-card-shimmer-progress"></div>}
                     <div className="repo-card-main">
                       <div className="repo-top">
                         <div className="repo-header-info">
-                          <div className="repo-icon-wrap" aria-hidden="true">
-                            <span className="material-symbols-outlined icon-sm">inventory_2</span>
+                          <div className={`repo-icon-wrap ${isOpening ? 'is-loading' : ''}`} aria-hidden="true">
+                            <span className={`material-symbols-outlined icon-sm ${isOpening ? 'spinning' : ''}`}>
+                              {isOpening ? 'progress_activity' : 'inventory_2'}
+                            </span>
                           </div>
                           <div className="repo-titles-group">
                             {isOrg && (
@@ -383,7 +421,14 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
                       </div>
 
                       <div className="repo-footer-right">
-                        <span className="material-symbols-outlined icon-xs" style={{ color: 'var(--text-muted)' }}>arrow_forward</span>
+                        {isOpening ? (
+                          <div className="repo-card-opening-pill" title="Carregando workspace...">
+                            <span className="material-symbols-outlined spinning icon-xs">progress_activity</span>
+                            <span>Carregando...</span>
+                          </div>
+                        ) : (
+                          <span className="material-symbols-outlined icon-xs arrow-icon" style={{ color: 'var(--text-muted)' }}>arrow_forward</span>
+                        )}
                       </div>
                     </div>
                   </div>
