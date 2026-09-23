@@ -133,6 +133,20 @@ export async function templatesRoutes(fastify: FastifyInstance) {
   });
 
   /**
+   * DELETE /api/templates/community/:id
+   * Remove a template from global community templates.
+   */
+  fastify.delete('/api/templates/community/:id', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string };
+      const result = templatesService.deleteCommunityTemplate(id);
+      return reply.send(result);
+    } catch (err: any) {
+      return reply.status(400).send({ error: err.message });
+    }
+  });
+
+  /**
    * POST /api/project/templates/:id/import
    * Import a community template into the active project.
    */
@@ -165,7 +179,41 @@ export async function templatesRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // ─── Legacy routes (kept for backward compatibility) ──────────────────────
+  // ─── Legacy & Universal routes (kept for backward compatibility) ──────────
+
+  fastify.delete('/api/templates/:id', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string };
+      const query = request.query as { repo?: string; is_community?: string };
+      const cfg = loadConfig();
+      const repoName = query.repo || cfg.active_repo?.name || 'local';
+      if (query.is_community === 'true') {
+        const resCommunity = templatesService.deleteCommunityTemplate(id);
+        return reply.send(resCommunity);
+      }
+      const result = templatesService.deleteProjectTemplate(id, repoName);
+      return reply.send(result);
+    } catch (err: any) {
+      return reply.status(400).send({ error: err.message });
+    }
+  });
+
+  fastify.delete('/api/templates', async (request, reply) => {
+    try {
+      const query = request.query as { id?: string; repo?: string; is_community?: string };
+      const body = (request.body || {}) as { id?: string; repo?: string; is_community?: boolean };
+      const id = query.id || body.id;
+      if (!id) return reply.status(400).send({ error: 'Template ID é obrigatório' });
+      const cfg = loadConfig();
+      const repoName = query.repo || body.repo || cfg.active_repo?.name || 'local';
+      if (query.is_community === 'true' || body.is_community === true) {
+        return reply.send(templatesService.deleteCommunityTemplate(id));
+      }
+      return reply.send(templatesService.deleteProjectTemplate(id, repoName));
+    } catch (err: any) {
+      return reply.status(400).send({ error: err.message });
+    }
+  });
 
   fastify.get('/api/templates', async (request, reply) => {
     const query = request.query as { repo?: string };

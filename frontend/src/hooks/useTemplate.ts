@@ -13,7 +13,8 @@ export interface UseTemplateReturn {
   createTemplate: (data: Partial<TemplateItem>) => Promise<{ success: boolean; message?: string; template?: TemplateItem }>;
   updateTemplate: (id: string, data: Partial<TemplateItem>) => Promise<{ success: boolean; message?: string; template?: TemplateItem }>;
   importFromCommunity: (id: string) => Promise<{ success: boolean; message: string }>;
-  deleteTemplate: (id: string, repo?: string) => Promise<{ success: boolean; message?: string }>;
+  deleteTemplate: (id: string, isCommunity?: boolean) => Promise<{ success: boolean; message?: string }>;
+  deleteCommunityTemplate: (id: string) => Promise<{ success: boolean; message?: string }>;
 }
 
 /**
@@ -34,6 +35,7 @@ export function useTemplate(): UseTemplateReturn {
   const updateTemplate = useTemplateStore((s) => s.updateTemplate);
   const importFromCommunity = useTemplateStore((s) => s.importFromCommunity);
   const deleteTemplate = useTemplateStore((s) => s.deleteTemplate);
+  const deleteCommunityTemplate = useTemplateStore((s) => s.deleteCommunityTemplate);
 
   return {
     templates,
@@ -48,6 +50,7 @@ export function useTemplate(): UseTemplateReturn {
     updateTemplate,
     importFromCommunity,
     deleteTemplate,
+    deleteCommunityTemplate,
   };
 }
 

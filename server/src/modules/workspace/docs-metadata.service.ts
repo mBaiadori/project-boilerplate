@@ -373,6 +373,28 @@ export class DocsMetadataService {
     }
   }
 
+  detachTemplateFromDocs(repoName: string, templateId: string): number {
+    const cleanRepo = repoName || 'local';
+    const targetSlug = (templateId || '').toLowerCase().trim().replace(/\.md$/, '');
+    if (!targetSlug) return 0;
+
+    const metaList = this.loadDocsMetadata(cleanRepo);
+    let count = 0;
+    for (const doc of metaList) {
+      const docTplSlug = (doc.templateId || '').toLowerCase().trim().replace(/\.md$/, '');
+      if (docTplSlug && docTplSlug === targetSlug) {
+        doc.templateId = '';
+        doc.updated_at = new Date().toISOString();
+        count++;
+      }
+    }
+
+    if (count > 0) {
+      this.saveDocsMetadata(cleanRepo, metaList);
+    }
+    return count;
+  }
+
   private sanitizeMetaItem(item: any): DocumentMetadataItem {
     const cleanItem = { ...item };
     // Remove layer e badge se existirem

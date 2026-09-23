@@ -23,7 +23,8 @@ export interface TemplateStoreState {
   createTemplate: (data: Partial<TemplateItem>) => Promise<{ success: boolean; message?: string; template?: TemplateItem }>;
   updateTemplate: (id: string, data: Partial<TemplateItem>) => Promise<{ success: boolean; message?: string; template?: TemplateItem }>;
   importFromCommunity: (id: string) => Promise<{ success: boolean; message: string }>;
-  deleteTemplate: (id: string) => Promise<{ success: boolean; message?: string }>;
+  deleteTemplate: (id: string, isCommunity?: boolean) => Promise<{ success: boolean; message?: string }>;
+  deleteCommunityTemplate: (id: string) => Promise<{ success: boolean; message?: string }>;
 }
 
 export const useTemplateStore = create<TemplateStoreState>((set, get) => ({
@@ -156,14 +157,29 @@ export const useTemplateStore = create<TemplateStoreState>((set, get) => ({
     }
   },
 
-  deleteTemplate: async (id: string) => {
+  deleteTemplate: async (id: string, isCommunity = false) => {
     try {
-      const res = await API.deleteProjectTemplate(id);
+      const res = isCommunity
+        ? await API.deleteCommunityTemplate(id)
+        : await API.deleteProjectTemplate(id);
       if (res.ok) {
-        await get().fetchTemplates();
-        return { success: true };
+        await Promise.all([get().fetchTemplates(), get().fetchCommunityTemplates()]);
+        return { success: true, message: res.data?.message || 'Template removido com sucesso.' };
       }
-      return { success: false, message: (res.data as any)?.error || 'Falha ao remover' };
+      return { success: false, message: (res.data as any)?.error || res.data?.message || 'Falha ao remover template.' };
+    } catch (err: any) {
+      return { success: false, message: err.message || 'Erro de conexão.' };
+    }
+  },
+
+  deleteCommunityTemplate: async (id: string) => {
+    try {
+      const res = await API.deleteCommunityTemplate(id);
+      if (res.ok) {
+        await Promise.all([get().fetchTemplates(), get().fetchCommunityTemplates()]);
+        return { success: true, message: res.data?.message || 'Template removido da comunidade com sucesso.' };
+      }
+      return { success: false, message: (res.data as any)?.error || res.data?.message || 'Falha ao remover template da comunidade.' };
     } catch (err: any) {
       return { success: false, message: err.message || 'Erro de conexão.' };
     }

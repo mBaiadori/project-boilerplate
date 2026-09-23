@@ -6,6 +6,7 @@ import {
   type ProjectTemplate,
 } from '../../config/constants.js';
 import { loadConfig } from '../../config/storage.js';
+import { docsMetadataService } from '../workspace/docs-metadata.service.js';
 
 function getActiveRepo(): string {
   const cfg = loadConfig();
@@ -162,7 +163,9 @@ export class TemplatesService {
     const targetRepo = repoName || getActiveRepo();
     const targetSlug = id.toLowerCase().trim().replace(/\.md$/, '');
 
-    // Check in the target repo first
+    let removed = false;
+
+    // 1. Check in the target repo first
     const existing = loadProjectTemplates(targetRepo);
     const filtered = existing.filter((t) => {
       const tId = (t.id || '').toLowerCase().trim().replace(/\.md$/, '');
@@ -173,10 +176,10 @@ export class TemplatesService {
 
     if (filtered.length < existing.length) {
       saveProjectTemplates(targetRepo, filtered);
-      return { success: true, message: `Template '${id}' removido do projeto com sucesso.` };
+      removed = true;
     }
 
-    // Fallback: check other repositories in projects directory
+    // 2. Fallback: check other repositories in projects directory
     const otherRepos = ['condominiums', 'default', 'project-boilerplate', 'local'];
     for (const otherRepo of otherRepos) {
       if (otherRepo === targetRepo) continue;
@@ -189,12 +192,43 @@ export class TemplatesService {
       });
       if (otherFiltered.length < otherList.length) {
         saveProjectTemplates(otherRepo, otherFiltered);
-        return { success: true, message: `Template '${id}' removido com sucesso.` };
+        removed = true;
       }
     }
 
-    // If still not found, return success since the template is already not in the project
-    return { success: true, message: `Template '${id}' removido com sucesso.` };
+    // 3. Desvincular templateId dos documentos associados com total segurança (mantendo os arquivos markdown 100% intactos)
+    try {
+      docsMetadataService.detachTemplateFromDocs(targetRepo, id);
+    } catch (err) {
+      console.warn('[deleteProjectTemplate] Aviso ao desvincular template dos documentos:', err);
+    }
+
+    return {
+      success: true,
+      message: removed
+        ? `Template '${id}' removido do projeto com sucesso.`
+        : `Template '${id}' já não constava no projeto.`,
+    };
+  }
+
+  /**
+   * Delete a community template from global .templates.json.
+   */
+  deleteCommunityTemplate(id: string): { success: boolean; message: string } {
+    const targetSlug = id.toLowerCase().trim().replace(/\.md$/, '');
+    const communityList = this.getCommunityTemplates();
+    const filtered = communityList.filter((t) => {
+      const tId = (t.id || '').toLowerCase().trim().replace(/\.md$/, '');
+      const tName = (t.templateName || '').toLowerCase().trim().replace(/\.md$/, '');
+      const tTitleSlug = generateTemplateSlug(t.title || '');
+      return tId !== targetSlug && tName !== targetSlug && tTitleSlug !== targetSlug;
+    });
+
+    if (filtered.length < communityList.length) {
+      saveCommunityTemplates(filtered);
+      return { success: true, message: `Template '${id}' removido da comunidade com sucesso.` };
+    }
+    return { success: true, message: `Template '${id}' não encontrado na comunidade.` };
   }
 
   /**

@@ -589,6 +589,14 @@ export const API = {
     return { ok: res.ok, data: await res.json() };
   },
 
+  async deleteCommunityTemplate(id: string): Promise<ApiResponse<{ success: boolean; message: string }>> {
+    const url = `/api/templates/community/${encodeURIComponent(id)}`;
+    const res = await fetch(url, {
+      method: 'DELETE'
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
   async importTemplateFromCommunity(id: string): Promise<ApiResponse<{ success: boolean; message: string; template: TemplateItem }>> {
     const res = await fetch(`/api/project/templates/${encodeURIComponent(id)}/import`, {
       method: 'POST',

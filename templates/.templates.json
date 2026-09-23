@@ -1,31 +1,24 @@
 [
   {
-    "id": "project-root",
-    "templateName": "project-root",
-    "title": "Visão Geral do Projeto",
-    "ext": "md",
-    "category": "arquitetura",
-    "tags": ["projeto", "estrategia", "visao", "governanca"],
-    "updated_at": "2026-09-23T12:00:00.000Z",
-    "content": "# Visão Geral do Projeto: {{PROJECT_NAME}}\n\n## 1. Proposta de Valor & Visão do Produto\nDescrição executiva do propósito da aplicação, público-alvo e o problema central que a plataforma resolve de forma única.\n\n## 2. Objetivos Estratégicos de Negócio\n* **[Objetivo 1]:** [Ex: Automatizar 90% das conciliações de pagamento em tempo real]\n* **[Objetivo 2]:** [Ex: Proporcionar experiência de checkout instantânea em menos de 2 segundos]\n\n## 3. Personas & Atores Principais\n* **[Persona 1]:** [Expectativa principal e valor percebido na experiência]\n* **[Persona 2]:** [Responsabilidades operacionais e controles gerenciados]\n\n## 4. Princípios & Invariantes Fundamentais\n1. [Regra inegociável de negócio]\n2. [Invariante arquitetural]\n",
-    "prompt": "Você é o Arquiteto de Software e Estrategista de Produto.\nSua responsabilidade é guiar o usuário no preenchimento da Visão Geral do Projeto.\nAjude a articular com clareza a proposta de valor, metas estratégicas mensuráveis, personas de impacto e princípios inegociáveis do sistema.",
-    "source": "community",
-    "description": "Estrutura fundamental para constituir a visão de negócio, objetivos e premissas estratégicas do software.",
-    "badge": "Fundação"
-  },
-  {
     "id": "feature-definition",
     "templateName": "feature-definition",
     "title": "Especificação de Feature (Spec)",
     "ext": "md",
     "category": "produto",
-    "tags": ["spec", "feature", "requisitos", "contratos"],
+    "tags": [
+      "spec",
+      "feature",
+      "requisitos",
+      "contratos"
+    ],
     "updated_at": "2026-09-23T12:00:00.000Z",
     "content": "# 📄 Especificação: {{FEATURE_NAME}}\n\n## 1. Visão Geral & Problema\nDescreva a dor do usuário, o contexto e o benefício gerado por esta funcionalidade.\n\n## 2. Critérios de Aceite (BDD / Gherkin)\n- **Cenário 1: Sucesso**\n  - **Dado que** o usuário está autenticado\n  - **Quando** ele submete os dados válidos\n  - **Então** o sistema processa e retorna confirmação\n\n## 3. Regras de Negócio & Validações\n- [ ] Validação 1: Campos obrigatórios e formatos.\n- [ ] Validação 2: Limites operacionais e permissões de acesso.\n\n## 4. Contratos de API & Estruturas de Dados\n```json\n{\n  \"action\": \"executar\",\n  \"status\": \"sucesso\"\n}\n```\n",
     "prompt": "Você é o Tech Lead & Product Owner assistindo na especificação técnica desta Feature.\nAjude a detalhar critérios de aceite em formato BDD/Gherkin, identificar edge cases, definir contratos de API robustos e validar regras de negócio.",
     "source": "community",
     "description": "Template detalhado para especificação técnica e funcional de features no modelo Spec-Driven.",
-    "badge": "Spec"
+    "badge": "Spec",
+    "systemPrompt": "Você é o Tech Lead & Product Owner assistindo na especificação técnica desta Feature.\nAjude a detalhar critérios de aceite em formato BDD/Gherkin, identificar edge cases, definir contratos de API robustos e validar regras de negócio.",
+    "assistant_prompt": "Você é o Tech Lead & Product Owner assistindo na especificação técnica desta Feature.\nAjude a detalhar critérios de aceite em formato BDD/Gherkin, identificar edge cases, definir contratos de API robustos e validar regras de negócio."
   },
   {
     "id": "persona-definition",
@@ -33,13 +26,20 @@
     "title": "Mapeamento de Persona & Jornada",
     "ext": "md",
     "category": "engenharia",
-    "tags": ["persona", "ux", "requisitos", "discovery"],
+    "tags": [
+      "persona",
+      "ux",
+      "requisitos",
+      "discovery"
+    ],
     "updated_at": "2026-09-23T12:00:00.000Z",
     "content": "# 👤 Persona: {{PERSONA_NAME}}\n\n## 1. Perfil & Contexto\n- **Papel:** [Ex: Síndico Profissional / Morador / Administrador]\n- **Nível de Familiaridade Técnica:** [Básico / Intermediário / Avançado]\n- **Frequência de Uso:** [Diária / Semanal / Eventual]\n\n## 2. Objetivos & Dores\n- **Objetivo Principal:** [O que ela busca alcançar?]\n- **Maiores Dores Atuais:** [Gargalos e frustrações do dia a dia]\n\n## 3. Jornada Típica na Aplicação\n1. **Acesso:** Ponto de entrada no fluxo.\n2. **Execução:** Ação primordial que realiza.\n3. **Valor Gerado:** Resultado que resolve a dor.\n",
     "prompt": "Você é o Especialista em UX e Descoberta de Produto.\nAjude a refinar o mapeamento desta Persona, garantindo que suas dores reais, limitações operacionais e momentos de valor estejam claramente documentados para o time de engenharia.",
     "source": "community",
     "description": "Modelo para definição de personas de usuários e alinhamento de UX com requisitos técnicos.",
-    "badge": "UX/Requisitos"
+    "badge": "UX/Requisitos",
+    "systemPrompt": "Você é o Especialista em UX e Descoberta de Produto.\nAjude a refinar o mapeamento desta Persona, garantindo que suas dores reais, limitações operacionais e momentos de valor estejam claramente documentados para o time de engenharia.",
+    "assistant_prompt": "Você é o Especialista em UX e Descoberta de Produto.\nAjude a refinar o mapeamento desta Persona, garantindo que suas dores reais, limitações operacionais e momentos de valor estejam claramente documentados para o time de engenharia."
   },
   {
     "id": "adr-architecture",
@@ -47,12 +47,19 @@
     "title": "Registro de Decisão Arquitetural (ADR)",
     "ext": "md",
     "category": "arquitetura",
-    "tags": ["adr", "arquitetura", "decisao", "tradeoffs"],
+    "tags": [
+      "adr",
+      "arquitetura",
+      "decisao",
+      "tradeoffs"
+    ],
     "updated_at": "2026-09-23T12:00:00.000Z",
     "content": "# ADR-{{ID}}: {{TITULO_DA_DECISAO}}\n\n## Status\n`PROPOSED` | `ACCEPTED` | `SUPERSEDED` | `DEPRECATED`\n\n## Contexto\nQual é o problema técnico ou de negócio que motivou esta decisão? Quais são as forças e restrições em jogo?\n\n## Decisão\nQual solução técnica adotamos e por quê?\n\n## Consequências & Trade-offs\n- **Positivas:** [O que ganhamos? Ex: performance, desacoplamento]\n- **Negativas / Riscos:** [O que assumimos de complexidade ou manutenção?]\n",
     "prompt": "Você é o Arquiteto Principal de Soluções.\nGuie o autor deste ADR a formular claramente o contexto, comparar alternativas técnicas com imparcialidade e documentar os trade-offs e impactos da decisão arquitetural.",
     "source": "community",
     "description": "Formato canônico de Architecture Decision Record para documentar decisões técnicas e seus trade-offs.",
-    "badge": "Arquitetura"
+    "badge": "Arquitetura",
+    "systemPrompt": "Você é o Arquiteto Principal de Soluções.\nGuie o autor deste ADR a formular claramente o contexto, comparar alternativas técnicas com imparcialidade e documentar os trade-offs e impactos da decisão arquitetural.",
+    "assistant_prompt": "Você é o Arquiteto Principal de Soluções.\nGuie o autor deste ADR a formular claramente o contexto, comparar alternativas técnicas com imparcialidade e documentar os trade-offs e impactos da decisão arquitetural."
   }
 ]
