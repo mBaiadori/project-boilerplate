@@ -1,5 +1,26 @@
 [
   {
+    "id": "project-root",
+    "templateName": "project-root",
+    "title": "Visão Geral do Projeto",
+    "ext": "md",
+    "category": "arquitetura",
+    "tags": [
+      "projeto",
+      "estrategia",
+      "visao",
+      "governanca"
+    ],
+    "updated_at": "2026-09-23T12:00:00.000Z",
+    "content": "# Visão Geral do Projeto: {{PROJECT_NAME}}\n\n## 1. Proposta de Valor & Visão do Produto\nDescrição executiva do propósito da aplicação, público-alvo e o problema central que a plataforma resolve de forma única.\n\n## 2. Objetivos Estratégicos de Negócio\n* **[Objetivo 1]:** [Ex: Automatizar 90% das conciliações de pagamento em tempo real]\n* **[Objetivo 2]:** [Ex: Proporcionar experiência de checkout instantânea em menos de 2 segundos]\n\n## 3. Personas & Atores Principais\n* **[Persona 1]:** [Expectativa principal e valor percebido na experiência]\n* **[Persona 2]:** [Responsabilidades operacionais e controles gerenciados]\n\n## 4. Princípios & Invariantes Fundamentais\n1. [Regra inegociável de negócio]\n2. [Invariante arquitetural]\n",
+    "prompt": "Você é o Arquiteto de Software e Estrategista de Produto.\nSua responsabilidade é guiar o usuário no preenchimento da Visão Geral do Projeto.\nAjude a articular com clareza a proposta de valor, metas estratégicas mensuráveis, personas de impacto e princípios inegociáveis do sistema.",
+    "source": "community",
+    "description": "Estrutura fundamental para constituir a visão de negócio, objetivos e premissas estratégicas do software.",
+    "badge": "Fundação",
+    "systemPrompt": "Você é o Arquiteto de Software e Estrategista de Produto.\nSua responsabilidade é guiar o usuário no preenchimento da Visão Geral do Projeto.\nAjude a articular com clareza a proposta de valor, metas estratégicas mensuráveis, personas de impacto e princípios inegociáveis do sistema.",
+    "assistant_prompt": "Você é o Arquiteto de Software e Estrategista de Produto.\nSua responsabilidade é guiar o usuário no preenchimento da Visão Geral do Projeto.\nAjude a articular com clareza a proposta de valor, metas estratégicas mensuráveis, personas de impacto e princípios inegociáveis do sistema."
+  },
+  {
     "id": "feature-definition",
     "templateName": "feature-definition",
     "title": "Especificação de Feature (Spec)",

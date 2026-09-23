@@ -1023,13 +1023,13 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
                             fontSize: "11px",
                           }}
                         >
-                          ✓ Importado
+                          ✓ Importado no Projeto
                         </span>
                         <button
                           id={`btn-unimport-community-${tpl.id}`}
                           className="btn btn-ghost btn-sm"
                           type="button"
-                          title="Remover este template do projeto"
+                          title="Remover este template do projeto local"
                           style={{
                             color: "var(--color-warning, #eab308)",
                             display: "inline-flex",
@@ -1041,50 +1041,22 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
                           <span className="material-symbols-outlined icon-xs">
                             remove_circle_outline
                           </span>
-                          Remover
-                        </button>
-                        <button
-                          id={`btn-delete-community-${tpl.id}`}
-                          className="btn btn-ghost btn-sm"
-                          type="button"
-                          title="Excluir este template da comunidade global"
-                          style={{ color: "var(--color-error)" }}
-                          onClick={() => handleDelete(tpl, true)}
-                        >
-                          <span className="material-symbols-outlined icon-xs">
-                            delete
-                          </span>
+                          Remover do Projeto
                         </button>
                       </div>
                     ) : (
-                      <div
-                        style={{ display: "flex", gap: "6px", width: "100%" }}
+                      <button
+                        id={`btn-import-community-${tpl.id}`}
+                        className="btn btn-primary btn-sm"
+                        type="button"
+                        style={{ width: "100%" }}
+                        disabled={importingId === tpl.id}
+                        onClick={() => handleImport(tpl)}
                       >
-                        <button
-                          id={`btn-import-community-${tpl.id}`}
-                          className="btn btn-primary btn-sm"
-                          type="button"
-                          style={{ flex: 1 }}
-                          disabled={importingId === tpl.id}
-                          onClick={() => handleImport(tpl)}
-                        >
-                          {importingId === tpl.id
-                            ? "Importando..."
-                            : "Importar para o Projeto"}
-                        </button>
-                        <button
-                          id={`btn-delete-community-${tpl.id}`}
-                          className="btn btn-ghost btn-sm"
-                          type="button"
-                          title="Excluir este template da comunidade global"
-                          style={{ color: "var(--color-error)" }}
-                          onClick={() => handleDelete(tpl, true)}
-                        >
-                          <span className="material-symbols-outlined icon-xs">
-                            delete
-                          </span>
-                        </button>
-                      </div>
+                        {importingId === tpl.id
+                          ? "Importando..."
+                          : "Importar para o Projeto"}
+                      </button>
                     )}
                   </div>
                 </div>

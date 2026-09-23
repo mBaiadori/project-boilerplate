@@ -536,6 +536,11 @@ export const API = {
   // ─── Templates ─────────────────────────────────────────────────────────────
 
   async getProjectTemplates(): Promise<ApiResponse<{ templates: TemplateItem[] }>> {
+    const res = await fetch('/api/project/templates');
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async getAllTemplates(): Promise<ApiResponse<{ templates: TemplateItem[] }>> {
     const res = await fetch('/api/project/templates/all');
     return { ok: res.ok, data: await res.json() };
   },

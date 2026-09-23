@@ -134,16 +134,12 @@ export async function templatesRoutes(fastify: FastifyInstance) {
 
   /**
    * DELETE /api/templates/community/:id
-   * Remove a template from global community templates.
+   * Templates da comunidade são canônicos e protegidos contra deleção global.
    */
-  fastify.delete('/api/templates/community/:id', async (request, reply) => {
-    try {
-      const { id } = request.params as { id: string };
-      const result = templatesService.deleteCommunityTemplate(id);
-      return reply.send(result);
-    } catch (err: any) {
-      return reply.status(400).send({ error: err.message });
-    }
+  fastify.delete('/api/templates/community/:id', async (_request, reply) => {
+    return reply.status(403).send({
+      error: 'Templates da comunidade são canônicos e protegidos contra exclusão global. Você pode importá-los ou removê-los do seu projeto local.',
+    });
   });
 
   /**
