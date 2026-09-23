@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import type { TemplateItem } from '../../types';
-import { useTemplate } from '../../hooks/useTemplate';
+import { useTemplate, useTemplateStore } from '../../hooks/useTemplate';
 import { useAI } from '../../context/AIContext';
 import { NotionEditor } from '../../components/editor/NotionEditor';
 
@@ -32,6 +32,8 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
     deleteTemplate,
   } = useTemplate();
 
+  const setActiveEditingTemplate = useTemplateStore((s) => s.setActiveEditingTemplate);
+  const updateActiveEditingTemplate = useTemplateStore((s) => s.updateActiveEditingTemplate);
   const { setIsTemplateEditorMode, setDynamicContext } = useAI();
 
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
@@ -75,13 +77,15 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
       });
     } else {
       setIsTemplateEditorMode(false);
+      setActiveEditingTemplate(null);
       setDynamicContext(null);
     }
     return () => {
       setIsTemplateEditorMode(false);
+      setActiveEditingTemplate(null);
       setDynamicContext(null);
     };
-  }, [viewMode, tplContent, tplTitle, tplId, tplTemplateName, setIsTemplateEditorMode, setDynamicContext]);
+  }, [viewMode, tplContent, tplTitle, tplId, tplTemplateName, setIsTemplateEditorMode, setDynamicContext, setActiveEditingTemplate]);
 
   // ── Derived list ────────────────────────────────────────────────────────────
   const activeList = activeTab === 'comunidade' ? communityTemplates : templates;
@@ -103,17 +107,33 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
     setIsEditMode(false);
     setTplId('');
     setTplTemplateName('');
-    setTplTitle('Novo Template');
+    const defaultTitle = 'Novo Template';
+    const defaultContent = '# Novo Template\n\n## 1. Visão Geral & Objetivos\nDescreva a proposta deste documento.\n\n## 2. Requisitos Principais\n- [ ] Requisito inicial a ser definido\n\n## 3. Detalhamento Técnico\nEspecifique os pontos de implementação.\n';
+    const defaultPrompt = 'Você é o assistente especialista responsável por guiar o preenchimento deste documento.\nAjude o usuário a definir objetivos claros, revisar requisitos funcionais e estruturar decisões técnicas.';
+
+    setTplTitle(defaultTitle);
     setTplCategory('geral');
     setTplBadge('Local');
     setTplDesc('');
     setTplTags('');
-    setTplContent('# Novo Template\n\n## 1. Visão Geral & Objetivos\nDescreva a proposta deste documento.\n\n## 2. Requisitos Principais\n- [ ] Requisito inicial a ser definido\n\n## 3. Detalhamento Técnico\nEspecifique os pontos de implementação.\n');
-    setTplPrompt('Você é o assistente especialista responsável por guiar o preenchimento deste documento.\nAjude o usuário a definir objetivos claros, revisar requisitos funcionais e estruturar decisões técnicas.');
+    setTplContent(defaultContent);
+    setTplPrompt(defaultPrompt);
     setSaveError('');
     setSaveSuccessMsg('');
     setShowConfigDrawer(true);
     setViewMode('editor');
+
+    setActiveEditingTemplate({
+      id: '',
+      templateName: '',
+      title: defaultTitle,
+      category: 'geral',
+      badge: 'Local',
+      description: '',
+      tags: [],
+      content: defaultContent,
+      prompt: defaultPrompt,
+    });
   };
 
   const handleOpenEdit = (tpl: TemplateItem) => {
@@ -125,12 +145,41 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
     setTplBadge(tpl.badge || (tpl.source === 'community' ? 'Comunidade' : 'Local'));
     setTplDesc(tpl.description || '');
     setTplTags((tpl.tags || []).join(', '));
-    setTplContent(tpl.content || `# ${tpl.title || 'Template'}\n\n## 1. Visão Geral\n`);
-    setTplPrompt(tpl.prompt || tpl.systemPrompt || 'Você é o assistente especialista deste documento.');
+    const content = tpl.content || `# ${tpl.title || 'Template'}\n\n## 1. Visão Geral\n`;
+    const prompt = tpl.prompt || tpl.systemPrompt || 'Você é o assistente especialista deste documento.';
+    setTplContent(content);
+    setTplPrompt(prompt);
     setSaveError('');
     setSaveSuccessMsg('');
     setShowConfigDrawer(false);
     setViewMode('editor');
+
+    setActiveEditingTemplate({
+      id: tpl.id,
+      templateName: tpl.templateName || tpl.id,
+      title: tpl.title || '',
+      category: tpl.category || 'geral',
+      badge: tpl.badge || (tpl.source === 'community' ? 'Comunidade' : 'Local'),
+      description: tpl.description || '',
+      tags: tpl.tags || [],
+      content,
+      prompt,
+    });
+  };
+
+  const handleContentChange = (content: string) => {
+    setTplContent(content);
+    updateActiveEditingTemplate({ content });
+  };
+
+  const handlePromptChange = (prompt: string) => {
+    setTplPrompt(prompt);
+    updateActiveEditingTemplate({ prompt, systemPrompt: prompt });
+  };
+
+  const handleTitleChange = (title: string) => {
+    setTplTitle(title);
+    updateActiveEditingTemplate({ title });
   };
 
   const handleSaveTemplate = async () => {
@@ -375,13 +424,13 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
         <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
           <NotionEditor
             content={tplContent}
-            onChange={setTplContent}
+            onChange={handleContentChange}
             promptContent={tplPrompt}
-            onPromptChange={setTplPrompt}
+            onPromptChange={handlePromptChange}
             filePath={tplTemplateName ? `templates/${tplTemplateName}.md` : `templates/${tplId || 'novo-template'}.md`}
             isTemplateMode={true}
             customTitle={tplTitle}
-            onCustomTitleChange={setTplTitle}
+            onCustomTitleChange={handleTitleChange}
             onCustomSave={handleSaveTemplate}
             customSaveStatus={isSaving ? 'Salvando template...' : 'Template Pronto'}
           />

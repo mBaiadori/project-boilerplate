@@ -323,7 +323,7 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
   const currentContextLabel =
     dynamicContext?.badge ||
     (isTemplateEditorMode
-      ? "🛠️ Modo Criador de Templates"
+      ? `🛠️ Template: ${templateTitle || "Novo"}`
       : activeFile
         ? `📄 ${activeFile}`
         : "Nenhum documento selecionado");
