@@ -74,6 +74,7 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
   const currentApprovers: string[] = Array.isArray(fileMetadata?.approvers) ? fileMetadata.approvers : [];
   const currentId = fileMetadata?.id || "";
   const currentUpdatedAt = fileMetadata?.updated_at || "";
+  const currentPrompt = fileMetadata?.prompt || "";
 
   // Opções do projeto
   const statusOptions = projectMetaOptions?.statuses || [
@@ -542,6 +543,29 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
                     Adicionar
                   </button>
                 </div>
+              </div>
+
+              {/* Prompt do Copilot (Contexto IA do Documento) */}
+              <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                <span style={{ fontSize: "11px", fontWeight: 600, color: "var(--color-primary, #2563eb)" }}>
+                  Prompt do Copilot (Contexto IA):
+                </span>
+                <textarea
+                  rows={3}
+                  className="form-input"
+                  placeholder="Instrução do assistente IA para este documento..."
+                  value={currentPrompt}
+                  onChange={(e) => updateFileMetadata({ prompt: e.target.value })}
+                  style={{
+                    fontSize: "11px",
+                    padding: "6px 8px",
+                    borderRadius: "4px",
+                    border: "1px solid #cbd5e1",
+                    resize: "vertical",
+                    fontFamily: "monospace",
+                    background: "#f8fafc",
+                  }}
+                />
               </div>
 
               {/* Informações do Sistema (Read-only) */}

@@ -55,7 +55,7 @@
         }
       }
     },
-    "ai_assistant_prompt": { "type": "string" }
+    "ai_template_prompt": { "type": "string" }
   },
   "additionalProperties": true
 }

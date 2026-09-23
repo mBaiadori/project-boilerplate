@@ -105,10 +105,40 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
   });
 
   fastify.post('/api/project/file/create', async (request, reply) => {
-    const body = request.body as { path?: string; content?: string; is_folder?: boolean; isFolder?: boolean; meta?: any };
+    const body = request.body as {
+      path?: string;
+      content?: string;
+      is_folder?: boolean;
+      isFolder?: boolean;
+      meta?: any;
+      templateId?: string;
+    };
     try {
       const isFolder = !!(body.is_folder || body.isFolder);
-      return reply.send(workspaceService.createFile(body.path || '', body.content || '', isFolder, body.meta));
+      let content = body.content || '';
+      let templatePrompt = '';
+      const templateId = body.templateId || body.meta?.templateId || '';
+
+      // If a templateId is provided, resolve and apply the template content and templatePrompt
+      if (!isFolder && templateId) {
+        const { templatesService } = await import('../templates/templates.service.js');
+        const cfg = loadConfig();
+        const repoName = cfg.active_repo?.name || 'local';
+        const tpl = templatesService.resolveTemplate(templateId, repoName);
+        if (tpl) {
+          content = tpl.content;
+          templatePrompt = tpl.prompt || tpl.systemPrompt || '';
+        }
+      }
+
+      const meta = {
+        ...(body.meta && typeof body.meta === 'object' ? body.meta : {}),
+        templateId: templateId || '',
+        prompt: body.meta?.prompt || '',
+      };
+
+      const result = workspaceService.createFile(body.path || '', content, isFolder, meta);
+      return reply.send({ ...result, templatePrompt, systemPrompt: templatePrompt, templateId });
     } catch (err: any) {
       return reply.status(400).send({ error: err.message });
     }

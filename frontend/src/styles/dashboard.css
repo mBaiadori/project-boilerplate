@@ -724,7 +724,7 @@ body.is-resizing .pane-resizer {
 }
 
 /* Tree Nodes Hierarchy */
-.antigravity-tree-root {
+.agent-tree-root {
   display: flex;
   flex-direction: column;
   gap: 1px;
@@ -1004,7 +1004,7 @@ body.is-resizing .pane-resizer {
   border-radius: 4px;
 }
 
-.antigravity-tree-root.drag-over-root {
+.agent-tree-root.drag-over-root {
   outline: 2px dashed #2563eb !important;
   outline-offset: -3px;
   background: rgba(37, 99, 235, 0.04);
@@ -1934,13 +1934,18 @@ body.is-resizing .pane-resizer {
 }
 
 .provider-card-option:hover {
-  border-color: var(--primary);
+  border-color: #10b981;
   background: var(--bg-subtle);
 }
 
 .provider-card-option.selected {
-  border-color: var(--primary);
-  background: var(--primary-subtle);
+  border-color: #10b981;
+  background: rgba(16, 185, 129, 0.08);
+  box-shadow: 0 0 0 1px #10b981;
+}
+
+.provider-card-option.selected .p-title {
+  color: #059669;
 }
 
 .p-icon {
@@ -1982,9 +1987,9 @@ body.is-resizing .pane-resizer {
 }
 
 .provider-status-badge.active-chat {
-  background: rgba(37, 99, 235, 0.12);
-  color: #2563eb;
-  border: 1px solid rgba(37, 99, 235, 0.25);
+  background: rgba(16, 185, 129, 0.12);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.25);
 }
 
 .provider-status-badge.unconfigured {

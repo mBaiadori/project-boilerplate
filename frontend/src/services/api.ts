@@ -65,7 +65,7 @@ export const API = {
     return res.json();
   },
 
-  async createProjectFile(payload: { path: string; is_folder?: boolean; content?: string; meta?: any }): Promise<ApiResponse<any>> {
+  async createProjectFile(payload: { path: string; is_folder?: boolean; content?: string; meta?: any; templateId?: string }): Promise<ApiResponse<any>> {
     const res = await fetch('/api/project/file/create', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -531,6 +531,80 @@ export const API = {
   async getGitDiagnostic(): Promise<ApiResponse<{ version: string; installed: boolean }>> {
     const res = await fetch('/api/git/diagnostic');
     return { ok: res.ok, data: await res.json() };
-  }
+  },
+
+  // ─── Templates ─────────────────────────────────────────────────────────────
+
+  async getProjectTemplates(): Promise<ApiResponse<{ templates: TemplateItem[] }>> {
+    const res = await fetch('/api/project/templates/all');
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async getCommunityTemplates(): Promise<ApiResponse<{ templates: TemplateItem[] }>> {
+    const res = await fetch('/api/templates/community');
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async getTemplate(id: string): Promise<ApiResponse<{ template: TemplateItem }>> {
+    const res = await fetch(`/api/project/templates/${encodeURIComponent(id)}`);
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async createProjectTemplate(payload: {
+    id?: string;
+    templateName?: string;
+    title: string;
+    ext?: string;
+    category?: string;
+    description?: string;
+    tags?: string[];
+    badge?: string;
+    content?: string;
+    prompt?: string;
+    systemPrompt?: string;
+    source?: string;
+  }): Promise<ApiResponse<{ success: boolean; template: TemplateItem }>> {
+    const res = await fetch('/api/project/templates', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async updateProjectTemplate(id: string, payload: Partial<TemplateItem>): Promise<ApiResponse<{ success: boolean; template: TemplateItem }>> {
+    const res = await fetch(`/api/project/templates/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async deleteProjectTemplate(id: string, repo?: string): Promise<ApiResponse<{ success: boolean; message: string }>> {
+    const url = `/api/project/templates/${encodeURIComponent(id)}${repo ? `?repo=${encodeURIComponent(repo)}` : ''}`;
+    const res = await fetch(url, {
+      method: 'DELETE'
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async importTemplateFromCommunity(id: string): Promise<ApiResponse<{ success: boolean; message: string; template: TemplateItem }>> {
+    const res = await fetch(`/api/project/templates/${encodeURIComponent(id)}/import`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({})
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async syncTemplatesMetadata(): Promise<ApiResponse<{ success: boolean; count: number }>> {
+    const res = await fetch('/api/project/templates/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({})
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
 };
 

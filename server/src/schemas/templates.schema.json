@@ -1,0 +1,27 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Templates",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": ["id", "title", "content", "prompt"],
+    "properties": {
+      "id": { "type": "string" },
+      "templateName": { "type": "string" },
+      "title": { "type": "string" },
+      "ext": { "type": "string" },
+      "category": { "type": "string" },
+      "tags": {
+        "type": "array",
+        "items": { "type": "string" }
+      },
+      "updated_at": { "type": "string" },
+      "content": { "type": "string" },
+      "prompt": { "type": "string" },
+      "source": { "type": "string" },
+      "description": { "type": "string" },
+      "badge": { "type": "string" }
+    },
+    "additionalProperties": true
+  }
+}

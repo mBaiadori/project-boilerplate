@@ -26,7 +26,8 @@
         "type": "array",
         "items": { "type": "string" }
       },
-      "templateId": { "type": "string" }
+      "templateId": { "type": "string" },
+      "prompt": { "type": "string" }
     },
     "additionalProperties": true
   }

@@ -27,102 +27,146 @@ DIRETRIZES FUNDAMENTAIS:
 2. Seja proativo em sugerir melhorias de clareza, alinhamento aos princípios de Domain-Driven Design (DDD) e consistência técnica.
 3. Forneça respostas estruturadas e textos prontos para serem aplicados nos campos correspondentes da tela.`;
 
-export interface CanonicalTemplate {
+export interface ProjectTemplate {
   id: string;
+  templateName: string;
   title: string;
+  ext: string; // 'md'
   category: string;
-  badge: string;
-  description: string;
-  default_filename: string;
-  suggested_folder: string;
-  assistant_prompt: string;
+  tags: string[];
+  updated_at: string;
   content: string;
-  source_file: string;
+  prompt: string;
+  source: 'community' | 'local' | string;
+  description?: string;
+  badge?: string;
+  // Compatibility fields
+  systemPrompt?: string;
+  assistant_prompt?: string;
 }
 
-export function extractFrontmatter(content: string): { meta: Record<string, any>; body: string } {
-  if (!content || typeof content !== 'string') return { meta: {}, body: '' };
-  if (content.startsWith('---')) {
-    const parts = content.split('---');
-    if (parts.length >= 3) {
-      const rawYaml = parts[1];
-      const body = parts.slice(2).join('---');
-      const meta: Record<string, any> = {};
-      
-      // Simple parser for YAML key-values without external dep issues
-      const lines = rawYaml.split('\n');
-      for (const line of lines) {
-        const match = line.match(/^\s*([\w_-]+)\s*:\s*(.*)$/);
-        if (match) {
-          const key = match[1].trim();
-          let val = match[2].trim();
-          if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
-            val = val.slice(1, -1);
-          }
-          meta[key] = val;
-        }
-      }
-      return { meta, body };
-    }
-  }
-  return { meta: {}, body: content };
+export type CanonicalTemplate = ProjectTemplate;
+
+export interface TemplatesMetadataItem {
+  id: string;
+  templateName?: string;
+  title: string;
+  description?: string;
+  category: string;
+  tags: string[];
+  badge?: string;
+  path?: string;
+  source: 'local' | 'community' | string;
+  created_at?: string;
+  updated_at: string;
 }
 
-export function loadCanonicalTemplates(): CanonicalTemplate[] {
-  const templates: CanonicalTemplate[] = [];
-  if (fs.existsSync(TEMPLATES_DIR)) {
-    try {
-      const files = fs.readdirSync(TEMPLATES_DIR).sort();
-      for (const f of files) {
-        if (f.endsWith('.md')) {
-          const fpath = path.join(TEMPLATES_DIR, f);
-          try {
-            const content = fs.readFileSync(fpath, 'utf-8');
-            const { meta } = extractFrontmatter(content);
-            let cleanId = f.replace(/^\d+-/, '').replace('.md', '');
-            const idAliases: Record<string, string> = {
-              domain: 'domain-context',
-              ideacao: 'feature-ideacao',
-              'behavior-specs': 'feature-behavior',
-            };
-            cleanId = idAliases[cleanId] || cleanId;
-            const rawId = meta.id || '';
-            const tplId = rawId && !String(rawId).includes('{{') ? String(rawId) : cleanId;
-
-            let title = meta.title;
-            if (!title || String(title).includes('{{')) {
-              title = cleanId.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-            }
-
-            const category = meta.category || (cleanId.includes('domain') ? 'Domain-Driven Design' : 'Esteira SDLC');
-            const badge = meta.badge || meta.layer || 'Template';
-            const description = meta.description || `Template oficial ${f}`;
-            const defaultFilename = meta.default_filename || `${cleanId}.md`;
-            const suggestedFolder = meta.suggested_folder || 'domains';
-            const assistantPrompt = meta.assistant_prompt || '';
-
-            templates.push({
-              id: tplId,
-              title,
-              category,
-              badge,
-              description,
-              default_filename: defaultFilename,
-              suggested_folder: suggestedFolder,
-              assistant_prompt: assistantPrompt,
-              content,
-              source_file: f,
-            });
-          } catch (err) {
-            console.error(`Erro ao carregar template ${f}:`, err);
-          }
-        }
-      }
-    } catch (err) {
-      console.error('Erro ao ler diretório de templates:', err);
-    }
+export function getProjectTemplatesPath(repoName: string): string {
+  const primaryPath = path.join(PROJECTS_DIR, repoName, '.templates.json');
+  const legacyMetaPath = path.join(PROJECTS_DIR, repoName, '.templates.metadata.json');
+  if (!fs.existsSync(primaryPath) && fs.existsSync(legacyMetaPath)) {
+    return legacyMetaPath;
   }
-  return templates;
+  return primaryPath;
+}
+
+export function getCommunityTemplatesPath(): string {
+  const insideTemplatesDir = path.join(TEMPLATES_DIR, '.templates.json');
+  const insideBaseDir = path.join(BASE_DIR, '.templates.json');
+  if (fs.existsSync(insideTemplatesDir)) return insideTemplatesDir;
+  if (fs.existsSync(insideBaseDir)) return insideBaseDir;
+  return insideTemplatesDir;
+}
+
+function sanitizeTemplateItem(item: any, defaultSource: 'local' | 'community' = 'local'): ProjectTemplate {
+  const id = item.id || (item.templateName ? String(item.templateName).toLowerCase().replace(/\s+/g, '-') : `tpl-${Date.now()}`);
+  const templateName = item.templateName || item.name || id;
+  const title = item.title || templateName;
+  const ext = item.ext || 'md';
+  const category = item.category || item.categories || 'geral';
+  const tags = Array.isArray(item.tags) ? item.tags : (item.tags ? [item.tags] : []);
+  const updated_at = item.updated_at || item.created_at || new Date().toISOString();
+  const content = item.content || '';
+  const prompt = item.prompt || item.systemPrompt || item.assistant_prompt || '';
+  const source = item.source || defaultSource;
+  const description = item.description || '';
+  const badge = item.badge || (source === 'community' ? 'Comunidade' : 'Local');
+
+  return {
+    id,
+    templateName,
+    title,
+    ext,
+    category,
+    tags,
+    updated_at,
+    content,
+    prompt,
+    source,
+    description,
+    badge,
+    systemPrompt: prompt,
+    assistant_prompt: prompt,
+  };
+}
+
+export function loadProjectTemplates(repoName: string): ProjectTemplate[] {
+  const filePath = getProjectTemplatesPath(repoName);
+  if (!fs.existsSync(filePath)) return [];
+  try {
+    const raw = fs.readFileSync(filePath, 'utf-8').trim();
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((t) => sanitizeTemplateItem(t, 'local'));
+  } catch (err) {
+    console.error(`[loadProjectTemplates] Erro ao carregar templates de ${filePath}:`, err);
+    return [];
+  }
+}
+
+export function saveProjectTemplates(repoName: string, items: ProjectTemplate[]): void {
+  const filePath = path.join(PROJECTS_DIR, repoName, '.templates.json');
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  const sanitized = items.map((t) => sanitizeTemplateItem(t, (t.source as any) || 'local'));
+  fs.writeFileSync(filePath, JSON.stringify(sanitized, null, 2), 'utf-8');
+}
+
+export function loadCommunityTemplates(): ProjectTemplate[] {
+  const filePath = getCommunityTemplatesPath();
+  if (!fs.existsSync(filePath)) {
+    // Check fallback old_templates if available to auto-populate community templates
+    return [];
+  }
+  try {
+    const raw = fs.readFileSync(filePath, 'utf-8').trim();
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((t) => sanitizeTemplateItem(t, 'community'));
+  } catch (err) {
+    console.error(`[loadCommunityTemplates] Erro ao carregar templates da comunidade:`, err);
+    return [];
+  }
+}
+
+export function saveCommunityTemplates(items: ProjectTemplate[]): void {
+  const filePath = getCommunityTemplatesPath();
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  const sanitized = items.map((t) => sanitizeTemplateItem(t, 'community'));
+  fs.writeFileSync(filePath, JSON.stringify(sanitized, null, 2), 'utf-8');
+}
+
+export function loadProjectTemplatesMetadata(repoName: string): TemplatesMetadataItem[] {
+  return loadProjectTemplates(repoName);
+}
+
+export function saveProjectTemplatesMetadata(repoName: string, items: TemplatesMetadataItem[]): void {
+  saveProjectTemplates(repoName, items as any);
+}
+
+export function loadCanonicalTemplates(): ProjectTemplate[] {
+  return loadCommunityTemplates();
 }
 
 export interface CanonicalTutorial {

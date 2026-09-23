@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import type { AISettingsState, ChatMessage } from '../types';
 import { API } from '../services/api';
 import { useWorkspace } from './WorkspaceContext';
@@ -24,17 +24,91 @@ interface AIContextType {
   sendMessage: (prompt: string, contextBadges?: string[]) => Promise<void>;
   clearMessages: () => void;
   resetMemory: (scope: string) => Promise<void>;
+
+  // Template Prompt Context & Toggles
+  templatePrompt: string | null;
+  templateTitle: string | null;
+  templateId: string | null;
+  isTemplatePromptEnabled: boolean;
+  toggleTemplatePrompt: () => void;
+
+  // Document Prompt Context & Toggles
+  docPrompt: string | null;
+  isDocPromptEnabled: boolean;
+  toggleDocPrompt: () => void;
+
+  // Template Creator Mode & Project Level Prompts
+  isTemplateEditorMode: boolean;
+  setIsTemplateEditorMode: (val: boolean) => void;
+  projectTemplatePrompt: string;
 }
 
 const AIContext = createContext<AIContextType | undefined>(undefined);
 
 export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { activeRepo, activeFile, fileContent, loadFile, refreshPendingChanges } = useWorkspace();
+  const { activeRepo, activeFile, fileContent, fileMetadata, loadFile, refreshPendingChanges, projectConfig } = useWorkspace();
   const [aiSettings, setAiSettings] = useState<AISettingsState | null>(null);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isThinking, setIsThinking] = useState(false);
   const [dynamicContext, setDynamicContext] = useState<DynamicContext | null>(null);
+  const [isTemplateEditorMode, setIsTemplateEditorMode] = useState<boolean>(false);
+
+  const projectTemplatePrompt = projectConfig?.ai_template_prompt || 'Você é o Arquiteto Especialista em Criação e Padronização de Templates de Engenharia.\nAjude o usuário a definir uma estrutura lógica e rigorosa de seções (H1, H2, H3), criar placeholders dinâmicos {{CAMPO}} e redigir o system instruction do Copilot para este novo template.';
+
+  // Template Prompt State
+  const [templatePrompt, setTemplatePrompt] = useState<string | null>(null);
+  const [templateTitle, setTemplateTitle] = useState<string | null>(null);
+  const [templateId, setTemplateId] = useState<string | null>(null);
+  const [isTemplatePromptEnabled, setIsTemplatePromptEnabled] = useState<boolean>(true);
+
+  // Document Prompt State
+  const docPrompt = fileMetadata?.prompt || null;
+  const [isDocPromptEnabled, setIsDocPromptEnabled] = useState<boolean>(true);
+
+  const activeRepoRef = useRef<string>('local');
+  useEffect(() => { activeRepoRef.current = activeRepo?.name || 'local'; }, [activeRepo]);
+
+  // Load Template Prompt when activeFile metadata has templateId
+  useEffect(() => {
+    const currentTemplateId = fileMetadata?.templateId || null;
+    setTemplateId(currentTemplateId);
+
+    if (currentTemplateId) {
+      API.getTemplate(currentTemplateId).then((res) => {
+        if (res.ok && res.data?.template) {
+          const tpl = res.data.template;
+          setTemplatePrompt(tpl.prompt || tpl.systemPrompt || null);
+          setTemplateTitle(tpl.title || tpl.templateName || currentTemplateId);
+          setIsTemplatePromptEnabled(true);
+        } else {
+          setTemplatePrompt(null);
+          setTemplateTitle(null);
+        }
+      }).catch(() => {
+        setTemplatePrompt(null);
+        setTemplateTitle(null);
+      });
+    } else {
+      setTemplatePrompt(null);
+      setTemplateTitle(null);
+    }
+  }, [activeFile, fileMetadata?.templateId]);
+
+  // Enable doc prompt by default if docPrompt has text
+  useEffect(() => {
+    if (docPrompt && docPrompt.trim().length > 0) {
+      setIsDocPromptEnabled(true);
+    }
+  }, [activeFile, docPrompt]);
+
+  const toggleTemplatePrompt = useCallback(() => {
+    setIsTemplatePromptEnabled((prev) => !prev);
+  }, []);
+
+  const toggleDocPrompt = useCallback(() => {
+    setIsDocPromptEnabled((prev) => !prev);
+  }, []);
 
   const loadAISettings = useCallback(async () => {
     try {
@@ -95,12 +169,30 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
         text: m.content
       }));
 
+      // Combine active prompts based on context and user toggles
+      const promptInstructions: string[] = [];
+
+      if (isTemplateEditorMode) {
+        // In template editor mode, assume the specialized template creator prompt
+        promptInstructions.push(`[Instruções do Especialista em Criação de Templates (ai_template_prompt)]:\n${projectTemplatePrompt}`);
+      } else {
+        if (isTemplatePromptEnabled && templatePrompt && templatePrompt.trim()) {
+          promptInstructions.push(`[Instruções do Template "${templateTitle || 'Template'}"]:\n${templatePrompt.trim()}`);
+        }
+        if (isDocPromptEnabled && docPrompt && docPrompt.trim()) {
+          promptInstructions.push(`[Instruções Específicas deste Documento]:\n${docPrompt.trim()}`);
+        }
+      }
+
+      const assistantPrompt = promptInstructions.length > 0 ? promptInstructions.join('\n\n---\n\n') : undefined;
+
       const res = await API.sendChatMessage({
         prompt,
         content: effectiveContent,
         path: effectivePath,
         history: historyPayload,
-        repo: activeRepo?.name || 'local'
+        repo: activeRepo?.name || 'local',
+        assistant_prompt: assistantPrompt,
       });
 
       if (res.ok && res.data) {
@@ -117,7 +209,6 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
         };
         setMessages(prev => [...prev, assistantMessage]);
 
-        // Se houve modificação de arquivo aplicada
         if (res.data.diff && res.data.diff.new_content && effectivePath === activeFile) {
           await loadFile(activeFile);
           await refreshPendingChanges();
@@ -180,7 +271,18 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
         saveSettings,
         sendMessage,
         clearMessages,
-        resetMemory
+        resetMemory,
+        templatePrompt,
+        templateTitle,
+        templateId,
+        isTemplatePromptEnabled,
+        toggleTemplatePrompt,
+        docPrompt,
+        isDocPromptEnabled,
+        toggleDocPrompt,
+        isTemplateEditorMode,
+        setIsTemplateEditorMode,
+        projectTemplatePrompt,
       }}
     >
       {children}

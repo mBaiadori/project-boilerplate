@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { FileText, Plus, Sparkles, FolderTree } from "lucide-react";
-import { parseFrontmatter } from "../../services/frontmatter";
+import { parseFrontmatter, serializeFrontmatter } from "../../services/frontmatter";
 import {
   NotionEditorEngine,
   type FragmentStatusInfo,
@@ -16,6 +16,8 @@ import type { GitCommitInfo, DocumentMetadataItem } from "../../types";
 interface NotionEditorProps {
   content: string;
   onChange: (newContent: string) => void;
+  promptContent?: string;
+  onPromptChange?: (newPrompt: string) => void;
   filePath: string | null;
   onNavigateFile?: (path: string) => void;
   onReload?: () => void;
@@ -23,11 +25,18 @@ interface NotionEditorProps {
   onToggleCopilot?: () => void;
   onOpenScaffoldWizard?: () => void;
   onSendSelectionToCopilot?: (text: string) => void;
+  isTemplateMode?: boolean;
+  onCustomSave?: () => Promise<{ success: boolean; message?: string } | void>;
+  customSaveStatus?: string;
+  customTitle?: string;
+  onCustomTitleChange?: (title: string) => void;
 }
 
 export const NotionEditor: React.FC<NotionEditorProps> = ({
   content,
   onChange,
+  promptContent,
+  onPromptChange,
   filePath,
   onNavigateFile,
   onReload = () => {},
@@ -35,6 +44,11 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
   onToggleCopilot,
   onOpenScaffoldWizard,
   onSendSelectionToCopilot,
+  isTemplateMode = false,
+  onCustomSave,
+  customSaveStatus,
+  customTitle,
+  onCustomTitleChange,
 }) => {
   const {
     originalContent,
@@ -45,7 +59,11 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
     saveCurrentFile,
     fileMetadata,
     updateDocumentTitle,
+    updateFileMetadata,
   } = useWorkspace();
+  const [editorTab, setEditorTab] = useState<"document" | "prompt">("document");
+  const [isGeneratingPromptAI, setIsGeneratingPromptAI] = useState(false);
+  const [promptAIFeedback, setPromptAIFeedback] = useState("");
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [importText, setImportText] = useState("");
   const [titleValue, setTitleValue] = useState<string>("");
@@ -100,7 +118,115 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
   const isInternalChangeRef = useRef(false);
 
   const parsed = parseFrontmatter(content || "");
-  const body = parsed.body || content || "";
+  const docBody = parsed.body || content || "";
+  const effectivePrompt =
+    promptContent !== undefined
+      ? promptContent
+      : fileMetadata?.prompt || "";
+
+  const editorTabRef = useRef(editorTab);
+  editorTabRef.current = editorTab;
+
+  const docBodyRef = useRef(docBody);
+  docBodyRef.current = docBody;
+
+  const effectivePromptRef = useRef(effectivePrompt);
+  effectivePromptRef.current = effectivePrompt;
+
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+
+  const onPromptChangeRef = useRef(onPromptChange);
+  onPromptChangeRef.current = onPromptChange;
+
+  const updateFileMetadataRef = useRef(updateFileMetadata);
+  updateFileMetadataRef.current = updateFileMetadata;
+
+  const parsedRef = useRef(parsed);
+  parsedRef.current = parsed;
+
+  const handleSwitchTab = (newTab: "document" | "prompt") => {
+    if (newTab === editorTab) return;
+
+    // Flush current editor content before switching
+    if (engineRef.current) {
+      const currentMd = engineRef.current.getMarkdown();
+      if (editorTab === "document") {
+        const newContent = parsedRef.current.hasFrontmatter
+          ? serializeFrontmatter(parsedRef.current.metadata, currentMd)
+          : currentMd;
+        onChangeRef.current(newContent);
+        docBodyRef.current = currentMd;
+      } else {
+        if (onPromptChangeRef.current) {
+          onPromptChangeRef.current(currentMd);
+        } else {
+          updateFileMetadataRef.current({ prompt: currentMd });
+        }
+        effectivePromptRef.current = currentMd;
+      }
+    }
+
+    setEditorTab(newTab);
+    editorTabRef.current = newTab;
+    const targetText = newTab === "document" ? docBodyRef.current : effectivePromptRef.current;
+    if (engineRef.current) {
+      isInternalChangeRef.current = true;
+      engineRef.current.setMarkdown(targetText);
+    }
+  };
+
+  const handleInsertPlaceholder = (token: string) => {
+    if (engineRef.current) {
+      const current = engineRef.current.getMarkdown();
+      const addition = `\n- **Placeholder:** \`${token}\` — orientar o preenchimento detalhado deste campo.`;
+      const updated = current ? `${current.trim()}${addition}` : addition.trim();
+      isInternalChangeRef.current = true;
+      engineRef.current.setMarkdown(updated);
+      if (editorTabRef.current === "prompt") {
+        if (onPromptChangeRef.current) onPromptChangeRef.current(updated);
+        else updateFileMetadataRef.current({ prompt: updated });
+        effectivePromptRef.current = updated;
+      }
+      setEditorToast({ text: `Tag ${token} adicionada ao prompt!`, type: "info" });
+      setTimeout(() => setEditorToast(null), 2500);
+    }
+  };
+
+  const handleOptimizePromptWithAI = async () => {
+    setIsGeneratingPromptAI(true);
+    setPromptAIFeedback("");
+    try {
+      const targetDocTitle = titleValue || fileMetadata?.title || filePath || "Documento";
+      const res = await API.askAI({
+        prompt: `Você é o Arquiteto de Software Líder. Escreva instruções ricas (system prompt) em Markdown para o Copilot auxiliar no desenvolvimento e refinamento do ${isTemplateMode ? "Template" : "Documento"}: "${targetDocTitle}".
+Inclua:
+## 🎯 Papel & Persona
+## 📋 Regras de Validação & Boas Práticas
+## 💡 Pontos de Atenção & Trade-offs
+Mantenha um tom técnico, rigoroso e direto.`,
+        history: [],
+      });
+
+      if (res.ok && res.data) {
+        const raw = res.data.response || res.data.reply || res.data.content || "";
+        if (raw && engineRef.current) {
+          isInternalChangeRef.current = true;
+          engineRef.current.setMarkdown(raw);
+          if (onPromptChangeRef.current) onPromptChangeRef.current(raw);
+          else updateFileMetadataRef.current({ prompt: raw });
+          effectivePromptRef.current = raw;
+          setPromptAIFeedback("Prompt gerado com sucesso!");
+          setTimeout(() => setPromptAIFeedback(""), 3000);
+        }
+      }
+    } catch (err) {
+      console.error("[NotionEditor] Erro ao otimizar prompt:", err);
+      setPromptAIFeedback("Erro ao gerar com IA.");
+    } finally {
+      setIsGeneratingPromptAI(false);
+    }
+  };
 
   // Auto-resize title textarea to fit content organically like a heading
   useEffect(() => {
@@ -145,17 +271,27 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
     setFragmentAlert(null);
   }, [filePath, activeRepo]);
 
-  // Sincronizar o título local com os metadados do documento
+  // Sincronizar o título local com os metadados do documento ou customTitle
   useEffect(() => {
+    if (isTemplateMode) {
+      if (customTitle !== undefined) {
+        setTitleValue(customTitle);
+      }
+      return;
+    }
     const metaTitle =
       fileMetadata?.title !== undefined
         ? fileMetadata.title
         : docMetadata?.title || "";
     setTitleValue(metaTitle);
-  }, [fileMetadata?.title, docMetadata?.title, filePath]);
+  }, [fileMetadata?.title, docMetadata?.title, filePath, isTemplateMode, customTitle]);
 
   const handleTitleChange = (newVal: string) => {
     setTitleValue(newVal);
+    if (isTemplateMode) {
+      if (onCustomTitleChange) onCustomTitleChange(newVal);
+      return;
+    }
     if (titleDebounceTimerRef.current) {
       clearTimeout(titleDebounceTimerRef.current);
     }
@@ -197,6 +333,17 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
 
   // Manual save trigger (Ctrl+S ou clique) que faz o flush imediato
   const handleSave = useCallback(async () => {
+    if (onCustomSave) {
+      const res = await onCustomSave();
+      if ((res as any)?.success !== false) {
+        setEditorToast({
+          text: (res as any)?.message || "Template salvo com sucesso!",
+          type: "success",
+        });
+        setTimeout(() => setEditorToast(null), 2500);
+      }
+      return;
+    }
     if (!filePath) return;
     const res = await saveCurrentFile();
     if (res?.success) {
@@ -206,7 +353,7 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
       });
       setTimeout(() => setEditorToast(null), 2500);
     }
-  }, [filePath, saveCurrentFile]);
+  }, [filePath, saveCurrentFile, onCustomSave]);
 
   // Initialize & Mount NotionEditorEngine
   useEffect(() => {
@@ -218,9 +365,22 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
       onNavigateFile: onNavigateFile,
       onChange: () => {
         if (!engineRef.current) return;
-        const currentBody = engineRef.current.getMarkdown();
+        const currentMd = engineRef.current.getMarkdown();
         isInternalChangeRef.current = true;
-        onChange(currentBody);
+        if (editorTabRef.current === "document") {
+          docBodyRef.current = currentMd;
+          const newContent = parsedRef.current.hasFrontmatter
+            ? serializeFrontmatter(parsedRef.current.metadata, currentMd)
+            : currentMd;
+          onChangeRef.current(newContent);
+        } else {
+          effectivePromptRef.current = currentMd;
+          if (onPromptChangeRef.current) {
+            onPromptChangeRef.current(currentMd);
+          } else {
+            updateFileMetadataRef.current({ prompt: currentMd });
+          }
+        }
       },
       onSave: () => {
         handleSave();
@@ -241,7 +401,8 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
     });
 
     engineRef.current = engine;
-    engine.setMarkdown(body);
+    const initialText = editorTab === "document" ? docBody : effectivePrompt;
+    engine.setMarkdown(initialText);
 
     const hash = window.location.hash;
     if (hash && hash.includes(":~:text=")) {
@@ -310,8 +471,9 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
     }
     if (engineRef.current) {
       const currentEngineMd = engineRef.current.getMarkdown();
-      if (currentEngineMd !== body) {
-        engineRef.current.setMarkdown(body);
+      const targetText = editorTab === "document" ? docBody : effectivePrompt;
+      if (currentEngineMd !== targetText) {
+        engineRef.current.setMarkdown(targetText);
         const hash = window.location.hash;
         if (hash && (hash.includes(":~:text=") || hash.startsWith("#"))) {
           setTimeout(() => {
@@ -320,7 +482,7 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
         }
       }
     }
-  }, [body]);
+  }, [docBody, effectivePrompt, editorTab]);
 
   // Keyboard shortcut Ctrl+S / Cmd+S
   useEffect(() => {
@@ -408,11 +570,12 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
     }
   };
 
-  const wordCount = body.trim() ? body.trim().split(/\s+/).length : 0;
-  const lineCount = body ? body.split(/\r?\n/).length : 0;
+  const currentContent = editorTab === "document" ? docBody : effectivePrompt;
+  const wordCount = currentContent.trim() ? currentContent.trim().split(/\s+/).length : 0;
+  const lineCount = currentContent ? currentContent.split(/\r?\n/).length : 0;
   const originalBody =
     parseFrontmatter(originalContent || "").body || originalContent || "";
-  const isDirty = (originalBody || "").trim() !== (body || "").trim();
+  const isDirty = (originalBody || "").trim() !== (docBody || "").trim();
 
   if (!filePath) {
     return (
@@ -554,6 +717,101 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
                 <FolderTree size={13} />
               </button>
             </div>
+          </div>
+
+          {/* Native Editor Mode Tabs: Documento vs Prompt do Copilot */}
+          <div
+            className="notion-editor-mode-tabs"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "3px",
+              background: "var(--color-surface-container-high, #f1f5f9)",
+              padding: "3px",
+              borderRadius: "8px",
+              marginLeft: "10px",
+              flexShrink: 0,
+            }}
+          >
+            <button
+              id="tab-mode-document"
+              type="button"
+              className={`notion-tab-btn ${editorTab === "document" ? "active" : ""}`}
+              onClick={() => handleSwitchTab("document")}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "5px",
+                padding: "4px 10px",
+                borderRadius: "6px",
+                border: "none",
+                fontSize: "12px",
+                fontWeight: editorTab === "document" ? 600 : 500,
+                cursor: "pointer",
+                background:
+                  editorTab === "document"
+                    ? "var(--color-surface, #ffffff)"
+                    : "transparent",
+                color:
+                  editorTab === "document"
+                    ? "var(--color-primary, #2563eb)"
+                    : "var(--color-outline, #64748b)",
+                boxShadow:
+                  editorTab === "document"
+                    ? "0 1px 3px rgba(0,0,0,0.1)"
+                    : "none",
+                transition: "all 0.15s ease",
+              }}
+            >
+              <span
+                className="material-symbols-outlined icon-xs"
+                style={{ fontSize: "15px" }}
+              >
+                {isTemplateMode ? "view_quilt" : "description"}
+              </span>
+              <span>
+                {isTemplateMode ? "Conteúdo do Template" : "Documento"}
+              </span>
+            </button>
+
+            <button
+              id="tab-mode-copilot-prompt"
+              type="button"
+              className={`notion-tab-btn ${editorTab === "prompt" ? "active" : ""}`}
+              onClick={() => handleSwitchTab("prompt")}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "5px",
+                padding: "4px 10px",
+                borderRadius: "6px",
+                border: "none",
+                fontSize: "12px",
+                fontWeight: editorTab === "prompt" ? 600 : 500,
+                cursor: "pointer",
+                background:
+                  editorTab === "prompt"
+                    ? "var(--color-surface, #ffffff)"
+                    : "transparent",
+                color:
+                  editorTab === "prompt"
+                    ? "var(--color-primary, #2563eb)"
+                    : "var(--color-outline, #64748b)",
+                boxShadow:
+                  editorTab === "prompt"
+                    ? "0 1px 3px rgba(0,0,0,0.1)"
+                    : "none",
+                transition: "all 0.15s ease",
+              }}
+            >
+              <span
+                className="material-symbols-outlined icon-xs"
+                style={{ fontSize: "15px" }}
+              >
+                smart_toy
+              </span>
+              <span>Prompt do Copilot</span>
+            </button>
           </div>
 
           <div className="editor-actions-right">
@@ -783,10 +1041,12 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
         )}
 
         {/* Top Context & Connectivity Bar */}
-        <DocConnectivityBar
-          filePath={filePath}
-          onNavigateFile={onNavigateFile || (() => {})}
-        />
+        {!isTemplateMode && (
+          <DocConnectivityBar
+            filePath={filePath}
+            onNavigateFile={onNavigateFile || (() => {})}
+          />
+        )}
 
         {/* Fragment Not Found / Snippet Alert Banner */}
         {fragmentAlert && fragmentAlert.type === "not_found" && (
@@ -869,7 +1129,7 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
           >
             <VisualMarkdownDiff
               oldContent={comparisonOldContent}
-              newContent={body}
+              newContent={docBody}
               oldTitle={comparisonOldTitle}
               newTitle="Versão Atual (Working Copy)"
               fileName={filePath || undefined}
@@ -884,46 +1144,193 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
         ) : (
           <div className="notion-editor-wrapper" id="notion-editor-wrapper">
             <div className="notion-editor-scroll-container">
-              {/* Título H1 Separado do Markdown */}
-              <div
-                className="notion-doc-header-block"
-                id="notion-doc-header-block"
-                onClick={() => titleTextareaRef.current?.focus()}
-              >
-                <div className="notion-doc-title-row">
-                  <textarea
-                    ref={titleTextareaRef}
-                    id="notion-doc-title-input"
-                    className="notion-doc-title-input"
-                    rows={1}
-                    placeholder="Sem título..."
-                    value={titleValue}
-                    onChange={(e) => {
-                      handleTitleChange(e.target.value);
-                      e.target.style.height = "auto";
-                      e.target.style.height = `${e.target.scrollHeight}px`;
+              {/* Prompt do Copilot Helper & Tag Banner */}
+              {editorTab === "prompt" && (
+                <div
+                  style={{
+                    margin: "16px 24px 8px",
+                    padding: "12px 16px",
+                    borderRadius: "8px",
+                    background: "var(--color-surface-container-high, #f8fafc)",
+                    border: "1px solid var(--color-outline-variant, #e2e8f0)",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "8px",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      flexWrap: "wrap",
+                      gap: "8px",
                     }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        if (canvasRef.current) {
-                          const firstBlock = canvasRef.current.querySelector(
-                            '[contenteditable="true"]',
-                          ) as HTMLElement;
-                          if (firstBlock) firstBlock.focus();
-                        }
-                      }
-                    }}
-                    title="Título principal do documento (.docs.metadata.json)"
-                  />
-                </div>
-              </div>
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                      }}
+                    >
+                      <span
+                        className="material-symbols-outlined"
+                        style={{
+                          color: "var(--color-primary, #2563eb)",
+                          fontSize: "18px",
+                        }}
+                      >
+                        smart_toy
+                      </span>
+                      <strong
+                        style={{
+                          fontSize: "12px",
+                          color: "var(--color-on-surface, #0f172a)",
+                        }}
+                      >
+                        {isTemplateMode
+                          ? "Prompt do Copilot para este Template"
+                          : `Instruções Específicas do Copilot para: ${titleValue || "este Documento"}`}
+                      </strong>
+                    </div>
 
-              {/* Divider separador entre o Título e o conteúdo .md */}
-              <div
-                className="notion-doc-title-divider"
-                id="notion-doc-title-divider"
-              />
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-xs"
+                      onClick={handleOptimizePromptWithAI}
+                      disabled={isGeneratingPromptAI}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "4px",
+                        fontSize: "11px",
+                      }}
+                    >
+                      <span className="material-symbols-outlined icon-xs">
+                        {isGeneratingPromptAI ? "sync" : "auto_awesome"}
+                      </span>
+                      {isGeneratingPromptAI ? "Gerando..." : "Gerar / Otimizar com IA"}
+                    </button>
+                  </div>
+
+                  <p
+                    style={{
+                      fontSize: "11px",
+                      color: "var(--text-muted, #64748b)",
+                      margin: 0,
+                    }}
+                  >
+                    {isTemplateMode
+                      ? "Defina a instrução em Markdown que o Copilot utilizará para guiar o usuário na criação e preenchimento de documentos com este template."
+                      : "Defina o papel, critérios técnicos e regras de negócio para guiar o Copilot nas análises e refatorações deste documento."}
+                  </p>
+
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "4px",
+                      flexWrap: "wrap",
+                      marginTop: "2px",
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: "10.5px",
+                        color: "var(--text-muted, #64748b)",
+                        marginRight: "4px",
+                      }}
+                    >
+                      Inserir Tag:
+                    </span>
+                    {[
+                      { label: "Título", token: "{{TITULO}}" },
+                      { label: "Autor", token: "{{AUTOR}}" },
+                      { label: "Data", token: "{{DATA}}" },
+                      { label: "Escopo", token: "{{ESCOPO}}" },
+                      { label: "Requisitos", token: "{{REQUISITOS}}" },
+                      { label: "Arquitetura", token: "{{ARQUITETURA}}" },
+                      { label: "Riscos", token: "{{RISCOS}}" },
+                    ].map((p) => (
+                      <button
+                        key={p.token}
+                        type="button"
+                        onClick={() => handleInsertPlaceholder(p.token)}
+                        style={{
+                          padding: "2px 6px",
+                          borderRadius: "4px",
+                          border: "1px solid var(--color-outline-variant, #cbd5e1)",
+                          background: "var(--color-surface, #ffffff)",
+                          fontSize: "10px",
+                          fontWeight: 600,
+                          color: "var(--color-primary, #2563eb)",
+                          cursor: "pointer",
+                        }}
+                      >
+                        +{p.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {promptAIFeedback && (
+                    <span
+                      style={{
+                        fontSize: "11px",
+                        color: "var(--color-primary, #2563eb)",
+                        fontWeight: 500,
+                      }}
+                    >
+                      {promptAIFeedback}
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {/* Título H1 Separado do Markdown (apenas na aba Documento) */}
+              {editorTab === "document" && (
+                <>
+                  <div
+                    className="notion-doc-header-block"
+                    id="notion-doc-header-block"
+                    onClick={() => titleTextareaRef.current?.focus()}
+                  >
+                    <div className="notion-doc-title-row">
+                      <textarea
+                        ref={titleTextareaRef}
+                        id="notion-doc-title-input"
+                        className="notion-doc-title-input"
+                        rows={1}
+                        placeholder="Sem título..."
+                        value={titleValue}
+                        onChange={(e) => {
+                          handleTitleChange(e.target.value);
+                          e.target.style.height = "auto";
+                          e.target.style.height = `${e.target.scrollHeight}px`;
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            if (canvasRef.current) {
+                              const firstBlock = canvasRef.current.querySelector(
+                                '[contenteditable="true"]',
+                              ) as HTMLElement;
+                              if (firstBlock) firstBlock.focus();
+                            }
+                          }
+                        }}
+                        title="Título principal do documento (.docs.metadata.json)"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Divider separador entre o Título e o conteúdo .md */}
+                  <div
+                    className="notion-doc-title-divider"
+                    id="notion-doc-title-divider"
+                  />
+                </>
+              )}
 
               <div
                 ref={canvasRef}
@@ -951,6 +1358,16 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
             >
               {isGitMode ? (
                 <span>Modo Git & Auditoria Ativo</span>
+              ) : isTemplateMode ? (
+                <>
+                  <span
+                    className="material-symbols-outlined icon-xs"
+                    style={{ color: "#10b981" }}
+                  >
+                    bookmark
+                  </span>
+                  <span style={{ color: "#10b981" }}>{customSaveStatus || "Editor de Template"}</span>
+                </>
               ) : saveStatus === "Salvando..." ? (
                 <>
                   <span

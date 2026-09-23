@@ -1,63 +1,183 @@
 import { FastifyInstance } from 'fastify';
+import { loadConfig } from '../../config/storage.js';
 import { templatesService } from './templates.service.js';
 
 export async function templatesRoutes(fastify: FastifyInstance) {
-  fastify.get('/api/templates', async (_request, reply) => {
+  // ─── Community templates ───────────────────────────────────────────────────
+
+  fastify.get('/api/templates/community', async (_request, reply) => {
     return reply.send({
-      templates: templatesService.getTemplates(),
+      templates: templatesService.getCommunityTemplates(),
     });
   });
 
-  fastify.get('/api/templates/store', async (_request, reply) => {
-    return reply.send({
-      templates: templatesService.getTemplates(),
-    });
-  });
+  // ─── Project templates ─────────────────────────────────────────────────────
 
-  fastify.get('/api/templates/installed', async (_request, reply) => {
-    return reply.send(templatesService.getInstalledTemplates());
-  });
-
-  fastify.post('/api/templates/save', async (request, reply) => {
+  /**
+   * GET /api/project/templates
+   * List all templates of the active (or specified) project.
+   */
+  fastify.get('/api/project/templates', async (request, reply) => {
     try {
-      const result = templatesService.saveTemplate(request.body as any);
+      const query = request.query as { repo?: string };
+      const cfg = loadConfig();
+      const repoName = query.repo || cfg.active_repo?.name || 'local';
+      return reply.send({
+        templates: templatesService.getProjectTemplates(repoName),
+      });
+    } catch (err: any) {
+      return reply.status(500).send({ error: err.message });
+    }
+  });
+
+  /**
+   * GET /api/project/templates/all
+   * List project templates + community templates merged.
+   */
+  fastify.get('/api/project/templates/all', async (request, reply) => {
+    try {
+      const query = request.query as { repo?: string };
+      const cfg = loadConfig();
+      const repoName = query.repo || cfg.active_repo?.name || 'local';
+      return reply.send({
+        templates: templatesService.getTemplates(repoName),
+      });
+    } catch (err: any) {
+      return reply.status(500).send({ error: err.message });
+    }
+  });
+
+  /**
+   * GET /api/project/templates/:id
+   * Get a single template (project-first, falls back to community).
+   * Returns content + prompt for use when creating a document.
+   */
+  fastify.get('/api/project/templates/:id', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string };
+      const query = request.query as { repo?: string };
+      const cfg = loadConfig();
+      const repoName = query.repo || cfg.active_repo?.name || 'local';
+      const template = templatesService.resolveTemplate(id, repoName);
+      if (!template) {
+        return reply.status(404).send({ error: `Template '${id}' não encontrado.` });
+      }
+      return reply.send({ template });
+    } catch (err: any) {
+      return reply.status(500).send({ error: err.message });
+    }
+  });
+
+  /**
+   * POST /api/project/templates
+   * Create a new template in the active project.
+   */
+  fastify.post('/api/project/templates', async (request, reply) => {
+    try {
+      const body = request.body as {
+        id?: string;
+        templateName?: string;
+        title: string;
+        ext?: string;
+        category?: string;
+        description?: string;
+        tags?: string[];
+        badge?: string;
+        content?: string;
+        prompt?: string;
+        systemPrompt?: string;
+        source?: string;
+        repo?: string;
+      };
+      const cfg = loadConfig();
+      const repoName = body.repo || cfg.active_repo?.name || 'local';
+      const result = templatesService.createProjectTemplate(repoName, body);
+      return reply.status(201).send(result);
+    } catch (err: any) {
+      return reply.status(400).send({ error: err.message });
+    }
+  });
+
+  /**
+   * PUT /api/project/templates/:id
+   * Update an existing template in the active project.
+   */
+  fastify.put('/api/project/templates/:id', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string };
+      const body = (request.body || {}) as Record<string, any>;
+      const cfg = loadConfig();
+      const repoName = body.repo || cfg.active_repo?.name || 'local';
+      const result = templatesService.updateProjectTemplate(repoName, id, body);
       return reply.send(result);
     } catch (err: any) {
       return reply.status(400).send({ error: err.message });
     }
   });
 
-  fastify.post('/api/templates/install', async (request, reply) => {
-    const body = request.body as { template_id?: string; folder?: string };
+  /**
+   * DELETE /api/project/templates/:id
+   * Remove a template from the active project.
+   */
+  fastify.delete('/api/project/templates/:id', async (request, reply) => {
     try {
-      const result = templatesService.installTemplate(body.template_id || '', body.folder);
+      const { id } = request.params as { id: string };
+      const query = request.query as { repo?: string };
+      const cfg = loadConfig();
+      const repoName = query.repo || cfg.active_repo?.name || 'local';
+      const result = templatesService.deleteProjectTemplate(id, repoName);
       return reply.send(result);
     } catch (err: any) {
       return reply.status(400).send({ error: err.message });
     }
   });
 
-  fastify.delete('/api/templates', async (request, reply) => {
-    const query = request.query as { id?: string };
+  /**
+   * POST /api/project/templates/:id/import
+   * Import a community template into the active project.
+   */
+  fastify.post('/api/project/templates/:id/import', async (request, reply) => {
     try {
-      const result = templatesService.deleteTemplate(query.id || '');
+      const { id } = request.params as { id: string };
+      const body = (request.body || {}) as { repo?: string };
+      const cfg = loadConfig();
+      const repoName = body.repo || cfg.active_repo?.name || 'local';
+      const result = templatesService.importFromCommunity(id, repoName);
       return reply.send(result);
     } catch (err: any) {
       return reply.status(400).send({ error: err.message });
     }
   });
 
-  fastify.get('/api/workflows', async (_request, reply) => {
-    return reply.send(templatesService.getWorkflows());
-  });
-
-  fastify.post('/api/workflows/apply', async (request, reply) => {
-    const body = request.body as { workflow_id?: string };
+  /**
+   * POST /api/project/templates/sync
+   * Sync / normalize .templates.json.
+   */
+  fastify.post('/api/project/templates/sync', async (request, reply) => {
     try {
-      const result = templatesService.applyWorkflow(body.workflow_id || '');
+      const body = (request.body || {}) as { repo?: string };
+      const cfg = loadConfig();
+      const repoName = body.repo || cfg.active_repo?.name || 'local';
+      const result = templatesService.syncProjectTemplatesMetadata(repoName);
       return reply.send(result);
     } catch (err: any) {
-      return reply.status(400).send({ error: err.message });
+      return reply.status(500).send({ error: err.message });
     }
+  });
+
+  // ─── Legacy routes (kept for backward compatibility) ──────────────────────
+
+  fastify.get('/api/templates', async (request, reply) => {
+    const query = request.query as { repo?: string };
+    const cfg = loadConfig();
+    const repoName = query.repo || cfg.active_repo?.name || 'local';
+    return reply.send({ templates: templatesService.getTemplates(repoName) });
+  });
+
+  fastify.get('/api/templates/store', async (request, reply) => {
+    const query = request.query as { repo?: string };
+    const cfg = loadConfig();
+    const repoName = query.repo || cfg.active_repo?.name || 'local';
+    return reply.send({ templates: templatesService.getTemplates(repoName) });
   });
 }

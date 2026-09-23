@@ -16,6 +16,7 @@ export interface DocumentMetadataItem {
   approvers: string[];
   links: string[];
   templateId: string;
+  prompt: string;
   [key: string]: any;
 }
 
@@ -397,6 +398,7 @@ export class DocsMetadataService {
       approvers: Array.isArray(cleanItem.approvers) ? cleanItem.approvers : [],
       links: Array.isArray(cleanItem.links) ? cleanItem.links : [],
       templateId: cleanItem.templateId || '',
+      prompt: cleanItem.prompt || '',
     };
   }
 }

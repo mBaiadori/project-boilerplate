@@ -74,6 +74,7 @@ export interface DocumentMetadataItem {
   approvers: string[];
   links: string[];
   templateId: string;
+  prompt?: string;
   [key: string]: any;
 }
 
@@ -140,14 +141,26 @@ export interface AISettingsState {
 
 export interface TemplateItem {
   id: string;
+  templateName?: string;
   title: string;
+  ext?: string;
   category: string;
-  description: string;
-  filename: string;
+  description?: string;
+  tags?: string[];
+  badge?: string;
+  filename?: string;
   content: string;
+  prompt: string;
+  systemPrompt?: string;
+  path?: string;
+  source?: 'local' | 'community' | string;
   icon?: string;
   installed?: boolean;
   assistant?: string;
+  assistant_prompt?: string;
+  created_at?: string;
+  updated_at?: string;
+  [key: string]: any;
 }
 
 export interface TutorialItem {
