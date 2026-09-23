@@ -36,7 +36,7 @@ export const SettingsSubView: React.FC = () => {
   const [projectVersion, setProjectVersion] = useState<string>("1.0.0");
   const [projectLead, setProjectLead] = useState<string>("@usuario");
   const [projectArchPattern, setProjectArchPattern] =
-    useState<string>("Modular Specs");
+    useState<string>("Documentação Viva & Git");
   const [projectRepoUrl, setProjectRepoUrl] = useState<string>("");
   const [categories, setCategories] = useState<string[]>([]);
   const [newCatInput, setNewCatInput] = useState<string>("");
@@ -88,7 +88,7 @@ export const SettingsSubView: React.FC = () => {
           setProjectVersion(pCfg.project.version || "1.0.0");
           setProjectLead(pCfg.project.lead || "@usuario");
           setProjectArchPattern(
-            pCfg.project.architecture_pattern || "Modular Specs",
+            pCfg.project.architecture_pattern || "Documentação Viva & Git",
           );
           setProjectRepoUrl(pCfg.project.repository_url || "");
         }
@@ -379,7 +379,7 @@ export const SettingsSubView: React.FC = () => {
                 id="cfg-proj-pattern"
                 value={projectArchPattern}
                 onChange={(e) => setProjectArchPattern(e.target.value)}
-                placeholder="Modular Specs / Clean Arch"
+                placeholder="Documentação Viva / Markdown Docs"
               />
             </div>
           </div>

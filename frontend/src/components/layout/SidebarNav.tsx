@@ -29,11 +29,11 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({ activeView, onSelectView
           </button>
         </div>
 
-        {/* 1. Editor */}
+        {/* 1. Documentos */}
         <button
           className={`dash-nav-item ${activeView === 'editor' ? 'active' : ''}`}
           data-view="editor"
-          title="Documentos & Especificações"
+          title="Documentos & Editor"
           onClick={() => onSelectView('editor')}
         >
           <svg className="nav-icon" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -45,40 +45,11 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({ activeView, onSelectView
           <span className="nav-label">Documentos</span>
         </button>
 
-        {/* 2. Dicionário */}
-        <button
-          className={`dash-nav-item ${activeView === 'dictionary' ? 'active' : ''}`}
-          data-view="dictionary"
-          title="Dicionário Ubíquo & Vocabulário Oficial"
-          onClick={() => onSelectView('dictionary')}
-        >
-          <svg className="nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <rect width="18" height="18" x="3" y="3" rx="4"></rect>
-            <path d="m8 16 4-8 4 8"></path>
-            <path d="M9.5 13h5"></path>
-          </svg>
-          <span className="nav-label">Dicionário</span>
-        </button>
-
-        {/* 3. Wiki */}
-        <button
-          className={`dash-nav-item ${activeView === 'wiki' ? 'active' : ''}`}
-          data-view="wiki"
-          title="Wiki de Conhecimento & Decisões da IA (Padrão Karpathy LLM-Wiki)"
-          onClick={() => onSelectView('wiki')}
-        >
-          <svg className="nav-icon" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
-            <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
-          </svg>
-          <span className="nav-label">Wiki IA</span>
-        </button>
-
-        {/* 4. Templates */}
+        {/* 2. Templates */}
         <button
           className={`dash-nav-item ${activeView === 'templates' ? 'active' : ''}`}
           data-view="templates"
-          title="Catálogo de Templates & Assistentes de IA"
+          title="Templates & Assistentes de Documentos"
           onClick={() => onSelectView('templates')}
         >
           <span className="material-symbols-outlined nav-icon" style={{ fontSize: '21px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -87,11 +58,11 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({ activeView, onSelectView
           <span className="nav-label">Templates</span>
         </button>
 
-        {/* 5. PRs */}
+        {/* 3. Revisões & Git */}
         <button
           className={`dash-nav-item ${activeView === 'prs' ? 'active' : ''}`}
           data-view="prs"
-          title="Pull Requests & Auditoria"
+          title="Revisões de Documentos & Controle Git"
           onClick={() => onSelectView('prs')}
         >
           <svg className="nav-icon" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -100,14 +71,28 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({ activeView, onSelectView
             <path d="M13 6h3a2 2 0 0 1 2 2v7"></path>
             <line x1="6" y1="9" x2="6" y2="21"></line>
           </svg>
-          <span className="nav-label">Pull Requests</span>
+          <span className="nav-label">Revisões / Git</span>
         </button>
 
-        {/* 6. Settings */}
+        {/* 4. Base de Conhecimento / Wiki */}
+        <button
+          className={`dash-nav-item ${activeView === 'wiki' ? 'active' : ''}`}
+          data-view="wiki"
+          title="Base de Conhecimento & Decisões da Equipe"
+          onClick={() => onSelectView('wiki')}
+        >
+          <svg className="nav-icon" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
+            <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
+          </svg>
+          <span className="nav-label">Conhecimento</span>
+        </button>
+
+        {/* 5. Configurações */}
         <button
           className={`dash-nav-item ${activeView === 'settings' ? 'active' : ''}`}
           data-view="settings"
-          title="Configurações Sistêmicas & Prompts Mestre"
+          title="Configurações do Projeto, Equipe & IA"
           onClick={() => onSelectView('settings')}
         >
           <svg className="nav-icon" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

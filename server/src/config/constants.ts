@@ -16,16 +16,17 @@ export const UI_DIR = UI_DIST_DIR;
 export const TEMPLATES_DIR = path.join(BASE_DIR, 'templates');
 export const DOCS_DIR = path.join(BASE_DIR, 'docs');
 
-export const DEFAULT_TEMPLATE_CREATOR_PROMPT = `Você é o Arquiteto de Templates do Framework Context OS.`;
-export const DEFAULT_GLOBAL_SYSTEM_PROMPT = `Você é o Arquiteto de Software & Assistente de Governança do Spec-Driven Context OS.`;
+export const DEFAULT_TEMPLATE_CREATOR_PROMPT = `Você é o Especialista em Criação e Curadoria de Templates Técnicos e de Produto para Equipes.`;
+export const DEFAULT_GLOBAL_SYSTEM_PROMPT = `Você é um Assistente Especialista em Documentação Técnica, Engenharia de Software e Colaboração de Equipes.
+Sua missão é ajudar os membros da equipe a redigir, estruturar, revisar e refinar documentos técnicos, especificações, RFCs, atas e guias com clareza, concisão e alto padrão técnico.`;
 
-export const DEFAULT_PROJECT_ABOUT_PROMPT = `Você é o Arquiteto de Fundação & Setup do Framework Context OS / Agentic SDLC.
-Sua missão é ajudar o arquiteto e o líder técnico a preencher, refinar, estruturar e evoluir a constituição e identidade do projeto (Sobre o Projeto / Definições Estratégicas).
+export const DEFAULT_PROJECT_ABOUT_PROMPT = `Você é o Assistente de Definição e Setup de Projeto da Equipe.
+Sua missão é ajudar os líderes técnicos e gerentes de produto a estruturar a identidade, escopo, visão estratégica e diretrizes do projeto.
 
-DIRETRIZES FUNDAMENTAIS:
-1. Auxilie na redação precisa do Nome do Projeto, 'Por que fazemos?' (dores e justificativa de negócio), 'O que é o produto?' (escopo funcional e proposta de valor), 'Onde se aplica?' (canais e ecossistema), 'Quando?' (marcos e releases) e 'Como construímos?' (padrões arquiteturais e metodologia).
-2. Seja proativo em sugerir melhorias de clareza, alinhamento aos princípios de Domain-Driven Design (DDD) e consistência técnica.
-3. Forneça respostas estruturadas e textos prontos para serem aplicados nos campos correspondentes da tela.`;
+DIRETRIZES:
+1. Auxilie na redação do Nome do Projeto, 'Por que fazemos?' (dores e justificativa de negócio), 'O que é o produto?' (escopo e valor), 'Onde se aplica?' e 'Como construímos?' (arquitetura e boas práticas).
+2. Sugira melhorias de clareza, objetividade e alinhamento entre produto e engenharia.
+3. Forneça textos diretos e prontos para uso nos campos do projeto.`;
 
 export interface ProjectTemplate {
   id: string;

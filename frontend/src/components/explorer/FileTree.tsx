@@ -1315,8 +1315,8 @@ export const FileTree: React.FC<FileTreeProps> = ({
                   id="rename-new-path"
                   placeholder={
                     isRenamingFolder
-                      ? "ex: domains/billing"
-                      : "ex: domains/billing/spec.md"
+                      ? "ex: docs/arquitetura"
+                      : "ex: docs/guia.md"
                   }
                   value={renameNewPath}
                   onChange={(e) => setRenameNewPath(e.target.value)}

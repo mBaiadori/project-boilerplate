@@ -277,31 +277,41 @@ export function ensureDefaultRepoFiles(repoName: string): void {
 
     const defaultCfg = {
       project: {
-        name: 'Default Project',
-        description: 'Estrutura padrão de governança de especificações.',
+        name: 'Projeto da Equipe',
+        description: 'Documentação técnica, RFCs, especificações e base de conhecimento da equipe.',
         version: '1.0.0',
-        architecture_pattern: 'Modular Specs',
+        architecture_pattern: 'Documentação Viva & Git',
         repository_url: '',
-        lead: '@usuario',
+        lead: '@equipe',
       },
-      categories: ['geral', 'arquitetura', 'engenharia', 'produto', 'segurança', 'infraestrutura', 'dados'],
-      tags: ['backend', 'frontend', 'api', 'database', 'security', 'core', 'auth', 'mobile', 'spec'],
+      categories: ['geral', 'engenharia', 'produto', 'arquitetura', 'guias', 'reunioes'],
+      tags: ['rfc', 'prd', 'api', 'backend', 'frontend', 'infra', 'guia', 'nota'],
       statuses: [
         { key: 'draft', label: 'Rascunho (DRAFT)', badge: 'badge-neutral' },
-        { key: 'proposed', label: 'Proposto (PROPOSED)', badge: 'badge-warning' },
         { key: 'review', label: 'Em Revisão (REVIEW)', badge: 'badge-info' },
         { key: 'approved', label: 'Aprovado (APPROVED)', badge: 'badge-success' },
-        { key: 'superseded', label: 'Substituído (SUPERSEDED)', badge: 'badge-secondary' },
         { key: 'deprecated', label: 'Obsoleto (DEPRECATED)', badge: 'badge-danger' },
       ],
       governance_rules: { min_approvals_default: 1 },
       reviewers: [],
-      ai_assistant_prompt: 'Você é o assistente de IA do projeto.',
+      ai_assistant_prompt: 'Você é o assistente inteligente de documentação e engenharia da equipe.',
     };
     fs.writeFileSync(path.join(defaultDir, '.project.config.json'), JSON.stringify(defaultCfg, null, 2), 'utf-8');
-    fs.writeFileSync(path.join(defaultDir, '.dictionary.json'), JSON.stringify({ version: '1.0.0', terms: [], domains: [] }, null, 2), 'utf-8');
     fs.writeFileSync(path.join(defaultDir, '.docs.metadata.json'), JSON.stringify([], null, 2), 'utf-8');
-    fs.writeFileSync(path.join(defaultDir, '.spec-memory', '_meta.yaml'), 'version: 1.0\ninitialized: true\n', 'utf-8');
+    
+    // Ensure basic docs folder and README.md
+    fs.mkdirSync(path.join(defaultDir, 'docs'), { recursive: true });
+    const defaultReadme = `# Documentação do Projeto
+
+Bem-vindo ao repositório de documentação da equipe!
+
+Este espaço centraliza:
+* 📄 **Especificações & RFCs:** Propostas técnicas e requisitos de produto.
+* 📚 **Templates Padronizados:** Modelos reutilizáveis com assistência de IA.
+* 💡 **Base de Conhecimento:** Guias, notas de alinhamento e tutoriais.
+* 🔀 **Controle de Versão com Git:** Edições controladas e revisões pelo time.
+`;
+    fs.writeFileSync(path.join(defaultDir, 'README.md'), defaultReadme, 'utf-8');
   }
 
   // If this is the default repo itself, we are done

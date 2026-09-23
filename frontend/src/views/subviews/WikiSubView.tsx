@@ -236,8 +236,8 @@ export const WikiSubView: React.FC = () => {
                   <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>menu_book</span>
                 </div>
                 <div>
-                  <h2 style={{ margin: 0, fontSize: '13.5px', fontWeight: 700, color: 'var(--text-heading)' }}>Wiki & Decisões IA</h2>
-                  <span style={{ fontSize: '10.5px', color: 'var(--text-muted)' }}>Memória Git (.spec-memory/)</span>
+                  <h2 style={{ margin: 0, fontSize: '13.5px', fontWeight: 700, color: 'var(--text-heading)' }}>Base de Conhecimento</h2>
+                  <span style={{ fontSize: '10.5px', color: 'var(--text-muted)' }}>Notas, Guias e Decisões da Equipe</span>
                 </div>
               </div>
               <button
