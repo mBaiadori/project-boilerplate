@@ -6,6 +6,7 @@ interface TopHeaderProps {
   onOpenDiffModal: () => void;
   onToggleCopilot: () => void;
   onOpenGitModal?: () => void;
+  onNavigateToEdits?: (tab?: 'drafts' | 'whats-new') => void;
   onOpenTour?: () => void;
 }
 
@@ -14,19 +15,36 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
   onOpenDiffModal,
   onToggleCopilot,
   onOpenGitModal = () => {},
+  onNavigateToEdits,
   onOpenTour = () => {},
 }) => {
-  const { activeRepo, pendingChanges, gitStatus, isLoadingWorkspace } = useWorkspace();
+  const { activeRepo, pendingChanges, isLoadingWorkspace, hasUnreadWhatsNew } =
+    useWorkspace();
 
-  const currentBranch =
-    gitStatus?.branch || (activeRepo?.is_local ? "local" : "main");
-  const isGitClean = gitStatus?.isClean ?? true;
-  const gitFilesCount = gitStatus?.files?.length || 0;
+  const handleGoToEdits = (tab?: 'drafts' | 'whats-new') => {
+    if (onNavigateToEdits) {
+      onNavigateToEdits(tab);
+    } else if (tab === 'drafts' && onOpenDiffModal) {
+      onOpenDiffModal();
+    } else {
+      onOpenGitModal();
+    }
+  };
 
   return (
-    <header className="dashboard-navbar" style={{ position: 'relative' }}>
+    <header className="dashboard-navbar" style={{ position: "relative" }}>
       {isLoadingWorkspace && (
-        <div className="repos-linear-progress-track" style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '2.5px', zIndex: 10 }}>
+        <div
+          className="repos-linear-progress-track"
+          style={{
+            position: "absolute",
+            bottom: 0,
+            left: 0,
+            right: 0,
+            height: "2.5px",
+            zIndex: 10,
+          }}
+        >
           <div className="repos-linear-progress-bar"></div>
         </div>
       )}
@@ -52,62 +70,15 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
             {isLoadingWorkspace && (
               <span
                 className="material-symbols-outlined spinning"
-                style={{ fontSize: "16px", color: "var(--md-sys-color-primary, #1a73e8)" }}
+                style={{
+                  fontSize: "16px",
+                  color: "var(--md-sys-color-primary, #1a73e8)",
+                }}
                 title="Carregando workspace..."
               >
                 progress_activity
               </span>
             )}
-
-            {/* Git Branch & Status Pill */}
-            <button
-              id="btn-open-git-status-header"
-              className="btn btn-ghost btn-xs"
-              type="button"
-              title="Abrir Painel Git (Branch, Status, Histórico e Sync)"
-              onClick={onOpenGitModal}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "6px",
-                padding: "3px 8px",
-                borderRadius: "12px",
-                background: isGitClean
-                  ? "var(--bg-surface, rgba(255,255,255,0.06))"
-                  : "rgba(234, 179, 8, 0.15)",
-                border: `1px solid ${isGitClean ? "var(--border-color, rgba(255,255,255,0.12))" : "rgba(234, 179, 8, 0.4)"}`,
-                cursor: "pointer",
-              }}
-            >
-              <span
-                className="material-symbols-outlined"
-                style={{
-                  fontSize: "14px",
-                  color: isGitClean ? "var(--primary, #3b82f6)" : "#eab308",
-                }}
-              >
-                alt_route
-              </span>
-              <span
-                style={{
-                  fontFamily: "var(--font-mono)",
-                  fontSize: "11px",
-                  fontWeight: 600,
-                  color: "var(--text-normal)",
-                }}
-              >
-                {currentBranch}
-              </span>
-              <span
-                className={`pill-dot ${isGitClean ? "success" : "warning"}`}
-                style={{ margin: 0, padding: 0 }}
-              >
-                <span
-                  className="dot"
-                  style={{ width: "6px", height: "6px" }}
-                ></span>
-              </span>
-            </button>
           </div>
           <span className="dash-meta">
             {activeRepo?.full_name && !activeRepo.is_local ? (
@@ -117,44 +88,51 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
                 target="_blank"
                 rel="noreferrer"
               >
-                GitHub: {activeRepo.full_name} ↗
+                Documentação: {activeRepo.full_name} ↗
               </a>
             ) : (
-              <span id="dash-repo-link">Repositório Local Ativo</span>
+              <span id="dash-repo-link">Documentação Local</span>
             )}
           </span>
         </div>
       </div>
 
       <div className="dash-nav-right">
-        {/* Quick Version & Evolution Control Button */}
+        {/* Quick Edições Button */}
         <button
           id="btn-quick-git-control"
           className="btn btn-secondary btn-sm"
           type="button"
-          title="Central de Versões & Evolução da Documentação"
-          onClick={onOpenGitModal}
+          title="Central de Edições"
+          onClick={() => handleGoToEdits(hasUnreadWhatsNew ? 'whats-new' : 'drafts')}
           style={{
             display: "inline-flex",
             alignItems: "center",
-            gap: "5px",
+            gap: "6px",
             fontSize: "12px",
+            position: "relative"
           }}
         >
           <span
             className="material-symbols-outlined icon-xs"
-            style={{ color: isGitClean ? "inherit" : "#eab308" }}
           >
             history_edu
           </span>
-          <span>Versões</span>
-          {gitFilesCount > 0 && (
+          <span>Edições</span>
+
+          {hasUnreadWhatsNew && (
             <span
-              className="badge badge-warning"
-              style={{ fontSize: "10px", padding: "1px 5px" }}
-            >
-              {gitFilesCount} {gitFilesCount === 1 ? "rascunho" : "rascunhos"}
-            </span>
+              style={{
+                width: "7px",
+                height: "7px",
+                borderRadius: "50%",
+                backgroundColor: "#22c55e",
+                boxShadow: "0 0 6px #22c55e",
+                display: "inline-block",
+                marginLeft: "2px",
+              }}
+              title="Novidades disponíveis!"
+            />
           )}
         </button>
 
@@ -164,13 +142,13 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
           style={{
             display: pendingChanges.length > 0 ? "inline-flex" : "none",
           }}
-          onClick={onOpenDiffModal}
+          onClick={() => handleGoToEdits('drafts')}
+          title="Ver minhas alterações e rascunhos na Central de Edições"
         >
           <span className="dot warning-dot"></span>
           <span id="pending-changes-badge-text">
             {pendingChanges.length} alterações
-          </span>{" "}
-          &bull; Revisar Proposta
+          </span>
         </button>
 
         <button

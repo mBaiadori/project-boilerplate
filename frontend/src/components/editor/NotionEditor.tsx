@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { FileText, Plus, Sparkles, FolderTree } from "lucide-react";
+import { FileText, Plus, FolderTree } from "lucide-react";
 import { parseFrontmatter, serializeFrontmatter } from "../../services/frontmatter";
 import {
   NotionEditorEngine,
@@ -41,7 +41,7 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
   onNavigateFile,
   onReload = () => {},
   onOpenDiffModal,
-  onToggleCopilot,
+  onToggleCopilot: _onToggleCopilot,
   onOpenScaffoldWizard,
   onSendSelectionToCopilot,
   isTemplateMode = false,
@@ -420,6 +420,9 @@ Mantenha um tom técnico, rigoroso e direto.`,
   useEffect(() => {
     if (engineRef.current) {
       engineRef.current.filePath = filePath;
+      const targetText = editorTab === "document" ? docBody : effectivePrompt;
+      isInternalChangeRef.current = false;
+      engineRef.current.setMarkdown(targetText);
       const hash = window.location.hash;
       if (hash && hash.includes(":~:text=")) {
         setTimeout(() => {
@@ -623,21 +626,6 @@ Mantenha um tom técnico, rigoroso e direto.`,
               >
                 <Plus size={15} />
                 <span>Explorar Templates & Criar</span>
-              </button>
-            )}
-            {onToggleCopilot && (
-              <button
-                id="btn-empty-open-copilot"
-                className="btn btn-secondary btn-sm"
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "6px",
-                }}
-                onClick={onToggleCopilot}
-              >
-                <Sparkles size={15} />
-                <span>Abrir Copilot IA</span>
               </button>
             )}
           </div>

@@ -15,6 +15,8 @@ import {
   getFileContentAtCommit,
   getFileBlameDetails,
   executeGitCommand,
+  getWhatsNewSummary,
+  getWhatsNewFileDiff,
 } from '../../utils/git.js';
 
 export class GitService {
@@ -139,6 +141,22 @@ export class GitService {
     const repoName = cfg.active_repo?.name || 'local';
     const repoDir = this.getRepoDir(repoName);
     return await getFileBlameDetails(repoDir, filePath);
+  }
+
+  async getWhatsNew(lastSeenHash?: string) {
+    await this.ensureActiveRepoGit();
+    const cfg = loadConfig();
+    const repoName = cfg.active_repo?.name || 'local';
+    const repoDir = this.getRepoDir(repoName);
+    return await getWhatsNewSummary(repoDir, lastSeenHash);
+  }
+
+  async getWhatsNewDiff(filePath: string, lastSeenHash?: string) {
+    await this.ensureActiveRepoGit();
+    const cfg = loadConfig();
+    const repoName = cfg.active_repo?.name || 'local';
+    const repoDir = this.getRepoDir(repoName);
+    return await getWhatsNewFileDiff(repoDir, filePath, lastSeenHash);
   }
 
   async getGitVersion() {

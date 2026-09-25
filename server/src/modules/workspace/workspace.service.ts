@@ -1,8 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { execFile, exec } from 'node:child_process';
 import { PROJECTS_DIR } from '../../config/constants.js';
 import { loadConfig, saveConfig, recordChange, ensureDefaultRepoFiles } from '../../config/storage.js';
 import { computeDiff } from '../../utils/diff.js';
+import { isGitRepo, executeGitCommand } from '../../utils/git.js';
 import {
   docsMetadataService,
   generateDocId,
@@ -25,6 +27,33 @@ export interface TreeNode {
 export { generateDocId, extractDocLinksFromMarkdown };
 export type { DocumentMetadataItem };
 
+export const DEFAULT_HIDDEN_FILES = [
+  '.git',
+  '.gitignore',
+  '.DS_Store',
+  'node_modules',
+  '.project.config.json',
+  '.docs.metadata.json',
+  '.dictionary.json',
+  '.templates.json',
+  '.templates.metadata.json',
+  '.spec-memory',
+  '.hidden_files.json',
+];
+
+export function loadHiddenFiles(repoDir: string): string[] {
+  const hiddenPath = path.join(repoDir, '.hidden_files.json');
+  if (fs.existsSync(hiddenPath)) {
+    try {
+      const data = JSON.parse(fs.readFileSync(hiddenPath, 'utf-8'));
+      if (Array.isArray(data)) return data;
+    } catch (e) {
+      console.warn(`[WorkspaceService] Erro ao ler .hidden_files.json em ${repoDir}:`, e);
+    }
+  }
+  return DEFAULT_HIDDEN_FILES;
+}
+
 export class WorkspaceService {
   private getRepoDir(repoName: string): string {
     return path.join(PROJECTS_DIR, repoName || 'local');
@@ -38,15 +67,16 @@ export class WorkspaceService {
     docsMetadataService.saveDocsMetadata(repoName, metaList);
   }
 
-  buildTree(dir: string, baseDir: string, docsMetadata?: DocumentMetadataItem[]): TreeNode[] {
+  buildTree(dir: string, baseDir: string, docsMetadata?: DocumentMetadataItem[], hiddenFiles?: string[]): TreeNode[] {
     if (!fs.existsSync(dir)) return [];
     const entries = fs.readdirSync(dir, { withFileTypes: true });
     const nodes: TreeNode[] = [];
 
     const metaList = docsMetadata || [];
+    const hiddenList = hiddenFiles || loadHiddenFiles(baseDir);
 
     for (const entry of entries) {
-      if (entry.name.startsWith('.') || entry.name === 'node_modules') continue;
+      if (hiddenList.includes(entry.name)) continue;
 
       const fullPath = path.join(dir, entry.name);
       const relPath = path.relative(baseDir, fullPath).replace(/\\/g, '/');
@@ -56,7 +86,7 @@ export class WorkspaceService {
           name: entry.name,
           path: relPath,
           type: 'directory',
-          children: this.buildTree(fullPath, baseDir, metaList),
+          children: this.buildTree(fullPath, baseDir, metaList, hiddenList),
         });
       } else if (entry.isFile()) {
         const docMeta = metaList.find((d) => d.path === relPath) || ({} as Partial<DocumentMetadataItem>);
@@ -81,11 +111,11 @@ export class WorkspaceService {
     });
   }
 
-  getTree() {
+  getTree(targetRepoName?: string) {
     const cfg = loadConfig();
-    const repoName = cfg.active_repo?.name || 'local';
-    const repoDir = this.getRepoDir(repoName);
+    const repoName = targetRepoName || cfg.active_repo?.name || 'local';
     ensureDefaultRepoFiles(repoName);
+    const repoDir = this.getRepoDir(repoName);
 
     const docsMetadata = docsMetadataService.loadDocsMetadata(repoName);
     const tree = this.buildTree(repoDir, repoDir, docsMetadata);
@@ -105,14 +135,74 @@ export class WorkspaceService {
       throw new Error(`Arquivo '${cleanPath}' não encontrado.`);
     }
 
-    const content = fs.readFileSync(fullPath, 'utf-8');
+    const stat = fs.statSync(fullPath);
+    const ext = path.extname(cleanPath).replace('.', '').toLowerCase();
+    const isBinary = ['pdf', 'xlsx', 'xls', 'docx', 'doc', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'ico', 'zip', 'gz', 'tar', 'exe', 'bin', 'mp4', 'mp3'].includes(ext);
+
+    let content = '';
+    if (!isBinary) {
+      try {
+        content = fs.readFileSync(fullPath, 'utf-8');
+      } catch (e) {
+        content = '';
+      }
+    }
+
     const meta = docsMetadataService.getDocMetadata(repoName, cleanPath);
 
     return {
       path: cleanPath,
       content,
+      isBinary,
+      size: stat.size,
       meta,
       repo: repoName,
+    };
+  }
+
+  getRawFile(filePath: string) {
+    const cfg = loadConfig();
+    const repoName = cfg.active_repo?.name || 'local';
+    const cleanPath = (filePath || '').trim().replace(/^\/+/, '');
+    const fullPath = path.join(this.getRepoDir(repoName), cleanPath);
+
+    if (!fs.existsSync(fullPath)) {
+      throw new Error(`Arquivo '${cleanPath}' não encontrado.`);
+    }
+
+    const ext = path.extname(cleanPath).replace('.', '').toLowerCase();
+    const mimeTypes: Record<string, string> = {
+      pdf: 'application/pdf',
+      xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      xls: 'application/vnd.ms-excel',
+      docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      doc: 'application/msword',
+      csv: 'text/csv; charset=utf-8',
+      tsv: 'text/tab-separated-values; charset=utf-8',
+      png: 'image/png',
+      jpg: 'image/jpeg',
+      jpeg: 'image/jpeg',
+      gif: 'image/gif',
+      svg: 'image/svg+xml',
+      webp: 'image/webp',
+      json: 'application/json; charset=utf-8',
+      yaml: 'text/yaml; charset=utf-8',
+      yml: 'text/yaml; charset=utf-8',
+      txt: 'text/plain; charset=utf-8',
+      md: 'text/markdown; charset=utf-8',
+      html: 'text/html; charset=utf-8',
+      css: 'text/css; charset=utf-8',
+      js: 'application/javascript; charset=utf-8',
+      ts: 'text/plain; charset=utf-8',
+    };
+
+    const mimeType = mimeTypes[ext] || 'application/octet-stream';
+    const buffer = fs.readFileSync(fullPath);
+    return {
+      buffer,
+      mimeType,
+      filename: path.basename(cleanPath),
+      size: buffer.length,
     };
   }
 
@@ -186,10 +276,6 @@ export class WorkspaceService {
       };
     }
 
-    if (!path.extname(cleanPath)) {
-      cleanPath += '.md';
-    }
-
     const fullPath = path.join(repoDir, cleanPath);
     if (fs.existsSync(fullPath)) {
       throw new Error(`Arquivo '${cleanPath}' já existe.`);
@@ -216,6 +302,105 @@ export class WorkspaceService {
       path: cleanPath,
       is_folder: false,
       meta: newItem,
+      tree: newTree,
+    };
+  }
+
+  importFiles(
+    targetFolder: string = '',
+    filesToImport: Array<{
+      name: string;
+      relativePath?: string;
+      content?: string;
+      base64?: string;
+      meta?: any;
+    }>,
+    targetRepoName?: string
+  ) {
+    const cfg = loadConfig();
+    const repoName = targetRepoName || cfg.active_repo?.name || 'local';
+    const repoDir = this.getRepoDir(repoName);
+    const cleanTarget = (targetFolder || '').trim().replace(/^\/+/, '').replace(/\/+$/, '');
+
+    const importedFiles: Array<{ path: string; name: string; isBinary: boolean; size: number }> = [];
+    const errors: string[] = [];
+
+    for (const item of filesToImport) {
+      try {
+        const itemRel = (item.relativePath || item.name || '').trim().replace(/^\/+/, '');
+        if (!itemRel) continue;
+
+        const fullRelPath = cleanTarget ? `${cleanTarget}/${itemRel}` : itemRel;
+        const fullDiskPath = path.join(repoDir, fullRelPath);
+
+        // Security check against directory traversal
+        const resolvedPath = path.resolve(fullDiskPath);
+        const resolvedRepoDir = path.resolve(repoDir);
+        if (!resolvedPath.startsWith(resolvedRepoDir)) {
+          errors.push(`Caminho inválido: ${fullRelPath}`);
+          continue;
+        }
+
+        fs.mkdirSync(path.dirname(fullDiskPath), { recursive: true });
+
+        let oldContent = '';
+        const exists = fs.existsSync(fullDiskPath);
+        if (exists) {
+          try {
+            oldContent = fs.readFileSync(fullDiskPath, 'utf-8');
+          } catch {
+            oldContent = '';
+          }
+        }
+
+        let isBinary = false;
+        let fileSize = 0;
+
+        if (item.base64) {
+          const buffer = Buffer.from(item.base64, 'base64');
+          fs.writeFileSync(fullDiskPath, buffer);
+          fileSize = buffer.length;
+          isBinary = true;
+        } else {
+          const textContent = item.content ?? '';
+          fs.writeFileSync(fullDiskPath, textContent, 'utf-8');
+          fileSize = Buffer.byteLength(textContent, 'utf-8');
+        }
+
+        const isMd = fullRelPath.toLowerCase().endsWith('.md') || fullRelPath.toLowerCase().endsWith('.markdown');
+        const textForLinks = isMd && !item.base64 ? (item.content || '') : '';
+        const extractedLinks = textForLinks ? extractDocLinksFromMarkdown(textForLinks) : [];
+
+        const defaultTitle = item.name.replace(/\.[^/.]+$/, '');
+        const metaPayload = {
+          title: defaultTitle,
+          status: 'draft',
+          categories: 'geral',
+          ...(item.meta && typeof item.meta === 'object' ? item.meta : {}),
+          links: extractedLinks,
+        };
+
+        docsMetadataService.updateDocMetadataItem(repoName, fullRelPath, metaPayload);
+        recordChange(repoName, fullRelPath, exists ? 'MODIFIED' : 'ADDED', oldContent, item.content || '');
+
+        importedFiles.push({
+          path: fullRelPath,
+          name: item.name,
+          isBinary,
+          size: fileSize,
+        });
+      } catch (err: any) {
+        errors.push(`Erro ao importar ${item.name}: ${err.message}`);
+      }
+    }
+
+    const docsMetadata = docsMetadataService.loadDocsMetadata(repoName);
+    const newTree = this.buildTree(repoDir, repoDir, docsMetadata);
+
+    return {
+      success: importedFiles.length > 0,
+      importedFiles,
+      errors,
       tree: newTree,
     };
   }
@@ -346,7 +531,7 @@ export class WorkspaceService {
     };
   }
 
-  discardChanges(paths?: string[]) {
+  async discardChanges(paths?: string[]) {
     const cfg = loadConfig();
     const repoName = cfg.active_repo?.name || 'local';
     const repoDir = this.getRepoDir(repoName);
@@ -368,7 +553,7 @@ export class WorkspaceService {
               }
             }
           } else if (change.type === 'MODIFIED' || change.type === 'DELETED') {
-            if (change.old_content) {
+            if (change.old_content !== undefined) {
               fs.mkdirSync(path.dirname(fullPath), { recursive: true });
               fs.writeFileSync(fullPath, change.old_content, 'utf-8');
             }
@@ -378,6 +563,23 @@ export class WorkspaceService {
         }
       } else {
         remainingChanges.push(change);
+      }
+    }
+
+    // Se o diretório for um repositório git, descartar alterações no git também
+    if (await isGitRepo(repoDir)) {
+      try {
+        if (targetPaths) {
+          for (const p of targetPaths) {
+            await executeGitCommand(`git checkout -- "${p}"`, repoDir);
+            await executeGitCommand(`git clean -fd "${p}"`, repoDir);
+          }
+        } else {
+          await executeGitCommand('git checkout -- .', repoDir);
+          await executeGitCommand('git clean -fd', repoDir);
+        }
+      } catch (e) {
+        console.warn(`[WorkspaceService] Aviso ao descartar alterações no git:`, e);
       }
     }
 
@@ -510,6 +712,61 @@ export class WorkspaceService {
       dependencies,
       consumers,
       documents: contextItems,
+    };
+  }
+
+  revealInOS(relPath?: string, repoName?: string): { success: boolean; message: string; fullPath: string } {
+    const cfg = loadConfig();
+    const repo = repoName || cfg.active_repo?.name || 'local';
+    const repoDir = this.getRepoDir(repo);
+    const cleanRel = (relPath || '').trim().replace(/^\/+/, '');
+    const targetPath = cleanRel ? path.join(repoDir, cleanRel) : repoDir;
+
+    if (!fs.existsSync(targetPath)) {
+      throw new Error(`Arquivo ou diretório não encontrado no disco: ${cleanRel || targetPath}`);
+    }
+
+    const platform = process.platform;
+    const isDirectory = fs.statSync(targetPath).isDirectory();
+
+    try {
+      if (platform === 'darwin') {
+        if (isDirectory) {
+          execFile('open', [targetPath], (err) => {
+            if (err) console.error('[revealInOS] Error opening directory on macOS:', err);
+          });
+        } else {
+          execFile('open', ['-R', targetPath], (err) => {
+            if (err) console.error('[revealInOS] Error revealing file on macOS:', err);
+          });
+        }
+      } else if (platform === 'win32') {
+        if (isDirectory) {
+          execFile('explorer.exe', [targetPath], (err) => {
+            if (err) console.error('[revealInOS] Error opening folder on Windows:', err);
+          });
+        } else {
+          // On Windows, explorer /select,path highlights the file
+          exec(`explorer.exe /select,"${targetPath.replace(/\//g, '\\')}"`, (err) => {
+            if (err) console.error('[revealInOS] Error selecting file in Windows Explorer:', err);
+          });
+        }
+      } else {
+        // Linux / other Unix
+        const openDir = isDirectory ? targetPath : path.dirname(targetPath);
+        execFile('xdg-open', [openDir], (err) => {
+          if (err) console.error('[revealInOS] Error opening via xdg-open:', err);
+        });
+      }
+    } catch (err: any) {
+      console.error('[revealInOS] Execution failure:', err);
+      throw new Error(`Falha ao abrir gerenciador de arquivos do sistema: ${err.message}`);
+    }
+
+    return {
+      success: true,
+      message: `Aberto no gerenciador de arquivos do SO: ${cleanRel || 'Raiz do projeto'}`,
+      fullPath: targetPath,
     };
   }
 }

@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import path from 'node:path';
 import { PROJECTS_DIR } from '../../config/constants.js';
 import { loadConfig, saveConfig, clearWorkspaceChanges } from '../../config/storage.js';
@@ -7,6 +8,7 @@ import {
   commitChanges,
   createAndCheckoutBranch,
   executeGitCommand,
+  getGitLog,
 } from '../../utils/git.js';
 import { computeDiff } from '../../utils/diff.js';
 
@@ -17,23 +19,158 @@ export class PRsService {
     return path.join(PROJECTS_DIR, activeRepoName);
   }
 
-  getPRs() {
+  async getPRs(targetRepoQuery?: string) {
     const cfg = loadConfig();
     const activeRepo = cfg.active_repo;
-    const repoName = activeRepo?.name || 'local';
-    const allPRs = cfg.prs || [];
+    const repoName = targetRepoQuery || activeRepo?.name || 'local';
+    let allPRs = cfg.prs || [];
+
+    // Auto-sync remote GitHub Pull Requests if authenticated and target matches active repo
+    if (cfg.authenticated && cfg.token && activeRepo?.full_name && !activeRepo?.is_local && activeRepo?.name === repoName) {
+      try {
+        const ghRes = await callGitHubAPI(`/repos/${activeRepo.full_name}/pulls?state=all`, cfg.token);
+        if (ghRes.statusCode === 200 && Array.isArray(ghRes.data)) {
+          let modified = false;
+          for (const ghPR of ghRes.data) {
+            const existingIdx = allPRs.findIndex((p: any) =>
+              (p.github_number && p.github_number === ghPR.number) ||
+              (p.github_id && p.github_id === ghPR.id) ||
+              (p.repo_name === repoName && String(p.id) === String(ghPR.number))
+            );
+            const status = ghPR.merged_at ? 'MERGED' : ghPR.state === 'closed' ? 'CLOSED' : 'OPEN';
+            if (existingIdx >= 0) {
+              const existing = allPRs[existingIdx];
+              if (existing.status !== status || !existing.html_url) {
+                existing.status = status;
+                existing.html_url = ghPR.html_url;
+                if (ghPR.merged_at) existing.merged_at = ghPR.merged_at;
+                if (ghPR.closed_at) existing.closed_at = ghPR.closed_at;
+                modified = true;
+              }
+            } else {
+              allPRs.unshift({
+                id: ghPR.number,
+                github_id: ghPR.id,
+                github_number: ghPR.number,
+                repo_name: repoName,
+                title: ghPR.title || `PR #${ghPR.number}`,
+                description: ghPR.body || '',
+                branch: ghPR.head?.ref || '',
+                target_branch: ghPR.base?.ref || 'main',
+                status,
+                created_at: ghPR.created_at,
+                merged_at: ghPR.merged_at,
+                closed_at: ghPR.closed_at,
+                author: ghPR.user?.login ? `@${ghPR.user.login}` : 'GitHub User',
+                approvals: [],
+                type: 'docs',
+                layer: 'Geral',
+                domain: '',
+                files: [],
+                html_url: ghPR.html_url,
+              });
+              modified = true;
+            }
+          }
+          if (modified) {
+            cfg.prs = allPRs;
+            saveConfig(cfg);
+          }
+        }
+      } catch (ghErr) {
+        console.warn('[PRsService] Aviso ao sincronizar PRs do GitHub:', ghErr);
+      }
+    }
+
+    // 1. STRICT ISOLATION: Filter PRs belonging to this specific repository
     const repoPRs = allPRs.filter((p: any) => p.repo_name === repoName || (!p.repo_name && repoName === 'local'));
+
+    // 2. Fetch Git Commits on main as Official Revisions (all changes on main are revisions)
+    const repoDir = this.getRepoDir(repoName);
+    const gitCommits = await getGitLog(repoDir, 50);
+
+    const existingHashes = new Set(repoPRs.map((p: any) => String(p.commit_hash || p.github_number || p.id)));
+    const existingTitles = new Set(repoPRs.map((p: any) => (p.title || '').trim().toLowerCase()));
+
+    const commitRevisions: any[] = [];
+    for (const c of gitCommits) {
+      // Avoid duplicating if commit was already created by a PR
+      if (existingHashes.has(c.hash) || existingHashes.has(c.shortHash) || existingTitles.has((c.message || '').trim().toLowerCase())) {
+        continue;
+      }
+
+      // Retrieve files changed in this commit
+      let commitFiles: any[] = [];
+      try {
+        const numStatRes = await executeGitCommand(`git show --numstat --pretty="" ${c.hash}`, repoDir);
+        if (numStatRes.success && numStatRes.stdout) {
+          commitFiles = numStatRes.stdout.split('\n').filter(Boolean).map((line) => {
+            const parts = line.split('\t');
+            if (parts.length >= 3) {
+              const additions = parseInt(parts[0], 10) || 0;
+              const deletions = parseInt(parts[1], 10) || 0;
+              const filePath = parts[2];
+              return {
+                path: filePath,
+                type: additions > 0 && deletions === 0 ? 'ADDED' : deletions > 0 && additions === 0 ? 'DELETED' : 'MODIFIED',
+                additions,
+                deletions,
+              };
+            }
+            return null;
+          }).filter(Boolean);
+        }
+      } catch (err) {
+        console.warn(`[PRsService] Erro ao obter files do commit ${c.hash}:`, err);
+      }
+
+      commitRevisions.push({
+        id: c.shortHash,
+        short_id: c.shortHash,
+        commit_hash: c.hash,
+        repo_name: repoName,
+        title: c.message,
+        description: `Revisão oficial comitada diretamente na branch main em ${c.date}`,
+        branch: 'main',
+        target_branch: 'main',
+        status: 'MERGED',
+        created_at: c.date,
+        merged_at: c.date,
+        author: c.author ? (c.author.startsWith('@') ? c.author : `@${c.author}`) : 'Git Committer',
+        approvals: ['Oficial (main)'],
+        type: c.message.startsWith('feat') ? 'feat' : c.message.startsWith('fix') ? 'fix' : 'docs',
+        layer: 'Versão Oficial (main)',
+        domain: '',
+        is_direct_commit: true,
+        files: commitFiles,
+        html_url: activeRepo?.html_url ? `${activeRepo.html_url}/commit/${c.hash}` : '',
+      });
+    }
+
+    // Combine: open PRs first, then merged PRs and commit revisions
+    const combinedList = [...repoPRs, ...commitRevisions];
 
     return {
       repo: activeRepo,
-      prs: repoPRs,
+      repo_name: repoName,
+      prs: combinedList,
+      count: combinedList.length,
       governance: cfg.governance || { min_approvals: 1, reviewers: [] },
     };
   }
 
-  generatePRSummary() {
+  async getPRFileDiff(repoName: string, filePath: string, commitHash?: string) {
+    const repoDir = this.getRepoDir(repoName);
+    if (commitHash) {
+      const res = await executeGitCommand(`git show ${commitHash} -- "${filePath}"`, repoDir);
+      return res.stdout || '';
+    }
+    return '';
+  }
+
+  generatePRSummary(repoNameQuery?: string) {
     const cfg = loadConfig();
-    const repoName = cfg.active_repo?.name || 'local';
+    const repoName = repoNameQuery || cfg.active_repo?.name || 'local';
     const changes = cfg.workspace_changes?.[repoName] || [];
 
     if (changes.length === 0) {
@@ -66,10 +203,11 @@ export class PRsService {
     type?: string;
     layer?: string;
     domain?: string;
+    repo?: string;
   }) {
     const cfg = loadConfig();
     const activeRepo = cfg.active_repo;
-    const repoName = activeRepo?.name || 'local';
+    const repoName = payload.repo || activeRepo?.name || 'local';
     const rawChanges = cfg.workspace_changes?.[repoName] || [];
 
     if (rawChanges.length === 0) {

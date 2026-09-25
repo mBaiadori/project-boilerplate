@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { useWorkspace } from '../../context/WorkspaceContext';
 import { useAI } from '../../context/AIContext';
 import { FileTree } from '../../components/explorer/FileTree';
-import { NotionEditor } from '../../components/editor/NotionEditor';
+import { WorkbenchCanvas } from '../../components/editor/WorkbenchCanvas';
 
 const TREE_WIDTH_STORAGE_KEY = 'spec_tree_width';
 const DEFAULT_TREE_WIDTH = 260;
@@ -111,10 +111,11 @@ export const EditorSubView: React.FC<EditorSubViewProps> = ({
               Carregando documento...
             </div>
           ) : (
-            <NotionEditor
+            <WorkbenchCanvas
+              key={activeFile || 'empty'}
+              filePath={activeFile}
               content={fileContent}
               onChange={setFileContent}
-              filePath={activeFile}
               onNavigateFile={(path) => {
                 loadFile(path);
                 onOpenFile?.(path);

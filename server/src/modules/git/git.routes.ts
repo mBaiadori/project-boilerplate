@@ -125,7 +125,32 @@ export async function gitRoutes(app: FastifyInstance) {
     }
   });
 
-  // 11. Get Git Diagnostic / Version
+  // 11. Get Whats New Summary
+  app.get('/api/git/whats-new', async (req, reply) => {
+    try {
+      const { lastSeenHash } = req.query as { lastSeenHash?: string };
+      const data = await gitService.getWhatsNew(lastSeenHash);
+      return data;
+    } catch (err: any) {
+      return reply.status(500).send({ error: err.message || 'Erro ao obter novidades da equipe' });
+    }
+  });
+
+  // 12. Get Whats New Single File Diff
+  app.get('/api/git/whats-new-diff', async (req, reply) => {
+    try {
+      const { path: filePath, lastSeenHash } = req.query as { path: string; lastSeenHash?: string };
+      if (!filePath) {
+        return reply.status(400).send({ error: 'Parâmetro path é obrigatório' });
+      }
+      const data = await gitService.getWhatsNewDiff(filePath, lastSeenHash);
+      return data;
+    } catch (err: any) {
+      return reply.status(500).send({ error: err.message || 'Erro ao obter comparativo do documento' });
+    }
+  });
+
+  // 13. Get Git Diagnostic / Version
   app.get('/api/git/diagnostic', async (req, reply) => {
     try {
       const res = await gitService.getGitVersion();

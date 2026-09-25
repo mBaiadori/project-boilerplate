@@ -2,6 +2,8 @@ import React, { useState } from "react";
 
 export type SubViewType =
   | "editor"
+  | "edits"
+  | "versions"
   | "dictionary"
   | "wiki"
   | "templates"
@@ -11,11 +13,13 @@ export type SubViewType =
 interface SidebarNavProps {
   activeView: SubViewType;
   onSelectView: (view: SubViewType) => void;
+  hasUnreadWhatsNew?: boolean;
 }
 
 export const SidebarNav: React.FC<SidebarNavProps> = ({
   activeView,
   onSelectView,
+  hasUnreadWhatsNew = false,
 }) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
 
@@ -78,7 +82,45 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
           <span className="nav-label">Documentos</span>
         </button>
 
-        {/* 2. Templates */}
+        {/* 2. Edições */}
+        <button
+          className={`dash-nav-item ${activeView === "edits" || activeView === "versions" ? "active" : ""}`}
+          data-view="edits"
+          title="Central de Edições"
+          onClick={() => onSelectView("edits")}
+          style={{ position: "relative" }}
+        >
+          <span
+            className="material-symbols-outlined nav-icon"
+            style={{
+              fontSize: "21px",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            history_edu
+          </span>
+          <span className="nav-label">Edições</span>
+          {hasUnreadWhatsNew && (
+            <span
+              style={{
+                width: "7px",
+                height: "7px",
+                borderRadius: "50%",
+                backgroundColor: "#22c55e",
+                boxShadow: "0 0 6px #22c55e",
+                position: "absolute",
+                top: "50%",
+                transform: "translateY(-50%)",
+                right: "14px",
+              }}
+              title="Novidades não visualizadas!"
+            />
+          )}
+        </button>
+
+        {/* 3. Templates */}
         <button
           className={`dash-nav-item ${activeView === "templates" ? "active" : ""}`}
           data-view="templates"

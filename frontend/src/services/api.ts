@@ -2,7 +2,7 @@
 import type { 
   WorkspaceStatus, Repo, WorkspaceChange, TreeNode, 
   PR, TemplateItem, TutorialItem, AISettingsState, DictionaryTerm, User,
-  GitStatus, GitCommitInfo, DocumentMetadataItem
+  GitStatus, GitCommitInfo, DocumentMetadataItem, WhatsNewSummary
 } from '../types';
 
 export interface ApiResponse<T = any> {
@@ -74,6 +74,25 @@ export const API = {
     return { ok: res.ok, data: await res.json() };
   },
 
+  async importFiles(payload: {
+    target_folder?: string;
+    files: Array<{
+      name: string;
+      relativePath?: string;
+      content?: string;
+      base64?: string;
+      meta?: any;
+    }>;
+    repo?: string;
+  }): Promise<ApiResponse<{ success: boolean; importedFiles: Array<{ path: string; name: string; isBinary: boolean; size: number }>; errors?: string[]; error?: string; tree?: TreeNode[] }>> {
+    const res = await fetch('/api/project/files/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
   async deleteProjectFile(path: string): Promise<ApiResponse<any>> {
     const res = await fetch(`/api/project/file?path=${encodeURIComponent(path)}`, {
       method: 'DELETE'
@@ -90,8 +109,17 @@ export const API = {
     return { ok: res.ok, data: await res.json() };
   },
 
-  async getProjectTree(): Promise<{ repo: Repo; tree: TreeNode[] }> {
-    const res = await fetch('/api/project/tree');
+  async openInOS(path?: string, repo?: string): Promise<ApiResponse<{ success?: boolean; message?: string; fullPath?: string; error?: string }>> {
+    const res = await fetch('/api/project/open-in-os', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path, repo })
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async getProjectTree(repo?: string): Promise<{ repo: Repo; tree: TreeNode[] }> {
+    const res = await fetch(`/api/project/tree${repo ? `?repo=${encodeURIComponent(repo)}` : ''}`);
     return res.json();
   },
 
@@ -170,15 +198,16 @@ export const API = {
     return this.sendChatMessage(payload);
   },
 
-  async generatePRSummaryAI(): Promise<ApiResponse<{ success?: boolean; title?: string; description?: string }>> {
+  async generatePRSummaryAI(repo?: string): Promise<ApiResponse<{ success?: boolean; title?: string; description?: string }>> {
     const res = await fetch('/api/workspace/generate-pr-summary', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(repo ? { repo } : {})
     });
     return { ok: res.ok, data: await res.json() };
   },
 
-  async createUnifiedPR(payload: { title: string; description: string }): Promise<ApiResponse<any>> {
+  async createUnifiedPR(payload: { title: string; description: string; repo?: string }): Promise<ApiResponse<any>> {
     const res = await fetch('/api/workspace/create-pr', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -357,12 +386,20 @@ export const API = {
   },
 
   // PRs
-  async getPRs(): Promise<{ prs: PR[] }> {
-    const res = await fetch('/api/prs');
+  async getPRs(repo?: string): Promise<{ 
+    prs: PR[]; 
+    repo?: Repo; 
+    selected_repo?: string; 
+    all_prs_count?: number; 
+    available_repos?: Array<{ name: string; count: number }>;
+    governance?: any; 
+  }> {
+    const query = repo ? `?repo=${encodeURIComponent(repo)}` : '';
+    const res = await fetch(`/api/prs${query}`);
     return res.json();
   },
 
-  async createPR(payload: { title: string; content?: string; path?: string }): Promise<ApiResponse<any>> {
+  async createPR(payload: { title: string; content?: string; path?: string; repo?: string }): Promise<ApiResponse<any>> {
     const res = await fetch('/api/prs/create', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -371,7 +408,7 @@ export const API = {
     return { ok: res.ok, data: await res.json() };
   },
 
-  async approvePR(id: number): Promise<ApiResponse<any>> {
+  async approvePR(id: number | string): Promise<ApiResponse<any>> {
     const res = await fetch('/api/prs/approve', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -380,7 +417,7 @@ export const API = {
     return { ok: res.ok, data: await res.json() };
   },
 
-  async mergePR(id: number): Promise<ApiResponse<any>> {
+  async mergePR(id: number | string): Promise<ApiResponse<any>> {
     const res = await fetch('/api/prs/merge', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -389,12 +426,21 @@ export const API = {
     return { ok: res.ok, data: await res.json() };
   },
 
-  async rejectPR(id: number, reason?: string): Promise<ApiResponse<any>> {
+  async rejectPR(id: number | string, reason?: string): Promise<ApiResponse<any>> {
     const res = await fetch('/api/prs/reject', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id, reason })
     });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async getPRFileDiff(params: { path: string; commit?: string; repo?: string }): Promise<ApiResponse<{ diff: string }>> {
+    const query = new URLSearchParams();
+    query.set('path', params.path);
+    if (params.commit) query.set('commit', params.commit);
+    if (params.repo) query.set('repo', params.repo);
+    const res = await fetch(`/api/prs/file-diff?${query.toString()}`);
     return { ok: res.ok, data: await res.json() };
   },
 
@@ -530,6 +576,19 @@ export const API = {
 
   async getGitDiagnostic(): Promise<ApiResponse<{ version: string; installed: boolean }>> {
     const res = await fetch('/api/git/diagnostic');
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async getWhatsNew(lastSeenHash?: string): Promise<ApiResponse<WhatsNewSummary>> {
+    const url = lastSeenHash ? `/api/git/whats-new?lastSeenHash=${encodeURIComponent(lastSeenHash)}` : '/api/git/whats-new';
+    const res = await fetch(url);
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async getWhatsNewFileDiff(path: string, lastSeenHash?: string): Promise<ApiResponse<{ diff: string }>> {
+    const query = new URLSearchParams({ path });
+    if (lastSeenHash) query.set('lastSeenHash', lastSeenHash);
+    const res = await fetch(`/api/git/whats-new-diff?${query.toString()}`);
     return { ok: res.ok, data: await res.json() };
   },
 

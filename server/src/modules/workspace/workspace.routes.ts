@@ -4,9 +4,10 @@ import { docsMetadataService } from './docs-metadata.service.js';
 import { loadConfig } from '../../config/storage.js';
 
 export async function workspaceRoutes(fastify: FastifyInstance) {
-  fastify.get('/api/project/tree', async (_request, reply) => {
+  fastify.get('/api/project/tree', async (request, reply) => {
     try {
-      return reply.send(workspaceService.getTree());
+      const query = request.query as { repo?: string };
+      return reply.send(workspaceService.getTree(query.repo));
     } catch (err: any) {
       return reply.status(500).send({ error: err.message });
     }
@@ -20,6 +21,23 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
     }
     try {
       return reply.send(workspaceService.getFile(filePath));
+    } catch (err: any) {
+      return reply.status(404).send({ error: err.message });
+    }
+  });
+
+  fastify.get('/api/project/file/raw', async (request, reply) => {
+    const query = request.query as { path?: string };
+    const filePath = query.path?.trim();
+    if (!filePath) {
+      return reply.status(400).send({ error: 'Parâmetro path é obrigatório' });
+    }
+    try {
+      const { buffer, mimeType, filename } = workspaceService.getRawFile(filePath);
+      return reply
+        .header('Content-Type', mimeType)
+        .header('Content-Disposition', `inline; filename="${encodeURIComponent(filename)}"`)
+        .send(buffer);
     } catch (err: any) {
       return reply.status(404).send({ error: err.message });
     }
@@ -144,6 +162,33 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
     }
   });
 
+  fastify.post('/api/project/files/import', async (request, reply) => {
+    const body = request.body as {
+      target_folder?: string;
+      targetFolder?: string;
+      files?: Array<{
+        name: string;
+        relativePath?: string;
+        content?: string;
+        base64?: string;
+        meta?: any;
+      }>;
+      repo?: string;
+    };
+    try {
+      const targetFolder = body.target_folder ?? body.targetFolder ?? '';
+      const files = body.files || [];
+      if (!Array.isArray(files) || files.length === 0) {
+        return reply.status(400).send({ error: 'Nenhum arquivo enviado para importação.' });
+      }
+
+      const result = workspaceService.importFiles(targetFolder, files, body.repo);
+      return reply.send(result);
+    } catch (err: any) {
+      return reply.status(400).send({ error: err.message });
+    }
+  });
+
   fastify.post('/api/project/file/rename', async (request, reply) => {
     const body = request.body as { old_path?: string; new_path?: string; oldPath?: string; newPath?: string };
     const oldPath = body.old_path || body.oldPath || '';
@@ -169,8 +214,9 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
   });
 
   fastify.post('/api/workspace/discard', async (request, reply) => {
-    const body = request.body as { paths?: string[] };
-    return reply.send(workspaceService.discardChanges(body?.paths));
+    const body = request.body as { path?: string; paths?: string[] };
+    const paths = body?.paths || (body?.path ? [body.path] : undefined);
+    return reply.send(await workspaceService.discardChanges(paths));
   });
 
   fastify.get('/api/project/document-context', async (request, reply) => {
@@ -227,6 +273,26 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
         path: fullRelPath,
         tree: created.tree,
       });
+    } catch (err: any) {
+      return reply.status(400).send({ error: err.message });
+    }
+  });
+
+  fastify.post('/api/project/open-in-os', async (request, reply) => {
+    const body = request.body as { path?: string; repo?: string };
+    try {
+      const result = workspaceService.revealInOS(body?.path, body?.repo);
+      return reply.send(result);
+    } catch (err: any) {
+      return reply.status(400).send({ error: err.message });
+    }
+  });
+
+  fastify.post('/api/project/reveal-in-os', async (request, reply) => {
+    const body = request.body as { path?: string; repo?: string };
+    try {
+      const result = workspaceService.revealInOS(body?.path, body?.repo);
+      return reply.send(result);
     } catch (err: any) {
       return reply.status(400).send({ error: err.message });
     }

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import type { Repo, WorkspaceChange, TreeNode, GitStatus, GitCommitInfo, DocumentMetadataItem, ProjectMetadataOptions } from '../types';
+import type { Repo, WorkspaceChange, TreeNode, GitStatus, GitCommitInfo, DocumentMetadataItem, ProjectMetadataOptions, WhatsNewSummary } from '../types';
 import { API } from '../services/api';
 import { DraftStore } from '../services/draft-store';
 import { useAuth } from './AuthContext';
@@ -34,13 +34,18 @@ interface WorkspaceContextType {
   isLoadingFile: boolean;
   isLoading: boolean;
   isLoadingWorkspace: boolean;
+  isLoadingTree: boolean;
   hasUnsavedChanges: boolean;
   gitStatus: GitStatus | null;
   gitLog: GitCommitInfo[];
+  whatsNewSummary: WhatsNewSummary | null;
+  hasUnreadWhatsNew: boolean;
+  refreshWhatsNew: () => Promise<void>;
+  markWhatsNewAsSeen: () => void;
   loadRepos: () => Promise<void>;
   selectRepo: (repo: Repo, initialFile?: string) => Promise<void>;
   selectRepoByName: (repoName: string, initialFile?: string) => Promise<boolean>;
-  loadTree: () => Promise<void>;
+  loadTree: (targetRepo?: string) => Promise<void>;
   loadFile: (filePath: string) => Promise<void>;
   setFileContent: (content: string) => void;
   setFileMetadata: (meta: Record<string, any>) => void;
@@ -80,8 +85,11 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [isLoadingFile, setIsLoadingFile] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingWorkspace, setIsLoadingWorkspace] = useState(false);
+  const [isLoadingTree, setIsLoadingTree] = useState(false);
   const [gitStatus, setGitStatus] = useState<GitStatus | null>(null);
   const [gitLog, setGitLog] = useState<GitCommitInfo[]>([]);
+  const [whatsNewSummary, setWhatsNewSummary] = useState<WhatsNewSummary | null>(null);
+  const [hasUnreadWhatsNew, setHasUnreadWhatsNew] = useState<boolean>(false);
   const [projectMetaOptions, setProjectMetaOptions] = useState<ProjectMetadataOptions | null>(null);
   const [projectConfig, setProjectConfig] = useState<any>(null);
 
@@ -90,6 +98,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const originalContentRef = useRef<string>('');
   const fileMetadataRef = useRef<Record<string, any>>({});
   const activeRepoRef = useRef<Repo | null>(null);
+  const inFlightRepoRef = useRef<string | null>(null);
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const statusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -227,13 +236,17 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   }, [performDiskSave]);
 
-  const loadTree = useCallback(async () => {
-    if (!activeRepoRef.current) return;
+  const loadTree = useCallback(async (targetRepo?: string) => {
+    const repo = targetRepo || activeRepoRef.current?.name;
+    if (!repo) return;
+    setIsLoadingTree(true);
     try {
-      const data = await API.getProjectTree();
+      const data = await API.getProjectTree(repo);
       setTree(data.tree || []);
     } catch (err) {
       console.error('[WorkspaceContext] Erro ao buscar árvore:', err);
+    } finally {
+      setIsLoadingTree(false);
     }
   }, []);
 
@@ -243,12 +256,6 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     const hashIndex = rawFilePath.indexOf('#');
     const cleanPath = hashIndex !== -1 ? rawFilePath.slice(0, hashIndex) : rawFilePath;
     const hash = hashIndex !== -1 ? rawFilePath.slice(hashIndex) : '';
-
-    const isMd = cleanPath.endsWith('.md') || cleanPath.endsWith('.markdown');
-    if (!isMd) {
-      console.warn('[WorkspaceContext] Arquivo não é markdown, abertura ignorada:', cleanPath);
-      return;
-    }
 
     if (hash) {
       try {
@@ -272,6 +279,12 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     setIsLoadingFile(true);
     setActiveFile(cleanPath);
     activeFileRef.current = cleanPath;
+    setFileContentState('');
+    fileContentRef.current = '';
+    setOriginalContent('');
+    originalContentRef.current = '';
+    setFileMetadataState({});
+    fileMetadataRef.current = {};
     try {
       const data = await API.getProjectFile(cleanPath);
       if (!data || (data as any).error) {
@@ -409,40 +422,93 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     await updateFileMetadata({ title: newTitle });
   }, [updateFileMetadata]);
 
-  const selectRepo = async (repo: Repo, initialFile?: string) => {
+  const refreshWhatsNew = useCallback(async () => {
+    const repoName = activeRepoRef.current?.name || 'default';
+    const lastSeenKey = `spec_whats_new_seen_${repoName}`;
+    const lastSeenHash = localStorage.getItem(lastSeenKey) || undefined;
+
+    try {
+      const res = await API.getWhatsNew(lastSeenHash);
+      if (res.ok && res.data) {
+        setWhatsNewSummary(res.data);
+        if (res.data.hasNewUpdates && res.data.latestHash && res.data.latestHash !== lastSeenHash) {
+          setHasUnreadWhatsNew(true);
+        } else {
+          setHasUnreadWhatsNew(false);
+        }
+      }
+    } catch (e) {
+      console.warn('[WorkspaceContext] Erro ao carregar novidades da equipe:', e);
+    }
+  }, []);
+
+  const markWhatsNewAsSeen = useCallback(() => {
+    const repoName = activeRepoRef.current?.name || 'default';
+    const lastSeenKey = `spec_whats_new_seen_${repoName}`;
+    if (whatsNewSummary?.latestHash) {
+      localStorage.setItem(lastSeenKey, whatsNewSummary.latestHash);
+    }
+    setHasUnreadWhatsNew(false);
+    refreshWhatsNew();
+  }, [whatsNewSummary, refreshWhatsNew]);
+
+  const selectRepo = useCallback(async (repo: Repo, initialFile?: string) => {
+    if (!repo || !repo.name) return;
+    if (inFlightRepoRef.current === repo.name) {
+      return;
+    }
+    inFlightRepoRef.current = repo.name;
     setIsLoadingWorkspace(true);
+    setIsLoadingTree(true);
     try {
       await flushPendingSave();
       setActiveRepo(repo);
       activeRepoRef.current = repo;
+
+      // Clear previous document states if changing to a different repo
+      setActiveFile('');
+      activeFileRef.current = '';
+      setFileContentState('');
+      fileContentRef.current = '';
+      setOriginalContent('');
+      originalContentRef.current = '';
+      setFileMetadataState({});
+      fileMetadataRef.current = {};
+
       await API.selectRepo(repo);
-      const data = await API.getProjectTree();
+      const data = await API.getProjectTree(repo.name);
       setTree(data.tree || []);
-      await loadProjectMetadataOptions();
-      await loadProjectConfig();
-      await refreshPendingChanges();
-      await refreshGitStatus();
-      await refreshGitLog(15);
+
+      await Promise.all([
+        loadProjectMetadataOptions(),
+        loadProjectConfig(),
+        refreshPendingChanges(),
+        refreshGitStatus(),
+        refreshGitLog(15),
+        refreshWhatsNew()
+      ]);
 
       const fileToOpen = initialFile || findFirstMdFile(data.tree || []);
       if (fileToOpen) {
         await loadFile(fileToOpen);
-      } else {
-        setActiveFile('');
-        activeFileRef.current = '';
-        setFileContentState('');
-        fileContentRef.current = '';
-        setOriginalContent('');
-        originalContentRef.current = '';
-        setFileMetadataState({});
-        fileMetadataRef.current = {};
       }
     } finally {
+      inFlightRepoRef.current = null;
+      setIsLoadingTree(false);
       setIsLoadingWorkspace(false);
     }
-  };
+  }, [
+    flushPendingSave,
+    loadProjectMetadataOptions,
+    loadProjectConfig,
+    refreshPendingChanges,
+    refreshGitStatus,
+    refreshGitLog,
+    refreshWhatsNew,
+    loadFile
+  ]);
 
-  const selectRepoByName = async (repoName: string, initialFile?: string): Promise<boolean> => {
+  const selectRepoByName = useCallback(async (repoName: string, initialFile?: string): Promise<boolean> => {
     let currentRepos = repos;
     if (currentRepos.length === 0) {
       try {
@@ -464,7 +530,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     const fallbackRepo: Repo = { id: 0, name: repoName, full_name: repoName, is_local: true };
     await selectRepo(fallbackRepo, initialFile);
     return true;
-  };
+  }, [repos, selectRepo]);
 
   const saveCurrentFile = async (metaOverride?: Record<string, any>) => {
     const meta = metaOverride !== undefined ? metaOverride : fileMetadataRef.current;
@@ -476,10 +542,16 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     await API.discardWorkspaceChanges(path || null);
     if (path && activeRepo) {
       DraftStore.clearDocDraft(activeRepo.name, path);
+    } else if (!path && activeRepo) {
+      DraftStore.clearDocDraft(activeRepo.name, activeFileRef.current);
     }
-    await refreshPendingChanges();
-    if (path === activeFile || (!path && activeFile)) {
-      await loadFile(activeFile);
+    await Promise.all([
+      refreshPendingChanges(),
+      refreshGitStatus(),
+      loadTree()
+    ]);
+    if (path === activeFileRef.current || (!path && activeFileRef.current)) {
+      await loadFile(activeFileRef.current);
     }
   };
 
@@ -489,6 +561,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       await refreshPendingChanges();
       await refreshGitStatus();
       await refreshGitLog(15);
+      await refreshWhatsNew();
     }
     return res.data;
   };
@@ -499,6 +572,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       await refreshPendingChanges();
       await refreshGitStatus();
       await refreshGitLog(15);
+      await refreshWhatsNew();
       await loadTree();
     }
     return res.data;
@@ -509,6 +583,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     if (res.ok) {
       await refreshGitStatus();
       await refreshGitLog(15);
+      await refreshWhatsNew();
       await loadTree();
     }
     return res.data;
@@ -570,6 +645,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         refreshPendingChanges();
         loadTree();
         refreshGitStatus();
+        refreshWhatsNew();
       });
     } catch (e) {
       console.warn('[WorkspaceContext] SSE não disponível:', e);
@@ -578,7 +654,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     return () => {
       if (evtSource) evtSource.close();
     };
-  }, [isAuthenticated, loadRepos, refreshPendingChanges, loadTree, refreshGitStatus]);
+  }, [isAuthenticated, loadRepos, refreshPendingChanges, loadTree, refreshGitStatus, refreshWhatsNew]);
 
   return (
     <WorkspaceContext.Provider
@@ -597,9 +673,14 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         isLoadingFile,
         isLoading,
         isLoadingWorkspace,
+        isLoadingTree,
         hasUnsavedChanges,
         gitStatus,
         gitLog,
+        whatsNewSummary,
+        hasUnreadWhatsNew,
+        refreshWhatsNew,
+        markWhatsNewAsSeen,
         loadRepos,
         selectRepo,
         selectRepoByName,

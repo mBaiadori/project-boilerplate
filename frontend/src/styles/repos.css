@@ -615,47 +615,6 @@
   }
 }
 
-/* Top Progress Banner */
-.repos-top-loading-banner {
-  position: relative;
-  background: var(--md-sys-color-surface, #ffffff);
-  border: 1px solid var(--md-sys-color-primary, #1a73e8);
-  border-radius: var(--md-shape-corner-md, 12px);
-  box-shadow: var(--md-sys-elevation-2, 0 4px 12px rgba(26, 115, 232, 0.15));
-  overflow: hidden;
-  animation: fadeIn 0.2s ease-out;
-}
-
-.repos-linear-progress-track {
-  width: 100%;
-  height: 3.5px;
-  background: var(--md-sys-color-primary-container, #d2e3fc);
-  position: relative;
-  overflow: hidden;
-}
-
-.repos-linear-progress-bar {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  background: var(--md-sys-color-primary, #1a73e8);
-  will-change: left, right;
-  animation: indeterminate-progress 1.5s cubic-bezier(0.65, 0.815, 0.735, 0.395) infinite;
-}
-
-.repos-loading-content {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 18px;
-  font-size: 13.5px;
-  color: var(--md-sys-color-on-surface, #202124);
-}
-
-.repos-loading-label strong {
-  color: var(--md-sys-color-primary, #1a73e8);
-}
-
 /* Card Loading State */
 .repo-card.is-opening {
   border-color: var(--md-sys-color-primary, #1a73e8) !important;

@@ -54,6 +54,7 @@ export interface TreeNode {
   path: string;
   type: 'file' | 'directory' | 'dir' | string;
   children?: TreeNode[];
+  title?: string;
   is_directory?: boolean;
   status?: string;
   badge?: string;
@@ -85,18 +86,40 @@ export interface ProjectMetadataOptions {
 }
 
 export interface PR {
-  id: number;
+  id: number | string;
+  repo_name?: string;
   repo_full_name?: string;
+  github_id?: number;
+  github_number?: number;
   title: string;
   description: string;
   file_path?: string;
   changes?: WorkspaceChange[];
+  files?: Array<{
+    path: string;
+    type?: string;
+    additions?: number;
+    deletions?: number;
+    diff_text?: string;
+    old_content?: string;
+    new_content?: string;
+  }>;
   branch: string;
+  target_branch?: string;
   author: string;
   status: 'OPEN' | 'MERGED' | 'CLOSED' | 'open' | 'merged' | 'closed' | string;
   approvals: string[];
   created_at: string;
   merged_at?: string;
+  closed_at?: string;
+  rejection_reason?: string;
+  type?: string;
+  layer?: string;
+  domain?: string;
+  html_url?: string;
+  is_direct_commit?: boolean;
+  commit_hash?: string;
+  short_id?: string;
 }
 
 export interface ADR {
@@ -209,5 +232,39 @@ export interface GitCommitInfo {
   author: string;
   date: string;
   message: string;
+}
+
+export interface WhatsNewItem {
+  hash: string;
+  shortHash: string;
+  author: string;
+  date: string;
+  message: string;
+}
+
+export interface WhatsNewFile {
+  path: string;
+  status: 'A' | 'M' | 'D';
+  statusLabel: string;
+  additions: number;
+  deletions: number;
+}
+
+export interface WhatsNewProposal {
+  id: string | number;
+  title: string;
+  author?: string;
+  commitHash?: string;
+}
+
+export interface WhatsNewSummary {
+  hasNewUpdates: boolean;
+  latestHash: string;
+  lastSeenHash?: string;
+  totalNewCommits: number;
+  commits: WhatsNewItem[];
+  files: WhatsNewFile[];
+  proposals: WhatsNewProposal[];
+  summaryMessage: string;
 }
 

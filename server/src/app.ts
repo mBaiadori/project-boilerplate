@@ -20,6 +20,7 @@ import { gitRoutes } from './modules/git/git.routes.js';
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = fastify({
+    bodyLimit: 50 * 1024 * 1024, // 50MB limit for importing documents, spreadsheets, PDFs and media
     logger: {
       level: 'info',
       transport: {

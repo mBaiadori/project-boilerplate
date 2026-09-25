@@ -2,12 +2,21 @@ import { FastifyInstance } from 'fastify';
 import { prsService } from './prs.service.js';
 
 export async function prsRoutes(fastify: FastifyInstance) {
-  fastify.get('/api/prs', async (_request, reply) => {
-    return reply.send(prsService.getPRs());
+  fastify.get('/api/prs', async (request, reply) => {
+    const query = request.query as { repo?: string };
+    const result = await prsService.getPRs(query.repo);
+    return reply.send(result);
   });
 
-  fastify.post('/api/workspace/generate-pr-summary', async (_request, reply) => {
-    return reply.send(prsService.generatePRSummary());
+  fastify.get('/api/prs/file-diff', async (request, reply) => {
+    const query = request.query as { repo?: string; path?: string; commit?: string };
+    const diff = await prsService.getPRFileDiff(query.repo || '', query.path || '', query.commit);
+    return reply.send({ diff });
+  });
+
+  fastify.post('/api/workspace/generate-pr-summary', async (request, reply) => {
+    const body = request.body as { repo?: string } | undefined;
+    return reply.send(prsService.generatePRSummary(body?.repo));
   });
 
   fastify.post('/api/workspace/create-pr', async (request, reply) => {

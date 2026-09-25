@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { API } from '../../services/api';
 
 interface DocActionBarProps {
   filePath: string;
@@ -23,6 +24,19 @@ export const DocActionBar: React.FC<DocActionBarProps> = ({
   const showNotification = (msg: string) => {
     setCopiedNotification(msg);
     setTimeout(() => setCopiedNotification(null), 2000);
+  };
+
+  const handleOpenInOS = async () => {
+    try {
+      const res = await API.openInOS(filePath);
+      if (res.ok) {
+        showNotification('Aberto no PC!');
+      } else {
+        alert(res.data?.error || 'Não foi possível abrir o arquivo no sistema operacional.');
+      }
+    } catch {
+      alert('Erro ao comunicar com o servidor.');
+    }
   };
 
   const handleCopyPath = () => {
@@ -117,6 +131,16 @@ export const DocActionBar: React.FC<DocActionBarProps> = ({
           >
             <span className="material-symbols-outlined icon-xs">download</span>
             Exportar
+          </button>
+          <button
+            type="button"
+            className="btn btn-ghost btn-xs"
+            onClick={handleOpenInOS}
+            title="Abrir no gerenciador de arquivos do PC (Finder / Explorer)"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+          >
+            <span className="material-symbols-outlined icon-xs">folder_open</span>
+            Abrir no PC
           </button>
           <button
             type="button"

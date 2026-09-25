@@ -80,9 +80,9 @@ export class ReposService {
       default_branch: repo.default_branch || 'main',
     };
 
-    ensureDefaultRepoFiles(repo.name);
     const repoDir = path.join(PROJECTS_DIR, repo.name);
-    await ensureGitRepo(repoDir, cfg.user, repo.html_url, cfg.token);
+    await ensureGitRepo(repoDir, cfg.user, repo.html_url, cfg.token, repo.name);
+    ensureDefaultRepoFiles(repo.name);
     saveConfig(cfg);
 
     return {

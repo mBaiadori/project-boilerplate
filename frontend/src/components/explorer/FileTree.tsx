@@ -1,8 +1,3 @@
-// =============================================================================
-// COMPONENT: ÁRVORE DE DOCUMENTOS & EXPLORER (VS CODE-GRADE)
-// Barra de busca no topo, barra de ícones de ação abaixo e suporte total a arquivos
-// =============================================================================
-
 import React, { useState, useMemo, useRef, useEffect } from "react";
 import {
   Folder,
@@ -17,9 +12,14 @@ import {
   X,
   FileText,
   FileCode,
+  FileSpreadsheet,
+  Image as ImageIcon,
   AlertCircle,
   ChevronsDownUp,
+  ChevronsUpDown,
   Search,
+  Upload,
+  Laptop,
 } from "lucide-react";
 import type { TreeNode, TemplateItem } from "../../types";
 import { useWorkspace } from "../../context/WorkspaceContext";
@@ -44,6 +44,147 @@ interface DraggedItem {
   isFolder: boolean;
 }
 
+interface ScannedFile {
+  file: File;
+  relativePath: string;
+}
+
+// Utility: Recursively scan files and folders dropped from OS / Finder
+const scanDataTransferItems = async (items: DataTransferItemList): Promise<ScannedFile[]> => {
+  const result: ScannedFile[] = [];
+
+  const traverseEntry = async (entry: any, currentPath: string = "") => {
+    if (!entry) return;
+    if (entry.isFile) {
+      try {
+        const file = await new Promise<File>((resolve, reject) => {
+          entry.file(resolve, reject);
+        });
+        const rel = currentPath ? `${currentPath}/${entry.name}` : entry.name;
+        result.push({ file, relativePath: rel });
+      } catch (err) {
+        console.warn("[FileTree] Falha ao ler arquivo de entrada:", entry.name, err);
+      }
+    } else if (entry.isDirectory) {
+      const dirReader = entry.createReader();
+      const readAllEntries = async (): Promise<any[]> => {
+        let allEntries: any[] = [];
+        let batch: any[] = [];
+        do {
+          batch = await new Promise<any[]>((resolve, reject) => {
+            dirReader.readEntries(resolve, reject);
+          });
+          allEntries = allEntries.concat(batch);
+        } while (batch && batch.length > 0);
+        return allEntries;
+      };
+
+      try {
+        const entries = await readAllEntries();
+        const nextPath = currentPath ? `${currentPath}/${entry.name}` : entry.name;
+        for (const childEntry of entries) {
+          await traverseEntry(childEntry, nextPath);
+        }
+      } catch (err) {
+        console.warn("[FileTree] Falha ao ler pasta:", entry.name, err);
+      }
+    }
+  };
+
+  const promises: Promise<any>[] = [];
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    if (item.kind === "file") {
+      const entry = (item as any).webkitGetAsEntry ? (item as any).webkitGetAsEntry() : null;
+      if (entry) {
+        promises.push(traverseEntry(entry));
+      } else {
+        const file = item.getAsFile();
+        if (file) {
+          result.push({ file, relativePath: file.name });
+        }
+      }
+    }
+  }
+
+  await Promise.all(promises);
+  return result;
+};
+
+// Utility: Process FileList from input
+const filesToScannedList = (fileList: FileList): ScannedFile[] => {
+  const result: ScannedFile[] = [];
+  for (let i = 0; i < fileList.length; i++) {
+    const file = fileList[i];
+    const rel = (file as any).webkitRelativePath || file.name;
+    result.push({ file, relativePath: rel });
+  }
+  return result;
+};
+
+// Utility: Convert files into Text or Base64 payloads
+const processFilesForUpload = async (scannedFiles: ScannedFile[]) => {
+  const textExts = [
+    "md", "markdown", "txt", "json", "yaml", "yml", "csv", "tsv",
+    "js", "ts", "jsx", "tsx", "html", "css", "scss", "svg", "xml",
+    "env", "sh", "py", "sql", "gitignore", "conf", "ini", "toml"
+  ];
+
+  const payload: Array<{
+    name: string;
+    relativePath: string;
+    content?: string;
+    base64?: string;
+  }> = [];
+
+  for (const item of scannedFiles) {
+    const file = item.file;
+    const name = file.name;
+    const ext = name.includes(".") ? name.split(".").pop()?.toLowerCase() || "" : "";
+    const isText = textExts.includes(ext) || file.type.startsWith("text/");
+
+    if (isText) {
+      try {
+        const text = await file.text();
+        payload.push({
+          name,
+          relativePath: item.relativePath,
+          content: text,
+        });
+      } catch (err) {
+        const b64 = await readFileAsBase64(file);
+        payload.push({
+          name,
+          relativePath: item.relativePath,
+          base64: b64,
+        });
+      }
+    } else {
+      const b64 = await readFileAsBase64(file);
+      payload.push({
+        name,
+        relativePath: item.relativePath,
+        base64: b64,
+      });
+    }
+  }
+
+  return payload;
+};
+
+const readFileAsBase64 = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const res = reader.result as string;
+      const commaIdx = res.indexOf(",");
+      resolve(commaIdx >= 0 ? res.substring(commaIdx + 1) : res);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+};
+
 export const FileTree: React.FC<FileTreeProps> = ({
   onOpenFile,
   isCollapsed,
@@ -58,24 +199,36 @@ export const FileTree: React.FC<FileTreeProps> = ({
     pendingChanges,
     refreshPendingChanges,
     refreshGitStatus,
+    isLoadingWorkspace,
+    isLoadingTree,
   } = useWorkspace();
+  const isTreeLoading = Boolean(isLoadingWorkspace || isLoadingTree);
   const [searchTerm, setSearchTerm] = useState("");
   const [collapsedFolders, setCollapsedFolders] = useState<
     Record<string, boolean>
   >({});
   const [selectedFolder, setSelectedFolder] = useState<string>("");
 
-  // Drag and Drop State
+  // Drag and Drop State (Internal Move & External Import)
   const [draggedItem, setDraggedItem] = useState<DraggedItem | null>(null);
   const [dragOverTarget, setDragOverTarget] = useState<string | null>(null);
   const [isDragOverRoot, setIsDragOverRoot] = useState(false);
+  const [isExternalDragActive, setIsExternalDragActive] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const [importProgressMessage, setImportProgressMessage] = useState("");
+  const [targetUploadFolder, setTargetUploadFolder] = useState<string>("");
   const dragHoverTimerRef = useRef<any>(null);
+  const hoveredFolderForExpansionRef = useRef<string | null>(null);
+  const externalDragCounterRef = useRef<number>(0);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const folderInputRef = useRef<HTMLInputElement>(null);
 
   // VS Code Inline Creation State
   const [inlineCreating, setInlineCreating] =
     useState<InlineCreatingState | null>(null);
   const [inlineValue, setInlineValue] = useState("");
   const inlineInputRef = useRef<HTMLInputElement>(null);
+  const isSubmittingInlineRef = useRef(false);
 
   // Template Picker State
   const [selectedTemplate, setSelectedTemplate] = useState<TemplateItem | null>(
@@ -160,6 +313,139 @@ export const FileTree: React.FC<FileTreeProps> = ({
     };
   }, [isCollapsed, onToggleCollapse, searchTerm]);
 
+  // Escape key & global drag cancel listener
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setIsExternalDragActive(false);
+        setDraggedItem(null);
+        setDragOverTarget(null);
+        setIsDragOverRoot(false);
+        externalDragCounterRef.current = 0;
+        hoveredFolderForExpansionRef.current = null;
+        if (dragHoverTimerRef.current) {
+          clearTimeout(dragHoverTimerRef.current);
+          dragHoverTimerRef.current = null;
+        }
+      }
+    };
+
+    const handleGlobalDragEnd = () => {
+      setIsExternalDragActive(false);
+      setDraggedItem(null);
+      setDragOverTarget(null);
+      setIsDragOverRoot(false);
+      externalDragCounterRef.current = 0;
+      hoveredFolderForExpansionRef.current = null;
+      if (dragHoverTimerRef.current) {
+        clearTimeout(dragHoverTimerRef.current);
+        dragHoverTimerRef.current = null;
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("dragend", handleGlobalDragEnd);
+    window.addEventListener("drop", handleGlobalDragEnd);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("dragend", handleGlobalDragEnd);
+      window.removeEventListener("drop", handleGlobalDragEnd);
+    };
+  }, []);
+
+  // Helper to detect external OS file drag vs internal node drag
+  const isExternalFileDrag = (e: React.DragEvent) => {
+    return (
+      !draggedItem &&
+      e.dataTransfer &&
+      (e.dataTransfer.types.includes("Files") ||
+        Array.from(e.dataTransfer.types).includes("Files"))
+    );
+  };
+
+  const handlePaneDragEnter = (e: React.DragEvent) => {
+    if (isExternalFileDrag(e)) {
+      e.preventDefault();
+      externalDragCounterRef.current++;
+      setIsExternalDragActive(true);
+    }
+  };
+
+  const handlePaneDragLeave = (e: React.DragEvent) => {
+    if (isExternalFileDrag(e)) {
+      e.preventDefault();
+      externalDragCounterRef.current--;
+      if (externalDragCounterRef.current <= 0) {
+        externalDragCounterRef.current = 0;
+        setIsExternalDragActive(false);
+        setDragOverTarget(null);
+        setIsDragOverRoot(false);
+      }
+    }
+  };
+
+  // Import handler for single/multiple files or folders
+  const handleImportFiles = async (
+    scannedFiles: ScannedFile[],
+    targetFolder: string = "",
+  ) => {
+    if (!scannedFiles || scannedFiles.length === 0) return;
+
+    setIsImporting(true);
+    const count = scannedFiles.length;
+    setImportProgressMessage(
+      `Lendo e processando ${count} arquivo${count > 1 ? "s" : ""}...`,
+    );
+
+    try {
+      const filesPayload = await processFilesForUpload(scannedFiles);
+      setImportProgressMessage(
+        `Importando para ${targetFolder ? `/${targetFolder}` : "a raiz"}...`,
+      );
+
+      const res = await API.importFiles({
+        target_folder: targetFolder,
+        files: filesPayload,
+      });
+
+      if (res.ok && res.data?.success) {
+        await loadTree();
+        await Promise.all([refreshPendingChanges(), refreshGitStatus()]);
+
+        const imported = res.data.importedFiles || [];
+        const destLabel = targetFolder ? `/${targetFolder}` : "a raiz do projeto";
+        showToast(
+          `${imported.length} arquivo${imported.length > 1 ? "s" : ""} importado${imported.length > 1 ? "s" : ""} com sucesso em ${destLabel}!`,
+          "info",
+        );
+
+        if (targetFolder) {
+          setCollapsedFolders((prev) => ({ ...prev, [targetFolder]: false }));
+        }
+
+        // If a single file was imported, open it automatically
+        if (imported.length === 1) {
+          onOpenFile(imported[0].path);
+        }
+      } else {
+        const errMsg =
+          res.data?.errors?.join(", ") ||
+          res.data?.error ||
+          "Falha ao importar arquivos.";
+        showToast(`Erro na importação: ${errMsg}`, "warning");
+      }
+    } catch (err: any) {
+      showToast(
+        `Erro ao conectar com o servidor: ${err.message || "Erro desconhecido"}`,
+        "warning",
+      );
+    } finally {
+      setIsImporting(false);
+      setImportProgressMessage("");
+    }
+  };
+
   // Drag and Drop Handlers
   const handleDragStart = (
     e: React.DragEvent,
@@ -182,31 +468,52 @@ export const FileTree: React.FC<FileTreeProps> = ({
     setDraggedItem(null);
     setDragOverTarget(null);
     setIsDragOverRoot(false);
-    if (dragHoverTimerRef.current) clearTimeout(dragHoverTimerRef.current);
+    setIsExternalDragActive(false);
+    externalDragCounterRef.current = 0;
+    hoveredFolderForExpansionRef.current = null;
+    if (dragHoverTimerRef.current) {
+      clearTimeout(dragHoverTimerRef.current);
+      dragHoverTimerRef.current = null;
+    }
   };
 
   const handleDragOverFolder = (e: React.DragEvent, folderPath: string) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!draggedItem) return;
-    if (draggedItem.path === folderPath) return;
-    if (
-      draggedItem.isFolder &&
-      (folderPath === draggedItem.path ||
-        folderPath.startsWith(`${draggedItem.path}/`))
-    ) {
-      return;
-    }
-    e.dataTransfer.dropEffect = "move";
-    if (dragOverTarget !== folderPath) {
+
+    const isExt = isExternalFileDrag(e);
+
+    if (isExt) {
+      e.dataTransfer.dropEffect = "copy";
       setDragOverTarget(folderPath);
       setIsDragOverRoot(false);
+    } else {
+      if (!draggedItem) return;
+      if (draggedItem.path === folderPath) return;
+      if (
+        draggedItem.isFolder &&
+        (folderPath === draggedItem.path ||
+          folderPath.startsWith(`${draggedItem.path}/`))
+      ) {
+        return;
+      }
+      e.dataTransfer.dropEffect = "move";
+      setDragOverTarget(folderPath);
+      setIsDragOverRoot(false);
+    }
 
+    // Snappy auto-expand: start timer once when entering or hovering a folder
+    if (hoveredFolderForExpansionRef.current !== folderPath) {
+      hoveredFolderForExpansionRef.current = folderPath;
+      if (dragHoverTimerRef.current) {
+        clearTimeout(dragHoverTimerRef.current);
+      }
+
+      // If the folder is collapsed, auto-expand it after 400ms of hovering
       if (collapsedFolders[folderPath]) {
-        if (dragHoverTimerRef.current) clearTimeout(dragHoverTimerRef.current);
         dragHoverTimerRef.current = setTimeout(() => {
           setCollapsedFolders((prev) => ({ ...prev, [folderPath]: false }));
-        }, 600);
+        }, 400);
       }
     }
   };
@@ -216,7 +523,13 @@ export const FileTree: React.FC<FileTreeProps> = ({
     e.stopPropagation();
     if (dragOverTarget === folderPath) {
       setDragOverTarget(null);
-      if (dragHoverTimerRef.current) clearTimeout(dragHoverTimerRef.current);
+    }
+    if (hoveredFolderForExpansionRef.current === folderPath) {
+      hoveredFolderForExpansionRef.current = null;
+      if (dragHoverTimerRef.current) {
+        clearTimeout(dragHoverTimerRef.current);
+        dragHoverTimerRef.current = null;
+      }
     }
   };
 
@@ -228,8 +541,25 @@ export const FileTree: React.FC<FileTreeProps> = ({
     e.stopPropagation();
     setDragOverTarget(null);
     setIsDragOverRoot(false);
+    setIsExternalDragActive(false);
+    externalDragCounterRef.current = 0;
     if (dragHoverTimerRef.current) clearTimeout(dragHoverTimerRef.current);
 
+    // 1. External OS files dropped on folder
+    if (
+      isExternalFileDrag(e) ||
+      (e.dataTransfer.files && e.dataTransfer.files.length > 0 && !draggedItem)
+    ) {
+      const scanned = e.dataTransfer.items
+        ? await scanDataTransferItems(e.dataTransfer.items)
+        : filesToScannedList(e.dataTransfer.files);
+      if (scanned.length > 0) {
+        await handleImportFiles(scanned, targetFolderPath);
+      }
+      return;
+    }
+
+    // 2. Internal tree item dropped on folder
     if (!draggedItem) return;
     const { path: sourcePath, name: itemName, isFolder } = draggedItem;
     setDraggedItem(null);
@@ -256,6 +586,14 @@ export const FileTree: React.FC<FileTreeProps> = ({
   const handleDragOverFile = (e: React.DragEvent, filePath: string) => {
     e.preventDefault();
     e.stopPropagation();
+
+    if (isExternalFileDrag(e)) {
+      e.dataTransfer.dropEffect = "copy";
+      setDragOverTarget(filePath);
+      setIsDragOverRoot(false);
+      return;
+    }
+
     if (!draggedItem) return;
     if (draggedItem.path === filePath) return;
     e.dataTransfer.dropEffect = "move";
@@ -279,16 +617,34 @@ export const FileTree: React.FC<FileTreeProps> = ({
     e.stopPropagation();
     setDragOverTarget(null);
     setIsDragOverRoot(false);
+    setIsExternalDragActive(false);
+    externalDragCounterRef.current = 0;
+
+    const segments = targetFilePath.split("/");
+    segments.pop();
+    const parentDir = segments.join("/");
+
+    // 1. External files dropped on file item (imports to containing folder)
+    if (
+      isExternalFileDrag(e) ||
+      (e.dataTransfer.files && e.dataTransfer.files.length > 0 && !draggedItem)
+    ) {
+      const scanned = e.dataTransfer.items
+        ? await scanDataTransferItems(e.dataTransfer.items)
+        : filesToScannedList(e.dataTransfer.files);
+      if (scanned.length > 0) {
+        await handleImportFiles(scanned, parentDir);
+      }
+      return;
+    }
+
+    // 2. Internal item move
     if (!draggedItem) return;
 
     const { path: sourcePath, name: itemName, isFolder } = draggedItem;
     setDraggedItem(null);
 
     if (sourcePath === targetFilePath) return;
-
-    const segments = targetFilePath.split("/");
-    segments.pop();
-    const parentDir = segments.join("/");
 
     if (
       isFolder &&
@@ -311,6 +667,14 @@ export const FileTree: React.FC<FileTreeProps> = ({
   const handleDragOverRoot = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
+
+    if (isExternalFileDrag(e)) {
+      e.dataTransfer.dropEffect = "copy";
+      setIsDragOverRoot(true);
+      setDragOverTarget(null);
+      return;
+    }
+
     if (draggedItem) {
       setIsDragOverRoot(true);
       setDragOverTarget(null);
@@ -329,7 +693,24 @@ export const FileTree: React.FC<FileTreeProps> = ({
 
     setIsDragOverRoot(false);
     setDragOverTarget(null);
+    setIsExternalDragActive(false);
+    externalDragCounterRef.current = 0;
 
+    // 1. External OS files dropped on root tree container
+    if (
+      isExternalFileDrag(e) ||
+      (e.dataTransfer.files && e.dataTransfer.files.length > 0 && !draggedItem)
+    ) {
+      const scanned = e.dataTransfer.items
+        ? await scanDataTransferItems(e.dataTransfer.items)
+        : filesToScannedList(e.dataTransfer.files);
+      if (scanned.length > 0) {
+        await handleImportFiles(scanned, selectedFolder || "");
+      }
+      return;
+    }
+
+    // 2. Internal move to root
     if (!draggedItem) return;
 
     const sourcePath = draggedItem.path;
@@ -375,11 +756,29 @@ export const FileTree: React.FC<FileTreeProps> = ({
     }
   };
 
-  // Rename Modal State
-  const [renameModalOpen, setRenameModalOpen] = useState(false);
-  const [renameOldPath, setRenameOldPath] = useState("");
-  const [renameNewPath, setRenameNewPath] = useState("");
-  const [isRenamingFolder, setIsRenamingFolder] = useState(false);
+  // Inline Renaming State (VS Code style in-place rename)
+  const [inlineRenaming, setInlineRenaming] = useState<{
+    path: string;
+    originalName: string;
+    isFolder: boolean;
+  } | null>(null);
+  const [inlineRenameValue, setInlineRenameValue] = useState("");
+  const inlineRenameInputRef = useRef<HTMLInputElement>(null);
+  const isSubmittingRenameRef = useRef(false);
+
+  // Focus and select inline rename input
+  useEffect(() => {
+    if (inlineRenaming && inlineRenameInputRef.current) {
+      inlineRenameInputRef.current.focus();
+      const name = inlineRenaming.originalName;
+      const dotIndex = name.lastIndexOf(".");
+      if (!inlineRenaming.isFolder && dotIndex > 0) {
+        inlineRenameInputRef.current.setSelectionRange(0, dotIndex);
+      } else {
+        inlineRenameInputRef.current.select();
+      }
+    }
+  }, [inlineRenaming]);
 
   // Focus inline input when creation starts
   useEffect(() => {
@@ -412,28 +811,25 @@ export const FileTree: React.FC<FileTreeProps> = ({
 
   // Confirm Inline Creation
   const handleConfirmInlineCreate = async () => {
-    if (!inlineCreating) return;
+    if (!inlineCreating || isSubmittingInlineRef.current) return;
     const rawName = inlineValue.trim();
     if (!rawName) {
       setInlineCreating(null);
       return;
     }
 
+    isSubmittingInlineRef.current = true;
     const { parentPath, isFolder } = inlineCreating;
-    let fileName = rawName;
+    const fileName = rawName;
 
     const isMarkdown =
       !isFolder &&
-      (fileName.endsWith(".md") ||
-        fileName.endsWith(".markdown") ||
-        !fileName.includes("."));
-    if (!isFolder && !fileName.includes(".")) {
-      fileName = `${fileName}.md`;
-    }
+      (fileName.toLowerCase().endsWith(".md") ||
+        fileName.toLowerCase().endsWith(".markdown"));
 
     const targetPath = parentPath ? `${parentPath}/${fileName}` : fileName;
 
-    const docTitle = rawName.replace(/\.md$/i, "").replace(/\.markdown$/i, "");
+    const docTitle = rawName.replace(/\.[^/.]+$/, "");
     const templateId = selectedTemplate?.id || "";
 
     try {
@@ -456,41 +852,62 @@ export const FileTree: React.FC<FileTreeProps> = ({
       });
 
       if (res.ok) {
+        const createdPath = res.data?.path || targetPath;
         setInlineCreating(null);
         setInlineValue("");
         setSelectedTemplate(null);
-        await loadTree();
-        await Promise.all([refreshPendingChanges(), refreshGitStatus()]);
 
         if (isFolder) {
           showToast(`Pasta "${rawName}" criada com sucesso.`, "info");
           setSelectedFolder(targetPath);
-        } else if (isMarkdown) {
-          onOpenFile(targetPath);
-          // If a template was used, dispatch the systemPrompt so the copilot can pick it up
-          const systemPrompt =
-            res.data?.systemPrompt || selectedTemplate?.systemPrompt || "";
-          if (systemPrompt) {
-            window.dispatchEvent(
-              new CustomEvent("template:applied", {
-                detail: { templateId, systemPrompt, filePath: targetPath },
-              }),
-            );
-          }
-          showToast(
-            templateId
-              ? `Documento criado com template "${selectedTemplate?.title || templateId}".`
-              : "Documento criado e aberto.",
-            "info",
-          );
         } else {
-          showToast(`Arquivo "${rawName}" criado no workspace.`, "info");
+          onOpenFile(createdPath);
+          // If a template was used, dispatch the systemPrompt so the copilot can pick it up
+          if (isMarkdown) {
+            const systemPrompt =
+              res.data?.systemPrompt || selectedTemplate?.systemPrompt || "";
+            if (systemPrompt) {
+              window.dispatchEvent(
+                new CustomEvent("template:applied", {
+                  detail: { templateId, systemPrompt, filePath: createdPath },
+                }),
+              );
+            }
+            showToast(
+              templateId
+                ? `Documento criado com template "${selectedTemplate?.title || templateId}".`
+                : "Documento criado e aberto no editor.",
+              "info",
+            );
+          } else {
+            showToast(`Arquivo "${rawName}" criado e aberto.`, "info");
+          }
         }
+
+        await loadTree();
+        await Promise.all([refreshPendingChanges(), refreshGitStatus()]);
       } else {
         alert(res.data?.error || "Erro ao criar item na árvore.");
       }
     } catch (err) {
       alert("Erro ao conectar com o servidor para criar item.");
+    } finally {
+      isSubmittingInlineRef.current = false;
+    }
+  };
+
+  // Open file or folder in OS File Manager (Finder / Explorer / File Manager)
+  const handleOpenInOS = async (path: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    try {
+      const res = await API.openInOS(path);
+      if (res.ok) {
+        showToast("Aberto no gerenciador de arquivos do PC.", "info");
+      } else {
+        showToast(res.data?.error || "Erro ao abrir no sistema operacional.", "warning");
+      }
+    } catch {
+      showToast("Erro ao conectar com o servidor.", "warning");
     }
   };
 
@@ -519,53 +936,60 @@ export const FileTree: React.FC<FileTreeProps> = ({
     showToast("Todas as pastas foram recolhidas.", "info");
   };
 
-  // File Click Handler: Enforce Markdown Only
-  const handleFileClick = (path: string, name: string) => {
-    const isMarkdown =
-      name.endsWith(".md") ||
-      name.endsWith(".markdown") ||
-      path.endsWith(".md") ||
-      path.endsWith(".markdown");
-
-    if (isMarkdown) {
-      onOpenFile(path);
-    } else {
-      // Document is NOT markdown -> Do NOT open in editor
-      showToast(
-        `Apenas documentos Markdown (.md) podem ser editados.`,
-        "warning",
-      );
-    }
+  // Expand All Folders (VS Code action)
+  const handleExpandAllFolders = () => {
+    setCollapsedFolders({});
+    showToast("Todas as pastas foram expandidas.", "info");
   };
 
-  const handleOpenRename = (
-    path: string,
+  // File Click Handler: Open any file in the workspace
+  const handleFileClick = (path: string, _name: string) => {
+    onOpenFile(path);
+  };
+
+  const startInlineRename = (
+    itemPath: string,
+    currentName: string,
     isFolder: boolean,
     e?: React.MouseEvent,
   ) => {
     if (e) e.stopPropagation();
-    setRenameOldPath(path);
-    setRenameNewPath(path);
-    setIsRenamingFolder(isFolder);
-    setRenameModalOpen(true);
+    setInlineCreating(null);
+    setInlineRenaming({ path: itemPath, originalName: currentName, isFolder });
+    setInlineRenameValue(currentName);
   };
 
-  const handleConfirmRename = async () => {
-    const old_path = renameOldPath.trim();
-    const new_path = renameNewPath.trim();
+  const handleCancelInlineRename = () => {
+    setInlineRenaming(null);
+    setInlineRenameValue("");
+    isSubmittingRenameRef.current = false;
+  };
 
-    if (!new_path || new_path === old_path) {
-      setRenameModalOpen(false);
+  const handleConfirmInlineRename = async () => {
+    if (!inlineRenaming || isSubmittingRenameRef.current) return;
+    const new_name = inlineRenameValue.trim();
+    const old_path = inlineRenaming.path;
+    const old_name = inlineRenaming.originalName;
+
+    if (!new_name || new_name === old_name) {
+      handleCancelInlineRename();
       return;
     }
 
+    isSubmittingRenameRef.current = true;
+    const cleanOld = old_path.replace(/^\/+/, "").replace(/\/+$/, "");
+    const parts = cleanOld.split("/");
+    parts.pop();
+    const parentDir = parts.join("/");
+    const new_path = parentDir ? `${parentDir}/${new_name}` : new_name;
+
     try {
-      const res = await API.renameProjectFile({ old_path, new_path });
+      const res = await API.renameProjectFile({ old_path: cleanOld, new_path });
       if (res.ok && res.data?.success) {
-        setRenameModalOpen(false);
+        handleCancelInlineRename();
         await loadTree();
         await Promise.all([refreshPendingChanges(), refreshGitStatus()]);
-        if (activeFile === old_path) {
+        if (activeFile === cleanOld) {
           const isMd =
             new_path.endsWith(".md") || new_path.endsWith(".markdown");
           if (isMd) {
@@ -576,10 +1000,17 @@ export const FileTree: React.FC<FileTreeProps> = ({
         }
         showToast("Item renomeado com sucesso.", "info");
       } else {
-        alert(`Erro ao renomear: ${res.data?.error || "Falha na operação"}`);
+        showToast(
+          `Erro ao renomear: ${res.data?.error || "Falha na operação"}`,
+          "warning",
+        );
+        handleCancelInlineRename();
       }
-    } catch (e) {
-      alert("Erro ao conectar com o servidor para renomear.");
+    } catch (err) {
+      showToast("Erro ao conectar com o servidor para renomear.", "warning");
+      handleCancelInlineRename();
+    } finally {
+      isSubmittingRenameRef.current = false;
     }
   };
 
@@ -622,43 +1053,37 @@ export const FileTree: React.FC<FileTreeProps> = ({
     }));
   };
 
-  // Build display nodes based on search query (displaying ALL files)
+  // Build display nodes based on search query (displaying ALL files, searching by name and title)
   const displayNodes = useMemo(() => {
     if (!tree || tree.length === 0) return [];
 
     const cleanNodes = (nodesList: TreeNode[]): TreeNode[] => {
-      return nodesList
-        .filter((n) => {
-          const name = n.name || "";
-          const path = n.path || "";
-          if (name.startsWith(".") || path.startsWith(".")) return false;
-          if (name === "node_modules") return false;
-          return true;
-        })
-        .map((n) => {
-          if (n.children && n.children.length > 0) {
-            return {
-              ...n,
-              children: cleanNodes(n.children),
-            };
-          }
-          return n;
-        });
+      return nodesList.map((n) => {
+        if (n.children && n.children.length > 0) {
+          return {
+            ...n,
+            children: cleanNodes(n.children),
+          };
+        }
+        return n;
+      });
     };
 
     let nodes: TreeNode[] = cleanNodes(tree);
 
-    // Filter by search term if present
+    // Filter by search term if present (matching specifically by name and document title, avoiding noisy path matches)
     if (searchTerm.trim()) {
       const q = searchTerm.trim().toLowerCase();
       const matchNode = (node: TreeNode): TreeNode | null => {
-        const nameMatch = node.name && node.name.toLowerCase().includes(q);
-        const pathMatch = node.path && node.path.toLowerCase().includes(q);
+        const nameMatch = Boolean(
+          (node.name && node.name.toLowerCase().includes(q)) ||
+          (node.title && node.title.toLowerCase().includes(q))
+        );
         const isDir =
           node.type === "dir" || node.type === "directory" || node.is_directory;
 
         if (!isDir) {
-          return nameMatch || pathMatch ? node : null;
+          return nameMatch ? node : null;
         }
 
         const filteredChildren = (node.children || [])
@@ -666,7 +1091,10 @@ export const FileTree: React.FC<FileTreeProps> = ({
           .filter((c): c is TreeNode => c !== null);
 
         if (nameMatch || filteredChildren.length > 0) {
-          return { ...node, children: filteredChildren };
+          return {
+            ...node,
+            children: filteredChildren.length > 0 ? filteredChildren : node.children,
+          };
         }
         return null;
       };
@@ -698,13 +1126,17 @@ export const FileTree: React.FC<FileTreeProps> = ({
             ref={inlineInputRef}
             type="text"
             className="tree-inline-input"
-            placeholder={isFolder ? "nome-da-pasta" : "novo-documento.md"}
+            placeholder={isFolder ? "nome-da-pasta" : "nome-do-arquivo"}
             value={inlineValue}
             onChange={(e) => setInlineValue(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
+                e.preventDefault();
+                e.stopPropagation();
                 handleConfirmInlineCreate();
               } else if (e.key === "Escape") {
+                e.preventDefault();
+                e.stopPropagation();
                 handleCancelInlineCreate();
               }
             }}
@@ -833,7 +1265,30 @@ export const FileTree: React.FC<FileTreeProps> = ({
                   style={{ flexShrink: 0 }}
                 />
               )}
-              <span className="tree-folder-name">{node.name}</span>
+              {inlineRenaming && inlineRenaming.path === node.path ? (
+                <input
+                  ref={inlineRenameInputRef}
+                  type="text"
+                  className="tree-inline-input"
+                  value={inlineRenameValue}
+                  onChange={(e) => setInlineRenameValue(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleConfirmInlineRename();
+                    } else if (e.key === "Escape") {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleCancelInlineRename();
+                    }
+                  }}
+                  onBlur={handleConfirmInlineRename}
+                  onClick={(e) => e.stopPropagation()}
+                />
+              ) : (
+                <span className="tree-folder-name">{node.name}</span>
+              )}
             </div>
             <div
               className="tree-folder-actions"
@@ -855,8 +1310,26 @@ export const FileTree: React.FC<FileTreeProps> = ({
               </button>
               <button
                 className="btn-tree-action"
+                title={`Importar arquivos para ${node.name}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setTargetUploadFolder(node.path);
+                  fileInputRef.current?.click();
+                }}
+              >
+                <Upload size={12} />
+              </button>
+              <button
+                className="btn-tree-action"
+                title={`Abrir pasta "${node.name}" no gerenciador de arquivos do PC`}
+                onClick={(e) => handleOpenInOS(node.path, e)}
+              >
+                <Laptop size={12} />
+              </button>
+              <button
+                className="btn-tree-action"
                 title="Renomear pasta"
-                onClick={(e) => handleOpenRename(node.path, true, e)}
+                onClick={(e) => startInlineRename(node.path, node.name, true, e)}
               >
                 <Edit3 size={11} />
               </button>
@@ -891,7 +1364,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
       node.path.endsWith(".markdown");
     const isFileActive = activeFile === node.path;
     const fileExt = node.name.includes(".")
-      ? node.name.split(".").pop()?.toUpperCase()
+      ? (node.name.split(".").pop() || "").toLowerCase()
       : "";
 
     const dotClass =
@@ -932,19 +1405,46 @@ export const FileTree: React.FC<FileTreeProps> = ({
           onDragLeave={(e) => handleDragLeaveFile(e, node.path)}
           onDrop={(e) => handleDropOnFile(e, node.path)}
           onClick={() => handleFileClick(node.path, node.name)}
-          title={
-            isMarkdown
-              ? `Abrir ${node.name}`
-              : `Arquivo (${fileExt || "não markdown"}). Apenas arquivos .md são abertos no editor.`
-          }
+          title={`Abrir ${node.name}`}
         >
           <div className="tree-file-left">
             {isMarkdown ? (
               <span className={`tree-dot ${dotClass}`}></span>
+            ) : ['csv', 'tsv', 'xlsx', 'xls'].includes(fileExt.toLowerCase()) ? (
+              <FileSpreadsheet size={13} color="#a6e3a1" style={{ flexShrink: 0 }} />
+            ) : ['pdf'].includes(fileExt.toLowerCase()) ? (
+              <FileText size={13} color="#f38ba8" style={{ flexShrink: 0 }} />
+            ) : ['docx', 'doc'].includes(fileExt.toLowerCase()) ? (
+              <FileText size={13} color="#89b4fa" style={{ flexShrink: 0 }} />
+            ) : ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp'].includes(fileExt.toLowerCase()) ? (
+              <ImageIcon size={13} color="#fab387" style={{ flexShrink: 0 }} />
             ) : (
-              <FileCode size={13} color="#94a3b8" style={{ flexShrink: 0 }} />
+              <FileCode size={13} color="#89b4fa" style={{ flexShrink: 0 }} />
             )}
-            <span className="tree-file-name">{node.name}</span>
+            {inlineRenaming && inlineRenaming.path === node.path ? (
+              <input
+                ref={inlineRenameInputRef}
+                type="text"
+                className="tree-inline-input"
+                value={inlineRenameValue}
+                onChange={(e) => setInlineRenameValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleConfirmInlineRename();
+                  } else if (e.key === "Escape") {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleCancelInlineRename();
+                  }
+                }}
+                onBlur={handleConfirmInlineRename}
+                onClick={(e) => e.stopPropagation()}
+              />
+            ) : (
+              <span className="tree-file-name">{node.name}</span>
+            )}
             {gitStatusCode && (
               <span
                 className="tree-git-status-badge"
@@ -998,8 +1498,15 @@ export const FileTree: React.FC<FileTreeProps> = ({
             >
               <button
                 className="btn-tree-action"
+                title={`Abrir "${node.name}" no gerenciador de arquivos do PC`}
+                onClick={(e) => handleOpenInOS(node.path, e)}
+              >
+                <Laptop size={11} />
+              </button>
+              <button
+                className="btn-tree-action"
                 title="Renomear"
-                onClick={(e) => handleOpenRename(node.path, false, e)}
+                onClick={(e) => startInlineRename(node.path, node.name, false, e)}
               >
                 <Edit3 size={11} />
               </button>
@@ -1037,10 +1544,12 @@ export const FileTree: React.FC<FileTreeProps> = ({
   return (
     <>
       <aside
-        className="workbench-tree-pane"
+        className={`workbench-tree-pane ${isExternalDragActive ? "is-drag-active" : ""}`}
         id="workbench-tree-pane"
         style={{ width: width ? `${width}px` : undefined }}
         onClick={() => setSelectedFolder("")}
+        onDragEnter={handlePaneDragEnter}
+        onDragLeave={handlePaneDragLeave}
       >
         {/* TOP SECTION: Search Bar on Top + Actions Toolbar Below */}
         <div
@@ -1110,6 +1619,41 @@ export const FileTree: React.FC<FileTreeProps> = ({
                 <FolderPlus size={14} />
               </button>
               <button
+                id="btn-tree-import-file"
+                className="btn-tree-tool"
+                title={
+                  selectedFolder
+                    ? `Importar Documentos em /${selectedFolderName}`
+                    : "Importar Documentos na raiz"
+                }
+                onClick={() => {
+                  setTargetUploadFolder(selectedFolder || "");
+                  fileInputRef.current?.click();
+                }}
+              >
+                <Upload size={13} />
+              </button>
+              <button
+                id="btn-tree-open-os"
+                className="btn-tree-tool"
+                title={
+                  selectedFolder
+                    ? `Abrir pasta /${selectedFolderName} no gerenciador de arquivos do PC`
+                    : "Abrir pasta do projeto no gerenciador de arquivos do PC"
+                }
+                onClick={(e) => handleOpenInOS(selectedFolder || "", e)}
+              >
+                <Laptop size={13} />
+              </button>
+              <button
+                id="btn-tree-expand-all"
+                className="btn-tree-tool"
+                title="Expandir Todas as Pastas"
+                onClick={handleExpandAllFolders}
+              >
+                <ChevronsUpDown size={14} />
+              </button>
+              <button
                 id="btn-tree-collapse-all"
                 className="btn-tree-tool"
                 title="Recolher Todas as Pastas"
@@ -1119,11 +1663,12 @@ export const FileTree: React.FC<FileTreeProps> = ({
               </button>
               <button
                 id="btn-tree-refresh"
-                className="btn-tree-tool"
-                title="Atualizar Árvore"
+                className={`btn-tree-tool ${isTreeLoading ? "spinning" : ""}`}
+                title={isTreeLoading ? "Carregando arquivos..." : "Atualizar Árvore"}
                 onClick={() => loadTree()}
+                disabled={isTreeLoading}
               >
-                <RefreshCw size={13} />
+                <RefreshCw size={13} className={isTreeLoading ? "spinning" : ""} />
               </button>
               <button
                 id="btn-toggle-tree-pane"
@@ -1135,6 +1680,11 @@ export const FileTree: React.FC<FileTreeProps> = ({
               </button>
             </div>
           </div>
+          {isTreeLoading && (
+            <div className="tree-progress-track" title="Sincronizando arquivos com o disco...">
+              <div className="tree-progress-bar"></div>
+            </div>
+          )}
         </div>
 
         {/* Tree Hierarchy Container */}
@@ -1151,7 +1701,50 @@ export const FileTree: React.FC<FileTreeProps> = ({
             {/* Inline input at Root Level */}
             {renderInlineCreateInput("")}
 
-            {displayNodes.length === 0 && !inlineCreating ? (
+            {isTreeLoading && displayNodes.length === 0 ? (
+              <div className="tree-skeleton-container" aria-label="Carregando estrutura de arquivos">
+                <div className="tree-loading-pill">
+                  <span className="material-symbols-outlined spinning" style={{ fontSize: "14px" }}>
+                    progress_activity
+                  </span>
+                  <span>Carregando arquivos...</span>
+                </div>
+                <div className="tree-skeleton-list">
+                  <div className="tree-skeleton-row indent-0">
+                    <div className="skeleton-icon" />
+                    <div className="skeleton-line" style={{ width: "65%" }} />
+                  </div>
+                  <div className="tree-skeleton-row indent-1">
+                    <div className="skeleton-icon" />
+                    <div className="skeleton-line" style={{ width: "45%" }} />
+                  </div>
+                  <div className="tree-skeleton-row indent-1">
+                    <div className="skeleton-icon" />
+                    <div className="skeleton-line" style={{ width: "70%" }} />
+                  </div>
+                  <div className="tree-skeleton-row indent-0">
+                    <div className="skeleton-icon" />
+                    <div className="skeleton-line" style={{ width: "55%" }} />
+                  </div>
+                  <div className="tree-skeleton-row indent-1">
+                    <div className="skeleton-icon" />
+                    <div className="skeleton-line" style={{ width: "80%" }} />
+                  </div>
+                  <div className="tree-skeleton-row indent-2">
+                    <div className="skeleton-icon" />
+                    <div className="skeleton-line" style={{ width: "50%" }} />
+                  </div>
+                  <div className="tree-skeleton-row indent-0">
+                    <div className="skeleton-icon" />
+                    <div className="skeleton-line" style={{ width: "60%" }} />
+                  </div>
+                  <div className="tree-skeleton-row indent-0">
+                    <div className="skeleton-icon" />
+                    <div className="skeleton-line" style={{ width: "40%" }} />
+                  </div>
+                </div>
+              </div>
+            ) : displayNodes.length === 0 && !inlineCreating ? (
               <div
                 className="tree-empty-state"
                 style={{
@@ -1187,54 +1780,81 @@ export const FileTree: React.FC<FileTreeProps> = ({
                     lineHeight: 1.4,
                   }}
                 >
-                  Crie novos documentos ou pastas para estruturar seu projeto.
+                  Crie ou arraste documentos para estruturar seu projeto.
                 </p>
                 <div
                   style={{
                     display: "flex",
+                    flexDirection: "column",
                     gap: "6px",
                     width: "100%",
                     marginTop: "6px",
                   }}
                 >
+                  <div style={{ display: "flex", gap: "6px", width: "100%" }}>
+                    <button
+                      className="btn btn-primary btn-sm"
+                      style={{
+                        flex: 1,
+                        fontSize: "11px",
+                        padding: "6px 8px",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: "4px",
+                      }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        startInlineCreate("", false);
+                      }}
+                    >
+                      <FilePlus size={13} />
+                      <span>Novo Arquivo</span>
+                    </button>
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      style={{
+                        flex: 1,
+                        fontSize: "11px",
+                        padding: "6px 8px",
+                        border: "1px solid var(--border)",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: "4px",
+                      }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        startInlineCreate("", true);
+                      }}
+                    >
+                      <FolderPlus size={13} />
+                      <span>Nova Pasta</span>
+                    </button>
+                  </div>
                   <button
-                    className="btn btn-primary btn-sm"
+                    className="btn btn-secondary btn-sm"
                     style={{
-                      flex: 1,
+                      width: "100%",
                       fontSize: "11px",
                       padding: "6px 8px",
+                      border: "1px dashed var(--primary, #2563eb)",
+                      background: "rgba(37, 99, 235, 0.05)",
+                      color: "var(--primary, #2563eb)",
                       display: "inline-flex",
                       alignItems: "center",
                       justifyContent: "center",
                       gap: "4px",
+                      cursor: "pointer",
                     }}
                     onClick={(e) => {
                       e.stopPropagation();
-                      startInlineCreate("", false);
+                      setTargetUploadFolder("");
+                      fileInputRef.current?.click();
                     }}
                   >
-                    <FilePlus size={13} />
-                    <span>Novo Arquivo</span>
-                  </button>
-                  <button
-                    className="btn btn-ghost btn-sm"
-                    style={{
-                      flex: 1,
-                      fontSize: "11px",
-                      padding: "6px 8px",
-                      border: "1px solid var(--border)",
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: "4px",
-                    }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      startInlineCreate("", true);
-                    }}
-                  >
-                    <FolderPlus size={13} />
-                    <span>Nova Pasta</span>
+                    <Upload size={13} />
+                    <span>Importar / Arrastar Documentos</span>
                   </button>
                 </div>
               </div>
@@ -1242,7 +1862,71 @@ export const FileTree: React.FC<FileTreeProps> = ({
               displayNodes.map((node) => renderTreeNode(node))
             )}
           </div>
+
+          {/* Drag Overlay Feedback - 100% transparent background with bottom floating pill */}
+          {isExternalDragActive && (
+            <div className="tree-drag-overlay" onClick={(e) => e.stopPropagation()}>
+              <div className="tree-drag-overlay-card">
+                <div className="tree-drag-overlay-icon">
+                  <Upload size={12} color="#60a5fa" />
+                </div>
+                <div className="tree-drag-overlay-text">
+                  <span>Soltar em:</span>
+                  <code>
+                    {dragOverTarget
+                      ? `/${dragOverTarget}`
+                      : selectedFolder
+                        ? `/${selectedFolder}`
+                        : "raiz"}
+                  </code>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Import Progress Loading Overlay - strictly bounded to tree scroll area */}
+          {isImporting && (
+            <div className="tree-import-loading-overlay">
+              <div className="tree-import-loading-card">
+                <RefreshCw size={18} className="spinning" color="#2563eb" />
+                <span className="tree-import-loading-msg">
+                  {importProgressMessage || "Importando arquivos..."}
+                </span>
+              </div>
+            </div>
+          )}
         </div>
+
+        {/* Hidden File and Folder Input Elements */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          style={{ display: "none" }}
+          onChange={async (e) => {
+            if (e.target.files && e.target.files.length > 0) {
+              const scanned = filesToScannedList(e.target.files);
+              await handleImportFiles(scanned, targetUploadFolder);
+              e.target.value = "";
+            }
+          }}
+        />
+        <input
+          ref={folderInputRef}
+          type="file"
+          // @ts-ignore
+          webkitdirectory=""
+          directory=""
+          multiple
+          style={{ display: "none" }}
+          onChange={async (e) => {
+            if (e.target.files && e.target.files.length > 0) {
+              const scanned = filesToScannedList(e.target.files);
+              await handleImportFiles(scanned, targetUploadFolder);
+              e.target.value = "";
+            }
+          }}
+        />
 
         {/* Tree Pane Floating Toast Notifications */}
         {toast && (
@@ -1260,108 +1944,6 @@ export const FileTree: React.FC<FileTreeProps> = ({
           </div>
         )}
       </aside>
-
-      {/* Rename Modal */}
-      {renameModalOpen && (
-        <div
-          id="rename-modal"
-          className="modal-backdrop"
-          style={{ display: "flex" }}
-        >
-          <div className="modal-box" style={{ maxWidth: "480px" }}>
-            <div className="modal-header">
-              <div>
-                <h3
-                  style={{
-                    margin: 0,
-                    fontSize: "15px",
-                    fontWeight: 600,
-                    color: "#0f172a",
-                  }}
-                >
-                  {isRenamingFolder ? "Renomear Pasta" : "Renomear Arquivo"}
-                </h3>
-                <span style={{ fontSize: "11.5px", color: "#64748b" }}>
-                  Atualize o nome ou caminho na árvore
-                </span>
-              </div>
-              <button
-                id="btn-close-rename-modal"
-                className="btn-close"
-                aria-label="Fechar"
-                onClick={() => setRenameModalOpen(false)}
-              >
-                <X size={14} />
-              </button>
-            </div>
-            <div
-              className="modal-body"
-              style={{ gap: "14px", padding: "18px 22px" }}
-            >
-              <input type="hidden" id="rename-old-path" value={renameOldPath} />
-              <div className="form-group">
-                <label
-                  htmlFor="rename-new-path"
-                  style={{
-                    fontSize: "12px",
-                    fontWeight: 500,
-                    color: "#334155",
-                  }}
-                >
-                  Novo Caminho / Nome:
-                </label>
-                <input
-                  type="text"
-                  id="rename-new-path"
-                  placeholder={
-                    isRenamingFolder
-                      ? "ex: docs/arquitetura"
-                      : "ex: docs/guia.md"
-                  }
-                  value={renameNewPath}
-                  onChange={(e) => setRenameNewPath(e.target.value)}
-                  autoFocus
-                />
-                <span
-                  style={{
-                    fontSize: "11px",
-                    color: "#94a3b8",
-                    marginTop: "4px",
-                  }}
-                  id="rename-path-hint"
-                >
-                  Caminho relativo a partir da raiz do repositório.
-                </span>
-              </div>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "flex-end",
-                  gap: "8px",
-                  marginTop: "6px",
-                }}
-              >
-                <button
-                  id="btn-cancel-rename"
-                  className="btn btn-ghost btn-sm"
-                  type="button"
-                  onClick={() => setRenameModalOpen(false)}
-                >
-                  Cancelar
-                </button>
-                <button
-                  id="btn-confirm-rename"
-                  className="btn btn-primary btn-sm"
-                  type="button"
-                  onClick={handleConfirmRename}
-                >
-                  Salvar
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </>
   );
 };

@@ -8,13 +8,13 @@ import { RawInspectorSidebar } from '../components/copilot/RawInspectorSidebar';
 import { DiffModal } from '../components/modals/DiffModal';
 import { ScaffoldModal } from '../components/modals/ScaffoldModal';
 import { AISettingsModal } from '../components/modals/AISettingsModal';
-import { GitModal } from '../components/modals/GitModal';
 import { OnboardingModal } from '../components/modals/OnboardingModal';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { useAI } from '../context/AIContext';
 
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { EditorSubView } from './subviews/EditorSubView';
+import { VersionsSubView } from './subviews/VersionsSubView';
 import { WikiSubView } from './subviews/WikiSubView';
 import { DictionarySubView } from './subviews/DictionarySubView';
 import { PRsSubView } from './subviews/PRsSubView';
@@ -28,7 +28,7 @@ interface DashboardViewProps {
 const AI_WIDTH_STORAGE_KEY = 'spec_ai_pane_width';
 const DEFAULT_AI_WIDTH = 360;
 
-const VALID_SUBVIEWS: SubViewType[] = ['editor', 'dictionary', 'wiki', 'templates', 'prs', 'settings'];
+const VALID_SUBVIEWS: SubViewType[] = ['editor', 'edits', 'versions', 'dictionary', 'wiki', 'templates', 'prs', 'settings'];
 
 export const DashboardView: React.FC<DashboardViewProps> = ({ onBackToRepos }) => {
   const { repoName, subview } = useParams<{ repoName: string; subview?: string }>();
@@ -43,28 +43,26 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onBackToRepos }) =
   const [activeCopilotSidebar, setActiveCopilotSidebar] = useState<'prompt' | 'history' | 'raw' | null>(null);
   const [isDiffModalOpen, setIsDiffModalOpen] = useState(false);
   const [isScaffoldModalOpen, setIsScaffoldModalOpen] = useState(false);
-  const [isGitModalOpen, setIsGitModalOpen] = useState(false);
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
 
-  const { activeFile, activeRepo, fileContent, selectRepoByName, loadFile } = useWorkspace();
+  const { activeFile, activeRepo, fileContent, selectRepoByName, loadFile, hasUnreadWhatsNew } = useWorkspace();
   const { messages, aiSettings, openSettingsModal } = useAI();
   const [systemPrompt, setSystemPrompt] = useState('');
+  const fileParam = searchParams.get('file');
 
   // Sync Repo from URL parameter
   useEffect(() => {
     if (repoName && (!activeRepo || activeRepo.name.toLowerCase() !== repoName.toLowerCase())) {
-      const fileParam = searchParams.get('file') || undefined;
-      selectRepoByName(repoName, fileParam);
+      selectRepoByName(repoName, fileParam || undefined);
     }
-  }, [repoName, activeRepo, selectRepoByName, searchParams]);
+  }, [repoName, activeRepo, selectRepoByName, fileParam]);
 
   // Sync File from search parameter ?file=...
   useEffect(() => {
-    const fileParam = searchParams.get('file');
     if (fileParam && fileParam !== activeFile && activeRepo) {
       loadFile(fileParam);
     }
-  }, [searchParams, activeFile, activeRepo, loadFile]);
+  }, [fileParam, activeFile, activeRepo, loadFile]);
 
   const [aiWidth, setAiWidth] = useState<number>(() => {
     try {
@@ -131,9 +129,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onBackToRepos }) =
     const currentRepoName = repoName || activeRepo?.name || 'default';
     if (view === 'editor' && activeFile) {
       navigate(`/repo/${encodeURIComponent(currentRepoName)}/${view}?file=${encodeURIComponent(activeFile)}`);
+    } else if (view === 'edits' || view === 'versions') {
+      const defaultTab = hasUnreadWhatsNew ? 'whats-new' : 'drafts';
+      navigate(`/repo/${encodeURIComponent(currentRepoName)}/edits?tab=${defaultTab}`);
     } else {
       navigate(`/repo/${encodeURIComponent(currentRepoName)}/${view}`);
     }
+  };
+
+  const handleNavigateToEdits = (tab?: 'drafts' | 'whats-new') => {
+    const currentRepoName = repoName || activeRepo?.name || 'default';
+    const targetTab = tab || (hasUnreadWhatsNew ? 'whats-new' : 'drafts');
+    navigate(`/repo/${encodeURIComponent(currentRepoName)}/edits?tab=${targetTab}`);
   };
 
   const handleBackToRepos = () => {
@@ -153,9 +160,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onBackToRepos }) =
       {/* Top Global Header */}
       <TopHeader
         onBackToRepos={handleBackToRepos}
-        onOpenDiffModal={() => setIsDiffModalOpen(true)}
+        onOpenDiffModal={() => handleNavigateToEdits('drafts')}
         onToggleCopilot={toggleCopilot}
-        onOpenGitModal={() => setIsGitModalOpen(true)}
+        onOpenGitModal={() => handleNavigateToEdits()}
+        onNavigateToEdits={handleNavigateToEdits}
         onOpenTour={() => setIsOnboardingOpen(true)}
       />
 
@@ -165,6 +173,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onBackToRepos }) =
         <SidebarNav
           activeView={activeSubView}
           onSelectView={handleSelectView}
+          hasUnreadWhatsNew={hasUnreadWhatsNew}
         />
 
         {/* Main Views Container */}
@@ -172,9 +181,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onBackToRepos }) =
           {activeSubView === 'editor' && (
             <EditorSubView
               onOpenScaffoldWizard={() => setIsScaffoldModalOpen(true)}
-              onOpenDiffModal={() => setIsDiffModalOpen(true)}
+              onOpenDiffModal={() => handleNavigateToEdits('drafts')}
               onToggleCopilot={toggleCopilot}
               onOpenFile={handleOpenFile}
+            />
+          )}
+
+          {(activeSubView === 'edits' || activeSubView === 'versions') && (
+            <VersionsSubView
+              onOpenFile={(path) => {
+                handleOpenFile(path);
+                handleSelectView('editor');
+              }}
+              onOpenDiffModal={() => handleNavigateToEdits('drafts')}
             />
           )}
 
@@ -285,18 +304,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onBackToRepos }) =
         onCreated={() => handleSelectView('editor')}
       />
 
-      <GitModal
-        isOpen={isGitModalOpen}
-        onClose={() => setIsGitModalOpen(false)}
-        onOpenDiffModal={() => setIsDiffModalOpen(true)}
-      />
-
       <OnboardingModal
         isOpen={isOnboardingOpen}
         onClose={() => setIsOnboardingOpen(false)}
         onNavigateView={handleSelectView}
         onToggleCopilot={toggleCopilot}
-        onOpenGitModal={() => setIsGitModalOpen(true)}
+        onOpenGitModal={() => handleNavigateToEdits()}
       />
     </div>
   );

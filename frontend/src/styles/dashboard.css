@@ -404,6 +404,7 @@
 
 /* 1. DOCUMENT TREE EXPLORER (DOCKABLE / RESIZABLE) */
 .workbench-tree-pane {
+  position: relative !important;
   width: 260px;
   min-width: 150px;
   background: #f8fafc;
@@ -540,6 +541,120 @@ body.is-resizing .dash-sidebar-nav {
   transform: scale(0.95);
 }
 
+/* Tree Loading & Skeleton Shimmer Styles */
+.tree-progress-track {
+  position: relative;
+  width: 100%;
+  height: 2.5px;
+  background: rgba(37, 99, 235, 0.12);
+  overflow: hidden;
+  margin-top: 2px;
+}
+
+.tree-progress-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, #3b82f6, #6366f1, #38bdf8);
+  width: 50%;
+  animation: tree-progress-anim 1.2s infinite cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes tree-progress-anim {
+  0% {
+    left: -50%;
+    width: 30%;
+  }
+  50% {
+    left: 25%;
+    width: 60%;
+  }
+  100% {
+    left: 100%;
+    width: 30%;
+  }
+}
+
+.tree-skeleton-container {
+  display: flex;
+  flex-direction: column;
+  padding: 12px 10px;
+  gap: 12px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.tree-loading-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: rgba(37, 99, 235, 0.08);
+  border: 1px solid rgba(37, 99, 235, 0.18);
+  border-radius: 20px;
+  color: #2563eb;
+  font-size: 11.5px;
+  font-weight: 500;
+  width: fit-content;
+  margin: 0 auto 4px auto;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.06);
+}
+
+.tree-skeleton-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+.tree-skeleton-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 22px;
+  padding-left: 6px;
+}
+
+.tree-skeleton-row.indent-0 {
+  padding-left: 6px;
+}
+
+.tree-skeleton-row.indent-1 {
+  padding-left: 20px;
+}
+
+.tree-skeleton-row.indent-2 {
+  padding-left: 34px;
+}
+
+.skeleton-icon {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);
+  background-size: 200% 100%;
+  animation: shimmer-skeleton 1.4s infinite linear;
+  flex-shrink: 0;
+}
+
+.skeleton-line {
+  height: 10px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);
+  background-size: 200% 100%;
+  animation: shimmer-skeleton 1.4s infinite linear;
+}
+
+@keyframes shimmer-skeleton {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
 .btn-icon {
   background: transparent;
   border: 1px solid transparent;
@@ -636,6 +751,7 @@ body.is-resizing .dash-sidebar-nav {
 }
 
 .tree-scroll-container {
+  position: relative !important;
   flex: 1;
   overflow-y: auto;
   padding: 8px 6px;
@@ -1025,6 +1141,129 @@ body.is-resizing .pane-resizer {
   color: #64748b;
   border: 1px solid #e2e8f0;
   text-transform: uppercase;
+}
+
+/* External Document Drag Overlay & States */
+.workbench-tree-pane.is-drag-active {
+  box-shadow: inset 0 0 0 2px #2563eb;
+}
+
+.tree-drag-overlay {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  right: 4px;
+  bottom: 4px;
+  background: transparent !important;
+  border: 2px dashed rgba(37, 99, 235, 0.45);
+  border-radius: 6px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 10px;
+  z-index: 40;
+  pointer-events: none;
+  animation: fadeInDrag 0.15s ease-out;
+  box-sizing: border-box;
+}
+
+@keyframes fadeInDrag {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.tree-drag-overlay-card {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  background: rgba(15, 23, 42, 0.88);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-radius: 20px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  max-width: 95%;
+  pointer-events: none;
+  box-sizing: border-box;
+}
+
+.tree-drag-overlay-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: rgba(37, 99, 235, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #60a5fa;
+  flex-shrink: 0;
+}
+
+.tree-drag-overlay-text {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: #f8fafc;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tree-drag-overlay-text span {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.tree-drag-overlay-text code {
+  font-family: var(--font-mono);
+  background: rgba(255, 255, 255, 0.16);
+  color: #93c5fd;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10.5px;
+  font-weight: 600;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Import Progress Overlay */
+.tree-import-loading-overlay {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  right: 4px;
+  bottom: 4px;
+  background: rgba(248, 250, 252, 0.94);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 45;
+  box-sizing: border-box;
+}
+
+.tree-import-loading-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: #ffffff;
+  border-radius: 6px;
+  border: 1px solid #cbd5e1;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  font-size: 11.5px;
+  font-weight: 500;
+  color: #0f172a;
 }
 
 .tree-toast-container {
