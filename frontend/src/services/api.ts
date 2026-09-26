@@ -4,7 +4,7 @@ import type {
   PR, TemplateItem, TutorialItem, AISettingsState, DictionaryTerm, User,
   GitStatus, GitCommitInfo, DocumentMetadataItem, WhatsNewSummary,
   SkillItem, ProjectSkillsManifest, ToolCallRecord,
-  AgentDefinition, MCPServerDefinition, ToolItem
+  AgentDefinition, MCPServerDefinition, ToolItem, CustomToolItem
 } from '../types';
 
 export interface ApiResponse<T = any> {
@@ -819,6 +819,39 @@ export const API = {
     const qs = repo ? `?repo=${encodeURIComponent(repo)}` : '';
     const res = await fetch(`/api/aicenter/mcp/remove/${encodeURIComponent(serverId)}${qs}`, {
       method: 'DELETE'
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  // --- AI Center: Custom Project Tools ---
+  async getCustomTools(repo?: string): Promise<ApiResponse<{ repo: string; tools: CustomToolItem[] }>> {
+    const qs = repo ? `?repo=${encodeURIComponent(repo)}` : '';
+    const res = await fetch(`/api/aicenter/custom-tools${qs}`);
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async saveCustomTool(tool: Partial<CustomToolItem>, repo?: string): Promise<ApiResponse<{ success: boolean; tool: CustomToolItem }>> {
+    const res = await fetch('/api/aicenter/custom-tools', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tool, repo })
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async deleteCustomTool(toolId: string, repo?: string): Promise<ApiResponse<{ success: boolean; message: string }>> {
+    const qs = repo ? `?repo=${encodeURIComponent(repo)}` : '';
+    const res = await fetch(`/api/aicenter/custom-tools/${encodeURIComponent(toolId)}${qs}`, {
+      method: 'DELETE'
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async testCustomTool(tool: Partial<CustomToolItem>, args: Record<string, any>, repo?: string): Promise<ApiResponse<any>> {
+    const res = await fetch('/api/aicenter/custom-tools/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tool, args, repo })
     });
     return { ok: res.ok, data: await res.json() };
   },

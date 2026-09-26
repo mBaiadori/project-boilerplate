@@ -224,5 +224,75 @@ export async function skillsRoutes(fastify: FastifyInstance) {
       return reply.status(400).send({ error: err.message });
     }
   });
+
+  // =========================================================================
+  // 10. CUSTOM PROJECT TOOLS (CRUD & RUNNER)
+  // =========================================================================
+  fastify.get('/api/aicenter/custom-tools', async (request, reply) => {
+    const query = request.query as { repo?: string };
+    const cfg = loadConfig();
+    const repoName = query.repo || cfg.active_repo?.name || 'local';
+    const { customToolsService } = await import('./custom-tools.service.js');
+    return reply.send({
+      repo: repoName,
+      tools: customToolsService.getProjectTools(repoName),
+    });
+  });
+
+  fastify.get('/api/aicenter/custom-tools/:id', async (request, reply) => {
+    const params = request.params as { id: string };
+    const query = request.query as { repo?: string };
+    const cfg = loadConfig();
+    const repoName = query.repo || cfg.active_repo?.name || 'local';
+    const { customToolsService } = await import('./custom-tools.service.js');
+    const tool = customToolsService.getProjectTool(repoName, params.id);
+    if (!tool) {
+      return reply.status(404).send({ error: `Ferramenta customizada '${params.id}' não encontrada.` });
+    }
+    return reply.send({ tool });
+  });
+
+  fastify.post('/api/aicenter/custom-tools', async (request, reply) => {
+    const body = request.body as { tool: any; repo?: string };
+    if (!body?.tool?.name || !body?.tool?.description) {
+      return reply.status(400).send({ error: 'Nome e descrição da ferramenta são obrigatórios.' });
+    }
+    const cfg = loadConfig();
+    const repoName = body.repo || cfg.active_repo?.name || 'local';
+    const { customToolsService } = await import('./custom-tools.service.js');
+    try {
+      const result = customToolsService.saveCustomTool(repoName, body.tool);
+      return reply.send(result);
+    } catch (err: any) {
+      return reply.status(400).send({ error: err.message });
+    }
+  });
+
+  fastify.delete('/api/aicenter/custom-tools/:id', async (request, reply) => {
+    const params = request.params as { id: string };
+    const query = request.query as { repo?: string };
+    const cfg = loadConfig();
+    const repoName = query.repo || cfg.active_repo?.name || 'local';
+    const { customToolsService } = await import('./custom-tools.service.js');
+    try {
+      const result = customToolsService.deleteCustomTool(repoName, params.id);
+      return reply.send(result);
+    } catch (err: any) {
+      return reply.status(400).send({ error: err.message });
+    }
+  });
+
+  fastify.post('/api/aicenter/custom-tools/test', async (request, reply) => {
+    const body = request.body as { tool: any; args?: Record<string, any>; repo?: string };
+    const cfg = loadConfig();
+    const repoName = body.repo || cfg.active_repo?.name || 'local';
+    const { customToolsService } = await import('./custom-tools.service.js');
+    try {
+      const result = await customToolsService.executeCustomTool(body.tool, body.args || {}, { repoName });
+      return reply.send(result);
+    } catch (err: any) {
+      return reply.status(400).send({ error: err.message });
+    }
+  });
 }
 

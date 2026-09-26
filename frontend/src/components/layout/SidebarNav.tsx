@@ -189,7 +189,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
         <button
           className={`dash-nav-item ${activeView === "wiki" ? "active" : ""}`}
           data-view="wiki"
-          title="Base de Conhecimento & Decisões da Equipe"
+          title="Base de Conhecimento & Decisões"
           onClick={() => onSelectView("wiki")}
         >
           <svg

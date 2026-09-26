@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useWorkspace } from "../../context/WorkspaceContext";
 import { API } from "../../services/api";
+import { isPathHidden } from "../../utils/hidden-files";
 
 interface VersionsSubViewProps {
   onOpenFile?: (path: string) => void;
@@ -95,7 +96,11 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
     Record<string, boolean>
   >({});
 
-  const changedFiles = gitStatus?.files || [];
+  const changedFiles = useMemo(() => {
+    return (gitStatus?.files || []).filter(
+      (f) => f?.path && !isPathHidden(f.path),
+    );
+  }, [gitStatus?.files]);
   const currentBranch = gitStatus?.branch || "main";
   const isClean = gitStatus?.isClean ?? changedFiles.length === 0;
 
@@ -187,7 +192,7 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
     setFeedback({
       type: "success",
       message:
-        "Todas as novidades da equipe foram marcadas como visualizadas com sucesso!",
+        "Todas as novidades d foram marcadas como visualizadas com sucesso!",
     });
   };
 
@@ -199,7 +204,7 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
       if (res?.success) {
         setFeedback({
           type: "success",
-          message: `Sincronização com a equipe concluída: ${res.message || "Atualizado"}`,
+          message: `Sincronização com  concluída: ${res.message || "Atualizado"}`,
         });
         if (refreshPendingChanges) await refreshPendingChanges();
         if (refreshWhatsNew) await refreshWhatsNew();
@@ -215,7 +220,7 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
     } catch (err: any) {
       setFeedback({
         type: "error",
-        message: err.message || "Erro ao sincronizar com o servidor da equipe.",
+        message: err.message || "Erro ao sincronizar com o servidor d.",
       });
     } finally {
       setIsSyncing(false);
@@ -441,7 +446,11 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
   };
 
   // Whats New computed list
-  const whatsNewFiles = whatsNewSummary?.files || [];
+  const whatsNewFiles = useMemo(() => {
+    return (whatsNewSummary?.files || []).filter(
+      (f) => f?.path && !isPathHidden(f.path),
+    );
+  }, [whatsNewSummary?.files]);
   const whatsNewProposals = whatsNewSummary?.proposals || [];
   const whatsNewCommits = whatsNewSummary?.commits || [];
 
@@ -603,7 +612,7 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
               >
                 cloud_sync
               </span>
-              {isSyncing ? "Sincronizando..." : "Sincronizar com a Equipe"}
+              {isSyncing ? "Sincronizando..." : "Sincronizar com "}
             </button>
           </div>
         </div>
@@ -618,7 +627,7 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
             overflowX: "auto",
           }}
         >
-          {/* Tab 1: Novidades da Equipe */}
+          {/* Tab 1: Novidades d */}
           <button
             type="button"
             onClick={() => handleTabChange("whats-new")}
@@ -651,7 +660,7 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
             >
               auto_awesome
             </span>
-            <span>Novidades da Equipe</span>
+            <span>Novidades d</span>
             {whatsNewFiles.length > 0 && (
               <span
                 style={{
@@ -791,7 +800,7 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
           )}
 
           {/* ═══════════════════════════════════════════════════════════════════════
-            TAB 1: NOVIDADES DA EQUIPE (Sincronização & O que veio de novo)
+            TAB 1: NOVIDADES D (Sincronização & O que veio de novo)
             ═══════════════════════════════════════════════════════════════════════ */}
           {activeTab === "whats-new" && (
             <div
@@ -843,7 +852,7 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
                         color: "#0f172a",
                       }}
                     >
-                      Novidades da Equipe nesta Trilha
+                      Novidades d nesta Trilha
                     </h3>
                     <span
                       style={{
@@ -854,7 +863,7 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
                       }}
                     >
                       {whatsNewSummary?.summaryMessage ||
-                        "Nenhuma atualização recente da equipe."}
+                        "Nenhuma atualização recente d."}
                     </span>
                   </div>
                 </div>
@@ -1157,8 +1166,7 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
                         color: "#0f172a",
                       }}
                     >
-                      Documentos Trazidos pela Equipe (
-                      {filteredWhatsNewFiles.length})
+                      Documentos Trazidos pel ({filteredWhatsNewFiles.length})
                     </span>
                   </div>
 
@@ -1400,7 +1408,7 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
                                 >
                                   {isExpanded
                                     ? "Ocultar mudanças"
-                                    : "Ver mudanças da equipe"}
+                                    : "Ver mudanças d"}
                                 </button>
                               </div>
                             </div>
@@ -1507,7 +1515,7 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
           )}
 
           {/* ═══════════════════════════════════════════════════════════════════════
-            TAB 2: MEUS RASCUNHOS & MODIFICAÇÕES LOCAIS (Isolado da Equipe!)
+            TAB 2: MEUS RASCUNHOS & MODIFICAÇÕES LOCAIS (Isolado d!)
             ═══════════════════════════════════════════════════════════════════════ */}
           {activeTab === "drafts" && (
             <div

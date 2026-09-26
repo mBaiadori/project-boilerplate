@@ -77,7 +77,9 @@ export class AIService {
     const fullUserPrompt = `${prompt}${contextPrompt}`;
     const allowedTools = aiSettings.allowed_tools;
     const hasTools = Array.isArray(allowedTools) && allowedTools.length > 0;
-    const activeTools = hasTools ? toolRegistry.getToolsForSkill(allowedTools) : [];
+    const activeTools = hasTools
+      ? toolRegistry.getToolsForSkill(allowedTools, repoName)
+      : toolRegistry.getAllTools(repoName);
     const executionContext = { repoName, filePath };
     const executedToolRecords: ToolCallExecutionRecord[] = [];
     const maxSteps = 5;

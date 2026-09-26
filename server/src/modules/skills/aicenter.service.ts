@@ -11,7 +11,88 @@ class AICenterService {
   // 1. AGENTS MANAGEMENT
   // =========================================================================
   public getHubAgents(): AgentDefinition[] {
-    return eccSeedAgents;
+    const agentsMap = new Map<string, AgentDefinition>();
+
+    // 1. Agentes Nativos do Sistema (Core)
+    for (const seed of eccSeedAgents) {
+      agentsMap.set(seed.id, {
+        ...seed,
+        source: 'system',
+        author: 'Context-OS (Core)',
+      });
+    }
+
+    // 2. Agentes da Comunidade (ECC-main/agents/*.md)
+    const eccMainAgentsDir = path.resolve(process.cwd(), 'ECC-main', 'agents');
+    if (fs.existsSync(eccMainAgentsDir)) {
+      try {
+        const agentFiles = fs.readdirSync(eccMainAgentsDir, { withFileTypes: true });
+        for (const file of agentFiles) {
+          if (!file.isFile() || !file.name.endsWith('.md')) continue;
+          const agentId = file.name.replace(/\.md$/, '');
+          if (agentsMap.has(agentId)) continue;
+
+          const rawContent = fs.readFileSync(path.join(eccMainAgentsDir, file.name), 'utf-8');
+          const parsed = this.parseAgentMarkdown(rawContent, agentId);
+          agentsMap.set(parsed.id, parsed);
+        }
+      } catch (err) {
+        console.warn('[AICenterService] Aviso ao ler agentes da comunidade:', err);
+      }
+    }
+
+    return Array.from(agentsMap.values());
+  }
+
+  private parseAgentMarkdown(rawContent: string, defaultId: string): AgentDefinition {
+    const frontmatterRegex = /^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/;
+    const match = rawContent.match(frontmatterRegex);
+
+    let metadata: Record<string, any> = {};
+    let content = rawContent;
+
+    if (match) {
+      const yamlBlock = match[1];
+      content = match[2];
+      const lines = yamlBlock.split('\n');
+      for (const line of lines) {
+        const [key, ...rest] = line.split(':');
+        if (key && rest.length > 0) {
+          const k = key.trim();
+          const val = rest.join(':').trim().replace(/^["']|["']$/g, '');
+          if (k === 'tools' || k === 'skills') {
+            metadata[k] = val ? val.split(',').map((s) => s.trim()).filter(Boolean) : [];
+          } else {
+            metadata[k] = val;
+          }
+        }
+      }
+    }
+
+    const name = metadata.name || defaultId;
+    const titleFormatted = name
+      .split('-')
+      .map((w: string) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(' ');
+
+    return {
+      id: metadata.id || defaultId,
+      name,
+      title: metadata.title || `${titleFormatted} (Especialista)`,
+      role: metadata.role || `Especialista (${titleFormatted})`,
+      description: metadata.description || 'Persona autônoma da comunidade.',
+      system_prompt: content.trim(),
+      skills: Array.isArray(metadata.skills) ? metadata.skills : [],
+      tools: Array.isArray(metadata.tools) ? metadata.tools : ['docs_read_file', 'docs_get_graph'],
+      category: (metadata.category as any) || 'engineering',
+      recommended_model: metadata.model ? `gemini-2.5-pro` : 'gemini-2.5-flash',
+      temperature: 0.3,
+      source: 'community',
+      sourceUrl: 'https://github.com/affaan-m/everything-claude-code',
+      license: 'MIT',
+      author: 'Comunidade (ECC • Licença MIT)',
+      icon: 'psychology',
+    };
   }
 
   public getProjectAgents(repoName: string): AgentDefinition[] {
@@ -32,7 +113,8 @@ class AICenterService {
   }
 
   public installAgent(repoName: string, agentId: string): { success: boolean; agent: AgentDefinition } {
-    const hubAgent = eccSeedAgents.find((a) => a.id === agentId);
+    const allHub = this.getHubAgents();
+    const hubAgent = allHub.find((a) => a.id === agentId);
     if (!hubAgent) {
       throw new Error(`Agente '${agentId}' não encontrado no catálogo global.`);
     }

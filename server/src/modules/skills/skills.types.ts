@@ -3,13 +3,14 @@ export interface SkillMetadata {
   name: string;
   title?: string;
   description: string;
-  category: 'governance' | 'architecture' | 'quality' | 'engineering' | 'memory' | 'general';
+  category: 'governance' | 'architecture' | 'quality' | 'engineering' | 'memory' | 'general' | 'testing' | 'security' | 'database';
   version: string;
-  source: 'ecc' | 'community' | 'project';
+  source: 'system' | 'community' | 'project';
   sourceUrl?: string;
+  license?: string;
+  author?: string;
   tools: string[];
   suggested_templates?: string[];
-  author?: string;
   tags?: string[];
   icon?: string;
 }
@@ -19,7 +20,7 @@ export interface SkillDefinition extends SkillMetadata {
   instincts?: string; // Optional behavioral heuristics
   installed_at?: string;
   updated_at?: string;
-  is_customized?: boolean; // True if user modified the original ECC seed
+  is_customized?: boolean;
 }
 
 export interface ProjectSkillsManifest {
@@ -44,10 +45,13 @@ export interface AgentDefinition {
   system_prompt: string;
   skills: string[];
   tools: string[];
-  category: 'architecture' | 'governance' | 'quality' | 'engineering' | 'review';
+  category: 'architecture' | 'governance' | 'quality' | 'engineering' | 'review' | 'security' | 'general';
   recommended_model?: string;
   temperature?: number;
-  source: 'ecc' | 'project' | 'custom';
+  source: 'system' | 'community' | 'project';
+  sourceUrl?: string;
+  license?: string;
+  author?: string;
   installed_at?: string;
   icon?: string;
 }
@@ -66,4 +70,48 @@ export interface MCPServerDefinition {
   discovered_tools?: { name: string; description: string }[];
   category?: string;
 }
+
+export interface CustomToolParameterProperty {
+  type: 'string' | 'number' | 'integer' | 'boolean' | 'array' | 'object';
+  description?: string;
+  enum?: string[];
+  items?: {
+    type: string;
+    description?: string;
+  };
+  properties?: Record<string, any>;
+  required?: string[];
+}
+
+export interface CustomToolDefinition {
+  id: string;
+  name: string;
+  title: string;
+  description: string;
+  category?: 'utility' | 'integration' | 'domain' | 'validation' | 'general';
+  parameters: {
+    type: 'object';
+    properties: Record<string, CustomToolParameterProperty>;
+    required?: string[];
+  };
+  handler_type: 'javascript' | 'http' | 'shell';
+  handler_code?: string; // Async JS: async function(args, context) { ... }
+  handler_config?: {
+    url?: string;
+    method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
+    headers?: Record<string, string>;
+    command?: string;
+  };
+  is_active?: boolean;
+  source?: 'project' | 'global';
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ProjectToolsManifest {
+  version: string;
+  project_repo: string;
+  tools: CustomToolDefinition[];
+}
+
 

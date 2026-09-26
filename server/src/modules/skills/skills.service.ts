@@ -106,6 +106,7 @@ export class SkillsService {
           parsed.installed_at = item.installed_at;
           parsed.updated_at = item.updated_at;
           parsed.is_customized = item.is_customized || false;
+          parsed.source = 'project';
           result.push(parsed);
         } catch {}
       }
@@ -286,8 +287,10 @@ export class SkillsService {
       description: metadata.description || 'Instruções de agente para o projeto.',
       category: (metadata.category as any) || 'governance',
       version: metadata.version || '1.0.0',
-      source: metadata.source || 'ecc',
-      sourceUrl: metadata.sourceUrl,
+      source: (metadata.source as any) || 'community',
+      sourceUrl: metadata.sourceUrl || 'https://github.com/affaan-m/everything-claude-code',
+      license: metadata.license || 'MIT',
+      author: metadata.author || 'Comunidade (ECC • Licença MIT)',
       tools: Array.isArray(metadata.tools) ? metadata.tools : [],
       suggested_templates: Array.isArray(metadata.suggested_templates) ? metadata.suggested_templates : [],
       tags: Array.isArray(metadata.tags) ? metadata.tags : [],
@@ -310,6 +313,8 @@ category: "${skill.category}"
 version: "${skill.version}"
 source: "${skill.source}"
 sourceUrl: "${skill.sourceUrl || ''}"
+author: "${skill.author || ''}"
+license: "${skill.license || ''}"
 tools: ${toolsJson}
 suggested_templates: ${templatesJson}
 tags: ${tagsJson}

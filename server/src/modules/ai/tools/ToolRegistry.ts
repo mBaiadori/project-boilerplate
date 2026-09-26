@@ -1,5 +1,6 @@
 import { AgentTool, ToolExecutionContext, ToolResult } from './tool.types.js';
 import { nativeTools } from './native-tools.js';
+import { customToolsService } from '../../skills/custom-tools.service.js';
 
 function convertPropToGeminiSchema(prop: any): any {
   if (!prop) return { type: 'STRING' };
@@ -55,17 +56,30 @@ export class ToolRegistry {
     return this.tools.get(name);
   }
 
-  getAllTools(): AgentTool[] {
-    return Array.from(this.tools.values());
+  getAllTools(repoName?: string): AgentTool[] {
+    const nativeList = Array.from(this.tools.values());
+    if (!repoName) return nativeList;
+
+    const customList = customToolsService.getProjectTools(repoName)
+      .filter((ct) => ct.is_active !== false)
+      .map((ct): AgentTool => ({
+        name: ct.name,
+        description: `[Custom Tool] ${ct.description}`,
+        parameters: ct.parameters as any,
+        execute: async (args, ctx) => {
+          return await customToolsService.executeCustomTool(ct, args, ctx);
+        },
+      }));
+
+    return [...nativeList, ...customList];
   }
 
-  getToolsForSkill(allowedToolNames?: string[]): AgentTool[] {
+  getToolsForSkill(allowedToolNames?: string[], repoName?: string): AgentTool[] {
+    const all = this.getAllTools(repoName);
     if (!allowedToolNames || allowedToolNames.length === 0) {
-      return this.getAllTools();
+      return all;
     }
-    return allowedToolNames
-      .map((name) => this.tools.get(name))
-      .filter((t): t is AgentTool => Boolean(t));
+    return all.filter((t) => allowedToolNames.includes(t.name));
   }
 
   async executeTool(
@@ -73,22 +87,29 @@ export class ToolRegistry {
     args: Record<string, any>,
     context: ToolExecutionContext
   ): Promise<ToolResult> {
-    const tool = this.tools.get(toolName);
-    if (!tool) {
-      return {
-        success: false,
-        error: `Ferramenta '${toolName}' não registrada no sistema.`,
-      };
+    const nativeTool = this.tools.get(toolName);
+    if (nativeTool) {
+      try {
+        return await nativeTool.execute(args || {}, context);
+      } catch (err: any) {
+        return {
+          success: false,
+          error: `Erro ao executar ferramenta nativa '${toolName}': ${err.message || String(err)}`,
+        };
+      }
     }
 
-    try {
-      return await tool.execute(args || {}, context);
-    } catch (err: any) {
-      return {
-        success: false,
-        error: `Erro ao executar ferramenta '${toolName}': ${err.message || String(err)}`,
-      };
+    if (context.repoName) {
+      const customTool = customToolsService.getProjectTool(context.repoName, toolName);
+      if (customTool) {
+        return await customToolsService.executeCustomTool(customTool, args || {}, context);
+      }
     }
+
+    return {
+      success: false,
+      error: `Ferramenta '${toolName}' não registrada no sistema ou no projeto ativo.`,
+    };
   }
 
   /**

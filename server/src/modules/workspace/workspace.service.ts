@@ -31,38 +31,8 @@ export interface TreeNode {
 
 export { generateDocId, extractDocLinksFromMarkdown };
 export type { DocumentMetadataItem };
-
-export const DEFAULT_HIDDEN_FILES = [
-  ".git",
-  ".gitignore",
-  ".DS_Store",
-  "node_modules",
-  ".project.config.json",
-  ".docs.metadata.json",
-  ".dictionary.json",
-  ".templates.json",
-  ".templates.metadata.json",
-  ".spec-memory",
-  ".skills",
-  ".mcp.json",
-  ".hidden_files.json",
-];
-
-export function loadHiddenFiles(repoDir: string): string[] {
-  const hiddenPath = path.join(repoDir, ".hidden_files.json");
-  if (fs.existsSync(hiddenPath)) {
-    try {
-      const data = JSON.parse(fs.readFileSync(hiddenPath, "utf-8"));
-      if (Array.isArray(data)) return data;
-    } catch (e) {
-      console.warn(
-        `[WorkspaceService] Erro ao ler .hidden_files.json em ${repoDir}:`,
-        e,
-      );
-    }
-  }
-  return DEFAULT_HIDDEN_FILES;
-}
+export { DEFAULT_HIDDEN_FILES, loadHiddenFiles, isPathHidden } from "../../utils/hidden-files.js";
+import { DEFAULT_HIDDEN_FILES, loadHiddenFiles, isPathHidden } from "../../utils/hidden-files.js";
 
 export class WorkspaceService {
   private getRepoDir(repoName: string): string {
@@ -91,10 +61,10 @@ export class WorkspaceService {
     const hiddenList = hiddenFiles || loadHiddenFiles(baseDir);
 
     for (const entry of entries) {
-      if (hiddenList.includes(entry.name)) continue;
-
       const fullPath = path.join(dir, entry.name);
       const relPath = path.relative(baseDir, fullPath).replace(/\\/g, "/");
+
+      if (isPathHidden(relPath, hiddenList) || isPathHidden(entry.name, hiddenList)) continue;
 
       if (entry.isDirectory()) {
         nodes.push({
@@ -586,7 +556,11 @@ export class WorkspaceService {
     }
 
     const repoName = activeRepo.name || "local";
-    const rawChanges = cfg.workspace_changes?.[repoName] || [];
+    const repoDir = this.getRepoDir(repoName);
+    const hiddenList = loadHiddenFiles(repoDir);
+    const rawChanges = (cfg.workspace_changes?.[repoName] || []).filter(
+      (c) => !isPathHidden(c.path, hiddenList),
+    );
 
     const detailedChanges = [];
     let totalAdditions = 0;

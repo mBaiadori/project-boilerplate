@@ -10,10 +10,10 @@ import { useAI } from "../../context/AIContext";
 import { API } from "../../services/api";
 import type { SkillItem } from "../../types";
 
-type Tab = "installed" | "hub";
+export type ScopeFilter = "installed" | "system" | "community";
 
 const CATEGORY_CHIPS = [
-  { id: "all", label: "Todas" },
+  { id: "all", label: "Todas as Categorias" },
   { id: "governance", label: "Governança" },
   { id: "architecture", label: "Arquitetura" },
   { id: "quality", label: "Qualidade" },
@@ -25,7 +25,7 @@ export const SkillsSubView: React.FC = () => {
   const { activeRepo } = useWorkspace();
   const { activeSkillId, setActiveSkillId } = useAI();
 
-  const [activeTab, setActiveTab] = useState<Tab>("installed");
+  const [scopeFilter, setScopeFilter] = useState<ScopeFilter>("installed");
   const [hubSkills, setHubSkills] = useState<SkillItem[]>([]);
   const [installedSkills, setInstalledSkills] = useState<SkillItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -52,9 +52,6 @@ export const SkillsSubView: React.FC = () => {
       if (projRes.ok && projRes.data) {
         const installed = projRes.data.installed_skills || [];
         setInstalledSkills(installed);
-        if (installed.length === 0 && activeTab === "installed") {
-          setActiveTab("hub");
-        }
       }
     } catch (err) {
       console.error("Erro ao carregar skills:", err);
@@ -106,9 +103,21 @@ export const SkillsSubView: React.FC = () => {
 
   const isInstalled = (id: string) => installedSkills.some((s) => s.id === id);
 
-  const displayedList = activeTab === "installed" ? installedSkills : hubSkills;
+  const systemSkills = hubSkills.filter((s) => s.source === "system");
+  const communitySkills = hubSkills.filter(
+    (s) => s.source === "community" || (!s.source && s.source !== "system"),
+  );
+
+  const displayedList =
+    scopeFilter === "installed"
+      ? installedSkills
+      : scopeFilter === "system"
+        ? systemSkills
+        : communitySkills;
+
   const filteredSkills = displayedList.filter((s) => {
     const matchesCat = selectedCategory === "all" || s.category?.toLowerCase() === selectedCategory.toLowerCase();
+
     const q = searchQuery.toLowerCase();
     const matchesSearch =
       !q ||
@@ -116,6 +125,7 @@ export const SkillsSubView: React.FC = () => {
       (s.title && s.title.toLowerCase().includes(q)) ||
       s.description.toLowerCase().includes(q) ||
       (s.tags && s.tags.some((t) => t.toLowerCase().includes(q)));
+
     return matchesCat && matchesSearch;
   });
 
@@ -169,11 +179,11 @@ export const SkillsSubView: React.FC = () => {
                     border: "1px solid var(--color-outline-variant, rgba(99, 102, 241, 0.25))",
                   }}
                 >
-                  Padrão ECC
+                  Sistema & Comunidade
                 </span>
               </div>
               <p className="subtitle" style={{ fontSize: "13px", color: "var(--text-muted)", marginTop: "4px", marginBottom: 0 }}>
-                Habilidades, ferramentas nativas e instruções autônomas ({activeRepo ? `projects/${activeRepo.name}` : "Workspace"}).
+                Habilidades organizadas em 3 escopos: Nativo do Sistema, Catálogo da Comunidade e Customizadas do Projeto ({activeRepo ? `projects/${activeRepo.name}` : "Workspace"}).
               </p>
             </div>
 
@@ -218,59 +228,44 @@ export const SkillsSubView: React.FC = () => {
             </div>
           )}
 
-          {/* ── 2. Tabs: Instaladas vs Catálogo Global ── */}
-          <div className="template-store-tabs" role="tablist">
-            <button
-              className={`store-tab-btn ${activeTab === "installed" ? "active" : ""}`}
-              id="tab-skills-installed"
-              type="button"
-              role="tab"
-              aria-selected={activeTab === "installed"}
-              onClick={() => setActiveTab("installed")}
-            >
-              <span className="material-symbols-outlined icon-xs" style={{ marginRight: "6px" }}>
-                check_circle
-              </span>
-              Instaladas no Projeto ({installedSkills.length})
-            </button>
-
-            <button
-              className={`store-tab-btn ${activeTab === "hub" ? "active" : ""}`}
-              id="tab-skills-hub"
-              type="button"
-              role="tab"
-              aria-selected={activeTab === "hub"}
-              onClick={() => setActiveTab("hub")}
-            >
-              <span className="material-symbols-outlined icon-xs" style={{ marginRight: "6px" }}>
-                public
-              </span>
-              Catálogo Global ECC ({hubSkills.length})
-            </button>
-          </div>
-
-          {/* ── 3. Filters & Search Bar ── */}
+          {/* ── 2. Filtros de Escopo (3 Filtros: Instaladas, Sistema, Comunidade) ── */}
           <div
             style={{
               display: "flex",
-              alignItems: "center",
               justifyContent: "space-between",
+              alignItems: "center",
               flexWrap: "wrap",
               gap: "12px",
               marginTop: "16px",
             }}
           >
-            <div className="store-filter-bar" id="skills-category-filters">
-              {CATEGORY_CHIPS.map((chip) => (
-                <button
-                  key={chip.id}
-                  className={`store-filter-chip ${selectedCategory === chip.id ? "active" : ""}`}
-                  type="button"
-                  onClick={() => setSelectedCategory(chip.id)}
-                >
-                  {chip.label}
-                </button>
-              ))}
+            <div style={{ display: "flex", gap: "6px" }}>
+              <button
+                className={`store-filter-chip ${scopeFilter === "installed" ? "active" : ""}`}
+                id="filter-skills-installed"
+                type="button"
+                onClick={() => setScopeFilter("installed")}
+              >
+                📁 Instaladas ({installedSkills.length})
+              </button>
+
+              <button
+                className={`store-filter-chip ${scopeFilter === "system" ? "active" : ""}`}
+                id="filter-skills-system"
+                type="button"
+                onClick={() => setScopeFilter("system")}
+              >
+                ⚙️ Sistema ({systemSkills.length})
+              </button>
+
+              <button
+                className={`store-filter-chip ${scopeFilter === "community" ? "active" : ""}`}
+                id="filter-skills-community"
+                type="button"
+                onClick={() => setScopeFilter("community")}
+              >
+                🌐 Comunidade ({communitySkills.length})
+              </button>
             </div>
 
             <div style={{ minWidth: "240px", flex: 1, maxWidth: "340px" }}>
@@ -307,6 +302,24 @@ export const SkillsSubView: React.FC = () => {
               </div>
             </div>
           </div>
+
+          <div
+            className="store-filter-bar"
+            id="skills-category-filters"
+            style={{ display: "flex", flexWrap: "wrap", gap: "4px", marginTop: "10px" }}
+          >
+            {CATEGORY_CHIPS.map((chip) => (
+              <button
+                key={chip.id}
+                className={`store-filter-chip ${selectedCategory === chip.id ? "active" : ""}`}
+                type="button"
+                onClick={() => setSelectedCategory(chip.id)}
+                style={{ fontSize: "11px", padding: "3px 10px" }}
+              >
+                {chip.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* ── 4. Main Content: Skills Grid ── */}
@@ -333,29 +346,24 @@ export const SkillsSubView: React.FC = () => {
                 extension_off
               </span>
               <h4 style={{ fontSize: "15px", fontWeight: 600, color: "var(--text-main)", margin: "0 0 6px 0" }}>
-                {activeTab === "installed" ? "Nenhuma skill instalada neste projeto" : "Nenhuma skill encontrada"}
+                {scopeFilter === "installed"
+                  ? "Nenhuma skill instalada neste projeto"
+                  : scopeFilter === "system"
+                    ? "Nenhuma skill do sistema encontrada"
+                    : "Nenhuma skill da comunidade encontrada"}
               </h4>
               <p style={{ fontSize: "12px", color: "var(--text-muted)", maxWidth: "420px", margin: "0 auto 16px auto" }}>
-                {activeTab === "installed"
-                  ? "Explore o Catálogo Global ECC para habilitar guardrails de governança, validação de termos e diagramação viva."
-                  : "Tente mudar os termos de busca ou filtros de categoria."}
+                {scopeFilter === "installed"
+                  ? "Explore as abas 'Sistema' ou 'Comunidade' para habilitar guardrails de governança, validação de termos e diagramação viva."
+                  : "Tente mudar os termos de busca ou o filtro de categoria acima."}
               </p>
-              {activeTab === "installed" && (
-                <button
-                  type="button"
-                  className="btn btn-primary btn-sm"
-                  onClick={() => setActiveTab("hub")}
-                  style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
-                >
-                  <span className="material-symbols-outlined icon-xs">explore</span>
-                  Explorar Catálogo Global ECC
-                </button>
-              )}
             </div>
           ) : (
             filteredSkills.map((skill) => {
               const installed = isInstalled(skill.id);
               const isActiveInCopilot = activeSkillId === skill.id;
+              const isSystem = skill.source === "system";
+              const isProject = skill.source === "project";
 
               return (
                 <div
@@ -378,7 +386,7 @@ export const SkillsSubView: React.FC = () => {
                 >
                   {/* Top Badges */}
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
                       <span
                         className="material-symbols-outlined"
                         style={{
@@ -394,6 +402,20 @@ export const SkillsSubView: React.FC = () => {
                       >
                         {skill.category || "Geral"}
                       </span>
+
+                      {isSystem ? (
+                        <span style={{ fontSize: "10px", fontWeight: 600, padding: "2px 6px", borderRadius: "4px", background: "rgba(26, 115, 232, 0.12)", color: "#1a73e8" }}>
+                          Sistema
+                        </span>
+                      ) : isProject ? (
+                        <span style={{ fontSize: "10px", fontWeight: 600, padding: "2px 6px", borderRadius: "4px", background: "rgba(16, 185, 129, 0.12)", color: "#10b981" }}>
+                          Projeto
+                        </span>
+                      ) : (
+                        <span style={{ fontSize: "10px", fontWeight: 600, padding: "2px 6px", borderRadius: "4px", background: "rgba(147, 51, 234, 0.12)", color: "#9333ea" }}>
+                          Comunidade
+                        </span>
+                      )}
                     </div>
 
                     <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
@@ -436,7 +458,7 @@ export const SkillsSubView: React.FC = () => {
                       color: "var(--text-muted)",
                       lineHeight: "1.4",
                       flex: 1,
-                      margin: "0 0 12px 0",
+                      margin: "0 0 8px 0",
                       display: "-webkit-box",
                       WebkitLineClamp: 3,
                       WebkitBoxOrient: "vertical",
@@ -445,6 +467,14 @@ export const SkillsSubView: React.FC = () => {
                   >
                     {skill.description}
                   </p>
+
+                  {/* Discrete attribution footer for community items */}
+                  {!isSystem && !isProject && (
+                    <div style={{ fontSize: "10px", color: "var(--text-muted)", marginBottom: "10px", opacity: 0.8, display: "flex", alignItems: "center", gap: "4px" }}>
+                      <span className="material-symbols-outlined" style={{ fontSize: "12px" }}>info</span>
+                      <span>Licença MIT • Catálogo da Comunidade</span>
+                    </div>
+                  )}
 
                   {/* Tools list */}
                   {skill.tools && skill.tools.length > 0 && (
@@ -758,7 +788,7 @@ export const SkillsSubView: React.FC = () => {
                   </>
                 ) : (
                   <>
-                    <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>Origem: Catálogo Global ECC</span>
+                    <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>Origem: Catálogo Global</span>
                     <button
                       type="button"
                       className="btn btn-primary btn-sm"

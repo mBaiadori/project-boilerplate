@@ -187,7 +187,7 @@ export const SkillsHubModal: React.FC<SkillsHubModalProps> = ({
                 }`}
               >
                 <Sparkles className="w-3.5 h-3.5" />
-                Catálogo Global ECC ({hubSkills.length})
+                Catálogo Global ({hubSkills.length})
               </button>
               <button
                 onClick={() => setActiveTab('installed')}

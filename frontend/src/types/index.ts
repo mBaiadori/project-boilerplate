@@ -281,10 +281,12 @@ export interface SkillItem {
   name: string;
   title?: string;
   description: string;
-  category: 'governance' | 'architecture' | 'quality' | 'engineering' | 'memory' | 'general';
+  category: 'governance' | 'architecture' | 'quality' | 'engineering' | 'memory' | 'general' | 'testing' | 'security' | 'database';
   version: string;
-  source: 'ecc' | 'community' | 'project';
+  source: 'system' | 'community' | 'project';
   sourceUrl?: string;
+  license?: string;
+  author?: string;
   tools: string[];
   suggested_templates?: string[];
   tags?: string[];
@@ -329,10 +331,13 @@ export interface AgentDefinition {
   system_prompt: string;
   skills: string[];
   tools: string[];
-  category: 'architecture' | 'governance' | 'quality' | 'engineering' | 'review';
+  category: 'architecture' | 'governance' | 'quality' | 'engineering' | 'review' | 'security' | 'general';
   recommended_model?: string;
   temperature?: number;
-  source: 'ecc' | 'project' | 'custom';
+  source: 'system' | 'community' | 'project';
+  sourceUrl?: string;
+  license?: string;
+  author?: string;
   installed_at?: string;
   icon?: string;
 }
@@ -357,6 +362,32 @@ export interface ToolItem {
   description: string;
   parameters: any;
 }
+
+export interface CustomToolItem {
+  id: string;
+  name: string;
+  title: string;
+  description: string;
+  category?: string;
+  parameters: {
+    type: 'object';
+    properties: Record<string, any>;
+    required?: string[];
+  };
+  handler_type: 'javascript' | 'http' | 'shell';
+  handler_code?: string;
+  handler_config?: {
+    url?: string;
+    method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
+    headers?: Record<string, string>;
+    command?: string;
+  };
+  is_active?: boolean;
+  source?: 'project' | 'global';
+  created_at?: string;
+  updated_at?: string;
+}
+
 
 
 

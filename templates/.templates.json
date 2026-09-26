@@ -7,7 +7,7 @@
     "category": "engenharia",
     "tags": ["rfc", "arquitetura", "proposta", "equipe"],
     "updated_at": "2026-09-23T12:00:00.000Z",
-    "content": "# RFC: {{TITLE}}\n\n- **Autor:** {{AUTHOR}}\n- **Data:** {{DATE}}\n- **Status:** `DRAFT` | `REVIEW` | `APPROVED` | `REJECTED`\n\n## 1. Resumo Executivo\nUma descrição concisa da proposta e do problema que ela resolve para a equipe ou produto.\n\n## 2. Motivação & Problema Atual\nQuais são as dores, gargalos técnicos ou necessidades de produto que justificam esta proposta?\n\n## 3. Solução Proposta\nDetalhamento da abordagem recomendada, fluxos, componentes afetados e exemplos de uso.\n\n```mermaid\ngraph TD\n    A[Cliente] --> B[Serviço]\n    B --> C[(Banco de Dados)]\n```\n\n## 4. Alternativas Consideradas\nQuais outras opções foram avaliadas e por que foram descartadas?\n\n## 5. Riscos & Trade-offs\n- **Complexidade:** Impacto na manutenção.\n- **Migração:** Plano para transição e compatibilidade.\n- **Segurança & Performance:** Considerações relevantes.\n\n## 6. Próximos Passos & Responsáveis\n- [ ] Tarefa 1: Validação de prova de conceito (@responsável)\n- [ ] Tarefa 2: Implementação do MVP (@responsável)\n",
+    "content": "# RFC: {{TITLE}}\n\n- **Autor:** {{AUTHOR}}\n- **Data:** {{DATE}}\n- **Status:** `DRAFT` | `REVIEW` | `APPROVED` | `REJECTED`\n\n## 1. Resumo Executivo\nUma descrição concisa da proposta e do problema que ela resolve para  ou produto.\n\n## 2. Motivação & Problema Atual\nQuais são as dores, gargalos técnicos ou necessidades de produto que justificam esta proposta?\n\n## 3. Solução Proposta\nDetalhamento da abordagem recomendada, fluxos, componentes afetados e exemplos de uso.\n\n```mermaid\ngraph TD\n    A[Cliente] --> B[Serviço]\n    B --> C[(Banco de Dados)]\n```\n\n## 4. Alternativas Consideradas\nQuais outras opções foram avaliadas e por que foram descartadas?\n\n## 5. Riscos & Trade-offs\n- **Complexidade:** Impacto na manutenção.\n- **Migração:** Plano para transição e compatibilidade.\n- **Segurança & Performance:** Considerações relevantes.\n\n## 6. Próximos Passos & Responsáveis\n- [ ] Tarefa 1: Validação de prova de conceito (@responsável)\n- [ ] Tarefa 2: Implementação do MVP (@responsável)\n",
     "prompt": "Você é o Revisor Técnico de RFCs (Request for Comments).\nAjude o time a articular claramente o problema, avaliar alternativas técnicas com imparcialidade, prever riscos e desenhar soluções bem estruturadas com diagramas quando útil.",
     "source": "community",
     "description": "Modelo de RFC para propor grandes alterações de arquitetura ou produto com revisão colaborativa do time.",
@@ -24,12 +24,12 @@
     "tags": ["prd", "produto", "requisitos", "ux"],
     "updated_at": "2026-09-23T12:00:00.000Z",
     "content": "# PRD: {{FEATURE_NAME}}\n\n## 1. Contexto & Problema\nQual é o problema do cliente ou oportunidade de negócio que estamos atacando?\n\n## 2. Objetivos & Métricas de Sucesso\n- **Objetivo Principal:** O que queremos alcançar?\n- **Métricas Chave (KPIs):** Como mediremos o sucesso pós-lançamento?\n\n## 3. Histórias de Usuário & Casos de Uso\n- **Como** [tipo de usuário],\n- **Eu quero** [realizar uma ação],\n- **Para que** [obter um benefício específico].\n\n## 4. Escopo & Requisitos Funcionais\n### No Escopo (In-Scope)\n- [ ] Requisito 1: Detalhe funcional.\n- [ ] Requisito 2: Regra de validação.\n\n### Fora do Escopo (Out-of-Scope)\n- O que deliberadamente não será feito nesta versão.\n\n## 5. Considerações de UX & Fluxo\nDescreva a jornada e estados esperados da interface (loading, sucesso, vazio, erro).\n",
-    "prompt": "Você é o Especialista em Gestão de Produto (Product Management).\nAjude a equipe a estruturar este PRD com clareza, definindo critérios de sucesso mensuráveis, histórias de usuário completas e escopo bem delimitado.",
+    "prompt": "Você é o Especialista em Gestão de Produto (Product Management).\nAjude  a estruturar este PRD com clareza, definindo critérios de sucesso mensuráveis, histórias de usuário completas e escopo bem delimitado.",
     "source": "community",
     "description": "Documento de Requisitos de Produto para alinhar expectativas entre negócios, design e engenharia.",
     "badge": "Produto",
-    "systemPrompt": "Você é o Especialista em Gestão de Produto (Product Management).\nAjude a equipe a estruturar este PRD com clareza, definindo critérios de sucesso mensuráveis, histórias de usuário completas e escopo bem delimitado.",
-    "assistant_prompt": "Você é o Especialista em Gestão de Produto (Product Management).\nAjude a equipe a estruturar este PRD com clareza, definindo critérios de sucesso mensuráveis, histórias de usuário completas e escopo bem delimitado."
+    "systemPrompt": "Você é o Especialista em Gestão de Produto (Product Management).\nAjude  a estruturar este PRD com clareza, definindo critérios de sucesso mensuráveis, histórias de usuário completas e escopo bem delimitado.",
+    "assistant_prompt": "Você é o Especialista em Gestão de Produto (Product Management).\nAjude  a estruturar este PRD com clareza, definindo critérios de sucesso mensuráveis, histórias de usuário completas e escopo bem delimitado."
   },
   {
     "id": "tech-spec",
@@ -72,11 +72,11 @@
     "tags": ["guia", "onboarding", "documentacao", "wiki"],
     "updated_at": "2026-09-23T12:00:00.000Z",
     "content": "# 📖 Guia: {{GUIDE_TITLE}}\n\n## 1. Introdução & Propósito\nQual é o objetivo deste guia e quem deve consultá-lo?\n\n## 2. Pré-requisitos & Ferramentas\n- Node.js >= 20\n- Git configurado\n\n## 3. Passo a Passo\n1. **Passo 1:** Execute os comandos de setup:\n```bash\nnpm install\nnpm run dev\n```\n2. **Passo 2:** Configuração das variáveis de ambiente.\n\n## 4. Boas Práticas & Dicas\n- Dica importante para o fluxo diário.\n- O que evitar durante o desenvolvimento.\n\n## 5. Dúvidas Frequentes (FAQ)\n* **P:** Como resolver problema X?\n* **R:** Execute o procedimento Y.\n",
-    "prompt": "Você é o Especialista em Documentação Técnica e Onboarding de Desenvolvedores.\nAjude a tornar este guia extremamente didático, claro e fácil de seguir por qualquer membro novo da equipe.",
+    "prompt": "Você é o Especialista em Documentação Técnica e Onboarding de Desenvolvedores.\nAjude a tornar este guia extremamente didático, claro e fácil de seguir por qualquer membro novo d.",
     "source": "community",
-    "description": "Estrutura para tutoriais internos, manuais de setup, onboarding e boas práticas da equipe.",
+    "description": "Estrutura para tutoriais internos, manuais de setup, onboarding e boas práticas d.",
     "badge": "Guia",
-    "systemPrompt": "Você é o Especialista em Documentação Técnica e Onboarding de Desenvolvedores.\nAjude a tornar este guia extremamente didático, claro e fácil de seguir por qualquer membro novo da equipe.",
-    "assistant_prompt": "Você é o Especialista em Documentação Técnica e Onboarding de Desenvolvedores.\nAjude a tornar este guia extremamente didático, claro e fácil de seguir por qualquer membro novo da equipe."
+    "systemPrompt": "Você é o Especialista em Documentação Técnica e Onboarding de Desenvolvedores.\nAjude a tornar este guia extremamente didático, claro e fácil de seguir por qualquer membro novo d.",
+    "assistant_prompt": "Você é o Especialista em Documentação Técnica e Onboarding de Desenvolvedores.\nAjude a tornar este guia extremamente didático, claro e fácil de seguir por qualquer membro novo d."
   }
 ]

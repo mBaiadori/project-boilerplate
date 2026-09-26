@@ -5,6 +5,7 @@ import { PROJECTS_DIR } from '../../../config/constants.js';
 import { docsMetadataService } from '../../workspace/docs-metadata.service.js';
 import { dictionaryService } from '../../dictionary/dictionary.service.js';
 import { templatesService } from '../../templates/templates.service.js';
+import { customToolsService } from '../../skills/custom-tools.service.js';
 
 function getSafeRepoPath(repoName: string, relativeFilePath: string): string | null {
   const safeRepo = repoName.replace(/[^a-zA-Z0-9_-]/g, '') || 'local';
@@ -416,4 +417,133 @@ export const nativeTools: AgentTool[] = [
       }
     },
   },
+
+  {
+    name: 'project_tool_list',
+    description: 'Lista todas as ferramentas customizadas e ativas cadastradas no projeto.',
+    parameters: {
+      type: 'object',
+      properties: {},
+    },
+    execute: async (_args, context): Promise<ToolResult> => {
+      try {
+        const tools = customToolsService.getProjectTools(context.repoName);
+        return {
+          success: true,
+          data: {
+            total_custom_tools: tools.length,
+            tools: tools.map((t) => ({
+              id: t.id,
+              name: t.name,
+              title: t.title,
+              description: t.description,
+              handler_type: t.handler_type,
+              is_active: t.is_active,
+            })),
+          },
+        };
+      } catch (err: any) {
+        return { success: false, error: `Erro ao listar ferramentas do projeto: ${err.message}` };
+      }
+    },
+  },
+
+  {
+    name: 'project_tool_upsert',
+    description: 'Cria ou atualiza uma ferramenta customizada no projeto (.tools/), permitindo que o próprio Copilot execute scripts Node.js, chamadas HTTP ou comandos CLI.',
+    parameters: {
+      type: 'object',
+      properties: {
+        name: {
+          type: 'string',
+          description: 'Identificador único da ferramenta no formato snake_case (ex: "format_sql_query", "jira_create_issue").',
+        },
+        title: {
+          type: 'string',
+          description: 'Título legível da ferramenta para exibição na UI.',
+        },
+        description: {
+          type: 'string',
+          description: 'Descrição clara e detalhada para que o modelo saiba quando e como invocar a ferramenta.',
+        },
+        category: {
+          type: 'string',
+          description: 'Categoria da ferramenta (utility, integration, domain, validation, general).',
+        },
+        handler_type: {
+          type: 'string',
+          enum: ['javascript', 'http', 'shell'],
+          description: 'Tipo de executor: javascript (código assíncrono em sandbox), http (webhook/API) ou shell (CLI).',
+        },
+        handler_code: {
+          type: 'string',
+          description: 'Código JavaScript executado quando handler_type for "javascript". Recebe args, context, utils.',
+        },
+        parameters_json: {
+          type: 'string',
+          description: 'String JSON contendo a definição do schema de parâmetros no formato { "type": "object", "properties": { ... }, "required": [...] }.',
+        },
+      },
+      required: ['name', 'description', 'handler_type'],
+    },
+    execute: async (args, context): Promise<ToolResult> => {
+      try {
+        let parsedParameters = { type: 'object', properties: {}, required: [] };
+        if (args.parameters_json) {
+          try {
+            parsedParameters = JSON.parse(args.parameters_json);
+          } catch {
+            return { success: false, error: 'O campo parameters_json não é um JSON válido.' };
+          }
+        }
+
+        const res = customToolsService.saveCustomTool(context.repoName, {
+          name: args.name,
+          title: args.title || args.name,
+          description: args.description,
+          category: args.category as any,
+          handler_type: args.handler_type,
+          handler_code: args.handler_code,
+          parameters: parsedParameters as any,
+        });
+
+        return {
+          success: true,
+          data: {
+            tool: res.tool,
+            message: `Ferramenta customizada '${res.tool.name}' salva com sucesso no projeto!`,
+          },
+        };
+      } catch (err: any) {
+        return { success: false, error: `Erro ao salvar ferramenta no projeto: ${err.message}` };
+      }
+    },
+  },
+
+  {
+    name: 'project_tool_delete',
+    description: 'Remove uma ferramenta customizada do projeto pelo ID ou nome.',
+    parameters: {
+      type: 'object',
+      properties: {
+        tool_id: {
+          type: 'string',
+          description: 'ID ou nome da ferramenta a ser removida.',
+        },
+      },
+      required: ['tool_id'],
+    },
+    execute: async (args, context): Promise<ToolResult> => {
+      try {
+        const res = customToolsService.deleteCustomTool(context.repoName, args.tool_id);
+        return {
+          success: res.success,
+          data: { message: res.message },
+        };
+      } catch (err: any) {
+        return { success: false, error: `Erro ao remover ferramenta: ${err.message}` };
+      }
+    },
+  },
 ];
+
