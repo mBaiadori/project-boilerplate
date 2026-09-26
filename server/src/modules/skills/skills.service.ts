@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { PROJECTS_DIR } from '../../config/constants.js';
+import { BASE_DIR, PROJECTS_DIR } from '../../config/constants.js';
 import { loadConfig, recordChange } from '../../config/storage.js';
 import { SkillDefinition, ProjectSkillsManifest, SkillMetadata } from './skills.types.js';
 import { ECC_SEED_SKILLS } from './seeds/seeds.data.js';
@@ -31,24 +31,38 @@ export class SkillsService {
   getHubSkills(): SkillDefinition[] {
     const hubMap = new Map<string, SkillDefinition>();
 
-    // 1. Sementes oficiais compiladas
+    // 1. Sementes oficiais pré-compiladas
     for (const seed of ECC_SEED_SKILLS) {
       hubMap.set(seed.id, seed);
     }
 
-    // 2. Tenta carregar skills adicionais de ECC-main/skills se a pasta existir na raiz
-    const eccMainSkillsDir = path.resolve(process.cwd(), 'ECC-main', 'skills');
-    if (fs.existsSync(eccMainSkillsDir)) {
+    // 2. Carrega todas as skills da pasta ECC-main/skills
+    const candidateDirs = [
+      path.join(BASE_DIR, 'ECC-main', 'skills'),
+      path.resolve(process.cwd(), 'ECC-main', 'skills'),
+      path.resolve(process.cwd(), '..', 'ECC-main', 'skills'),
+      path.resolve(PROJECTS_DIR, '..', 'ECC-main', 'skills'),
+    ];
+    const eccMainSkillsDir = candidateDirs.find((p) => fs.existsSync(p));
+
+    if (eccMainSkillsDir) {
       try {
         const skillFolders = fs.readdirSync(eccMainSkillsDir, { withFileTypes: true });
         for (const folder of skillFolders) {
-          if (!folder.isDirectory() || hubMap.has(folder.name)) continue;
+          if (!folder.isDirectory()) continue;
 
           const skillMdPath = path.join(eccMainSkillsDir, folder.name, 'SKILL.md');
           if (fs.existsSync(skillMdPath)) {
-            const rawContent = fs.readFileSync(skillMdPath, 'utf-8');
-            const parsed = this.parseSkillMarkdown(rawContent, folder.name);
-            hubMap.set(parsed.id, parsed);
+            try {
+              const rawContent = fs.readFileSync(skillMdPath, 'utf-8');
+              const parsed = this.parseSkillMarkdown(rawContent, folder.name);
+              // Mantém as sementes se já existirem ou atualiza com a versão completa do ECC-main
+              if (!hubMap.has(parsed.id) || hubMap.get(parsed.id)?.source === 'community') {
+                hubMap.set(parsed.id, parsed);
+              }
+            } catch (skillErr) {
+              console.warn(`[SkillsService] Falha ao processar skill '${folder.name}':`, skillErr);
+            }
           }
         }
       } catch (err) {
@@ -254,7 +268,7 @@ export class SkillsService {
     const frontmatterRegex = /^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/;
     const match = fileContent.match(frontmatterRegex);
 
-    let metadata: Partial<SkillMetadata> = {};
+    const metadata: Record<string, any> = {};
     let content = fileContent;
 
     if (match) {
@@ -262,38 +276,102 @@ export class SkillsService {
       content = match[2];
 
       const lines = yamlBlock.split('\n');
-      for (const line of lines) {
-        const [key, ...rest] = line.split(':');
-        if (key && rest.length > 0) {
-          const k = key.trim();
-          const val = rest.join(':').trim().replace(/^["']|["']$/g, '');
-          if (k === 'tools' || k === 'suggested_templates' || k === 'tags') {
+      let currentKey: string | null = null;
+
+      for (const rawLine of lines) {
+        const trimmed = rawLine.trim();
+        if (!trimmed || trimmed.startsWith('#')) continue;
+
+        // Check if list item of current key
+        if (rawLine.startsWith('  - ') || rawLine.startsWith('- ')) {
+          const itemVal = trimmed.replace(/^-\s*/, '').replace(/^["']|["']$/g, '');
+          if (currentKey) {
+            if (!Array.isArray(metadata[currentKey])) {
+              metadata[currentKey] = [];
+            }
+            metadata[currentKey].push(itemVal);
+          }
+          continue;
+        }
+
+        // Check if continuation of multi-line string
+        if ((rawLine.startsWith('  ') || rawLine.startsWith('\t')) && currentKey && typeof metadata[currentKey] === 'string') {
+          metadata[currentKey] += ' ' + trimmed.replace(/^["']|["']$/g, '');
+          continue;
+        }
+
+        const colonIdx = rawLine.indexOf(':');
+        if (colonIdx > 0) {
+          const key = rawLine.slice(0, colonIdx).trim();
+          const val = rawLine.slice(colonIdx + 1).trim();
+          currentKey = key;
+
+          if (val === '' || val === '|' || val === '>') {
+            metadata[key] = '';
+          } else if (val.startsWith('[') && val.endsWith(']')) {
             try {
-              metadata[k] = JSON.parse(val.replace(/'/g, '"'));
+              metadata[key] = JSON.parse(val.replace(/'/g, '"'));
             } catch {
-              metadata[k] = val ? [val] : [];
+              metadata[key] = val.slice(1, -1).split(',').map((s) => s.trim().replace(/^["']|["']$/g, '')).filter(Boolean);
             }
           } else {
-            (metadata as any)[k] = val;
+            metadata[key] = val.replace(/^["']|["']$/g, '');
           }
         }
       }
     }
 
+    const name = metadata.name || defaultId;
+    const title = metadata.title || name
+      .split('-')
+      .map((w: string) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(' ');
+
+    let category = metadata.category;
+    if (!category) {
+      const lower = (name + ' ' + (metadata.description || '')).toLowerCase();
+      if (lower.includes('governance') || lower.includes('spec') || lower.includes('compliance') || lower.includes('audit') || lower.includes('guard')) {
+        category = 'governance';
+      } else if (lower.includes('architect') || lower.includes('pattern') || lower.includes('design') || lower.includes('system') || lower.includes('ddd')) {
+        category = 'architecture';
+      } else if (lower.includes('test') || lower.includes('quality') || lower.includes('review') || lower.includes('benchmark') || lower.includes('eval')) {
+        category = 'quality';
+      } else if (lower.includes('memory') || lower.includes('graph') || lower.includes('recall') || lower.includes('context')) {
+        category = 'memory';
+      } else {
+        category = 'engineering';
+      }
+    }
+
+    // Parse tools if string or array
+    let tools: string[] = [];
+    if (Array.isArray(metadata.tools)) {
+      tools = metadata.tools;
+    } else if (typeof metadata.tools === 'string' && metadata.tools.trim()) {
+      tools = metadata.tools.split(',').map((s: string) => s.trim().replace(/^["']|["']$/g, '')).filter(Boolean);
+    }
+
+    let tags: string[] = [];
+    if (Array.isArray(metadata.tags)) {
+      tags = metadata.tags;
+    } else if (typeof metadata.tags === 'string' && metadata.tags.trim()) {
+      tags = metadata.tags.split(',').map((s: string) => s.trim().replace(/^["']|["']$/g, '')).filter(Boolean);
+    }
+
     return {
       id: metadata.id || defaultId,
-      name: metadata.name || defaultId,
-      title: metadata.title || metadata.name || defaultId,
-      description: metadata.description || 'Instruções de agente para o projeto.',
-      category: (metadata.category as any) || 'governance',
+      name,
+      title,
+      description: metadata.description || 'Instruções de engenharia e governança para agentes de contexto.',
+      category: category as any,
       version: metadata.version || '1.0.0',
       source: (metadata.source as any) || 'community',
       sourceUrl: metadata.sourceUrl || 'https://github.com/affaan-m/everything-claude-code',
       license: metadata.license || 'MIT',
       author: metadata.author || 'Comunidade (ECC • Licença MIT)',
-      tools: Array.isArray(metadata.tools) ? metadata.tools : [],
+      tools,
       suggested_templates: Array.isArray(metadata.suggested_templates) ? metadata.suggested_templates : [],
-      tags: Array.isArray(metadata.tags) ? metadata.tags : [],
+      tags,
       icon: metadata.icon || 'Sparkles',
       content: content.trim(),
     };

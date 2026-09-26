@@ -8,6 +8,7 @@ import type {
   MCPServerDefinition,
   ToolItem,
   CustomToolItem,
+  CommunityToolItem,
 } from "../../types";
 
 type MainTab = "skills" | "agents" | "tools" | "mcp";
@@ -49,10 +50,14 @@ export const AICenterSubView: React.FC = () => {
     null,
   );
 
-  // 3. Tools State (Native & Custom Project Tools)
+  // 3. Tools State (Native, Custom & Community ECC Tools)
   const [toolScope, setToolScope] = useState<ScopeFilter>("installed");
   const [toolsList, setToolsList] = useState<ToolItem[]>([]);
   const [customTools, setCustomTools] = useState<CustomToolItem[]>([]);
+  const [communityTools, setCommunityTools] = useState<CommunityToolItem[]>([]);
+  const [communityToolCategory, setCommunityToolCategory] = useState<string>("all");
+  const [communityToolSearch, setCommunityToolSearch] = useState<string>("");
+  const [selectedCommunityTool, setSelectedCommunityTool] = useState<CommunityToolItem | null>(null);
   const [testingTool, setTestingTool] = useState<ToolItem | null>(null);
   const [toolArgsInput, setToolArgsInput] = useState("{}");
   const [toolTestResult, setToolTestResult] = useState<any>(null);
@@ -123,6 +128,7 @@ return {
         projAgentsRes,
         toolsRes,
         customToolsRes,
+        commToolsRes,
         mcpTemplatesRes,
         projMcpRes,
       ] = await Promise.all([
@@ -132,6 +138,7 @@ return {
         API.getAgentsProject(repo),
         API.getTools(),
         API.getCustomTools(repo),
+        API.getCommunityTools(),
         API.getMcpTemplates(),
         API.getMcpProject(repo),
       ]);
@@ -151,6 +158,8 @@ return {
       if (toolsRes.ok && toolsRes.data) setToolsList(toolsRes.data.tools || []);
       if (customToolsRes.ok && customToolsRes.data)
         setCustomTools(customToolsRes.data.tools || []);
+      if (commToolsRes.ok && commToolsRes.data)
+        setCommunityTools(commToolsRes.data.tools || []);
 
       if (mcpTemplatesRes.ok && mcpTemplatesRes.data)
         setMcpTemplates(mcpTemplatesRes.data.templates || []);
@@ -867,7 +876,7 @@ return {
               >
                 build
               </span>
-              Tools ({customTools.length + toolsList.length})
+              Tools ({customTools.length + toolsList.length + communityTools.length})
             </button>
 
             <button
@@ -1592,7 +1601,7 @@ return {
                   onClick={() => setToolScope("community")}
                   className={`store-filter-chip ${toolScope === "community" ? "active" : ""}`}
                 >
-                  🌐 Comunidade (0)
+                  🌐 Comunidade ({communityTools.length})
                 </button>
               </div>
 
@@ -1935,54 +1944,321 @@ return {
               </div>
             )}
 
-            {/* Scope 3: Community Tools */}
+            {/* Scope 3: Community Tools (ECC-main & MCP Connectors) */}
             {toolScope === "community" && (
-              <div
-                style={{
-                  padding: "48px 24px",
-                  background: "var(--color-surface-container-low, #f8f9fa)",
-                  borderRadius: "12px",
-                  border: "1px dashed var(--color-outline-variant, #e2e8f0)",
-                  textAlign: "center",
-                }}
-              >
-                <span
-                  className="material-symbols-outlined"
+              <div>
+                {/* Search & Category Filter */}
+                <div
                   style={{
-                    fontSize: "40px",
-                    color: "var(--text-muted)",
-                    opacity: 0.6,
-                    marginBottom: "8px",
-                    display: "block",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                    gap: "12px",
+                    marginBottom: "16px",
                   }}
                 >
-                  public
-                </span>
-                <h4
-                  style={{
-                    fontSize: "15px",
-                    fontWeight: 600,
-                    margin: "0 0 6px 0",
-                    color: "var(--color-on-surface)",
-                  }}
-                >
-                  Catálogo de Ferramentas da Comunidade
-                </h4>
-                <p
-                  style={{
-                    fontSize: "12px",
-                    color: "var(--text-muted)",
-                    maxWidth: "460px",
-                    margin: "0 auto",
-                  }}
-                >
-                  Em breve, ferramentas e integrações publicadas pela comunidade
-                  estarão disponíveis aqui para instalação no projeto. Você
-                  também pode criar suas próprias ferramentas em{" "}
-                  <strong>Instaladas</strong>.
-                </p>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: "4px",
+                    }}
+                  >
+                    {[
+                      { id: "all", label: "Todas" },
+                      { id: "integration", label: "Integração & MCP" },
+                      { id: "search", label: "Busca & Web" },
+                      { id: "memory", label: "Memória & Grafos" },
+                      { id: "devops", label: "DevOps & Cloud" },
+                      { id: "quality", label: "Qualidade & Testes" },
+                    ].map((cat) => (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => setCommunityToolCategory(cat.id)}
+                        className={`store-filter-chip ${communityToolCategory === cat.id ? "active" : ""}`}
+                        style={{ fontSize: "11px", padding: "3px 10px" }}
+                      >
+                        {cat.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <input
+                    type="text"
+                    placeholder="Filtrar ferramentas da comunidade..."
+                    value={communityToolSearch}
+                    onChange={(e) => setCommunityToolSearch(e.target.value)}
+                    style={{
+                      fontSize: "12px",
+                      padding: "5px 12px",
+                      borderRadius: "16px",
+                      border: "1px solid var(--color-outline-variant, #cbd5e1)",
+                      background: "var(--color-surface, #ffffff)",
+                      color: "var(--color-on-surface, #202124)",
+                      width: "240px",
+                    }}
+                  />
+                </div>
+
+                {/* Community Tools Grid */}
+                {(() => {
+                  const filtered = communityTools.filter((t) => {
+                    const matchesCat =
+                      communityToolCategory === "all" ||
+                      t.category?.toLowerCase() === communityToolCategory.toLowerCase();
+                    const q = communityToolSearch.toLowerCase();
+                    const matchesSearch =
+                      !q ||
+                      t.name.toLowerCase().includes(q) ||
+                      t.title.toLowerCase().includes(q) ||
+                      t.description.toLowerCase().includes(q) ||
+                      (t.server_name && t.server_name.toLowerCase().includes(q));
+                    return matchesCat && matchesSearch;
+                  });
+
+                  if (filtered.length === 0) {
+                    return (
+                      <div
+                        style={{
+                          padding: "48px 24px",
+                          background: "var(--color-surface-container-low, #f8f9fa)",
+                          borderRadius: "12px",
+                          border: "1px dashed var(--color-outline-variant, #e2e8f0)",
+                          textAlign: "center",
+                        }}
+                      >
+                        <span
+                          className="material-symbols-outlined"
+                          style={{
+                            fontSize: "40px",
+                            color: "var(--text-muted)",
+                            opacity: 0.6,
+                            marginBottom: "8px",
+                            display: "block",
+                          }}
+                        >
+                          build_circle
+                        </span>
+                        <h4
+                          style={{
+                            fontSize: "15px",
+                            fontWeight: 600,
+                            margin: "0 0 6px 0",
+                            color: "var(--color-on-surface)",
+                          }}
+                        >
+                          Nenhuma ferramenta encontrada
+                        </h4>
+                        <p
+                          style={{
+                            fontSize: "12px",
+                            color: "var(--text-muted)",
+                            maxWidth: "420px",
+                            margin: "0 auto",
+                          }}
+                        >
+                          Tente ajustar o termo de busca ou a categoria selecionada.
+                        </p>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns:
+                          "repeat(auto-fill, minmax(320px, 1fr))",
+                        gap: "16px",
+                      }}
+                    >
+                      {filtered.map((tool) => {
+                        const isMcpConfigured = tool.server_id
+                          ? projectMcpServers.some((s) => s.id === tool.server_id)
+                          : false;
+
+                        return (
+                          <div
+                            key={tool.id || tool.name}
+                            className="template-card"
+                            style={{
+                              display: "flex",
+                              flexDirection: "column",
+                              background: "var(--color-surface-container-low, #f8f9fa)",
+                              border: "1px solid var(--color-outline-variant, #e2e8f0)",
+                              borderRadius: "12px",
+                              padding: "16px",
+                            }}
+                          >
+                            <div
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "space-between",
+                                marginBottom: "8px",
+                              }}
+                            >
+                              <span
+                                style={{
+                                  fontSize: "13px",
+                                  fontWeight: 700,
+                                  fontFamily: "monospace",
+                                  color: "var(--color-primary, #1a73e8)",
+                                }}
+                              >
+                                {tool.name}
+                              </span>
+                              <div
+                                style={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "6px",
+                                }}
+                              >
+                                {renderOriginBadge("community")}
+                              </div>
+                            </div>
+
+                            {tool.server_name && (
+                              <div
+                                style={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "6px",
+                                  marginBottom: "6px",
+                                }}
+                              >
+                                <span
+                                  style={{
+                                    fontSize: "10px",
+                                    fontWeight: 600,
+                                    padding: "2px 6px",
+                                    borderRadius: "4px",
+                                    background: "rgba(26, 115, 232, 0.08)",
+                                    color: "var(--color-primary, #1a73e8)",
+                                    border: "1px solid rgba(26, 115, 232, 0.2)",
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "3px",
+                                  }}
+                                >
+                                  <span
+                                    className="material-symbols-outlined"
+                                    style={{ fontSize: "11px" }}
+                                  >
+                                    cable
+                                  </span>
+                                  {tool.server_name}
+                                </span>
+                                {isMcpConfigured && (
+                                  <span
+                                    style={{
+                                      fontSize: "10px",
+                                      fontWeight: 600,
+                                      padding: "2px 6px",
+                                      borderRadius: "4px",
+                                      background: "rgba(16, 185, 129, 0.12)",
+                                      color: "#10b981",
+                                    }}
+                                  >
+                                    Ativo
+                                  </span>
+                                )}
+                              </div>
+                            )}
+
+                            <h4
+                              style={{
+                                fontSize: "14px",
+                                fontWeight: 600,
+                                margin: "0 0 4px 0",
+                                color: "var(--color-on-surface)",
+                              }}
+                            >
+                              {tool.title || tool.name}
+                            </h4>
+
+                            <p
+                              style={{
+                                fontSize: "12px",
+                                color: "var(--text-muted)",
+                                lineHeight: "1.4",
+                                flex: 1,
+                                margin: "0 0 12px 0",
+                              }}
+                            >
+                              {tool.description}
+                            </p>
+
+                            <div
+                              style={{
+                                paddingTop: "10px",
+                                borderTop:
+                                  "1px solid var(--color-outline-variant, #e2e8f0)",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "space-between",
+                                gap: "6px",
+                              }}
+                            >
+                              <button
+                                type="button"
+                                className="btn btn-ghost btn-sm"
+                                onClick={() => setSelectedCommunityTool(tool)}
+                                style={{
+                                  fontSize: "11px",
+                                  padding: "4px 8px",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "4px",
+                                }}
+                              >
+                                <span className="material-symbols-outlined icon-xs">
+                                  info
+                                </span>
+                                Parâmetros
+                              </button>
+
+                              {tool.server_id && (
+                                <button
+                                  type="button"
+                                  className={`btn btn-sm ${isMcpConfigured ? "btn-secondary" : "btn-primary"}`}
+                                  onClick={() => {
+                                    const matchingTpl = mcpTemplates.find(
+                                      (t) => t.id === tool.server_id,
+                                    );
+                                    if (matchingTpl) {
+                                      handleSaveMcpFromTemplate(matchingTpl);
+                                    } else {
+                                      setActiveMainTab("mcp");
+                                    }
+                                  }}
+                                  style={{
+                                    fontSize: "11px",
+                                    padding: "4px 10px",
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "4px",
+                                  }}
+                                >
+                                  <span className="material-symbols-outlined icon-xs">
+                                    {isMcpConfigured ? "check" : "add_link"}
+                                  </span>
+                                  {isMcpConfigured ? "Conectado" : "Conectar MCP"}
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
               </div>
             )}
+
           </div>
         )}
 
@@ -3330,6 +3606,236 @@ return {
                       {selectedSkill.content}
                     </pre>
                   </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Drawer: Community Tool Detail View ── */}
+        {selectedCommunityTool && (
+          <div
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(0,0,0,0.5)",
+              backdropFilter: "blur(4px)",
+              zIndex: 1000,
+              display: "flex",
+              justifyContent: "flex-end",
+            }}
+            onClick={() => setSelectedCommunityTool(null)}
+          >
+            <div
+              style={{
+                width: "100%",
+                maxWidth: "580px",
+                height: "100%",
+                background: "var(--color-surface, #ffffff)",
+                color: "var(--color-on-surface, #202124)",
+                display: "flex",
+                flexDirection: "column",
+                overflow: "hidden",
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div
+                style={{
+                  padding: "16px 20px",
+                  borderBottom:
+                    "1px solid var(--color-outline-variant, #e2e8f0)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                }}
+              >
+                <div>
+                  <h3 style={{ fontSize: "16px", fontWeight: 700, margin: 0 }}>
+                    {selectedCommunityTool.title || selectedCommunityTool.name}
+                  </h3>
+                  <span
+                    style={{
+                      fontSize: "11px",
+                      color: "var(--color-primary, #1a73e8)",
+                      fontFamily: "monospace",
+                    }}
+                  >
+                    tool: {selectedCommunityTool.name}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => setSelectedCommunityTool(null)}
+                  style={{ padding: "4px" }}
+                >
+                  <span className="material-symbols-outlined">close</span>
+                </button>
+              </div>
+
+              <div style={{ flex: 1, overflowY: "auto", padding: "20px" }}>
+                <div style={{ marginBottom: "16px" }}>
+                  <h4
+                    style={{
+                      fontSize: "12px",
+                      fontWeight: 700,
+                      textTransform: "uppercase",
+                      color: "var(--text-muted)",
+                      marginBottom: "6px",
+                    }}
+                  >
+                    Origem & Servidor MCP
+                  </h4>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    {renderOriginBadge(selectedCommunityTool.source)}
+                    {selectedCommunityTool.server_name && (
+                      <span
+                        style={{
+                          fontSize: "11px",
+                          fontWeight: 600,
+                          padding: "2px 8px",
+                          borderRadius: "4px",
+                          background: "rgba(26, 115, 232, 0.1)",
+                          color: "var(--color-primary, #1a73e8)",
+                        }}
+                      >
+                        Servidor: {selectedCommunityTool.server_name}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <h4
+                  style={{
+                    fontSize: "12px",
+                    fontWeight: 700,
+                    textTransform: "uppercase",
+                    color: "var(--text-muted)",
+                    marginBottom: "6px",
+                  }}
+                >
+                  Descrição
+                </h4>
+                <p
+                  style={{
+                    fontSize: "13px",
+                    lineHeight: "1.5",
+                    margin: "0 0 16px 0",
+                  }}
+                >
+                  {selectedCommunityTool.description}
+                </p>
+
+                {selectedCommunityTool.command_snippet && (
+                  <div style={{ marginBottom: "16px" }}>
+                    <h4
+                      style={{
+                        fontSize: "12px",
+                        fontWeight: 700,
+                        textTransform: "uppercase",
+                        color: "var(--text-muted)",
+                        marginBottom: "6px",
+                      }}
+                    >
+                      Comando / Conexão MCP
+                    </h4>
+                    <pre
+                      style={{
+                        fontSize: "11.5px",
+                        fontFamily: "var(--font-mono, monospace)",
+                        padding: "10px 12px",
+                        borderRadius: "8px",
+                        background:
+                          "var(--color-surface-container-low, #f8f9fa)",
+                        border:
+                          "1px solid var(--color-outline-variant, #e2e8f0)",
+                        overflowX: "auto",
+                      }}
+                    >
+                      {selectedCommunityTool.command_snippet}
+                    </pre>
+                  </div>
+                )}
+
+                <div>
+                  <h4
+                    style={{
+                      fontSize: "12px",
+                      fontWeight: 700,
+                      textTransform: "uppercase",
+                      color: "var(--text-muted)",
+                      marginBottom: "6px",
+                    }}
+                  >
+                    Esquema de Parâmetros (JSON Schema)
+                  </h4>
+                  <pre
+                    style={{
+                      fontSize: "11.5px",
+                      lineHeight: "1.45",
+                      fontFamily: "var(--font-mono, monospace)",
+                      padding: "12px",
+                      borderRadius: "8px",
+                      background:
+                        "var(--color-surface-container-low, #f8f9fa)",
+                      border:
+                        "1px solid var(--color-outline-variant, #e2e8f0)",
+                      whiteSpace: "pre-wrap",
+                      overflowX: "auto",
+                      maxHeight: "260px",
+                    }}
+                  >
+                    {JSON.stringify(
+                      selectedCommunityTool.parameters || {},
+                      null,
+                      2,
+                    )}
+                  </pre>
+                </div>
+              </div>
+
+              <div
+                style={{
+                  padding: "12px 20px",
+                  borderTop:
+                    "1px solid var(--color-outline-variant, #e2e8f0)",
+                  display: "flex",
+                  justifyContent: "flex-end",
+                  gap: "8px",
+                  background: "var(--color-surface-container-low, #f8f9fa)",
+                }}
+              >
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => setSelectedCommunityTool(null)}
+                >
+                  Fechar
+                </button>
+                {selectedCommunityTool.server_id && (
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    onClick={() => {
+                      const matchingTpl = mcpTemplates.find(
+                        (t) => t.id === selectedCommunityTool.server_id,
+                      );
+                      if (matchingTpl) {
+                        handleSaveMcpFromTemplate(matchingTpl);
+                      }
+                      setSelectedCommunityTool(null);
+                      setActiveMainTab("mcp");
+                    }}
+                  >
+                    Configurar Conector MCP
+                  </button>
                 )}
               </div>
             </div>

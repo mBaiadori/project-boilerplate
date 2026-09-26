@@ -785,6 +785,11 @@ export const API = {
     return { ok: res.ok, data: await res.json() };
   },
 
+  async getCommunityTools(): Promise<ApiResponse<{ tools: import('../types').CommunityToolItem[] }>> {
+    const res = await fetch('/api/aicenter/tools/community');
+    return { ok: res.ok, data: await res.json() };
+  },
+
   async executeToolTest(toolName: string, args: Record<string, any>, repo?: string): Promise<ApiResponse<any>> {
     const res = await fetch('/api/aicenter/tools/execute', {
       method: 'POST',

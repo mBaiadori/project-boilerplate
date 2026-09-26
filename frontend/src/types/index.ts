@@ -388,6 +388,22 @@ export interface CustomToolItem {
   updated_at?: string;
 }
 
+export interface CommunityToolItem {
+  id: string;
+  name: string;
+  title: string;
+  description: string;
+  category: string;
+  server_id?: string;
+  server_name?: string;
+  parameters?: any;
+  source: 'community';
+  author?: string;
+  license?: string;
+  icon?: string;
+  command_snippet?: string;
+}
+
 
 
 

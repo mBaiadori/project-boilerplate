@@ -108,6 +108,22 @@ export interface CustomToolDefinition {
   updated_at?: string;
 }
 
+export interface CommunityToolDefinition {
+  id: string;
+  name: string;
+  title: string;
+  description: string;
+  category: string;
+  server_id?: string;
+  server_name?: string;
+  parameters?: any;
+  source: 'community';
+  author?: string;
+  license?: string;
+  icon?: string;
+  command_snippet?: string;
+}
+
 export interface ProjectToolsManifest {
   version: string;
   project_repo: string;

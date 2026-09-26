@@ -169,6 +169,11 @@ export async function skillsRoutes(fastify: FastifyInstance) {
     return reply.send({ tools: aiCenterService.getAllTools() });
   });
 
+  fastify.get('/api/aicenter/tools/community', async (_request, reply) => {
+    const { aiCenterService } = await import('./aicenter.service.js');
+    return reply.send({ tools: aiCenterService.getCommunityTools() });
+  });
+
   fastify.post('/api/aicenter/tools/execute', async (request, reply) => {
     const body = request.body as { tool_name: string; args?: Record<string, any>; repo?: string };
     const cfg = loadConfig();

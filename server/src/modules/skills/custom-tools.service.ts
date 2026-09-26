@@ -85,7 +85,7 @@ export class CustomToolsService {
     const now = new Date().toISOString();
 
     const existingIndex = manifest.tools.findIndex(
-      (t) => t.id === toolId || t.name.toLowerCase() === toolName.toLowerCase()
+      (t: CustomToolDefinition) => t.id === toolId || t.name.toLowerCase() === toolName.toLowerCase()
     );
 
     const cleanTool: CustomToolDefinition = {
@@ -141,7 +141,7 @@ export class CustomToolsService {
     const safeRepo = getSafeRepo(repoName);
     const manifest = this.getProjectManifest(safeRepo);
 
-    manifest.tools = manifest.tools.filter((t) => t.id !== toolId && t.name !== toolId);
+    manifest.tools = manifest.tools.filter((t: CustomToolDefinition) => t.id !== toolId && t.name !== toolId);
     this.saveManifest(safeRepo, manifest);
 
     const toolDir = path.join(this.getToolsDir(safeRepo), toolId);
