@@ -14,6 +14,24 @@ export interface CopilotStoreState {
   isSettingsModalOpen: boolean;
   dynamicContext: DynamicContext | null;
 
+  // Session Management
+  currentSessionId: string;
+  setCurrentSessionId: (id: string) => void;
+  newChatSession: () => string;
+
+  // Multi-Document References & Global Scope
+  referencedDocs: string[];
+  isGlobalScope: boolean;
+  setReferencedDocs: (docs: string[]) => void;
+  addReferencedDoc: (path: string) => void;
+  removeReferencedDoc: (path: string) => void;
+  setIsGlobalScope: (isGlobal: boolean) => void;
+
+  // Skills & RAW Mode
+  activeSkillId: string | null;
+  isRawMode: boolean;
+  isSkillsModalOpen: boolean;
+
   // Prompt toggles & states
   templatePrompt: string | null;
   templateTitle: string | null;
@@ -33,6 +51,11 @@ export interface CopilotStoreState {
   closeSettingsModal: () => void;
   setDynamicContext: (ctx: DynamicContext | null) => void;
 
+  setActiveSkillId: (skillId: string | null) => void;
+  setIsRawMode: (isRaw: boolean) => void;
+  openSkillsModal: () => void;
+  closeSkillsModal: () => void;
+
   setTemplateContext: (data: { id: string | null; title: string | null; prompt: string | null }) => void;
   toggleTemplatePrompt: () => void;
   setIsTemplatePromptEnabled: (val: boolean) => void;
@@ -49,6 +72,14 @@ export const useCopilotStore = create<CopilotStoreState>((set) => ({
   isSettingsModalOpen: false,
   dynamicContext: null,
 
+  currentSessionId: `sess-${Date.now()}`,
+  referencedDocs: [],
+  isGlobalScope: false,
+
+  activeSkillId: 'living-docs-governance', // Default skill
+  isRawMode: false,
+  isSkillsModalOpen: false,
+
   templatePrompt: null,
   templateTitle: null,
   templateId: null,
@@ -56,6 +87,51 @@ export const useCopilotStore = create<CopilotStoreState>((set) => ({
 
   docPrompt: null,
   isDocPromptEnabled: true,
+
+  setCurrentSessionId: (currentSessionId) => {
+    set({ currentSessionId });
+  },
+
+  newChatSession: () => {
+    const newId = `sess-${Date.now()}`;
+    set({
+      currentSessionId: newId,
+      messages: [],
+      isThinking: false,
+    });
+    return newId;
+  },
+
+  setReferencedDocs: (referencedDocs) => {
+    set({ referencedDocs, isGlobalScope: referencedDocs.length === 0 });
+  },
+
+  addReferencedDoc: (path) => {
+    set((state) => {
+      if (state.referencedDocs.includes(path)) return state;
+      return {
+        referencedDocs: [...state.referencedDocs, path],
+        isGlobalScope: false,
+      };
+    });
+  },
+
+  removeReferencedDoc: (path) => {
+    set((state) => {
+      const nextDocs = state.referencedDocs.filter((p) => p !== path);
+      return {
+        referencedDocs: nextDocs,
+        isGlobalScope: nextDocs.length === 0,
+      };
+    });
+  },
+
+  setIsGlobalScope: (isGlobalScope) => {
+    set((state) => ({
+      isGlobalScope,
+      referencedDocs: isGlobalScope ? [] : state.referencedDocs,
+    }));
+  },
 
   setMessages: (messages) => {
     set((state) => ({
@@ -91,6 +167,22 @@ export const useCopilotStore = create<CopilotStoreState>((set) => ({
     set({ dynamicContext });
   },
 
+  setActiveSkillId: (activeSkillId) => {
+    set({ activeSkillId });
+  },
+
+  setIsRawMode: (isRawMode) => {
+    set({ isRawMode });
+  },
+
+  openSkillsModal: () => {
+    set({ isSkillsModalOpen: true });
+  },
+
+  closeSkillsModal: () => {
+    set({ isSkillsModalOpen: false });
+  },
+
   setTemplateContext: ({ id, title, prompt }) => {
     set({
       templateId: id,
@@ -104,22 +196,19 @@ export const useCopilotStore = create<CopilotStoreState>((set) => ({
     set((state) => ({ isTemplatePromptEnabled: !state.isTemplatePromptEnabled }));
   },
 
-  setIsTemplatePromptEnabled: (val) => {
-    set({ isTemplatePromptEnabled: val });
+  setIsTemplatePromptEnabled: (isTemplatePromptEnabled) => {
+    set({ isTemplatePromptEnabled });
   },
 
   setDocPrompt: (docPrompt) => {
-    set({
-      docPrompt,
-      ...(docPrompt && docPrompt.trim().length > 0 ? { isDocPromptEnabled: true } : {}),
-    });
+    set({ docPrompt });
   },
 
   toggleDocPrompt: () => {
     set((state) => ({ isDocPromptEnabled: !state.isDocPromptEnabled }));
   },
 
-  setIsDocPromptEnabled: (val) => {
-    set({ isDocPromptEnabled: val });
+  setIsDocPromptEnabled: (isDocPromptEnabled) => {
+    set({ isDocPromptEnabled });
   },
 }));

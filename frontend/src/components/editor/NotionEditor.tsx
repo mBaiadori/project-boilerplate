@@ -405,7 +405,7 @@ Mantenha um tom técnico, rigoroso e direto.`,
     engine.setMarkdown(initialText);
 
     const hash = window.location.hash;
-    if (hash && hash.includes(":~:text=")) {
+    if (hash && (hash.includes(":~:text=") || hash.startsWith("#")) && initialText.trim()) {
       setTimeout(() => {
         engine.scrollToFragment(hash);
       }, 250);
@@ -423,11 +423,14 @@ Mantenha um tom técnico, rigoroso e direto.`,
       const targetText = editorTab === "document" ? docBody : effectivePrompt;
       isInternalChangeRef.current = false;
       engineRef.current.setMarkdown(targetText);
+      setFragmentAlert(null);
+      engineRef.current.clearFragmentHighlights();
+
       const hash = window.location.hash;
-      if (hash && hash.includes(":~:text=")) {
+      if (hash && (hash.includes(":~:text=") || hash.startsWith("#")) && targetText.trim()) {
         setTimeout(() => {
           engineRef.current?.scrollToFragment(hash);
-        }, 250);
+        }, 150);
       }
     }
   }, [filePath]);
@@ -435,6 +438,10 @@ Mantenha um tom técnico, rigoroso e direto.`,
   // Listeners para navegação e atualização de fragmentos de texto (Deep Linking)
   useEffect(() => {
     const handleFragmentNav = (e: any) => {
+      // Se o evento especificou um filePath de destino, só executa se corresponder a este editor
+      if (e.detail?.filePath && e.detail.filePath !== filePath) {
+        return;
+      }
       const targetHash = e.detail?.hash || window.location.hash;
       if (
         targetHash &&
@@ -448,6 +455,11 @@ Mantenha um tom técnico, rigoroso e direto.`,
 
     const handleHashChange = () => {
       const hash = window.location.hash;
+      if (!hash) {
+        setFragmentAlert(null);
+        engineRef.current?.clearFragmentHighlights();
+        return;
+      }
       if (hash && (hash.includes(":~:text=") || hash.startsWith("#"))) {
         setTimeout(() => {
           engineRef.current?.scrollToFragment(hash);
@@ -464,7 +476,7 @@ Mantenha um tom técnico, rigoroso e direto.`,
       );
       window.removeEventListener("hashchange", handleHashChange);
     };
-  }, []);
+  }, [filePath]);
 
   // Sync external content changes into the editor canvas
   useEffect(() => {

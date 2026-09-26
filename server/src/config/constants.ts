@@ -41,6 +41,7 @@ export interface ProjectTemplate {
   source: 'community' | 'local' | string;
   description?: string;
   badge?: string;
+  skills?: string[]; // Attached ECC skills (e.g. ['living-docs-governance', 'architecture-adr-guardian'])
   // Compatibility fields
   systemPrompt?: string;
   assistant_prompt?: string;
@@ -92,6 +93,7 @@ function sanitizeTemplateItem(item: any, defaultSource: 'local' | 'community' = 
   const source = item.source || defaultSource;
   const description = item.description || '';
   const badge = item.badge || (source === 'community' ? 'Comunidade' : 'Local');
+  const skills = Array.isArray(item.skills) ? item.skills : [];
 
   return {
     id,
@@ -100,6 +102,7 @@ function sanitizeTemplateItem(item: any, defaultSource: 'local' | 'community' = 
     ext,
     category,
     tags,
+    skills,
     updated_at,
     content,
     prompt,

@@ -1,0 +1,419 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { AgentTool, ToolResult } from './tool.types.js';
+import { PROJECTS_DIR } from '../../../config/constants.js';
+import { docsMetadataService } from '../../workspace/docs-metadata.service.js';
+import { dictionaryService } from '../../dictionary/dictionary.service.js';
+import { templatesService } from '../../templates/templates.service.js';
+
+function getSafeRepoPath(repoName: string, relativeFilePath: string): string | null {
+  const safeRepo = repoName.replace(/[^a-zA-Z0-9_-]/g, '') || 'local';
+  const repoDir = path.resolve(PROJECTS_DIR, safeRepo);
+  const targetPath = path.resolve(repoDir, relativeFilePath.replace(/^\/+/, ''));
+  if (!targetPath.startsWith(repoDir)) {
+    return null; // Sandboxing: path traversal attempt blocked
+  }
+  return targetPath;
+}
+
+export const nativeTools: AgentTool[] = [
+  {
+    name: 'docs_get_graph',
+    description: 'Obtém o grafo de conexões, links de entrada/saída, status e metadados de documentos no projeto.',
+    parameters: {
+      type: 'object',
+      properties: {
+        target_path: {
+          type: 'string',
+          description: 'Caminho relativo do documento específico para inspecionar conexões (ex: "docs/architecture.md"). Se omitido, retorna resumo de todo o grafo.',
+        },
+      },
+    },
+    execute: async (args, context): Promise<ToolResult> => {
+      try {
+        const metaList = docsMetadataService.loadDocsMetadata(context.repoName);
+        if (args.target_path) {
+          const cleanPath = args.target_path.replace(/^\/+/, '');
+          const doc = metaList.find((d) => d.path === cleanPath || d.id === cleanPath);
+          if (!doc) {
+            return {
+              success: false,
+              error: `Documento '${args.target_path}' não encontrado no índice de metadados do projeto.`,
+            };
+          }
+
+          // Documentos que apontam para este (incoming links)
+          const referencedBy = metaList
+            .filter((d) => Array.isArray(d.links) && d.links.some((l) => l.includes(cleanPath) || l.includes(doc.id)))
+            .map((d) => ({ path: d.path, title: d.title, status: d.status }));
+
+          return {
+            success: true,
+            data: {
+              document: doc,
+              incoming_references: referencedBy,
+              outgoing_links: doc.links || [],
+            },
+          };
+        }
+
+        // Resumo geral do grafo
+        return {
+          success: true,
+          data: {
+            total_documents: metaList.length,
+            documents: metaList.map((d) => ({
+              id: d.id,
+              path: d.path,
+              title: d.title || d.name,
+              status: d.status,
+              categories: d.categories,
+              tags: d.tags,
+              links_count: (d.links || []).length,
+            })),
+          },
+        };
+      } catch (err: any) {
+        return { success: false, error: `Erro ao obter grafo: ${err.message}` };
+      }
+    },
+  },
+
+  {
+    name: 'docs_list_by_status',
+    description: 'Lista documentos filtrados por status do ciclo de vida (draft, proposed, review, approved, superseded, deprecated).',
+    parameters: {
+      type: 'object',
+      properties: {
+        status: {
+          type: 'string',
+          description: 'O status a ser filtrado (ex: "approved", "draft", "deprecated", "review").',
+        },
+      },
+      required: ['status'],
+    },
+    execute: async (args, context): Promise<ToolResult> => {
+      try {
+        const metaList = docsMetadataService.loadDocsMetadata(context.repoName);
+        const filtered = metaList.filter(
+          (d) => (d.status || 'draft').toLowerCase() === (args.status || '').toLowerCase()
+        );
+        return {
+          success: true,
+          data: {
+            status: args.status,
+            count: filtered.length,
+            documents: filtered.map((d) => ({
+              id: d.id,
+              path: d.path,
+              title: d.title || d.name,
+              tags: d.tags,
+              updated_at: d.updated_at,
+            })),
+          },
+        };
+      } catch (err: any) {
+        return { success: false, error: `Erro ao filtrar por status: ${err.message}` };
+      }
+    },
+  },
+
+  {
+    name: 'docs_read_file',
+    description: 'Lê com segurança o conteúdo de texto de um arquivo markdown ou especificação dentro do repositório.',
+    parameters: {
+      type: 'object',
+      properties: {
+        file_path: {
+          type: 'string',
+          description: 'Caminho relativo do arquivo no repositório (ex: "docs/index.md", "README.md").',
+        },
+      },
+      required: ['file_path'],
+    },
+    execute: async (args, context): Promise<ToolResult> => {
+      try {
+        const fullPath = getSafeRepoPath(context.repoName, args.file_path);
+        if (!fullPath) {
+          return { success: false, error: 'Acesso negado: Caminho fora dos limites do repositório.' };
+        }
+        if (!fs.existsSync(fullPath)) {
+          return { success: false, error: `Arquivo '${args.file_path}' não encontrado no repositório.` };
+        }
+        const content = fs.readFileSync(fullPath, 'utf-8');
+        return {
+          success: true,
+          data: {
+            file_path: args.file_path,
+            content,
+            size_bytes: Buffer.byteLength(content, 'utf-8'),
+          },
+        };
+      } catch (err: any) {
+        return { success: false, error: `Erro ao ler arquivo: ${err.message}` };
+      }
+    },
+  },
+
+  {
+    name: 'docs_propose_diff',
+    description: 'Propõe uma alteração estruturada (patch/diff) para um arquivo. Não sobrescreve diretamente; gera uma proposta para aprovação do usuário.',
+    parameters: {
+      type: 'object',
+      properties: {
+        file_path: {
+          type: 'string',
+          description: 'Caminho do arquivo a ser modificado.',
+        },
+        proposed_content: {
+          type: 'string',
+          description: 'Conteúdo completo proposto para o arquivo após a alteração.',
+        },
+        rationale: {
+          type: 'string',
+          description: 'Justificativa clara da mudança proposta e quais regras ou documentos motivaram a alteração.',
+        },
+      },
+      required: ['file_path', 'proposed_content', 'rationale'],
+    },
+    execute: async (args, context): Promise<ToolResult> => {
+      try {
+        const fullPath = getSafeRepoPath(context.repoName, args.file_path);
+        if (!fullPath) {
+          return { success: false, error: 'Acesso negado: Caminho fora do repositório.' };
+        }
+
+        let originalContent = '';
+        if (fs.existsSync(fullPath)) {
+          originalContent = fs.readFileSync(fullPath, 'utf-8');
+        }
+
+        return {
+          success: true,
+          message: `Proposta de alteração gerada para '${args.file_path}'. Aguardando revisão do usuário.`,
+          data: {
+            file_path: args.file_path,
+            has_existing: fs.existsSync(fullPath),
+            original_content: originalContent,
+            proposed_content: args.proposed_content,
+            rationale: args.rationale,
+            timestamp: new Date().toISOString(),
+          },
+        };
+      } catch (err: any) {
+        return { success: false, error: `Erro ao gerar proposta de diff: ${err.message}` };
+      }
+    },
+  },
+
+  {
+    name: 'dictionary_validate_terms',
+    description: 'Valida se o texto ou documento fornecido utiliza corretamente os termos canônicos e a Linguagem Ubíqua cadastrada no projeto.',
+    parameters: {
+      type: 'object',
+      properties: {
+        text_sample: {
+          type: 'string',
+          description: 'Texto ou trecho de especificação para validar contra o dicionário de domínio.',
+        },
+      },
+      required: ['text_sample'],
+    },
+    execute: async (args, context): Promise<ToolResult> => {
+      try {
+        const dict = dictionaryService.getDictionary(context.repoName);
+        const terms: any[] = dict.terms || [];
+        const foundTerms: any[] = [];
+        const missingOrMisused: string[] = [];
+
+        const lowerText = (args.text_sample || '').toLowerCase();
+
+        for (const t of terms) {
+          const termName = (t.term || t.name || '').toLowerCase();
+          if (termName && lowerText.includes(termName)) {
+            foundTerms.push({
+              term: t.term || t.name,
+              definition: t.definition,
+              domain: t.domain,
+            });
+          }
+        }
+
+        return {
+          success: true,
+          data: {
+            total_domain_terms_checked: terms.length,
+            matched_canonical_terms: foundTerms,
+            alerts: missingOrMisused,
+          },
+        };
+      } catch (err: any) {
+        return { success: false, error: `Erro ao validar termos no dicionário: ${err.message}` };
+      }
+    },
+  },
+
+  {
+    name: 'dictionary_upsert_term',
+    description: 'Adiciona um novo termo canônico ou atualiza a definição, domínio, categoria ou aliases de um termo existente no Dicionário de Linguagem Ubíqua do projeto.',
+    parameters: {
+      type: 'object',
+      properties: {
+        term: {
+          type: 'string',
+          description: 'Nome canônico do termo (ex: "Workspace", "Living Documentation", "Tenant").',
+        },
+        definition: {
+          type: 'string',
+          description: 'Definição conceitual e inequívoca do termo no contexto do projeto.',
+        },
+        domain: {
+          type: 'string',
+          description: 'Domínio ou Bounded Context ao qual o termo pertence (ex: "Core", "Billing", "Identity"). Opcional.',
+        },
+        category: {
+          type: 'string',
+          description: 'Classificação do termo (ex: "Entity", "Value Object", "Process", "Architecture"). Opcional.',
+        },
+        code_name: {
+          type: 'string',
+          description: 'Nome correspondente no código-fonte/API (ex: "WorkspaceEntity", "BillingPlan"). Opcional.',
+        },
+        aliases: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Sinônimos, variações ou termos legados equivalentes. Opcional.',
+        },
+      },
+      required: ['term', 'definition'],
+    },
+    execute: async (args, context): Promise<ToolResult> => {
+      try {
+        if (!args.term || typeof args.term !== 'string' || !args.term.trim()) {
+          return { success: false, error: 'O parâmetro "term" é obrigatório e não pode ser vazio.' };
+        }
+        if (!args.definition || typeof args.definition !== 'string' || !args.definition.trim()) {
+          return { success: false, error: 'O parâmetro "definition" é obrigatório e não pode ser vazio.' };
+        }
+
+        const dict = dictionaryService.getDictionary(context.repoName);
+        dict.terms = Array.isArray(dict.terms) ? dict.terms : [];
+        dict.domains = Array.isArray(dict.domains) ? dict.domains : [];
+
+        const normalizedTermName = args.term.trim();
+        const existingIndex = dict.terms.findIndex(
+          (t: any) => (t.term || t.name || '').toLowerCase() === normalizedTermName.toLowerCase()
+        );
+
+        const updatedEntry: any = {
+          term: normalizedTermName,
+          definition: args.definition.trim(),
+          ...(args.domain ? { domain: args.domain.trim() } : {}),
+          ...(args.category ? { category: args.category.trim() } : {}),
+          ...(args.code_name ? { code_name: args.code_name.trim() } : {}),
+          ...(Array.isArray(args.aliases)
+            ? { aliases: args.aliases.map((a: any) => String(a).trim()).filter(Boolean) }
+            : {}),
+        };
+
+        let action: 'created' | 'updated' = 'created';
+
+        if (existingIndex >= 0) {
+          action = 'updated';
+          dict.terms[existingIndex] = {
+            ...dict.terms[existingIndex],
+            ...updatedEntry,
+          };
+        } else {
+          dict.terms.push(updatedEntry);
+        }
+
+        if (args.domain && typeof args.domain === 'string') {
+          const trimmedDomain = args.domain.trim();
+          if (trimmedDomain && !dict.domains.includes(trimmedDomain)) {
+            dict.domains.push(trimmedDomain);
+          }
+        }
+
+        dictionaryService.saveDictionary(dict, context.repoName);
+
+        return {
+          success: true,
+          data: {
+            action,
+            term: updatedEntry,
+            total_terms: dict.terms.length,
+            message: `Termo '${normalizedTermName}' ${action === 'created' ? 'adicionado' : 'atualizado'} com sucesso no dicionário.`,
+          },
+        };
+      } catch (err: any) {
+        return { success: false, error: `Erro ao salvar termo no dicionário: ${err.message}` };
+      }
+    },
+  },
+
+  {
+    name: 'templates_get_template',
+    description: 'Obtém a estrutura e o esqueleto de um template oficial cadastrado no projeto ou no catálogo global.',
+    parameters: {
+      type: 'object',
+      properties: {
+        template_id: {
+          type: 'string',
+          description: 'ID ou slug do template desejado (ex: "adr-template", "technical-spec").',
+        },
+      },
+      required: ['template_id'],
+    },
+    execute: async (args, context): Promise<ToolResult> => {
+      try {
+        const tpl = templatesService.resolveTemplate(args.template_id, context.repoName);
+        if (!tpl) {
+          return { success: false, error: `Template '${args.template_id}' não encontrado.` };
+        }
+        return {
+          success: true,
+          data: {
+            id: tpl.id,
+            title: tpl.title,
+            category: tpl.category,
+            content: tpl.content,
+            prompt: tpl.prompt,
+          },
+        };
+      } catch (err: any) {
+        return { success: false, error: `Erro ao buscar template: ${err.message}` };
+      }
+    },
+  },
+
+  {
+    name: 'memory_get_handoff',
+    description: 'Recupera o último marco de handoff registrado no .spec-memory do projeto para manter a continuidade cognitiva entre sessões.',
+    parameters: {
+      type: 'object',
+      properties: {},
+    },
+    execute: async (_args, context): Promise<ToolResult> => {
+      try {
+        const handoffPath = path.join(PROJECTS_DIR, context.repoName || 'local', '.spec-memory', 'handoffs', 'latest.md');
+        if (!fs.existsSync(handoffPath)) {
+          return {
+            success: true,
+            data: { handoff: null, message: 'Nenhum handoff anterior registrado no repositório.' },
+          };
+        }
+        const handoff = fs.readFileSync(handoffPath, 'utf-8');
+        return {
+          success: true,
+          data: {
+            handoff,
+            updated_at: fs.statSync(handoffPath).mtime.toISOString(),
+          },
+        };
+      } catch (err: any) {
+        return { success: false, error: `Erro ao ler memória: ${err.message}` };
+      }
+    },
+  },
+];

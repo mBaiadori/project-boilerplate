@@ -19,6 +19,7 @@ import { WikiSubView } from './subviews/WikiSubView';
 import { DictionarySubView } from './subviews/DictionarySubView';
 import { PRsSubView } from './subviews/PRsSubView';
 import { TemplatesSubView } from './subviews/TemplatesSubView';
+import { AICenterSubView } from './subviews/AICenterSubView';
 import { SettingsSubView } from './subviews/SettingsSubView';
 
 interface DashboardViewProps {
@@ -28,11 +29,11 @@ interface DashboardViewProps {
 const AI_WIDTH_STORAGE_KEY = 'spec_ai_pane_width';
 const DEFAULT_AI_WIDTH = 360;
 
-const VALID_SUBVIEWS: SubViewType[] = ['editor', 'edits', 'versions', 'dictionary', 'wiki', 'templates', 'prs', 'settings'];
+const VALID_SUBVIEWS: SubViewType[] = ['editor', 'edits', 'versions', 'dictionary', 'wiki', 'templates', 'skills', 'aicenter', 'prs', 'settings'];
 
 export const DashboardView: React.FC<DashboardViewProps> = ({ onBackToRepos }) => {
   const { repoName, subview } = useParams<{ repoName: string; subview?: string }>();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
   const activeSubView: SubViewType = (subview && VALID_SUBVIEWS.includes(subview as SubViewType))
@@ -60,7 +61,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onBackToRepos }) =
   // Sync File from search parameter ?file=...
   useEffect(() => {
     if (fileParam && fileParam !== activeFile && activeRepo) {
-      loadFile(fileParam);
+      const currentHash = window.location.hash || '';
+      loadFile(`${fileParam}${currentHash}`);
     }
   }, [fileParam, activeFile, activeRepo, loadFile]);
 
@@ -151,8 +153,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onBackToRepos }) =
     }
   };
 
-  const handleOpenFile = (path: string) => {
-    setSearchParams({ file: path });
+  const handleOpenFile = (rawPath: string) => {
+    const hashIndex = rawPath.indexOf('#');
+    const cleanPath = hashIndex !== -1 ? rawPath.slice(0, hashIndex) : rawPath;
+    const hash = hashIndex !== -1 ? rawPath.slice(hashIndex) : '';
+
+    const currentRepoName = repoName || activeRepo?.name || 'default';
+    navigate(`/repo/${encodeURIComponent(currentRepoName)}/editor?file=${encodeURIComponent(cleanPath)}${hash}`);
   };
 
   return (
@@ -207,6 +214,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onBackToRepos }) =
 
           {activeSubView === 'templates' && (
             <TemplatesSubView onApplyTemplate={() => handleSelectView('editor')} />
+          )}
+
+          {(activeSubView === 'aicenter' || activeSubView === 'skills') && (
+            <AICenterSubView />
           )}
 
           {activeSubView === 'prs' && (

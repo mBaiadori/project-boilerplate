@@ -65,6 +65,18 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
     }
   });
 
+  fastify.get('/api/workspace/context-bundle', async (request, reply) => {
+    try {
+      const query = request.query as { path?: string; repo?: string };
+      const cfg = loadConfig();
+      const repoName = query.repo || cfg.active_repo?.name || 'local';
+      const filePath = query.path || 'index.md';
+      return reply.send(docsMetadataService.buildDocumentContextBundle(repoName, filePath));
+    } catch (err: any) {
+      return reply.status(500).send({ error: err.message });
+    }
+  });
+
   fastify.get('/api/project/config', async (request, reply) => {
     try {
       const query = request.query as { repo?: string };

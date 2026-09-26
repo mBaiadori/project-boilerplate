@@ -1,64 +1,132 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAI } from '../../context/AIContext';
 import { API } from '../../services/api';
+import { SelectDropdown, type SelectOption } from '../common/SelectDropdown';
 
 const PROVIDERS = [
-  { id: 'gemini', name: 'Google Gemini', desc: 'Gemini 3.5 Flash / 1.5 Pro', needsKey: true, hasEndpoint: false },
+  { id: 'gemini', name: 'Google Gemini', desc: 'Gemini 2.5 Flash / 2.5 Pro', needsKey: true, hasEndpoint: false },
   { id: 'openai', name: 'OpenAI', desc: 'GPT-4o / GPT-4o-mini', needsKey: true, hasEndpoint: false },
-  { id: 'anthropic', name: 'Anthropic Claude', desc: 'Claude 3.5 Sonnet', needsKey: true, hasEndpoint: false },
+  { id: 'anthropic', name: 'Anthropic Claude', desc: 'Claude 3.7 & 3.5 Sonnet', needsKey: true, hasEndpoint: false },
   { id: 'deepseek', name: 'DeepSeek API', desc: 'DeepSeek V3 / R1', needsKey: true, hasEndpoint: false },
   { id: 'local', name: 'Ollama Local', desc: 'Offline & Sem Chave', needsKey: false, hasEndpoint: true, defaultEndpoint: 'http://localhost:11434/v1' }
 ];
 
+interface DetailedModelItem {
+  id: string;
+  name: string;
+  description?: string;
+}
+
 export const AISettingsModal: React.FC = () => {
   const { isSettingsModalOpen, closeSettingsModal, aiSettings, saveAISettings } = useAI();
   const [selectedProvider, setSelectedProvider] = useState('gemini');
-  const [model, setModel] = useState('gemini-3.5-flash');
+  const [model, setModel] = useState('gemini-2.5-flash');
   const [apiKey, setApiKey] = useState('');
   const [endpoint, setEndpoint] = useState('');
-  const [modelsList, setModelsList] = useState<string[]>([]);
+  const [modelsList, setModelsList] = useState<DetailedModelItem[]>([]);
   const [isLoadingModels, setIsLoadingModels] = useState(false);
+  const [isDynamicList, setIsDynamicList] = useState(false);
   const [isCustomModelInput, setIsCustomModelInput] = useState(false);
-  const [statusMessage, setStatusMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  const [statusMessage, setStatusMessage] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
 
   useEffect(() => {
     if (aiSettings) {
-      setSelectedProvider(aiSettings.active_provider || 'gemini');
-      setModel(aiSettings.active_model || 'gemini-3.5-flash');
-      const prov = aiSettings.providers?.[aiSettings.active_provider || 'gemini'];
+      const activeProv = aiSettings.active_provider || 'gemini';
+      setSelectedProvider(activeProv);
+      setModel(aiSettings.active_model || (activeProv === 'gemini' ? 'gemini-2.5-flash' : 'gpt-4o'));
+      const prov = aiSettings.providers?.[activeProv];
       if (prov) {
         setEndpoint(prov.custom_endpoint || '');
       }
     }
   }, [aiSettings, isSettingsModalOpen]);
 
+  const fetchModelsForProvider = async (provId: string, customKey?: string, customEp?: string) => {
+    setIsLoadingModels(true);
+    try {
+      const res = await API.getAIModels({
+        provider: provId,
+        api_key: customKey || apiKey || undefined,
+        custom_endpoint: customEp || endpoint || undefined,
+      });
+
+      if (res.ok && res.data) {
+        let items: DetailedModelItem[] = [];
+        if (res.data.detailedModels && res.data.detailedModels.length > 0) {
+          items = res.data.detailedModels;
+        } else if (res.data.models && res.data.models.length > 0) {
+          items = res.data.models.map((m: any) => typeof m === 'string' ? { id: m, name: m } : m);
+        }
+
+        if (items.length > 0) {
+          setModelsList(items);
+          setIsDynamicList(Boolean(res.data.isDynamic));
+          const exists = items.some((m) => m.id === model);
+          if (!exists && items[0]) {
+            setModel(items[0].id);
+          }
+          if (res.data.isDynamic) {
+            setStatusMessage({ text: res.data.message || `Carregados ${items.length} modelos dinamicamente via API`, type: 'success' });
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[AISettingsModal] Erro ao buscar modelos:', err);
+    } finally {
+      setIsLoadingModels(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isSettingsModalOpen) {
+      fetchModelsForProvider(selectedProvider);
+    }
+  }, [selectedProvider, isSettingsModalOpen]);
+
+  // Transform modelsList to SelectOption array
+  const selectOptions: SelectOption[] = useMemo(() => {
+    if (modelsList.length === 0) {
+      return [
+        { value: model, label: model, description: 'Modelo ativo selecionado' },
+        { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', description: 'Alta velocidade e capacidades multimodais', badge: 'Flash', badgeType: 'success' },
+        { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', description: 'Raciocínio complexo e codificação profunda', badge: 'Pro', badgeType: 'warning' },
+        { value: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash', description: 'Modelo versátil', badge: 'Flash', badgeType: 'info' },
+      ];
+    }
+
+    return modelsList.map((m) => {
+      let badge: string | undefined;
+      let badgeType: 'primary' | 'success' | 'warning' | 'neutral' | 'info' = 'primary';
+
+      if (m.id.includes('pro')) {
+        badge = 'Pro';
+        badgeType = 'warning';
+      } else if (m.id.includes('flash')) {
+        badge = 'Flash';
+        badgeType = 'success';
+      } else if (m.id.includes('reason') || m.id.includes('r1')) {
+        badge = 'Reasoner';
+        badgeType = 'info';
+      }
+
+      return {
+        value: m.id,
+        label: m.name !== m.id ? m.name : m.id,
+        description: m.description || m.id,
+        icon: 'smart_toy',
+        badge,
+        badgeType,
+      };
+    });
+  }, [modelsList, model]);
+
   if (!isSettingsModalOpen) return null;
 
   const currentProviderConfig = PROVIDERS.find(p => p.id === selectedProvider) || PROVIDERS[0];
 
-  const handleFetchModels = async () => {
-    setIsLoadingModels(true);
+  const handleManualFetchModels = () => {
     setStatusMessage(null);
-    try {
-      const res = await API.getAIModels({
-        provider: selectedProvider,
-        api_key: apiKey,
-        custom_endpoint: endpoint
-      });
-      if (res.ok && res.data.models && res.data.models.length > 0) {
-        setModelsList(res.data.models);
-        if (!res.data.models.includes(model) && res.data.models[0]) {
-          setModel(res.data.models[0]);
-        }
-        setStatusMessage({ text: `Encontrados ${res.data.models.length} modelos disponíveis`, type: 'success' });
-      } else {
-        setStatusMessage({ text: 'Não foi possível listar modelos automaticamente.', type: 'error' });
-      }
-    } catch (err) {
-      setStatusMessage({ text: 'Erro ao conectar com provedor.', type: 'error' });
-    } finally {
-      setIsLoadingModels(false);
-    }
+    fetchModelsForProvider(selectedProvider, apiKey, endpoint);
   };
 
   const handleSave = async () => {
@@ -80,7 +148,7 @@ export const AISettingsModal: React.FC = () => {
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <div>
               <h3>Configurar Provedor de IA</h3>
-              <span className="subtitle">Escolha o modelo para parear com o Agentic Chat</span>
+              <span className="subtitle">Escolha o provedor e modelo de LLM ativo</span>
             </div>
           </div>
           <button className="btn-close" aria-label="Fechar" onClick={closeSettingsModal}>
@@ -125,20 +193,68 @@ export const AISettingsModal: React.FC = () => {
             })}
           </div>
 
+          {currentProviderConfig.needsKey && (
+            <div className="form-group">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                <label htmlFor="ai-api-key" style={{ marginBottom: 0 }}>API Key do Provedor:</label>
+                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                  Necessária para consulta de modelos e chat
+                </span>
+              </div>
+              <input
+                id="ai-api-key"
+                type="password"
+                className="form-input"
+                placeholder="Insira sua chave de API (opcional se já definida no ambiente)"
+                value={apiKey}
+                onChange={e => setApiKey(e.target.value)}
+                onBlur={() => {
+                  if (apiKey.trim()) {
+                    fetchModelsForProvider(selectedProvider, apiKey, endpoint);
+                  }
+                }}
+              />
+            </div>
+          )}
+
+          {currentProviderConfig.hasEndpoint && (
+            <div className="form-group">
+              <label htmlFor="ai-custom-endpoint">Endpoint Customizado (Ollama / Local):</label>
+              <input
+                id="ai-custom-endpoint"
+                type="text"
+                className="form-input"
+                placeholder="http://localhost:11434/v1"
+                value={endpoint}
+                onChange={e => setEndpoint(e.target.value)}
+                onBlur={() => fetchModelsForProvider(selectedProvider, apiKey, endpoint)}
+              />
+            </div>
+          )}
+
           <div className="form-group">
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-              <label htmlFor="ai-model-select" style={{ marginBottom: 0 }}>Modelo de IA:</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <label htmlFor="ai-model-select" style={{ marginBottom: 0 }}>Modelo de IA:</label>
+                {isDynamicList && (
+                  <span className="badge badge-success" style={{ fontSize: '10px', padding: '1px 6px' }}>
+                    API Dinâmica
+                  </span>
+                )}
+              </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <button
                   className="btn btn-ghost btn-xs"
                   type="button"
-                  title="Consultar modelos disponíveis"
-                  onClick={handleFetchModels}
+                  title="Consultar modelos disponíveis na API do provedor"
+                  onClick={handleManualFetchModels}
                   disabled={isLoadingModels}
                   style={{ fontSize: '11px', padding: '2px 8px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
                 >
-                  <span className="material-symbols-outlined icon-xs">refresh</span>
-                  {isLoadingModels ? 'Buscando...' : 'Buscar no Servidor'}
+                  <span className={`material-symbols-outlined icon-xs ${isLoadingModels ? 'spinning' : ''}`}>
+                    {isLoadingModels ? 'progress_activity' : 'refresh'}
+                  </span>
+                  {isLoadingModels ? 'Consultando...' : 'Atualizar Modelos'}
                 </button>
                 <button
                   className="btn btn-ghost btn-xs"
@@ -157,31 +273,21 @@ export const AISettingsModal: React.FC = () => {
                 id="ai-model-select"
                 type="text"
                 className="form-input"
-                placeholder="Ex: gemini-2.5-flash, deepseek-chat"
+                placeholder="Ex: gemini-2.5-flash, gemini-2.5-pro, gpt-4o"
                 value={model}
                 onChange={e => setModel(e.target.value)}
               />
             ) : (
-              <select
+              <SelectDropdown
                 id="ai-model-select"
-                className="form-select"
                 value={model}
-                onChange={e => setModel(e.target.value)}
-              >
-                {modelsList.length > 0 ? (
-                  modelsList.map(m => <option key={m} value={m}>{m}</option>)
-                ) : (
-                  <>
-                    <option value={model}>{model} (Atual)</option>
-                    <option value="gemini-3.5-flash">gemini-3.5-flash (Padrão)</option>
-                    <option value="gemini-2.5-pro">gemini-2.5-pro</option>
-                    <option value="gpt-4o">gpt-4o</option>
-                    <option value="claude-3-5-sonnet-latest">claude-3-5-sonnet-latest</option>
-                    <option value="deepseek-chat">deepseek-chat</option>
-                    <option value="deepseek-r1:latest">deepseek-r1:latest</option>
-                  </>
-                )}
-              </select>
+                options={selectOptions}
+                onChange={(val) => setModel(val)}
+                placeholder="Selecione o modelo de IA..."
+                searchable={selectOptions.length > 5}
+                searchPlaceholder="Filtrar modelos (ex: flash, pro, 2.5)..."
+                leadingIcon="smart_toy"
+              />
             )}
           </div>
 

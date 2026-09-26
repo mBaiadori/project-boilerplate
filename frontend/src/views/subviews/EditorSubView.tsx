@@ -5,6 +5,7 @@ import { FileTree } from '../../components/explorer/FileTree';
 import { WorkbenchCanvas } from '../../components/editor/WorkbenchCanvas';
 
 const TREE_WIDTH_STORAGE_KEY = 'spec_tree_width';
+const TREE_COLLAPSED_STORAGE_KEY = 'spec_tree_collapsed';
 const DEFAULT_TREE_WIDTH = 260;
 
 interface EditorSubViewProps {
@@ -22,7 +23,24 @@ export const EditorSubView: React.FC<EditorSubViewProps> = ({
 }) => {
   const { activeFile, fileContent, setFileContent, loadFile, isLoadingFile } = useWorkspace();
   const { sendMessage } = useAI();
-  const [isTreeCollapsed, setIsTreeCollapsed] = useState(false);
+  const [isTreeCollapsed, setIsTreeCollapsed] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem(TREE_COLLAPSED_STORAGE_KEY);
+      return saved === 'true';
+    } catch (e) {
+      return false;
+    }
+  });
+
+  const handleToggleTreeCollapse = () => {
+    setIsTreeCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(TREE_COLLAPSED_STORAGE_KEY, String(next));
+      } catch (e) {}
+      return next;
+    });
+  };
 
   const [treeWidth, setTreeWidth] = useState<number>(() => {
     try {
@@ -90,7 +108,7 @@ export const EditorSubView: React.FC<EditorSubViewProps> = ({
             onOpenFile?.(path);
           }}
           isCollapsed={isTreeCollapsed}
-          onToggleCollapse={() => setIsTreeCollapsed(!isTreeCollapsed)}
+          onToggleCollapse={handleToggleTreeCollapse}
           width={treeWidth}
         />
 

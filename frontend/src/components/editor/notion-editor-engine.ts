@@ -577,14 +577,18 @@ export class NotionEditorEngine {
    * Rola suavemente até o trecho especificado por um W3C TextFragment ou texto exato,
    * aplicando um efeito visual de destaque luminoso (pulsing highlight).
    */
-  scrollToFragment(target: TextFragmentQuery | string): boolean {
+  scrollToFragment(target: TextFragmentQuery | string, retryCount = 0): boolean {
     let query: TextFragmentQuery | null = null;
     if (typeof target === 'string') {
       query = parseTextFragmentUrl(target);
       if (!query) {
         const cleanText = target.replace(/^#/, '').replace(/^\/?/, '').trim();
         if (cleanText) {
-          query = { exact: cleanText };
+          try {
+            query = { exact: decodeURIComponent(cleanText).replace(/-/g, ' ') };
+          } catch {
+            query = { exact: cleanText.replace(/-/g, ' ') };
+          }
         }
       }
     } else {
@@ -595,7 +599,32 @@ export class NotionEditorEngine {
 
     this.clearFragmentHighlights();
 
-    const match = findTextFragmentInElement(this.canvas, query);
+    const canvasText = (this.canvas.textContent || '').trim();
+    if (!canvasText && retryCount < 3) {
+      setTimeout(() => {
+        this.scrollToFragment(target, retryCount + 1);
+      }, 150);
+      return false;
+    }
+
+    let match = findTextFragmentInElement(this.canvas, query);
+    if (!match && retryCount < 2) {
+      setTimeout(() => {
+        const retryMatch = findTextFragmentInElement(this.canvas, query!);
+        if (retryMatch) {
+          this.applyFragmentMatch(retryMatch, query!);
+        } else if (this.onFragmentStatus) {
+          this.onFragmentStatus({
+            type: 'not_found',
+            exact: query!.exact,
+            prefix: query!.prefix,
+            suffix: query!.suffix
+          });
+        }
+      }, 180);
+      return false;
+    }
+
     if (!match) {
       if (this.onFragmentStatus) {
         this.onFragmentStatus({
@@ -605,53 +634,43 @@ export class NotionEditorEngine {
           suffix: query.suffix
         });
       }
-      if (this.onToast) {
-        this.onToast(`Trecho "${query.exact.slice(0, 32)}..." não foi localizado no documento atual.`, 'warning');
-      }
       return false;
     }
 
-    try {
-      if (match.isExact) {
-        if (this.onFragmentStatus) {
-          this.onFragmentStatus(null);
-        }
-      } else {
-        if (this.onFragmentStatus) {
-          this.onFragmentStatus({
-            type: 'fuzzy_match',
-            exact: query.exact,
-            prefix: query.prefix,
-            suffix: query.suffix,
-            currentFoundText: match.element.textContent?.trim()
-          });
-        }
+    this.applyFragmentMatch(match, query);
+    return true;
+  }
+
+  private applyFragmentMatch(match: { element: HTMLElement; range: Range; isExact: boolean }, query: TextFragmentQuery) {
+    if (match.isExact) {
+      if (this.onFragmentStatus) {
+        this.onFragmentStatus(null);
       }
-
-      // Rolagem suave até o elemento centralizando no viewport
-      match.element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-
-      // Aplicar destaque visual com classe CSS animada
-      match.element.classList.add('notion-fragment-highlight-block');
-      if (!match.isExact) {
-        match.element.classList.add('is-fuzzy-match');
-        match.element.setAttribute('data-fragment-note', 'Trecho localizado por aproximação');
+    } else {
+      if (this.onFragmentStatus) {
+        this.onFragmentStatus({
+          type: 'fuzzy_match',
+          exact: query.exact,
+          prefix: query.prefix,
+          suffix: query.suffix,
+          currentFoundText: match.element.textContent?.trim()
+        });
       }
-
-      // Remover o highlight após 5 segundos
-      setTimeout(() => {
-        this.clearFragmentHighlights();
-      }, 5500);
-
-      if (!match.isExact && this.onToast) {
-        this.onToast('Trecho localizado com pequenas modificações no texto original.', 'info');
-      }
-
-      return true;
-    } catch (err) {
-      console.warn('[NotionEditorEngine] Erro ao aplicar highlight no elemento:', err);
-      return false;
     }
+
+    // Rolagem suave até o elemento centralizando no viewport
+    match.element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+    // Aplicar destaque visual com classe CSS animada
+    match.element.classList.add('notion-fragment-highlight-block');
+    if (!match.isExact) {
+      match.element.classList.add('is-fuzzy-match');
+      match.element.setAttribute('data-fragment-note', 'Trecho localizado por aproximação');
+    }
+
+    setTimeout(() => {
+      this.clearFragmentHighlights();
+    }, 4500);
   }
 
   /**
@@ -1560,16 +1579,30 @@ export class NotionEditorEngine {
   }
 
   handleSlashCommand(cmdId: string, targetRange: Range | null) {
-    if (targetRange) {
+    let savedRange: Range | null = targetRange ? targetRange.cloneRange() : null;
+
+    if (savedRange) {
+      const node = savedRange.startContainer;
+      if (node && node.nodeType === Node.TEXT_NODE && node.textContent) {
+        const offset = savedRange.startOffset;
+        const text = node.textContent;
+        if (offset > 0 && text[offset - 1] === '/') {
+          // Remover exatamente a barra '/' digitada na posição do caret
+          const before = text.slice(0, offset - 1);
+          const after = text.slice(offset);
+          node.textContent = before + after;
+          // Reposicionar o range salvo
+          savedRange.setStart(node, offset - 1);
+          savedRange.setEnd(node, offset - 1);
+        } else if (text.includes('/')) {
+          node.textContent = text.replace(/\/$/, '');
+        }
+      }
+
       const selection = window.getSelection();
       if (selection) {
         selection.removeAllRanges();
-        selection.addRange(targetRange);
-      }
-
-      const node = targetRange.startContainer;
-      if (node && node.nodeType === Node.TEXT_NODE && node.textContent?.includes('/')) {
-        node.textContent = node.textContent.replace(/\/$/, '');
+        selection.addRange(savedRange);
       }
     }
 
@@ -1583,19 +1616,43 @@ export class NotionEditorEngine {
       case 'h3':
         this.insertBlockHtml('<h3>Título 3</h3>');
         break;
-      case 'link': {
-        if (this.onOpenLinkModal) {
-          this.onOpenLinkModal('', (url, text) => {
-            const isDoc = url.endsWith('.md') || url.includes('.md#') || url.includes(':~:text=');
-            this.insertBlockHtml(`<p><a href="${escapeHtml(url)}" class="${isDoc ? 'notion-doc-link' : ''}" target="${isDoc ? '_self' : '_blank'}">${escapeHtml(text || url)}</a></p>`);
-          });
-        }
-        break;
-      }
+      case 'link':
       case 'doc-link': {
         if (this.onOpenLinkModal) {
           this.onOpenLinkModal('', (url, text) => {
-            this.insertBlockHtml(`<p><a href="${escapeHtml(url)}" class="notion-doc-link">${escapeHtml(text || url)}</a></p>`);
+            if (!url) return;
+            const isDoc = url.endsWith('.md') || url.includes('.md#') || url.includes(':~:text=') || url.startsWith('#');
+            const label = text || url;
+            
+            const anchor = document.createElement('a');
+            anchor.setAttribute('href', url);
+            if (isDoc) {
+              anchor.className = 'notion-doc-link';
+              anchor.target = '_self';
+            } else {
+              anchor.target = '_blank';
+            }
+            anchor.textContent = label;
+
+            if (savedRange && savedRange.startContainer && savedRange.startContainer.isConnected) {
+              savedRange.deleteContents();
+              savedRange.insertNode(anchor);
+
+              // Posicionar o cursor imediatamente após o link inserido
+              const newRange = document.createRange();
+              newRange.setStartAfter(anchor);
+              newRange.collapse(true);
+              const sel = window.getSelection();
+              if (sel) {
+                sel.removeAllRanges();
+                sel.addRange(newRange);
+              }
+            } else {
+              this.insertBlockHtml(`<p><a href="${escapeHtml(url)}" class="${isDoc ? 'notion-doc-link' : ''}" target="${isDoc ? '_self' : '_blank'}">${escapeHtml(label)}</a></p>`);
+            }
+
+            this.attachInteractiveListeners();
+            this.recordChange();
           });
         }
         break;

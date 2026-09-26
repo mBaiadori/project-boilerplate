@@ -65,17 +65,9 @@ export class SlashMenuEngine {
       id: 'link',
       category: 'Links & Referências',
       title: 'Inserir Link',
-      desc: 'Adicionar hiperlink externo ou URL web',
+      desc: 'Adicionar hiperlink web, documento do workspace ou trecho',
       icon: '<span class="material-symbols-outlined icon-sm">link</span>',
-      keywords: ['link', 'url', 'href', 'hiperlink', 'endereco', 'web', 'site']
-    },
-    {
-      id: 'doc-link',
-      category: 'Links & Referências',
-      title: 'Link para Documento / Trecho',
-      desc: 'Inserir referência a outro documento ou deep link de trecho (#:~:text=)',
-      icon: '<span class="material-symbols-outlined icon-sm" style="color: var(--primary, #2563eb)">share_location</span>',
-      keywords: ['doc', 'documento', 'deeplink', 'trecho', 'fragment', 'referencia', 'link', 'arquivo', 'contrato']
+      keywords: ['link', 'url', 'href', 'hiperlink', 'documento', 'doc', 'trecho', 'deeplink', 'web', 'site', 'referencia']
     },
 
     // 3. Tabelas & Estrutura

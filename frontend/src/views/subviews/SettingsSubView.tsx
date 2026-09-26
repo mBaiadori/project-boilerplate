@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { useAI } from "../../context/AIContext";
 import { useWorkspace } from "../../context/WorkspaceContext";
 import { API } from "../../services/api";
+import { SelectDropdown, type SelectOption } from "../../components/common/SelectDropdown";
 
 export const SettingsSubView: React.FC = () => {
   const { user, logout } = useAuth();
@@ -21,9 +22,13 @@ export const SettingsSubView: React.FC = () => {
 
   // AI Provider State
   const [provider, setProvider] = useState<string>("gemini");
-  const [model, setModel] = useState<string>("gemini-3.5-flash");
+  const [model, setModel] = useState<string>("gemini-2.5-flash");
   const [apiKey, setApiKey] = useState<string>("");
   const [endpoint, setEndpoint] = useState<string>("http://localhost:11434/v1");
+  const [modelsList, setModelsList] = useState<Array<{ id: string; name: string; description?: string }>>([]);
+  const [isLoadingModels, setIsLoadingModels] = useState<boolean>(false);
+  const [isDynamicList, setIsDynamicList] = useState<boolean>(false);
+  const [isCustomModelInput, setIsCustomModelInput] = useState<boolean>(false);
 
   // Prompts State
   const [globalPrompt, setGlobalPrompt] = useState<string>("");
@@ -55,13 +60,84 @@ export const SettingsSubView: React.FC = () => {
   // Status feedback
   const [saveStatus, setSaveStatus] = useState<string | null>(null);
 
+  const fetchModelsForProvider = useCallback(async (provId: string, customKey?: string, customEp?: string) => {
+    setIsLoadingModels(true);
+    try {
+      const res = await API.getAIModels({
+        provider: provId,
+        api_key: customKey || apiKey || undefined,
+        custom_endpoint: customEp || endpoint || undefined,
+      });
+
+      if (res.ok && res.data) {
+        let items: Array<{ id: string; name: string; description?: string }> = [];
+        if (res.data.detailedModels && res.data.detailedModels.length > 0) {
+          items = res.data.detailedModels;
+        } else if (res.data.models && res.data.models.length > 0) {
+          items = res.data.models.map((m: any) => typeof m === "string" ? { id: m, name: m } : m);
+        }
+
+        if (items.length > 0) {
+          setModelsList(items);
+          setIsDynamicList(Boolean(res.data.isDynamic));
+          const exists = items.some((m) => m.id === model);
+          if (!exists && items[0]) {
+            setModel(items[0].id);
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("[SettingsSubView] Erro ao carregar modelos:", err);
+    } finally {
+      setIsLoadingModels(false);
+    }
+  }, [apiKey, endpoint, model]);
+
   useEffect(() => {
     if (aiSettings) {
-      setProvider(aiSettings.active_provider || "gemini");
-      setModel(aiSettings.active_model || "gemini-3.5-flash");
+      const activeProv = aiSettings.active_provider || "gemini";
+      setProvider(activeProv);
+      setModel(aiSettings.active_model || (activeProv === "gemini" ? "gemini-2.5-flash" : "gpt-4o"));
       setEndpoint(aiSettings.custom_endpoint || "http://localhost:11434/v1");
+      fetchModelsForProvider(activeProv, undefined, aiSettings.custom_endpoint);
     }
-  }, [aiSettings]);
+  }, [aiSettings, fetchModelsForProvider]);
+
+  const selectOptions: SelectOption[] = useMemo(() => {
+    if (modelsList.length === 0) {
+      return [
+        { value: model, label: model, description: "Modelo ativo selecionado" },
+        { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash", description: "Alta velocidade e capacidades multimodais", badge: "Flash", badgeType: "success" },
+        { value: "gemini-2.5-pro", label: "Gemini 2.5 Pro", description: "Raciocínio complexo e codificação profunda", badge: "Pro", badgeType: "warning" },
+        { value: "gemini-1.5-flash", label: "Gemini 1.5 Flash", description: "Modelo versátil", badge: "Flash", badgeType: "info" },
+      ];
+    }
+
+    return modelsList.map((m) => {
+      let badge: string | undefined;
+      let badgeType: "primary" | "success" | "warning" | "neutral" | "info" = "primary";
+
+      if (m.id.includes("pro")) {
+        badge = "Pro";
+        badgeType = "warning";
+      } else if (m.id.includes("flash")) {
+        badge = "Flash";
+        badgeType = "success";
+      } else if (m.id.includes("reason") || m.id.includes("r1")) {
+        badge = "Reasoner";
+        badgeType = "info";
+      }
+
+      return {
+        value: m.id,
+        label: m.name !== m.id ? m.name : m.id,
+        description: m.description || m.id,
+        icon: "smart_toy",
+        badge,
+        badgeType,
+      };
+    });
+  }, [modelsList, model]);
 
   const loadAllSettings = useCallback(async () => {
     try {
@@ -904,7 +980,7 @@ export const SettingsSubView: React.FC = () => {
               data-provider="gemini"
               onClick={() => {
                 setProvider("gemini");
-                setModel("gemini-3.5-flash");
+                fetchModelsForProvider("gemini", apiKey, endpoint);
               }}
               style={{
                 padding: "12px",
@@ -941,7 +1017,7 @@ export const SettingsSubView: React.FC = () => {
                   marginTop: "4px",
                 }}
               >
-                Flash 3.5 & Pro
+                Flash 2.5 & Pro
               </span>
             </div>
 
@@ -950,7 +1026,7 @@ export const SettingsSubView: React.FC = () => {
               data-provider="openai"
               onClick={() => {
                 setProvider("openai");
-                setModel("gpt-4o");
+                fetchModelsForProvider("openai", apiKey, endpoint);
               }}
               style={{
                 padding: "12px",
@@ -996,7 +1072,7 @@ export const SettingsSubView: React.FC = () => {
               data-provider="anthropic"
               onClick={() => {
                 setProvider("anthropic");
-                setModel("claude-3-5-sonnet-20241022");
+                fetchModelsForProvider("anthropic", apiKey, endpoint);
               }}
               style={{
                 padding: "12px",
@@ -1033,7 +1109,7 @@ export const SettingsSubView: React.FC = () => {
                   marginTop: "4px",
                 }}
               >
-                Claude 3.5 Sonnet
+                Claude 3.7 & 3.5
               </span>
             </div>
 
@@ -1042,7 +1118,7 @@ export const SettingsSubView: React.FC = () => {
               data-provider="deepseek"
               onClick={() => {
                 setProvider("deepseek");
-                setModel("deepseek-chat");
+                fetchModelsForProvider("deepseek", apiKey, endpoint);
               }}
               style={{
                 padding: "12px",
@@ -1088,7 +1164,7 @@ export const SettingsSubView: React.FC = () => {
               data-provider="local"
               onClick={() => {
                 setProvider("local");
-                setModel("llama3.2");
+                fetchModelsForProvider("local", apiKey, endpoint);
               }}
               style={{
                 padding: "12px",
@@ -1140,26 +1216,64 @@ export const SettingsSubView: React.FC = () => {
             }}
           >
             <div className="form-group">
-              <label htmlFor="settings-ai-model-input">
-                Modelo Selecionado:
-              </label>
-              <input
-                type="text"
-                id="settings-ai-model-input"
-                value={model}
-                onChange={(e) => setModel(e.target.value)}
-              />
-              <span
-                id="settings-ai-model-hint"
-                style={{
-                  fontSize: "11px",
-                  color: "var(--text-muted)",
-                  marginTop: "3px",
-                }}
-              >
-                Modelos recomendados: gemini-3.5-flash, gemini-3-flash-preview,
-                gpt-4o
-              </span>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "4px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <label htmlFor="settings-ai-model-input" style={{ marginBottom: 0 }}>
+                    Modelo Selecionado:
+                  </label>
+                  {isDynamicList && (
+                    <span className="badge badge-success" style={{ fontSize: "10px", padding: "1px 6px" }}>
+                      API Dinâmica
+                    </span>
+                  )}
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <button
+                    className="btn btn-ghost btn-xs"
+                    type="button"
+                    title="Buscar modelos do provedor"
+                    onClick={() => fetchModelsForProvider(provider, apiKey, endpoint)}
+                    disabled={isLoadingModels}
+                    style={{ fontSize: "11px", padding: "2px 8px", display: "inline-flex", alignItems: "center", gap: "4px" }}
+                  >
+                    <span className={`material-symbols-outlined icon-xs ${isLoadingModels ? "spinning" : ""}`}>
+                      {isLoadingModels ? "progress_activity" : "refresh"}
+                    </span>
+                    {isLoadingModels ? "Buscando..." : "Atualizar"}
+                  </button>
+                  <button
+                    className="btn btn-ghost btn-xs"
+                    type="button"
+                    onClick={() => setIsCustomModelInput(!isCustomModelInput)}
+                    style={{ fontSize: "11px", padding: "2px 8px", display: "inline-flex", alignItems: "center", gap: "4px" }}
+                  >
+                    <span className="material-symbols-outlined icon-xs">edit</span>
+                    {isCustomModelInput ? "Lista" : "Digitar"}
+                  </button>
+                </div>
+              </div>
+
+              {isCustomModelInput ? (
+                <input
+                  type="text"
+                  id="settings-ai-model-input"
+                  className="form-input"
+                  placeholder="Ex: gemini-2.5-flash, gemini-2.5-pro, gpt-4o"
+                  value={model}
+                  onChange={(e) => setModel(e.target.value)}
+                />
+              ) : (
+                <SelectDropdown
+                  id="settings-ai-model-input"
+                  value={model}
+                  options={selectOptions}
+                  onChange={(val) => setModel(val)}
+                  placeholder="Selecione o modelo de IA..."
+                  searchable={selectOptions.length > 5}
+                  searchPlaceholder="Filtrar modelos (ex: flash, pro, 2.5)..."
+                  leadingIcon="smart_toy"
+                />
+              )}
             </div>
 
             <div className="form-group" id="settings-ai-key-group">
@@ -1169,9 +1283,15 @@ export const SettingsSubView: React.FC = () => {
               <input
                 type="password"
                 id="settings-ai-key-input"
+                className="form-input"
                 placeholder="Cole sua chave aqui..."
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
+                onBlur={() => {
+                  if (apiKey.trim()) {
+                    fetchModelsForProvider(provider, apiKey, endpoint);
+                  }
+                }}
               />
             </div>
           </div>

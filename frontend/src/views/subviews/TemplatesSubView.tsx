@@ -4,7 +4,8 @@
 // =============================================================================
 
 import React, { useState, useEffect } from "react";
-import type { TemplateItem } from "../../types";
+import type { TemplateItem, SkillItem } from "../../types";
+import { API } from "../../services/api";
 import { useTemplate, useTemplateStore } from "../../hooks/useTemplate";
 import { useAI } from "../../context/AIContext";
 import { NotionEditor } from "../../components/editor/NotionEditor";
@@ -46,7 +47,7 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
   const updateActiveEditingTemplate = useTemplateStore(
     (s) => s.updateActiveEditingTemplate,
   );
-  const { setIsTemplateEditorMode, setDynamicContext } = useAI();
+  const { setIsTemplateEditorMode, setDynamicContext, setActiveSkillId } = useAI();
 
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [activeTab, setActiveTab] = useState<Tab>("projeto");
@@ -69,6 +70,8 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
   const [tplTags, setTplTags] = useState("");
   const [tplContent, setTplContent] = useState("");
   const [tplPrompt, setTplPrompt] = useState("");
+  const [tplSkills, setTplSkills] = useState<string[]>([]);
+  const [availableSkills, setAvailableSkills] = useState<SkillItem[]>([]);
 
   // Import feedback
   const [importFeedback, setImportFeedback] = useState<
@@ -78,12 +81,33 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
   useEffect(() => {
     fetchTemplates();
     fetchCommunityTemplates();
+    loadAvailableSkills();
   }, [fetchTemplates, fetchCommunityTemplates]);
+
+  const loadAvailableSkills = async () => {
+    try {
+      const [hubRes, projRes] = await Promise.all([
+        API.getSkillsHub(),
+        API.getSkillsProject(),
+      ]);
+      const hubList = hubRes.ok && hubRes.data?.skills ? hubRes.data.skills : [];
+      const projList = projRes.ok && projRes.data?.installed_skills ? projRes.data.installed_skills : [];
+      // Combine unique by ID
+      const map = new Map<string, SkillItem>();
+      [...hubList, ...projList].forEach((s) => map.set(s.id, s));
+      setAvailableSkills(Array.from(map.values()));
+    } catch (e) {
+      console.error("Erro ao carregar skills para templates:", e);
+    }
+  };
 
   // Sync AI Context template editor mode & dynamic template content for Copilot
   useEffect(() => {
     if (viewMode === "editor") {
       setIsTemplateEditorMode(true);
+      if (tplSkills.length > 0) {
+        setActiveSkillId(tplSkills[0]);
+      }
       setDynamicContext({
         filePath: tplTemplateName
           ? `templates/${tplTemplateName}.md`
@@ -107,9 +131,11 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
     tplTitle,
     tplId,
     tplTemplateName,
+    tplSkills,
     setIsTemplateEditorMode,
     setDynamicContext,
     setActiveEditingTemplate,
+    setActiveSkillId,
   ]);
 
   // ── Derived list ────────────────────────────────────────────────────────────
@@ -149,6 +175,7 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
     setTplBadge("Local");
     setTplDesc("");
     setTplTags("");
+    setTplSkills([]);
     setTplContent(defaultContent);
     setTplPrompt(defaultPrompt);
     setSaveError("");
@@ -164,6 +191,7 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
       badge: "Local",
       description: "",
       tags: [],
+      skills: [],
       content: defaultContent,
       prompt: defaultPrompt,
     });
@@ -180,6 +208,7 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
     );
     setTplDesc(tpl.description || "");
     setTplTags((tpl.tags || []).join(", "));
+    setTplSkills(tpl.skills || []);
     const content =
       tpl.content || `# ${tpl.title || "Template"}\n\n## 1. Visão Geral\n`;
     const prompt =
@@ -201,6 +230,7 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
       badge: tpl.badge || (tpl.source === "community" ? "Comunidade" : "Local"),
       description: tpl.description || "",
       tags: tpl.tags || [],
+      skills: tpl.skills || [],
       content,
       prompt,
     });
@@ -249,6 +279,7 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
           .split(",")
           .map((t) => t.trim())
           .filter(Boolean),
+        skills: tplSkills,
         content: tplContent.trim(),
         prompt: tplPrompt.trim(),
         systemPrompt: tplPrompt.trim(),
@@ -650,6 +681,75 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
                 }}
               />
             </div>
+
+            {/* Skills Vinculadas ao Template (Padrão ECC) */}
+            <div style={{ gridColumn: "1 / -1", marginTop: "4px" }}>
+              <label
+                style={{
+                  fontSize: "11px",
+                  fontWeight: 600,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "4px",
+                  marginBottom: "6px",
+                  color: "var(--color-primary, #1a73e8)",
+                }}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>
+                  auto_awesome
+                </span>
+                Skills Recomendadas / Vinculadas ao Template (Padrão ECC):
+              </label>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                {availableSkills.length === 0 ? (
+                  <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>Carregando catálogo de skills...</span>
+                ) : (
+                  availableSkills.map((skill) => {
+                    const isSelected = tplSkills.includes(skill.id);
+                    return (
+                      <button
+                        key={skill.id}
+                        type="button"
+                        onClick={() => {
+                          if (isSelected) {
+                            setTplSkills(tplSkills.filter((id) => id !== skill.id));
+                          } else {
+                            setTplSkills([...tplSkills, skill.id]);
+                          }
+                        }}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "5px",
+                          padding: "4px 10px",
+                          borderRadius: "14px",
+                          border: "1px solid",
+                          fontSize: "11px",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                          background: isSelected
+                            ? "var(--color-primary-container, #d2e3fc)"
+                            : "var(--color-surface-container-low, #f8f9fa)",
+                          color: isSelected
+                            ? "var(--color-on-primary-container, #041e49)"
+                            : "var(--text-muted, #64748b)",
+                          borderColor: isSelected
+                            ? "var(--color-primary, #1a73e8)"
+                            : "var(--color-outline-variant, #cbd5e1)",
+                          transition: "all 0.15s ease",
+                        }}
+                        title={isSelected ? `Skill ${skill.id} vinculada. Clique para remover.` : `Vincular skill ${skill.id}`}
+                      >
+                        <span className="material-symbols-outlined" style={{ fontSize: "13px" }}>
+                          {isSelected ? "check_circle" : "add_circle_outline"}
+                        </span>
+                        {skill.title || skill.name}
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </div>
           </div>
         )}
 
@@ -950,6 +1050,42 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
                           }}
                         >
                           {tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {(tpl.skills || []).length > 0 && (
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: "4px",
+                        flexWrap: "wrap",
+                        marginBottom: "8px",
+                      }}
+                    >
+                      {(tpl.skills || []).map((skillId: string) => (
+                        <span
+                          key={skillId}
+                          style={{
+                            fontSize: "10px",
+                            padding: "2px 6px",
+                            borderRadius: "4px",
+                            background: "var(--color-primary-container, #d2e3fc)",
+                            color: "var(--color-on-primary-container, #041e49)",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "3px",
+                            border: "1px solid var(--color-primary, #1a73e8)",
+                          }}
+                          title={`Skill vinculada: ${skillId}`}
+                        >
+                          <span
+                            className="material-symbols-outlined"
+                            style={{ fontSize: "11px", color: "var(--color-primary, #1a73e8)" }}
+                          >
+                            auto_awesome
+                          </span>
+                          {skillId}
                         </span>
                       ))}
                     </div>

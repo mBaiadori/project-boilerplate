@@ -1,6 +1,6 @@
 ---
-description: Enforce Material Design 3 and Google Web Design standards across all UI files (HTML, CSS, JS)
-globs: ui/**/*
+description: Enforce Material Design 3 and Application Theme standards across all UI & Frontend files (React, TypeScript, CSS)
+globs: "{ui/**/*,frontend/**/*}"
 ---
 
 # UI Design & Material Design 3 Standards
@@ -8,7 +8,7 @@ globs: ui/**/*
 When creating, editing, or refactoring user interfaces, dashboards, modal dialogues, and styling in this repository, always adhere to the following rules:
 
 1. **Design Tokens First**:
-   - Reference variables defined in `ui/css/design-tokens.css`.
+   - Reference variables defined in `dashboard.css`, `design-tokens.css`, and CSS custom properties (`var(--color-surface)`, `var(--color-primary)`, `var(--color-outline-variant)`, `var(--text-main)`, `var(--text-muted)`).
    - Never introduce ad-hoc hardcoded hex values (e.g., `#ffffff`, `#333333`, `#007bff`) or arbitrary pixel values when a design token exists.
 
 2. **Color Roles & Contrast**:
@@ -53,3 +53,8 @@ When creating, editing, or refactoring user interfaces, dashboards, modal dialog
      - `.icon-xl` (40px, opsz 48): Empty states.
    - **Touch Targets**: Icon-only buttons (`.btn-icon`, `.btn-icon-subtle`) must maintain a minimum clickable area of 36–40px (desktop) / 48px (mobile/compact).
    - **Navigation State**: Full label + icon when expanded; icon-only with tooltip/badge when collapsed.
+
+8. **Application Theme Fidelity & Subview Architecture**:
+   - **Never mix un-themed or isolated Tailwind dark utility classes** (`bg-slate-900`, `text-slate-400`, `border-slate-800`) that break against the active light/dark theme variables.
+   - Always use native design tokens and CSS class hierarchies (e.g. `dash-subview`, `templates-view-wrapper`, `store-tab-btn`, `store-filter-chip`, `btn-primary`, `btn-ghost`, `badge`).
+   - All main modules (Templates, Skills, Dicionário, Wiki, Versões, Revisões) must follow the subview pattern with standard headers, tabs, search bars, and responsive grid layouts.

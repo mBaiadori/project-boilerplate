@@ -50,7 +50,9 @@ interface ScannedFile {
 }
 
 // Utility: Recursively scan files and folders dropped from OS / Finder
-const scanDataTransferItems = async (items: DataTransferItemList): Promise<ScannedFile[]> => {
+const scanDataTransferItems = async (
+  items: DataTransferItemList,
+): Promise<ScannedFile[]> => {
   const result: ScannedFile[] = [];
 
   const traverseEntry = async (entry: any, currentPath: string = "") => {
@@ -63,7 +65,11 @@ const scanDataTransferItems = async (items: DataTransferItemList): Promise<Scann
         const rel = currentPath ? `${currentPath}/${entry.name}` : entry.name;
         result.push({ file, relativePath: rel });
       } catch (err) {
-        console.warn("[FileTree] Falha ao ler arquivo de entrada:", entry.name, err);
+        console.warn(
+          "[FileTree] Falha ao ler arquivo de entrada:",
+          entry.name,
+          err,
+        );
       }
     } else if (entry.isDirectory) {
       const dirReader = entry.createReader();
@@ -81,7 +87,9 @@ const scanDataTransferItems = async (items: DataTransferItemList): Promise<Scann
 
       try {
         const entries = await readAllEntries();
-        const nextPath = currentPath ? `${currentPath}/${entry.name}` : entry.name;
+        const nextPath = currentPath
+          ? `${currentPath}/${entry.name}`
+          : entry.name;
         for (const childEntry of entries) {
           await traverseEntry(childEntry, nextPath);
         }
@@ -95,7 +103,9 @@ const scanDataTransferItems = async (items: DataTransferItemList): Promise<Scann
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
     if (item.kind === "file") {
-      const entry = (item as any).webkitGetAsEntry ? (item as any).webkitGetAsEntry() : null;
+      const entry = (item as any).webkitGetAsEntry
+        ? (item as any).webkitGetAsEntry()
+        : null;
       if (entry) {
         promises.push(traverseEntry(entry));
       } else {
@@ -125,9 +135,31 @@ const filesToScannedList = (fileList: FileList): ScannedFile[] => {
 // Utility: Convert files into Text or Base64 payloads
 const processFilesForUpload = async (scannedFiles: ScannedFile[]) => {
   const textExts = [
-    "md", "markdown", "txt", "json", "yaml", "yml", "csv", "tsv",
-    "js", "ts", "jsx", "tsx", "html", "css", "scss", "svg", "xml",
-    "env", "sh", "py", "sql", "gitignore", "conf", "ini", "toml"
+    "md",
+    "markdown",
+    "txt",
+    "json",
+    "yaml",
+    "yml",
+    "csv",
+    "tsv",
+    "js",
+    "ts",
+    "jsx",
+    "tsx",
+    "html",
+    "css",
+    "scss",
+    "svg",
+    "xml",
+    "env",
+    "sh",
+    "py",
+    "sql",
+    "gitignore",
+    "conf",
+    "ini",
+    "toml",
   ];
 
   const payload: Array<{
@@ -140,7 +172,9 @@ const processFilesForUpload = async (scannedFiles: ScannedFile[]) => {
   for (const item of scannedFiles) {
     const file = item.file;
     const name = file.name;
-    const ext = name.includes(".") ? name.split(".").pop()?.toLowerCase() || "" : "";
+    const ext = name.includes(".")
+      ? name.split(".").pop()?.toLowerCase() || ""
+      : "";
     const isText = textExts.includes(ext) || file.type.startsWith("text/");
 
     if (isText) {
@@ -185,6 +219,13 @@ const readFileAsBase64 = (file: File): Promise<string> => {
   });
 };
 
+const getCollapsedStorageKey = (repoName?: string) =>
+  `spec_tree_collapsed_folders_${repoName || "default"}`;
+const getSelectedFolderStorageKey = (repoName?: string) =>
+  `spec_tree_selected_folder_${repoName || "default"}`;
+const getScrollStorageKey = (repoName?: string) =>
+  `spec_tree_scroll_${repoName || "default"}`;
+
 export const FileTree: React.FC<FileTreeProps> = ({
   onOpenFile,
   isCollapsed,
@@ -194,6 +235,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
   const {
     tree,
     activeFile,
+    activeRepo,
     loadTree,
     gitStatus,
     pendingChanges,
@@ -202,12 +244,73 @@ export const FileTree: React.FC<FileTreeProps> = ({
     isLoadingWorkspace,
     isLoadingTree,
   } = useWorkspace();
+  const repoName = activeRepo?.name || "default";
   const isTreeLoading = Boolean(isLoadingWorkspace || isLoadingTree);
   const [searchTerm, setSearchTerm] = useState("");
   const [collapsedFolders, setCollapsedFolders] = useState<
     Record<string, boolean>
-  >({});
-  const [selectedFolder, setSelectedFolder] = useState<string>("");
+  >(() => {
+    try {
+      const saved = localStorage.getItem(
+        getCollapsedStorageKey(activeRepo?.name),
+      );
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return {};
+  });
+  const [selectedFolder, setSelectedFolder] = useState<string>(() => {
+    try {
+      return (
+        sessionStorage.getItem(getSelectedFolderStorageKey(activeRepo?.name)) ||
+        ""
+      );
+    } catch (e) {
+      return "";
+    }
+  });
+
+  const treeScrollRef = useRef<HTMLDivElement>(null);
+  const isRestoringScrollRef = useRef(false);
+
+  // Sync collapsed folders & selected folder when switching repositories
+  useEffect(() => {
+    try {
+      const savedCollapsed = localStorage.getItem(
+        getCollapsedStorageKey(repoName),
+      );
+      setCollapsedFolders(savedCollapsed ? JSON.parse(savedCollapsed) : {});
+      const savedFolder = sessionStorage.getItem(
+        getSelectedFolderStorageKey(repoName),
+      );
+      setSelectedFolder(savedFolder || "");
+    } catch (e) {
+      setCollapsedFolders({});
+    }
+  }, [repoName]);
+
+  // Persist collapsed folders state changes
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        getCollapsedStorageKey(repoName),
+        JSON.stringify(collapsedFolders),
+      );
+    } catch (e) {}
+  }, [collapsedFolders, repoName]);
+
+  // Persist selected folder state changes
+  useEffect(() => {
+    try {
+      if (selectedFolder) {
+        sessionStorage.setItem(
+          getSelectedFolderStorageKey(repoName),
+          selectedFolder,
+        );
+      } else {
+        sessionStorage.removeItem(getSelectedFolderStorageKey(repoName));
+      }
+    } catch (e) {}
+  }, [selectedFolder, repoName]);
 
   // Drag and Drop State (Internal Move & External Import)
   const [draggedItem, setDraggedItem] = useState<DraggedItem | null>(null);
@@ -414,7 +517,9 @@ export const FileTree: React.FC<FileTreeProps> = ({
         await Promise.all([refreshPendingChanges(), refreshGitStatus()]);
 
         const imported = res.data.importedFiles || [];
-        const destLabel = targetFolder ? `/${targetFolder}` : "a raiz do projeto";
+        const destLabel = targetFolder
+          ? `/${targetFolder}`
+          : "a raiz do projeto";
         showToast(
           `${imported.length} arquivo${imported.length > 1 ? "s" : ""} importado${imported.length > 1 ? "s" : ""} com sucesso em ${destLabel}!`,
           "info",
@@ -904,7 +1009,10 @@ export const FileTree: React.FC<FileTreeProps> = ({
       if (res.ok) {
         showToast("Aberto no gerenciador de arquivos do PC.", "info");
       } else {
-        showToast(res.data?.error || "Erro ao abrir no sistema operacional.", "warning");
+        showToast(
+          res.data?.error || "Erro ao abrir no sistema operacional.",
+          "warning",
+        );
       }
     } catch {
       showToast("Erro ao conectar com o servidor.", "warning");
@@ -1077,7 +1185,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
       const matchNode = (node: TreeNode): TreeNode | null => {
         const nameMatch = Boolean(
           (node.name && node.name.toLowerCase().includes(q)) ||
-          (node.title && node.title.toLowerCase().includes(q))
+          (node.title && node.title.toLowerCase().includes(q)),
         );
         const isDir =
           node.type === "dir" || node.type === "directory" || node.is_directory;
@@ -1093,7 +1201,8 @@ export const FileTree: React.FC<FileTreeProps> = ({
         if (nameMatch || filteredChildren.length > 0) {
           return {
             ...node,
-            children: filteredChildren.length > 0 ? filteredChildren : node.children,
+            children:
+              filteredChildren.length > 0 ? filteredChildren : node.children,
           };
         }
         return null;
@@ -1104,6 +1213,43 @@ export const FileTree: React.FC<FileTreeProps> = ({
 
     return nodes;
   }, [tree, searchTerm]);
+
+  // Handle tree scroll position tracking
+  const handleTreeScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    if (isRestoringScrollRef.current) return;
+    const top = e.currentTarget.scrollTop;
+    try {
+      sessionStorage.setItem(getScrollStorageKey(repoName), String(top));
+      localStorage.setItem(getScrollStorageKey(repoName), String(top));
+    } catch (e) {}
+  };
+
+  // Restore scroll position when tree nodes are rendered / mounted / updated
+  useEffect(() => {
+    if (!isTreeLoading && displayNodes.length > 0 && treeScrollRef.current) {
+      try {
+        const savedScroll =
+          sessionStorage.getItem(getScrollStorageKey(repoName)) ||
+          localStorage.getItem(getScrollStorageKey(repoName));
+        if (savedScroll !== null) {
+          const top = parseInt(savedScroll, 10);
+          if (!isNaN(top) && top > 0) {
+            isRestoringScrollRef.current = true;
+            treeScrollRef.current.scrollTop = top;
+            const frameId = requestAnimationFrame(() => {
+              if (treeScrollRef.current) {
+                treeScrollRef.current.scrollTop = top;
+              }
+              setTimeout(() => {
+                isRestoringScrollRef.current = false;
+              }, 80);
+            });
+            return () => cancelAnimationFrame(frameId);
+          }
+        }
+      } catch (e) {}
+    }
+  }, [isTreeLoading, displayNodes.length, repoName]);
 
   // Render Inline Input Row for VS Code creation
   const renderInlineCreateInput = (parentPath: string) => {
@@ -1329,7 +1475,9 @@ export const FileTree: React.FC<FileTreeProps> = ({
               <button
                 className="btn-tree-action"
                 title="Renomear pasta"
-                onClick={(e) => startInlineRename(node.path, node.name, true, e)}
+                onClick={(e) =>
+                  startInlineRename(node.path, node.name, true, e)
+                }
               >
                 <Edit3 size={11} />
               </button>
@@ -1410,13 +1558,21 @@ export const FileTree: React.FC<FileTreeProps> = ({
           <div className="tree-file-left">
             {isMarkdown ? (
               <span className={`tree-dot ${dotClass}`}></span>
-            ) : ['csv', 'tsv', 'xlsx', 'xls'].includes(fileExt.toLowerCase()) ? (
-              <FileSpreadsheet size={13} color="#a6e3a1" style={{ flexShrink: 0 }} />
-            ) : ['pdf'].includes(fileExt.toLowerCase()) ? (
+            ) : ["csv", "tsv", "xlsx", "xls"].includes(
+                fileExt.toLowerCase(),
+              ) ? (
+              <FileSpreadsheet
+                size={13}
+                color="#a6e3a1"
+                style={{ flexShrink: 0 }}
+              />
+            ) : ["pdf"].includes(fileExt.toLowerCase()) ? (
               <FileText size={13} color="#f38ba8" style={{ flexShrink: 0 }} />
-            ) : ['docx', 'doc'].includes(fileExt.toLowerCase()) ? (
+            ) : ["docx", "doc"].includes(fileExt.toLowerCase()) ? (
               <FileText size={13} color="#89b4fa" style={{ flexShrink: 0 }} />
-            ) : ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp'].includes(fileExt.toLowerCase()) ? (
+            ) : ["png", "jpg", "jpeg", "gif", "svg", "webp"].includes(
+                fileExt.toLowerCase(),
+              ) ? (
               <ImageIcon size={13} color="#fab387" style={{ flexShrink: 0 }} />
             ) : (
               <FileCode size={13} color="#89b4fa" style={{ flexShrink: 0 }} />
@@ -1506,7 +1662,9 @@ export const FileTree: React.FC<FileTreeProps> = ({
               <button
                 className="btn-tree-action"
                 title="Renomear"
-                onClick={(e) => startInlineRename(node.path, node.name, false, e)}
+                onClick={(e) =>
+                  startInlineRename(node.path, node.name, false, e)
+                }
               >
                 <Edit3 size={11} />
               </button>
@@ -1583,16 +1741,6 @@ export const FileTree: React.FC<FileTreeProps> = ({
 
           {/* Action Toolbar Below Search Bar */}
           <div className="tree-toolbar-row">
-            <div
-              className="tree-toolbar-label"
-              title={
-                selectedFolder
-                  ? `Pasta selecionada: ${selectedFolder}`
-                  : "Raiz do repositório"
-              }
-            >
-              {selectedFolder ? `/${selectedFolderName}` : "ARQUIVOS"}
-            </div>
             <div className="tree-toolbar-icons">
               <button
                 id="btn-tree-new-file"
@@ -1664,11 +1812,16 @@ export const FileTree: React.FC<FileTreeProps> = ({
               <button
                 id="btn-tree-refresh"
                 className={`btn-tree-tool ${isTreeLoading ? "spinning" : ""}`}
-                title={isTreeLoading ? "Carregando arquivos..." : "Atualizar Árvore"}
+                title={
+                  isTreeLoading ? "Carregando arquivos..." : "Atualizar Árvore"
+                }
                 onClick={() => loadTree()}
                 disabled={isTreeLoading}
               >
-                <RefreshCw size={13} className={isTreeLoading ? "spinning" : ""} />
+                <RefreshCw
+                  size={13}
+                  className={isTreeLoading ? "spinning" : ""}
+                />
               </button>
               <button
                 id="btn-toggle-tree-pane"
@@ -1681,7 +1834,10 @@ export const FileTree: React.FC<FileTreeProps> = ({
             </div>
           </div>
           {isTreeLoading && (
-            <div className="tree-progress-track" title="Sincronizando arquivos com o disco...">
+            <div
+              className="tree-progress-track"
+              title="Sincronizando arquivos com o disco..."
+            >
               <div className="tree-progress-bar"></div>
             </div>
           )}
@@ -1689,7 +1845,9 @@ export const FileTree: React.FC<FileTreeProps> = ({
 
         {/* Tree Hierarchy Container */}
         <div
+          ref={treeScrollRef}
           className="tree-scroll-container"
+          onScroll={handleTreeScroll}
           onDragOver={handleDragOverRoot}
           onDragLeave={handleDragLeaveRoot}
           onDrop={handleDropOnRoot}
@@ -1702,9 +1860,15 @@ export const FileTree: React.FC<FileTreeProps> = ({
             {renderInlineCreateInput("")}
 
             {isTreeLoading && displayNodes.length === 0 ? (
-              <div className="tree-skeleton-container" aria-label="Carregando estrutura de arquivos">
+              <div
+                className="tree-skeleton-container"
+                aria-label="Carregando estrutura de arquivos"
+              >
                 <div className="tree-loading-pill">
-                  <span className="material-symbols-outlined spinning" style={{ fontSize: "14px" }}>
+                  <span
+                    className="material-symbols-outlined spinning"
+                    style={{ fontSize: "14px" }}
+                  >
                     progress_activity
                   </span>
                   <span>Carregando arquivos...</span>
@@ -1865,7 +2029,10 @@ export const FileTree: React.FC<FileTreeProps> = ({
 
           {/* Drag Overlay Feedback - 100% transparent background with bottom floating pill */}
           {isExternalDragActive && (
-            <div className="tree-drag-overlay" onClick={(e) => e.stopPropagation()}>
+            <div
+              className="tree-drag-overlay"
+              onClick={(e) => e.stopPropagation()}
+            >
               <div className="tree-drag-overlay-card">
                 <div className="tree-drag-overlay-icon">
                   <Upload size={12} color="#60a5fa" />

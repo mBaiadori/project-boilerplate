@@ -18,7 +18,9 @@ export async function settingsRoutes(fastify: FastifyInstance) {
     return reply.send(settingsService.saveAISettings(request.body));
   });
 
-  fastify.get('/api/ai/models', async (_request, reply) => {
-    return reply.send(settingsService.getAvailableModels());
+  fastify.get('/api/ai/models', async (request, reply) => {
+    const query = request.query as { provider?: string; api_key?: string; custom_endpoint?: string };
+    const modelsResult = await settingsService.getAvailableModels(query);
+    return reply.send(modelsResult);
   });
 }

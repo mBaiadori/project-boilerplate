@@ -52,6 +52,25 @@
   --md-sys-color-info: #1a73e8;
   --md-sys-color-success: #1e8e3e;
 
+  /* Aliases & Generic Color Variables (Theme-Safe) */
+  --color-surface: var(--md-sys-color-surface);
+  --color-on-surface: var(--md-sys-color-on-surface);
+  --color-surface-container: var(--md-sys-color-surface-container);
+  --color-surface-container-low: var(--md-sys-color-surface-container-low);
+  --color-surface-container-lowest: var(--md-sys-color-surface-container-lowest);
+  --color-surface-container-high: var(--md-sys-color-surface-container-high);
+  --color-surface-container-highest: var(--md-sys-color-surface-container-highest);
+  --color-primary: var(--md-sys-color-primary);
+  --color-primary-container: var(--md-sys-color-primary-container);
+  --color-on-primary: var(--md-sys-color-on-primary);
+  --color-on-primary-container: var(--md-sys-color-on-primary-container);
+  --color-outline: var(--md-sys-color-outline);
+  --color-outline-variant: var(--md-sys-color-outline-variant);
+  --border-color: var(--md-sys-color-outline-variant);
+  --text-main: var(--md-sys-color-on-surface);
+  --text-muted: var(--md-sys-color-on-surface-variant);
+  --bg-surface: var(--md-sys-color-surface);
+
   /* ========================================================================= */
   /* SHAPES & CORNER RADII                                                    */
   /* ========================================================================= */

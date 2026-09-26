@@ -158,8 +158,11 @@ export interface AIProviderMeta {
 export interface AISettingsState {
   active_provider: string;
   active_model: string;
+  provider?: string;
+  model?: string;
+  has_key?: boolean;
   custom_endpoint?: string;
-  providers: Record<string, AIProviderMeta>;
+  providers?: Record<string, AIProviderMeta>;
 }
 
 export interface TemplateItem {
@@ -179,6 +182,7 @@ export interface TemplateItem {
   source?: 'local' | 'community' | string;
   icon?: string;
   installed?: boolean;
+  skills?: string[];
   assistant?: string;
   assistant_prompt?: string;
   created_at?: string;
@@ -203,9 +207,13 @@ export interface ChatMessage {
     path: string;
     old_content: string;
     new_content: string;
+    rationale?: string;
   };
   contextBadges?: string[];
   isStreaming?: boolean;
+  tool_calls?: ToolCallRecord[];
+  skill_id?: string;
+  steps_count?: number;
 }
 
 export interface GitFileStatus {
@@ -267,4 +275,88 @@ export interface WhatsNewSummary {
   proposals: WhatsNewProposal[];
   summaryMessage: string;
 }
+
+export interface SkillItem {
+  id: string;
+  name: string;
+  title?: string;
+  description: string;
+  category: 'governance' | 'architecture' | 'quality' | 'engineering' | 'memory' | 'general';
+  version: string;
+  source: 'ecc' | 'community' | 'project';
+  sourceUrl?: string;
+  tools: string[];
+  suggested_templates?: string[];
+  tags?: string[];
+  icon?: string;
+  content?: string;
+  installed_at?: string;
+  updated_at?: string;
+  is_customized?: boolean;
+}
+
+export interface ProjectSkillsManifest {
+  version: string;
+  project_repo: string;
+  installed_skills: {
+    id: string;
+    version: string;
+    source: string;
+    installed_at: string;
+    updated_at: string;
+    is_customized?: boolean;
+  }[];
+}
+
+export interface ToolCallRecord {
+  tool: string;
+  args: Record<string, any>;
+  result: {
+    success: boolean;
+    data?: any;
+    error?: string;
+    message?: string;
+  };
+  timestamp: string;
+}
+
+export interface AgentDefinition {
+  id: string;
+  name: string;
+  title: string;
+  role: string;
+  description: string;
+  system_prompt: string;
+  skills: string[];
+  tools: string[];
+  category: 'architecture' | 'governance' | 'quality' | 'engineering' | 'review';
+  recommended_model?: string;
+  temperature?: number;
+  source: 'ecc' | 'project' | 'custom';
+  installed_at?: string;
+  icon?: string;
+}
+
+export interface MCPServerDefinition {
+  id: string;
+  name: string;
+  description: string;
+  type: 'sse' | 'stdio';
+  endpoint?: string;
+  command?: string;
+  args?: string[];
+  env?: Record<string, string>;
+  enabled: boolean;
+  status?: 'connected' | 'disconnected' | 'error';
+  discovered_tools?: { name: string; description: string }[];
+  category?: string;
+}
+
+export interface ToolItem {
+  name: string;
+  description: string;
+  parameters: any;
+}
+
+
 

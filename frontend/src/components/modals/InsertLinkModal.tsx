@@ -377,14 +377,14 @@ export const InsertLinkModal: React.FC<InsertLinkModalProps> = ({
             </span>
           </div>
 
-          {/* As 3 Abas */}
+          {/* As 3 Abas Justificadas com Largura Total */}
           <div
             style={{
-              display: 'flex',
+              display: 'grid',
+              gridTemplateColumns: 'repeat(3, 1fr)',
+              width: '100%',
               borderBottom: '1px solid var(--color-outline-variant, #e2e8f0)',
-              padding: '0 18px',
-              gap: '12px',
-              background: '#f8fafc',
+              background: 'var(--color-surface-container-low, #f8fafc)',
             }}
           >
             {/* Aba 1: Documento */}
@@ -392,23 +392,27 @@ export const InsertLinkModal: React.FC<InsertLinkModalProps> = ({
               type="button"
               onClick={() => setActiveTab('doc')}
               style={{
-                padding: '10px 6px',
+                padding: '11px 12px',
                 fontSize: '12.5px',
                 fontWeight: activeTab === 'doc' ? 600 : 500,
-                color: activeTab === 'doc' ? 'var(--primary, #2563eb)' : '#64748b',
+                color: activeTab === 'doc' ? 'var(--primary, #2563eb)' : 'var(--color-outline, #64748b)',
                 borderBottom: activeTab === 'doc' ? '2px solid var(--primary, #2563eb)' : '2px solid transparent',
-                background: 'none',
+                background: activeTab === 'doc' ? 'var(--color-surface, #ffffff)' : 'transparent',
                 borderTop: 'none',
                 borderLeft: 'none',
                 borderRight: 'none',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '6px',
+                justifyContent: 'center',
+                gap: '7px',
+                transition: 'all 0.15s ease',
               }}
             >
-              <span className="material-symbols-outlined icon-xs">account_tree</span>
-              Documento
+              <span className="material-symbols-outlined icon-xs" style={{ color: activeTab === 'doc' ? 'var(--primary, #2563eb)' : '#94a3b8' }}>
+                account_tree
+              </span>
+              <span>Documento</span>
             </button>
 
             {/* Aba 2: Trecho */}
@@ -416,23 +420,27 @@ export const InsertLinkModal: React.FC<InsertLinkModalProps> = ({
               type="button"
               onClick={() => setActiveTab('snippet')}
               style={{
-                padding: '10px 6px',
+                padding: '11px 12px',
                 fontSize: '12.5px',
                 fontWeight: activeTab === 'snippet' ? 600 : 500,
-                color: activeTab === 'snippet' ? 'var(--primary, #2563eb)' : '#64748b',
+                color: activeTab === 'snippet' ? 'var(--primary, #2563eb)' : 'var(--color-outline, #64748b)',
                 borderBottom: activeTab === 'snippet' ? '2px solid var(--primary, #2563eb)' : '2px solid transparent',
-                background: 'none',
+                background: activeTab === 'snippet' ? 'var(--color-surface, #ffffff)' : 'transparent',
                 borderTop: 'none',
                 borderLeft: 'none',
                 borderRight: 'none',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '6px',
+                justifyContent: 'center',
+                gap: '7px',
+                transition: 'all 0.15s ease',
               }}
             >
-              <span className="material-symbols-outlined icon-xs">share_location</span>
-              Trecho (Link Gerado)
+              <span className="material-symbols-outlined icon-xs" style={{ color: activeTab === 'snippet' ? 'var(--primary, #2563eb)' : '#94a3b8' }}>
+                share_location
+              </span>
+              <span>Trecho (Link)</span>
             </button>
 
             {/* Aba 3: Web */}
@@ -440,23 +448,27 @@ export const InsertLinkModal: React.FC<InsertLinkModalProps> = ({
               type="button"
               onClick={() => setActiveTab('url')}
               style={{
-                padding: '10px 6px',
+                padding: '11px 12px',
                 fontSize: '12.5px',
                 fontWeight: activeTab === 'url' ? 600 : 500,
-                color: activeTab === 'url' ? 'var(--primary, #2563eb)' : '#64748b',
+                color: activeTab === 'url' ? 'var(--primary, #2563eb)' : 'var(--color-outline, #64748b)',
                 borderBottom: activeTab === 'url' ? '2px solid var(--primary, #2563eb)' : '2px solid transparent',
-                background: 'none',
+                background: activeTab === 'url' ? 'var(--color-surface, #ffffff)' : 'transparent',
                 borderTop: 'none',
                 borderLeft: 'none',
                 borderRight: 'none',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '6px',
+                justifyContent: 'center',
+                gap: '7px',
+                transition: 'all 0.15s ease',
               }}
             >
-              <span className="material-symbols-outlined icon-xs">language</span>
-              Web
+              <span className="material-symbols-outlined icon-xs" style={{ color: activeTab === 'url' ? 'var(--primary, #2563eb)' : '#94a3b8' }}>
+                language
+              </span>
+              <span>Web (URL)</span>
             </button>
           </div>
 

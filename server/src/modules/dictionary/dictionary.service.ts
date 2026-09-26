@@ -15,9 +15,9 @@ export class DictionaryService {
     return hiddenPath;
   }
 
-  getDictionary() {
+  getDictionary(targetRepo?: string) {
     const cfg = loadConfig();
-    const repoName = cfg.active_repo?.name || 'local';
+    const repoName = targetRepo || cfg.active_repo?.name || 'local';
     const dictPath = this.getDictionaryPath(repoName);
 
     if (fs.existsSync(dictPath)) {
@@ -40,14 +40,14 @@ export class DictionaryService {
     };
   }
 
-  saveDictionary(data: any) {
+  saveDictionary(data: any, targetRepo?: string) {
     const valRes = validateJsonSchema('dictionary', data);
     if (!valRes.valid) {
       throw new Error(`Dados do dicionário inválidos: ${valRes.errors?.join(', ')}`);
     }
 
     const cfg = loadConfig();
-    const repoName = cfg.active_repo?.name || 'local';
+    const repoName = targetRepo || cfg.active_repo?.name || 'local';
     const dictPath = this.getDictionaryPath(repoName);
 
     let oldContent = '';

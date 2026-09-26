@@ -4681,7 +4681,9 @@ span[title] {
   flex-shrink: 0;
   min-height: 46px;
   box-sizing: border-box;
-  overflow: hidden;
+  overflow: visible;
+  position: relative;
+  z-index: 20;
 }
 
 .proj-ai-agent-wrapper,
@@ -4691,7 +4693,8 @@ span[title] {
   gap: 6px;
   min-width: 0;
   flex: 1 1 auto;
-  overflow: hidden;
+  overflow: visible;
+  position: relative;
 }
 
 .proj-ai-agent-btn,
@@ -4883,6 +4886,33 @@ span[title] {
 .ai-copilot-prompt-agent-tag {
   font-weight: 600;
   color: #2563eb;
+}
+
+.ai-copilot-new-chat-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 3px 8px;
+  height: 28px;
+  width: auto !important;
+  min-width: auto !important;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-primary, #2563eb);
+  background: var(--color-surface, #ffffff);
+  border: 1px solid var(--color-outline-variant, #cbd5e1);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-sizing: border-box;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.ai-copilot-new-chat-btn:hover {
+  background: var(--color-primary-container, #eff6ff);
+  border-color: var(--color-primary, #2563eb);
 }
 
 .ai-copilot-raw-btn {

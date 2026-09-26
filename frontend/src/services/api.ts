@@ -2,7 +2,9 @@
 import type { 
   WorkspaceStatus, Repo, WorkspaceChange, TreeNode, 
   PR, TemplateItem, TutorialItem, AISettingsState, DictionaryTerm, User,
-  GitStatus, GitCommitInfo, DocumentMetadataItem, WhatsNewSummary
+  GitStatus, GitCommitInfo, DocumentMetadataItem, WhatsNewSummary,
+  SkillItem, ProjectSkillsManifest, ToolCallRecord,
+  AgentDefinition, MCPServerDefinition, ToolItem
 } from '../types';
 
 export interface ApiResponse<T = any> {
@@ -278,9 +280,12 @@ export const API = {
     path?: string; 
     history?: any[]; 
     assistant_prompt?: string; 
+    raw_mode?: boolean;
     session_id?: string; 
-    repo?: string; 
-  }): Promise<ApiResponse<{ reply: string; diff?: any; actions?: any[] }>> {
+    repo?: string;
+    skill_id?: string;
+    allowed_tools?: string[];
+  }): Promise<ApiResponse<{ reply: string; diff?: any; actions?: any[]; tool_calls?: ToolCallRecord[]; steps_count?: number; provider?: string; model?: string }>> {
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -310,6 +315,16 @@ export const API = {
     if (params.repo) query.set('repo', params.repo);
     if (params.session_id) query.set('session_id', params.session_id);
     const res = await fetch(`/api/chat/memory/session?${query.toString()}`);
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async deleteMemorySession(params: { repo?: string; session_id: string }): Promise<ApiResponse<any>> {
+    const query = new URLSearchParams();
+    if (params.repo) query.set('repo', params.repo);
+    query.set('session_id', params.session_id);
+    const res = await fetch(`/api/chat/memory/session?${query.toString()}`, {
+      method: 'DELETE'
+    });
     return { ok: res.ok, data: await res.json() };
   },
 
@@ -367,7 +382,14 @@ export const API = {
     return { ok: res.ok, data: await res.json() };
   },
 
-  async getAIModels(params: { provider?: string; api_key?: string; custom_endpoint?: string } = {}): Promise<ApiResponse<{ models: string[]; default?: string }>> {
+  async getAIModels(params: { provider?: string; api_key?: string; custom_endpoint?: string } = {}): Promise<ApiResponse<{
+    provider?: string;
+    models: string[];
+    detailedModels?: Array<{ id: string; name: string; description?: string }>;
+    isDynamic?: boolean;
+    message?: string;
+    error?: string;
+  }>> {
     const query = new URLSearchParams();
     if (params.provider) query.set('provider', params.provider);
     if (params.api_key) query.set('api_key', params.api_key);
@@ -678,5 +700,129 @@ export const API = {
     });
     return { ok: res.ok, data: await res.json() };
   },
+
+  // ─── SKILLS & HARNESS API ───────────────────────────────────────────────
+  async getSkillsHub(category?: string, search?: string): Promise<ApiResponse<{ count: number; skills: SkillItem[] }>> {
+    const params = new URLSearchParams();
+    if (category) params.set('category', category);
+    if (search) params.set('search', search);
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    const res = await fetch(`/api/skills/hub${qs}`);
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async getSkillsProject(repo?: string): Promise<ApiResponse<{ repo: string; count: number; manifest: ProjectSkillsManifest; installed_skills: SkillItem[] }>> {
+    const qs = repo ? `?repo=${encodeURIComponent(repo)}` : '';
+    const res = await fetch(`/api/skills/project${qs}`);
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async installSkill(skillId: string, repo?: string): Promise<ApiResponse<{ success: boolean; message: string; skill: SkillItem }>> {
+    const res = await fetch('/api/skills/install', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ skill_id: skillId, repo })
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async uninstallSkill(skillId: string, repo?: string): Promise<ApiResponse<{ success: boolean; message: string }>> {
+    const qs = repo ? `?repo=${encodeURIComponent(repo)}` : '';
+    const res = await fetch(`/api/skills/uninstall/${encodeURIComponent(skillId)}${qs}`, {
+      method: 'DELETE'
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async customizeSkill(skillId: string, data: Partial<SkillItem>, repo?: string): Promise<ApiResponse<{ success: boolean; skill: SkillItem }>> {
+    const res = await fetch(`/api/skills/project/${encodeURIComponent(skillId)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...data, repo })
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async getWorkspaceContextBundle(path: string, repo?: string): Promise<ApiResponse<any>> {
+    const params = new URLSearchParams({ path });
+    if (repo) params.set('repo', repo);
+    const res = await fetch(`/api/workspace/context-bundle?${params.toString()}`);
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  // --- AI Center: Agents ---
+  async getAgentsHub(): Promise<ApiResponse<{ agents: AgentDefinition[] }>> {
+    const res = await fetch('/api/aicenter/agents/hub');
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async getAgentsProject(repo?: string): Promise<ApiResponse<{ repo: string; agents: AgentDefinition[] }>> {
+    const qs = repo ? `?repo=${encodeURIComponent(repo)}` : '';
+    const res = await fetch(`/api/aicenter/agents/project${qs}`);
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async installAgent(agentId: string, repo?: string): Promise<ApiResponse<{ success: boolean; agent: AgentDefinition }>> {
+    const res = await fetch('/api/aicenter/agents/install', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agent_id: agentId, repo })
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async uninstallAgent(agentId: string, repo?: string): Promise<ApiResponse<{ success: boolean; message: string }>> {
+    const qs = repo ? `?repo=${encodeURIComponent(repo)}` : '';
+    const res = await fetch(`/api/aicenter/agents/uninstall/${encodeURIComponent(agentId)}${qs}`, {
+      method: 'DELETE'
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  // --- AI Center: Tools ---
+  async getTools(): Promise<ApiResponse<{ tools: ToolItem[] }>> {
+    const res = await fetch('/api/aicenter/tools');
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async executeToolTest(toolName: string, args: Record<string, any>, repo?: string): Promise<ApiResponse<any>> {
+    const res = await fetch('/api/aicenter/tools/execute', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tool_name: toolName, args, repo })
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  // --- AI Center: MCP Connectors ---
+  async getMcpTemplates(): Promise<ApiResponse<{ templates: MCPServerDefinition[] }>> {
+    const res = await fetch('/api/aicenter/mcp/templates');
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async getMcpProject(repo?: string): Promise<ApiResponse<{ repo: string; servers: MCPServerDefinition[] }>> {
+    const qs = repo ? `?repo=${encodeURIComponent(repo)}` : '';
+    const res = await fetch(`/api/aicenter/mcp/project${qs}`);
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async saveMcpServer(server: MCPServerDefinition, repo?: string): Promise<ApiResponse<{ success: boolean; server: MCPServerDefinition }>> {
+    const res = await fetch('/api/aicenter/mcp/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ server, repo })
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async removeMcpServer(serverId: string, repo?: string): Promise<ApiResponse<{ success: boolean; message: string }>> {
+    const qs = repo ? `?repo=${encodeURIComponent(repo)}` : '';
+    const res = await fetch(`/api/aicenter/mcp/remove/${encodeURIComponent(serverId)}${qs}`, {
+      method: 'DELETE'
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
 };
+
+
 

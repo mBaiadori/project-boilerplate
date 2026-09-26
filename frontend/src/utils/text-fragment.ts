@@ -82,7 +82,12 @@ export function parseTextFragmentUrl(urlOrHash: string): TextFragmentQuery | nul
     const rawFragment = urlOrHash.split(':~:text=')[1]?.split('&')[0];
     if (!rawFragment) return null;
 
-    const decoded = decodeURIComponent(rawFragment.replace(/\+/g, ' '));
+    let decoded = '';
+    try {
+      decoded = decodeURIComponent(rawFragment.replace(/\+/g, ' '));
+    } catch {
+      decoded = unescape(rawFragment.replace(/\+/g, ' '));
+    }
     
     // Padrão W3C: [prefix-,]textStart[,textEnd][,-suffix]
     let prefix = '';
@@ -155,6 +160,17 @@ export function calculateSimilarity(s1: string, s2: string): number {
 }
 
 /**
+ * Normaliza string removendo pontuação externa e múltiplos espaços para busca confiável
+ */
+function normalizeForSearch(str: string): string {
+  return (str || '')
+    .toLowerCase()
+    .replace(/[\r\n\t]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
  * Procura um trecho dentro do DOM de um elemento container,
  * utilizando busca exata e fallback resiliente (Fuzzy Search).
  */
@@ -162,72 +178,131 @@ export function findTextFragmentInElement(
   container: HTMLElement,
   fragment: TextFragmentQuery
 ): { element: HTMLElement; range: Range; isExact: boolean } | null {
-  const exact = fragment.exact.trim().replace(/\s+/g, ' ').toLowerCase();
-  if (!exact) return null;
+  if (!container || !fragment || !fragment.exact) return null;
 
-  // 1. Coletar todos os blocos editáveis e parágrafos do documento
-  const blocks = Array.from(
-    container.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li, blockquote, pre, div.callout-content, td, th, div.notion-toggle-content, summary')
-  ) as HTMLElement[];
-  if (blocks.length === 0 && container.innerText) {
-    blocks.push(container);
+  const rawExact = fragment.exact.trim();
+  const exactNorm = normalizeForSearch(rawExact);
+  if (!exactNorm) return null;
+
+  // 1. Coletar todos os blocos relevantes do documento Notion
+  const blockSelector = [
+    'p',
+    'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+    'li',
+    'blockquote',
+    'pre', 'code',
+    '.notion-callout',
+    '.notion-callout-content',
+    'td', 'th',
+    '.notion-toggle-content',
+    'summary',
+    '.notion-todo-item',
+    '.notion-todo-text',
+    '.notion-code-block',
+    '.notion-code-content',
+    'div[contenteditable="true"]'
+  ].join(', ');
+
+  let rawBlocks = Array.from(container.querySelectorAll(blockSelector)) as HTMLElement[];
+  // Filtrar elementos que contenham texto e não sejam duplicatas puras
+  let blocks = rawBlocks.filter(b => (b.textContent || '').trim().length > 0);
+
+  if (blocks.length === 0 && (container.textContent || '').trim()) {
+    blocks = [container];
   }
 
-  // ETAPA 1: Busca Exata (com suporte a prefixo/sufixo para desempate)
+  const prefixNorm = fragment.prefix ? normalizeForSearch(fragment.prefix) : '';
+  const suffixNorm = fragment.suffix ? normalizeForSearch(fragment.suffix) : '';
+
+  // ETAPA 1: Busca Exata com preferência por correspondência de prefixo/sufixo
+  let exactCandidates: { element: HTMLElement; index: number; textNorm: string }[] = [];
+
   for (const block of blocks) {
-    const rawText = block.innerText || block.textContent || '';
-    const textNorm = rawText.replace(/\s+/g, ' ');
-    const lower = textNorm.toLowerCase();
-    
-    const index = lower.indexOf(exact);
+    const rawText = block.textContent || block.innerText || '';
+    const textNorm = normalizeForSearch(rawText);
+    const index = textNorm.indexOf(exactNorm);
     if (index !== -1) {
-      if (fragment.prefix && !lower.includes(fragment.prefix.toLowerCase().replace(/\s+/g, ' '))) {
-        continue;
+      exactCandidates.push({ element: block, index, textNorm });
+    }
+  }
+
+  if (exactCandidates.length > 0) {
+    // Se houver prefixo, tentar desempate
+    if (prefixNorm) {
+      const matchWithPrefix = exactCandidates.find(c => c.textNorm.includes(prefixNorm));
+      if (matchWithPrefix) {
+        const range = createRangeFromNodeAndOffsets(matchWithPrefix.element, matchWithPrefix.index, matchWithPrefix.index + exactNorm.length);
+        return { element: matchWithPrefix.element, range: range || document.createRange(), isExact: true };
       }
+    }
 
-      const range = createRangeFromNodeAndOffsets(block, index, index + exact.length);
-      return { element: block, range: range || document.createRange(), isExact: true };
+    // Se houver sufixo, tentar desempate
+    if (suffixNorm) {
+      const matchWithSuffix = exactCandidates.find(c => c.textNorm.includes(suffixNorm));
+      if (matchWithSuffix) {
+        const range = createRangeFromNodeAndOffsets(matchWithSuffix.element, matchWithSuffix.index, matchWithSuffix.index + exactNorm.length);
+        return { element: matchWithSuffix.element, range: range || document.createRange(), isExact: true };
+      }
+    }
+
+    // Retornar o primeiro candidato exato (ou o mais específico / menor elemento)
+    const bestExact = exactCandidates.reduce((prev, curr) => {
+      const prevLen = prev.element.textContent?.length || 999999;
+      const currLen = curr.element.textContent?.length || 999999;
+      return currLen < prevLen ? curr : prev;
+    }, exactCandidates[0]);
+
+    const range = createRangeFromNodeAndOffsets(bestExact.element, bestExact.index, bestExact.index + exactNorm.length);
+    return { element: bestExact.element, range: range || document.createRange(), isExact: true };
+  }
+
+  // ETAPA 2: Busca por Subsequência de Palavras (caso pontuações ou tags inline tenham quebrado a string exata)
+  const targetWords = exactNorm.split(' ').filter(w => w.length > 1);
+  if (targetWords.length >= 2) {
+    for (const block of blocks) {
+      const textNorm = normalizeForSearch(block.textContent || '');
+      const allWordsPresent = targetWords.every(word => textNorm.includes(word));
+      if (allWordsPresent) {
+        const range = document.createRange();
+        range.selectNodeContents(block);
+        return { element: block, range, isExact: true };
+      }
     }
   }
 
-  // ETAPA 1.5: Busca Exata ignorando prefixo (caso prefixo tenha sido alterado)
-  for (const block of blocks) {
-    const rawText = block.innerText || block.textContent || '';
-    const textNorm = rawText.replace(/\s+/g, ' ');
-    const lower = textNorm.toLowerCase();
-    const index = lower.indexOf(exact);
-    if (index !== -1) {
-      const range = createRangeFromNodeAndOffsets(block, index, index + exact.length);
-      return { element: block, range: range || document.createRange(), isExact: true };
-    }
-  }
-
-  // ETAPA 2: Busca Resiliente (Fuzzy Matching para pequenas edições ou correções)
+  // ETAPA 3: Busca Resiliente (Fuzzy Matching para pequenas edições ou correções)
   let bestMatch: { element: HTMLElement; score: number } | null = null;
-  const targetWords = exact.split(/\s+/).filter(Boolean);
 
   for (const block of blocks) {
-    const rawText = (block.innerText || block.textContent || '').trim();
+    const rawText = (block.textContent || block.innerText || '').trim();
     if (!rawText) continue;
 
-    const textNorm = rawText.replace(/\s+/g, ' ');
-    const blockWords = textNorm.split(/\s+/).filter(Boolean);
+    const textNorm = normalizeForSearch(rawText);
+    const blockWords = textNorm.split(' ').filter(Boolean);
     if (blockWords.length === 0) continue;
 
     const windowSize = Math.max(targetWords.length, 2);
     for (let i = 0; i <= blockWords.length - 1; i++) {
-      const windowStr = blockWords.slice(i, i + windowSize).join(' ').toLowerCase();
-      const sim = calculateSimilarity(exact, windowStr);
-      if (sim >= 0.70 && (!bestMatch || sim > bestMatch.score)) {
+      const windowStr = blockWords.slice(i, i + windowSize).join(' ');
+      const sim = calculateSimilarity(exactNorm, windowStr);
+      if (sim >= 0.65 && (!bestMatch || sim > bestMatch.score)) {
         bestMatch = { element: block, score: sim };
       }
     }
   }
 
-  if (bestMatch && bestMatch.score >= 0.70) {
+  if (bestMatch && bestMatch.score >= 0.65) {
     const range = document.createRange();
     range.selectNodeContents(bestMatch.element);
     return { element: bestMatch.element, range, isExact: false };
+  }
+
+  // ETAPA 4: Fallback Global no Container
+  const containerTextNorm = normalizeForSearch(container.textContent || '');
+  if (containerTextNorm.includes(exactNorm)) {
+    const range = document.createRange();
+    range.selectNodeContents(container);
+    return { element: container, range, isExact: true };
   }
 
   return null;
@@ -253,12 +328,12 @@ function createRangeFromNodeAndOffsets(parent: HTMLElement, startOffset: number,
       
       if (!startNode && currentOffset + nodeLength >= startOffset) {
         startNode = currentNode;
-        nodeStartOffset = startOffset - currentOffset;
+        nodeStartOffset = Math.max(0, startOffset - currentOffset);
       }
       
       if (!endNode && currentOffset + nodeLength >= endOffset) {
         endNode = currentNode;
-        nodeEndOffset = endOffset - currentOffset;
+        nodeEndOffset = Math.min(nodeLength, endOffset - currentOffset);
         break;
       }
       

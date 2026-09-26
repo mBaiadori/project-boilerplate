@@ -75,6 +75,7 @@ export class TemplatesService {
       description?: string;
       badge?: string;
       source?: string;
+      skills?: string[];
     }
   ): { success: boolean; template: ProjectTemplate } {
     const repo = repoName || getActiveRepo();
@@ -107,6 +108,7 @@ export class TemplatesService {
       source: data.source || 'local',
       description: data.description || '',
       badge: data.badge || 'Local',
+      skills: Array.isArray(data.skills) ? data.skills : [],
       systemPrompt: promptText,
       assistant_prompt: promptText,
     };

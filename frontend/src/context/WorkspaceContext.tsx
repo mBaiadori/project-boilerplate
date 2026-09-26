@@ -258,9 +258,26 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     const hash = hashIndex !== -1 ? rawFilePath.slice(hashIndex) : '';
 
     if (hash) {
-      try {
-        window.location.hash = hash;
-      } catch (e) {}
+      if (window.location.hash !== hash) {
+        try {
+          window.history.replaceState(
+            window.history.state,
+            '',
+            window.location.pathname + window.location.search + hash
+          );
+        } catch (e) {}
+      }
+    } else {
+      // Limpa qualquer hash anterior na URL sem criar entrada duplicada no histórico
+      if (window.location.hash) {
+        try {
+          window.history.replaceState(
+            window.history.state,
+            '',
+            window.location.pathname + window.location.search
+          );
+        } catch (e) {}
+      }
     }
 
     // Se o arquivo já for o ativo atual, apenas disparar a navegação de fragmento sem recarregar o arquivo do zero

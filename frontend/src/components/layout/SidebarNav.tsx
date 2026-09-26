@@ -7,6 +7,8 @@ export type SubViewType =
   | "dictionary"
   | "wiki"
   | "templates"
+  | "skills"
+  | "aicenter"
   | "prs"
   | "settings";
 
@@ -141,6 +143,27 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
           <span className="nav-label">Templates</span>
         </button>
 
+        {/* 4. AI Center (Skills, Personas, Tools, MCP) */}
+        <button
+          className={`dash-nav-item ${activeView === "aicenter" || activeView === "skills" ? "active" : ""}`}
+          data-view="aicenter"
+          title="AI Center: Skills, Personas, Ferramentas Nativas & MCP"
+          onClick={() => onSelectView("aicenter")}
+        >
+          <span
+            className="material-symbols-outlined nav-icon"
+            style={{
+              fontSize: "21px",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            psychology
+          </span>
+          <span className="nav-label">AI Center</span>
+        </button>
+
         {/* 3. Revisões & Propostas de Evolução */}
         <button
           className={`dash-nav-item ${activeView === "prs" ? "active" : ""}`}
@@ -162,7 +185,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
           <span className="nav-label">Revisões</span>
         </button>
 
-        {/* 4. Base de Conhecimento / Wiki */}
+        {/* 6. Base de Conhecimento / Wiki */}
         <button
           className={`dash-nav-item ${activeView === "wiki" ? "active" : ""}`}
           data-view="wiki"
@@ -184,6 +207,27 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
             <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
           </svg>
           <span className="nav-label">Conhecimento</span>
+        </button>
+
+        {/* 7. Dicionário Ubíquo */}
+        <button
+          className={`dash-nav-item ${activeView === "dictionary" ? "active" : ""}`}
+          data-view="dictionary"
+          title="Dicionário Ubíquo & Vocabulário Oficial"
+          onClick={() => onSelectView("dictionary")}
+        >
+          <span
+            className="material-symbols-outlined nav-icon"
+            style={{
+              fontSize: "21px",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            spellcheck
+          </span>
+          <span className="nav-label">Dicionário</span>
         </button>
 
         {/* 5. Configurações */}
