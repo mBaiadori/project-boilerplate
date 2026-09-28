@@ -14,7 +14,7 @@ import {
   rollbackToCommit,
 } from '../../utils/git.js';
 import { computeDiff } from '../../utils/diff.js';
-import { isPathHidden, loadHiddenFiles } from '../../utils/hidden-files.js';
+import { isPathHidden, loadHiddenFiles, isSystemPath, getSystemFileFriendlyName } from '../../utils/hidden-files.js';
 import { aiService } from '../ai/ai.service.js';
 
 export class PRsService {
@@ -181,14 +181,15 @@ export class PRsService {
 
     // 1. Gather files from workspace_changes
     const wsChanges = (cfg.workspace_changes?.[repoName] || []).filter(
-      (c) => !isPathHidden(c.path, hiddenList),
+      (c) => !isPathHidden(c.path, hiddenList) || isSystemPath(c.path),
     );
 
     // 2. Gather files from git status (covers untracked and working tree changes)
     const gitStatus = await getGitStatus(repoDir);
-    const gitFiles = (gitStatus.files || []).filter(
-      (f) => !isPathHidden(f.path, hiddenList),
-    );
+    const gitFiles = [
+      ...(gitStatus.files || []).filter((f) => !isPathHidden(f.path, hiddenList)),
+      ...(gitStatus.systemFiles || []),
+    ];
 
     const allPathsSet = new Set<string>([
       ...wsChanges.map((c) => c.path),
@@ -398,11 +399,12 @@ Retorne APENAS um JSON válido no formato:
     const repoDir = this.getRepoDir(repoName);
     const hiddenList = loadHiddenFiles(repoDir);
     const gitStatus = await getGitStatus(repoDir);
-    const gitFiles = (gitStatus.files || []).filter(
-      (f) => !isPathHidden(f.path, hiddenList),
-    );
+    const gitFiles = [
+      ...(gitStatus.files || []).filter((f) => !isPathHidden(f.path, hiddenList)),
+      ...(gitStatus.systemFiles || []),
+    ];
     const rawChanges = (cfg.workspace_changes?.[repoName] || []).filter(
-      (c) => !isPathHidden(c.path, hiddenList),
+      (c) => !isPathHidden(c.path, hiddenList) || isSystemPath(c.path),
     );
 
     const allChangedPaths = Array.from(

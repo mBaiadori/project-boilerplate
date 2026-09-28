@@ -2,14 +2,14 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useWorkspace } from "../../context/WorkspaceContext";
 import { API } from "../../services/api";
-import { isPathHidden } from "../../utils/hidden-files";
+import { isPathHidden, getSystemFileFriendlyName } from "../../utils/hidden-files";
 
 interface VersionsSubViewProps {
   onOpenFile?: (path: string) => void;
   onOpenDiffModal?: () => void;
 }
 
-type TabType = "whats-new" | "drafts";
+type TabType = "whats-new" | "drafts" | "system";
 type WhatsNewFilterType = "all" | "new" | "modified" | "proposals";
 
 export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
@@ -19,6 +19,7 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
     activeRepo,
     gitStatus,
     pendingChanges = [],
+    systemPendingChanges = [],
     whatsNewSummary,
     hasUnreadWhatsNew,
     refreshGitStatus,
@@ -34,7 +35,7 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
   const tabParam = searchParams.get("tab") as TabType | null;
 
   const activeTab: TabType = useMemo(() => {
-    if (tabParam && ["whats-new", "drafts"].includes(tabParam)) {
+    if (tabParam && ["whats-new", "drafts", "system"].includes(tabParam)) {
       return tabParam;
     }
     return hasUnreadWhatsNew ? "whats-new" : "drafts";
@@ -42,7 +43,7 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
 
   // Synchronize URL search params so the active tab is always explicitly in the URL
   useEffect(() => {
-    if (!tabParam || !["whats-new", "drafts"].includes(tabParam)) {
+    if (!tabParam || !["whats-new", "drafts", "system"].includes(tabParam)) {
       const defaultTab = hasUnreadWhatsNew ? "whats-new" : "drafts";
       setSearchParams(
         (prev) => {
@@ -79,7 +80,7 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
     message: string;
   } | null>(null);
 
-  // File diff state: team diffs vs local diffs
+  // File diff state: team diffs vs local diffs vs system diffs
   const [expandedWhatsNewFiles, setExpandedWhatsNewFiles] = useState<
     Record<string, boolean>
   >({});
@@ -98,12 +99,22 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
     Record<string, boolean>
   >({});
 
+  const [expandedSystemFiles, setExpandedSystemFiles] = useState<
+    Record<string, boolean>
+  >({});
+  const [systemDiffs, setSystemDiffs] = useState<Record<string, string>>({});
+  const [loadingSystemDiffs, setLoadingSystemDiffs] = useState<
+    Record<string, boolean>
+  >({});
+
   // Reset local state when active repo changes so repos are strictly isolated
   useEffect(() => {
     setExpandedDraftFiles({});
     setExpandedWhatsNewFiles({});
+    setExpandedSystemFiles({});
     setDraftDiffs({});
     setWhatsNewDiffs({});
+    setSystemDiffs({});
     setPrTitle("");
     setPrDescription("");
     setCreatedPRUrl(null);
@@ -154,6 +165,47 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
 
     return Array.from(map.values());
   }, [gitStatus?.files, filteredPendingChanges]);
+
+  const allSystemDraftFiles = useMemo(() => {
+    const map = new Map<
+      string,
+      { path: string; status?: string; type?: string; friendlyName: string }
+    >();
+
+    // 1. Files from gitStatus (systemFiles)
+    for (const f of gitStatus?.systemFiles || []) {
+      if (f?.path) {
+        const cleanPath = f.path.replace(/^\/+/, "");
+        map.set(cleanPath, {
+          path: cleanPath,
+          status: f.status,
+          type:
+            f.status === "??" || f.status === "A"
+              ? "ADDED"
+              : f.status === "D"
+                ? "DELETED"
+                : "MODIFIED",
+          friendlyName: getSystemFileFriendlyName(cleanPath),
+        });
+      }
+    }
+
+    // 2. Files from in-memory / workspace system changes
+    for (const c of systemPendingChanges || []) {
+      if (c?.path) {
+        const cleanPath = c.path.replace(/^\/+/, "");
+        const existing = map.get(cleanPath);
+        map.set(cleanPath, {
+          path: cleanPath,
+          status: existing?.status || (c.type === "ADDED" ? "??" : "M"),
+          type: c.type || existing?.type || "MODIFIED",
+          friendlyName: getSystemFileFriendlyName(cleanPath),
+        });
+      }
+    }
+
+    return Array.from(map.values());
+  }, [gitStatus?.systemFiles, systemPendingChanges]);
 
   const changedFiles = allDraftFiles;
   const currentBranch = gitStatus?.branch || "main";
@@ -229,6 +281,36 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
     setExpandedDraftFiles((prev) => ({ ...prev, [filePath]: nextState }));
     if (nextState) {
       fetchDraftDiff(filePath);
+    }
+  };
+
+  const fetchSystemDiff = useCallback(
+    async (filePath: string) => {
+      if (!filePath || systemDiffs[filePath]) return;
+      setLoadingSystemDiffs((prev) => ({ ...prev, [filePath]: true }));
+      try {
+        const res = await API.getGitDiff(filePath);
+        if (res?.ok && res?.data?.diff) {
+          setSystemDiffs((prev) => ({ ...prev, [filePath]: res.data.diff }));
+        }
+      } catch (err) {
+        console.error(
+          `[VersionsSubView] Erro ao buscar comparativo de sistema de ${filePath}:`,
+          err,
+        );
+      } finally {
+        setLoadingSystemDiffs((prev) => ({ ...prev, [filePath]: false }));
+      }
+    },
+    [systemDiffs],
+  );
+
+  const toggleSystemFile = (filePath: string) => {
+    if (!filePath) return;
+    const nextState = !expandedSystemFiles[filePath];
+    setExpandedSystemFiles((prev) => ({ ...prev, [filePath]: nextState }));
+    if (nextState) {
+      fetchSystemDiff(filePath);
     }
   };
 
@@ -835,6 +917,55 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
                 }}
               >
                 {changedFiles.length}
+              </span>
+            )}
+          </button>
+
+          {/* Tab 3: Sistema & Configurações */}
+          <button
+            type="button"
+            onClick={() => handleTabChange("system")}
+            style={{
+              height: "46px",
+              padding: "0 18px",
+              border: "none",
+              borderBottom:
+                activeTab === "system"
+                  ? "3px solid #2563eb"
+                  : "3px solid transparent",
+              background: "transparent",
+              color: activeTab === "system" ? "#2563eb" : "#64748b",
+              fontWeight: 600,
+              fontSize: "14px",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              transition: "border-color 0.15s ease, color 0.15s ease",
+            }}
+          >
+            <span
+              className="material-symbols-outlined"
+              style={{
+                fontSize: "20px",
+                color: activeTab === "system" ? "#2563eb" : "#64748b",
+              }}
+            >
+              settings_suggest
+            </span>
+            <span>Sistema</span>
+            {allSystemDraftFiles.length > 0 && (
+              <span
+                style={{
+                  padding: "2px 8px",
+                  borderRadius: "12px",
+                  fontSize: "11px",
+                  fontWeight: 700,
+                  background: activeTab === "system" ? "#2563eb" : "#dbeafe",
+                  color: activeTab === "system" ? "#ffffff" : "#1e40af",
+                }}
+              >
+                {allSystemDraftFiles.length}
               </span>
             )}
           </button>
@@ -2215,6 +2346,513 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
                   </button>
                 </div>
               </form>
+            </div>
+          )}
+
+          {/* ═══════════════════════════════════════════════════════════════════════
+            TAB 3: SISTEMA & TEMPLATES (Configurações, Dicionário e Modelos)
+            ═══════════════════════════════════════════════════════════════════════ */}
+          {activeTab === "system" && (
+            <div
+              style={{ display: "flex", flexDirection: "column", gap: "24px" }}
+            >
+              {/* Top Summary Banner */}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  background: "#ffffff",
+                  padding: "18px 24px",
+                  borderRadius: "12px",
+                  border: "1px solid #e2e8f0",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+                  flexWrap: "wrap",
+                  gap: "16px",
+                }}
+              >
+                <div
+                  style={{ display: "flex", alignItems: "center", gap: "14px" }}
+                >
+                  <div
+                    style={{
+                      width: "46px",
+                      height: "46px",
+                      borderRadius: "12px",
+                      background: "#eff6ff",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      color: "#2563eb",
+                    }}
+                  >
+                    <span
+                      className="material-symbols-outlined"
+                      style={{ fontSize: "26px" }}
+                    >
+                      settings_suggest
+                    </span>
+                  </div>
+                  <div>
+                    <h3
+                      style={{
+                        margin: 0,
+                        fontSize: "16px",
+                        fontWeight: 700,
+                        color: "#0f172a",
+                      }}
+                    >
+                      Arquivos de Sistema, Templates & Configurações
+                    </h3>
+                    <p
+                      style={{
+                        margin: "3px 0 0 0",
+                        fontSize: "13px",
+                        color: "#64748b",
+                      }}
+                    >
+                      Alterações em templates de documentos (<code>.templates.json</code>), termos de dicionário (<code>.dictionary.json</code>), metadados e configurações da governança.
+                    </p>
+                  </div>
+                </div>
+
+                <div
+                  style={{ display: "flex", alignItems: "center", gap: "10px" }}
+                >
+                  <span
+                    style={{
+                      padding: "4px 12px",
+                      borderRadius: "16px",
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      background:
+                        allSystemDraftFiles.length > 0 ? "#eff6ff" : "#f1f5f9",
+                      color:
+                        allSystemDraftFiles.length > 0 ? "#2563eb" : "#64748b",
+                    }}
+                  >
+                    {allSystemDraftFiles.length} arquivo(s) de sistema modificado(s)
+                  </span>
+                </div>
+              </div>
+
+              {allSystemDraftFiles.length === 0 ? (
+                <div
+                  style={{
+                    background: "#ffffff",
+                    borderRadius: "12px",
+                    border: "1px solid #e2e8f0",
+                    padding: "48px 24px",
+                    textAlign: "center",
+                    boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+                  }}
+                >
+                  <span
+                    className="material-symbols-outlined"
+                    style={{
+                      fontSize: "44px",
+                      color: "#16a34a",
+                      marginBottom: "12px",
+                    }}
+                  >
+                    check_circle
+                  </span>
+                  <h4
+                    style={{
+                      margin: 0,
+                      fontSize: "16px",
+                      fontWeight: 700,
+                      color: "#0f172a",
+                    }}
+                  >
+                    Nenhuma Alteração de Sistema Pendente
+                  </h4>
+                  <p
+                    style={{
+                      margin: "8px auto 0 auto",
+                      fontSize: "13.5px",
+                      color: "#64748b",
+                      maxWidth: "480px",
+                      lineHeight: "1.5",
+                    }}
+                  >
+                    Todos os templates (<code>.templates.json</code>), termos do dicionário (<code>.dictionary.json</code>) e arquivos de configuração do projeto estão sincronizados com a versão oficial.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  {/* System Files List */}
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "12px",
+                    }}
+                  >
+                    {allSystemDraftFiles.map((f) => {
+                      const isExpanded = !!expandedSystemFiles[f.path];
+                      const diffText = systemDiffs[f.path] || "";
+                      const isLoading = !!loadingSystemDiffs[f.path];
+
+                      return (
+                        <div
+                          key={f.path}
+                          style={{
+                            background: "#ffffff",
+                            borderRadius: "10px",
+                            border: "1px solid #e2e8f0",
+                            overflow: "hidden",
+                            boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
+                          }}
+                        >
+                          {/* Header */}
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              padding: "12px 18px",
+                              background: "#f8fafc",
+                              borderBottom: isExpanded
+                                ? "1px solid #e2e8f0"
+                                : "none",
+                              flexWrap: "wrap",
+                              gap: "10px",
+                            }}
+                          >
+                            <div
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "10px",
+                              }}
+                            >
+                              <span
+                                className="material-symbols-outlined"
+                                style={{ fontSize: "22px", color: "#3b82f6" }}
+                              >
+                                {f.path.includes("template")
+                                  ? "dashboard_customize"
+                                  : f.path.includes("dictionary")
+                                    ? "book"
+                                    : f.path.includes("metadata")
+                                      ? "tune"
+                                      : "settings"}
+                              </span>
+                              <div>
+                                <div
+                                  style={{
+                                    fontSize: "14px",
+                                    fontWeight: 700,
+                                    color: "#0f172a",
+                                  }}
+                                >
+                                  {f.friendlyName}
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: "12px",
+                                    fontFamily:
+                                      "var(--font-mono, monospace)",
+                                    color: "#64748b",
+                                  }}
+                                >
+                                  {f.path}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "8px",
+                              }}
+                            >
+                              <span
+                                style={{
+                                  fontSize: "11px",
+                                  fontWeight: 700,
+                                  padding: "3px 8px",
+                                  borderRadius: "4px",
+                                  background:
+                                    f.type === "ADDED"
+                                      ? "#dcfce7"
+                                      : f.type === "DELETED"
+                                        ? "#fee2e2"
+                                        : "#e0f2fe",
+                                  color:
+                                    f.type === "ADDED"
+                                      ? "#16a34a"
+                                      : f.type === "DELETED"
+                                        ? "#dc2626"
+                                        : "#0284c7",
+                                }}
+                              >
+                                {f.type === "ADDED"
+                                  ? "NOVO"
+                                  : f.type === "DELETED"
+                                    ? "REMOVIDO"
+                                    : "MODIFICADO"}
+                              </span>
+
+                              <button
+                                type="button"
+                                onClick={() => toggleSystemFile(f.path)}
+                                style={{
+                                  padding: "5px 12px",
+                                  borderRadius: "6px",
+                                  border: "1px solid #cbd5e1",
+                                  background: "#ffffff",
+                                  color: "#334155",
+                                  fontSize: "12px",
+                                  fontWeight: 600,
+                                  cursor: "pointer",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "4px",
+                                }}
+                              >
+                                <span
+                                  className="material-symbols-outlined"
+                                  style={{ fontSize: "16px" }}
+                                >
+                                  {isExpanded ? "expand_less" : "expand_more"}
+                                </span>
+                                {isExpanded
+                                  ? "Ocultar Diferenças"
+                                  : "Ver Diferenças (Diff)"}
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handleDiscard(f.path)}
+                                style={{
+                                  padding: "5px 10px",
+                                  borderRadius: "6px",
+                                  border: "1px solid #fca5a5",
+                                  background: "#fff",
+                                  color: "#dc2626",
+                                  fontSize: "12px",
+                                  fontWeight: 600,
+                                  cursor: "pointer",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "4px",
+                                }}
+                                title="Descartar alterações neste arquivo de sistema"
+                              >
+                                <span
+                                  className="material-symbols-outlined"
+                                  style={{ fontSize: "15px" }}
+                                >
+                                  delete
+                                </span>
+                                Descartar
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Diff Viewer Body */}
+                          {isExpanded && renderDiffViewer(diffText, isLoading)}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Proposal Form for System changes */}
+                  <form
+                    onSubmit={handleCreateProposal}
+                    style={{
+                      background: "#ffffff",
+                      padding: "24px",
+                      borderRadius: "12px",
+                      border: "1px solid #e2e8f0",
+                      boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        marginBottom: "8px",
+                      }}
+                    >
+                      <h3
+                        style={{
+                          margin: 0,
+                          fontSize: "15px",
+                          fontWeight: 600,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
+                          color: "#0f172a",
+                        }}
+                      >
+                        <span
+                          className="material-symbols-outlined"
+                          style={{ fontSize: "20px", color: "#1a73e8" }}
+                        >
+                          alt_route
+                        </span>
+                        Publicar ou Propor Atualização de Sistema
+                      </h3>
+
+                      <button
+                        type="button"
+                        onClick={handleGenerateSummaryAI}
+                        disabled={
+                          isGeneratingAI || allSystemDraftFiles.length === 0
+                        }
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "6px",
+                          padding: "5px 12px",
+                          fontSize: "12px",
+                          fontWeight: 600,
+                          borderRadius: "6px",
+                          background:
+                            "linear-gradient(135deg, #eef2ff, #ede9fe)",
+                          color: "#4f46e5",
+                          border: "1px solid #c7d2fe",
+                          cursor: isGeneratingAI ? "not-allowed" : "pointer",
+                        }}
+                      >
+                        <span
+                          className="material-symbols-outlined"
+                          style={{
+                            fontSize: "15px",
+                            animation: isGeneratingAI
+                              ? "spin 1s linear infinite"
+                              : "none",
+                          }}
+                        >
+                          {isGeneratingAI ? "progress_activity" : "auto_fix_high"}
+                        </span>
+                        {isGeneratingAI
+                          ? "Gerando resumo..."
+                          : "Gerar Resumo com IA"}
+                      </button>
+                    </div>
+
+                    <p
+                      style={{
+                        fontSize: "12.5px",
+                        color: "#64748b",
+                        margin: "0 0 14px 0",
+                      }}
+                    >
+                      Ao criar a proposta, uma revisão será aberta para que os novos templates e configurações sejam compartilhados e replicados para toda a equipe.
+                    </p>
+
+                    <div style={{ marginBottom: "12px" }}>
+                      <label
+                        style={{
+                          display: "block",
+                          fontSize: "12.5px",
+                          fontWeight: 600,
+                          color: "#334155",
+                          marginBottom: "4px",
+                        }}
+                      >
+                        Título da Proposta de Sistema *
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Ex: chore(templates): atualizar modelos canônicos de especificação"
+                        value={prTitle}
+                        onChange={(e) => setPrTitle(e.target.value)}
+                        disabled={isCreatingPR}
+                        style={{
+                          width: "100%",
+                          padding: "10px 14px",
+                          fontSize: "13.5px",
+                          border: "1px solid #cbd5e1",
+                          borderRadius: "6px",
+                          background: "#ffffff",
+                          color: "#1e293b",
+                          outline: "none",
+                        }}
+                      />
+                    </div>
+
+                    <div style={{ marginBottom: "16px" }}>
+                      <label
+                        style={{
+                          display: "block",
+                          fontSize: "12.5px",
+                          fontWeight: 600,
+                          color: "#334155",
+                          marginBottom: "4px",
+                        }}
+                      >
+                        Descrição das Modificações (Opcional)
+                      </label>
+                      <textarea
+                        rows={3}
+                        placeholder="Detalhe o que foi alterado nos templates ou configurações..."
+                        value={prDescription}
+                        onChange={(e) => setPrDescription(e.target.value)}
+                        disabled={isCreatingPR}
+                        style={{
+                          width: "100%",
+                          padding: "10px 14px",
+                          fontSize: "13px",
+                          border: "1px solid #cbd5e1",
+                          borderRadius: "6px",
+                          background: "#ffffff",
+                          color: "#1e293b",
+                          outline: "none",
+                          resize: "vertical",
+                        }}
+                      />
+                    </div>
+
+                    <div
+                      style={{ display: "flex", justifyContent: "flex-end" }}
+                    >
+                      <button
+                        type="submit"
+                        disabled={isCreatingPR || !prTitle.trim()}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "8px",
+                          padding: "9px 20px",
+                          fontWeight: 600,
+                          fontSize: "13.5px",
+                          borderRadius: "8px",
+                          background:
+                            isCreatingPR || !prTitle.trim()
+                              ? "#e2e8f0"
+                              : "#1a73e8",
+                          color:
+                            isCreatingPR || !prTitle.trim()
+                              ? "#94a3b8"
+                              : "#ffffff",
+                          border: "none",
+                          cursor:
+                            isCreatingPR || !prTitle.trim()
+                              ? "not-allowed"
+                              : "pointer",
+                        }}
+                      >
+                        <span
+                          className="material-symbols-outlined"
+                          style={{ fontSize: "18px" }}
+                        >
+                          {isCreatingPR ? "progress_activity" : "publish"}
+                        </span>
+                        {isCreatingPR
+                          ? "Criando Proposta..."
+                          : "Criar Proposta de Evolução"}
+                      </button>
+                    </div>
+                  </form>
+                </>
+              )}
             </div>
           )}
         </div>

@@ -101,3 +101,62 @@ export function isPathHidden(filePath: string, hiddenList?: string[]): boolean {
 
   return false;
 }
+
+export const KNOWN_SYSTEM_FILES = [
+  ".templates.json",
+  ".templates.metadata.json",
+  ".dictionary.json",
+  ".docs.metadata.json",
+  ".project.config.json",
+  ".hidden_files.json",
+  ".mcp.json",
+  ".spec-memory",
+  ".skills",
+  ".agents",
+  ".tools",
+  ".gitignore",
+];
+
+export function isSystemPath(filePath: string): boolean {
+  if (!filePath) return false;
+  const cleanPath = filePath.trim().replace(/^\/+/, "").replace(/\\/g, "/");
+  if (!cleanPath) return false;
+
+  const segments = cleanPath.split("/").filter(Boolean);
+
+  // Pure OS or runtime garbage (never system files)
+  for (const seg of segments) {
+    if (seg === ".git" || seg === ".DS_Store" || seg === "node_modules" || seg.endsWith(".log") || seg === ".env") {
+      return false;
+    }
+  }
+
+  for (const item of KNOWN_SYSTEM_FILES) {
+    if (cleanPath === item || cleanPath.startsWith(item + "/") || segments.includes(item)) {
+      return true;
+    }
+  }
+
+  if (cleanPath.startsWith(".") || segments.some((s) => s.startsWith("."))) {
+    return true;
+  }
+
+  return false;
+}
+
+export function getSystemFileFriendlyName(filePath: string): string {
+  const cleanPath = (filePath || "").trim().replace(/^\/+/, "").replace(/\\/g, "/");
+  if (cleanPath === ".templates.json") return "Templates e Modelos de Documento";
+  if (cleanPath === ".templates.metadata.json") return "Metadados de Templates";
+  if (cleanPath === ".dictionary.json") return "Dicionário de Termos e Vocabulário";
+  if (cleanPath === ".docs.metadata.json") return "Metadados e Governança de Documentos";
+  if (cleanPath === ".project.config.json") return "Configurações Gerais do Projeto";
+  if (cleanPath === ".hidden_files.json") return "Regras de Arquivos do Sistema";
+  if (cleanPath === ".mcp.json") return "Configuração de Servidores MCP";
+  if (cleanPath === ".gitignore") return "Configuração Gitignore";
+  if (cleanPath.startsWith(".skills")) return `Habilidade do Projeto (${path.basename(cleanPath)})`;
+  if (cleanPath.startsWith(".agents")) return `Agente do Projeto (${path.basename(cleanPath)})`;
+  if (cleanPath.startsWith(".spec-memory")) return "Memória de Contexto & IA";
+  return cleanPath;
+}
+

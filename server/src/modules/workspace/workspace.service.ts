@@ -31,8 +31,8 @@ export interface TreeNode {
 
 export { generateDocId, extractDocLinksFromMarkdown };
 export type { DocumentMetadataItem };
-export { DEFAULT_HIDDEN_FILES, loadHiddenFiles, isPathHidden } from "../../utils/hidden-files.js";
-import { DEFAULT_HIDDEN_FILES, loadHiddenFiles, isPathHidden } from "../../utils/hidden-files.js";
+export { DEFAULT_HIDDEN_FILES, loadHiddenFiles, isPathHidden, isSystemPath } from "../../utils/hidden-files.js";
+import { DEFAULT_HIDDEN_FILES, loadHiddenFiles, isPathHidden, isSystemPath } from "../../utils/hidden-files.js";
 
 export class WorkspaceService {
   private treeCache = new Map<string, { tree: TreeNode[]; timestamp: number }>();
@@ -591,15 +591,19 @@ export class WorkspaceService {
     const repoName = activeRepo.name || "local";
     const repoDir = this.getRepoDir(repoName);
     const hiddenList = loadHiddenFiles(repoDir);
-    const rawChanges = (cfg.workspace_changes?.[repoName] || []).filter(
+    const allRaw = cfg.workspace_changes?.[repoName] || [];
+    const rawDocChanges = allRaw.filter(
       (c) => !isPathHidden(c.path, hiddenList),
+    );
+    const rawSystemChanges = allRaw.filter(
+      (c) => isSystemPath(c.path),
     );
 
     const detailedChanges = [];
     let totalAdditions = 0;
     let totalDeletions = 0;
 
-    for (const c of rawChanges) {
+    for (const c of rawDocChanges) {
       const diffData = computeDiff(
         c.old_content || "",
         c.new_content || "",
@@ -608,6 +612,25 @@ export class WorkspaceService {
       totalAdditions += diffData.additions;
       totalDeletions += diffData.deletions;
       detailedChanges.push({
+        path: c.path,
+        type: c.type,
+        timestamp: c.timestamp,
+        additions: diffData.additions,
+        deletions: diffData.deletions,
+        diff_text: diffData.diff_text,
+        old_content: c.old_content,
+        new_content: c.new_content,
+      });
+    }
+
+    const detailedSystemChanges = [];
+    for (const c of rawSystemChanges) {
+      const diffData = computeDiff(
+        c.old_content || "",
+        c.new_content || "",
+        c.path,
+      );
+      detailedSystemChanges.push({
         path: c.path,
         type: c.type,
         timestamp: c.timestamp,
@@ -630,9 +653,11 @@ export class WorkspaceService {
     return {
       repo: activeRepo,
       changes: detailedChanges,
+      system_changes: detailedSystemChanges,
       total_additions: totalAdditions,
       total_deletions: totalDeletions,
       total_files: detailedChanges.length,
+      total_system_files: detailedSystemChanges.length,
       guardrail,
     };
   }

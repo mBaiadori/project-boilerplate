@@ -175,6 +175,7 @@ export const API = {
   // Centralized Workspace Changes & Diff Staging
   async getWorkspaceChanges(): Promise<{ 
     changes: WorkspaceChange[]; 
+    system_changes?: WorkspaceChange[];
     total_additions: number; 
     total_deletions: number; 
     guardrail: string;

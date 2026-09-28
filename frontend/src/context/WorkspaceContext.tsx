@@ -19,7 +19,7 @@ import type {
 import { API } from "../services/api";
 import { DraftStore } from "../services/draft-store";
 import { useAuth } from "./AuthContext";
-import { isPathHidden } from "../utils/hidden-files";
+import { isPathHidden, isSystemPath } from "../utils/hidden-files";
 
 function findFirstMdFile(nodes: TreeNode[]): string | null {
   for (const node of nodes) {
@@ -49,6 +49,7 @@ interface WorkspaceContextType {
   originalContent: string;
   fileMetadata: Record<string, any>;
   pendingChanges: WorkspaceChange[];
+  systemPendingChanges: WorkspaceChange[];
   guardrailStatus: string;
   isSaving: boolean;
   saveStatus: AutoSaveStatus;
@@ -120,6 +121,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
   );
   const [originalContent, setOriginalContent] = useState<string>("");
   const [pendingChanges, setPendingChanges] = useState<WorkspaceChange[]>([]);
+  const [systemPendingChanges, setSystemPendingChanges] = useState<WorkspaceChange[]>([]);
   const [guardrailStatus, setGuardrailStatus] = useState<string>("CLEAN");
   const [isSaving, setIsSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<AutoSaveStatus>("Pronto");
@@ -189,10 +191,20 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
         const filteredFiles = (res.data.files || []).filter(
           (f) => f?.path && !isPathHidden(f.path),
         );
+        const sysFiles = [
+          ...(res.data.systemFiles || []),
+          ...(res.data.files || []).filter((f) => f?.path && isSystemPath(f.path)),
+        ];
+        const sysMap = new Map<string, any>();
+        for (const sf of sysFiles) {
+          if (sf?.path) sysMap.set(sf.path, sf);
+        }
+        const uniqueSysFiles = Array.from(sysMap.values());
         setGitStatus({
           ...res.data,
           files: filteredFiles,
-          isClean: filteredFiles.length === 0,
+          systemFiles: uniqueSysFiles,
+          isClean: filteredFiles.length === 0 && uniqueSysFiles.length === 0,
         });
       }
     } catch (err) {
@@ -219,7 +231,11 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
       const filtered = (data.changes || []).filter(
         (c: any) => c?.path && !isPathHidden(c.path),
       );
+      const sysFiltered = (data.system_changes || []).filter(
+        (c: any) => c?.path && isSystemPath(c.path),
+      );
       setPendingChanges(filtered);
+      setSystemPendingChanges(sysFiltered);
       setGuardrailStatus(filtered.length === 0 ? "CLEAN" : data.guardrail || "CLEAN");
       await refreshGitStatus();
     } catch (err) {
@@ -846,6 +862,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
         originalContent,
         fileMetadata,
         pendingChanges,
+        systemPendingChanges,
         guardrailStatus,
         isSaving,
         saveStatus,

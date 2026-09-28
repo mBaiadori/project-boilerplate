@@ -230,6 +230,7 @@ export interface GitStatus {
   behind: number;
   isClean: boolean;
   files: GitFileStatus[];
+  systemFiles?: GitFileStatus[];
   remoteUrl?: string;
   repo_name?: string;
 }

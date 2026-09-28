@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
-import { isPathHidden, loadHiddenFiles } from "./hidden-files.js";
+import { isPathHidden, loadHiddenFiles, isSystemPath } from "./hidden-files.js";
 
 const execAsync = promisify(exec);
 
@@ -106,6 +106,7 @@ export interface GitStatusResult {
   behind: number;
   isClean: boolean;
   files: GitFileStatus[];
+  systemFiles: GitFileStatus[];
   remoteUrl?: string;
 }
 
@@ -130,6 +131,9 @@ export function ensureGitIgnore(repoDir: string): void {
     "node_modules/",
     "*.log",
     ".env",
+  ];
+
+  const systemPatternsToUnignore = [
     ".hidden_files.json",
     ".docs.metadata.json",
     ".dictionary.json",
@@ -151,20 +155,21 @@ export function ensureGitIgnore(repoDir: string): void {
     }
   }
 
-  const existingLines = new Set(
-    currentContent.split("\n").map((l) => l.trim()).filter(Boolean)
-  );
+  // Remove lines that mistakenly ignored project system files
+  let lines = currentContent.split("\n").map((l) => l.trim()).filter((l) => {
+    return l && !systemPatternsToUnignore.includes(l) && l !== "# Context OS Internal Metadata";
+  });
 
-  const missing = requiredPatterns.filter((p) => !existingLines.has(p));
-  if (missing.length > 0) {
-    const appended = currentContent
-      ? `${currentContent.trimEnd()}\n\n# Context OS Internal Metadata\n${missing.join("\n")}\n`
-      : `# Context OS Internal Metadata\n${requiredPatterns.join("\n")}\n`;
-    try {
-      fs.writeFileSync(gitignorePath, appended, "utf-8");
-    } catch (e) {
-      console.warn(`[Git] Falha ao atualizar .gitignore em ${repoDir}:`, e);
+  for (const pattern of requiredPatterns) {
+    if (!lines.includes(pattern)) {
+      lines.push(pattern);
     }
+  }
+
+  try {
+    fs.writeFileSync(gitignorePath, lines.join("\n") + "\n", "utf-8");
+  } catch (e) {
+    console.warn(`[Git] Falha ao atualizar .gitignore em ${repoDir}:`, e);
   }
 }
 
@@ -275,6 +280,7 @@ export async function getGitStatus(repoDir: string): Promise<GitStatusResult> {
       behind: 0,
       isClean: true,
       files: [],
+      systemFiles: [],
     };
   }
 
@@ -351,6 +357,7 @@ export async function getGitStatus(repoDir: string): Promise<GitStatusResult> {
 
   const hiddenList = loadHiddenFiles(repoDir);
   const visibleFiles = files.filter((f) => !isPathHidden(f.path, hiddenList));
+  const systemFiles = files.filter((f) => isSystemPath(f.path));
 
   return {
     isRepo: true,
@@ -358,8 +365,9 @@ export async function getGitStatus(repoDir: string): Promise<GitStatusResult> {
     tracking,
     ahead,
     behind,
-    isClean: visibleFiles.length === 0,
+    isClean: visibleFiles.length === 0 && systemFiles.length === 0,
     files: visibleFiles,
+    systemFiles,
     remoteUrl,
   };
 }
