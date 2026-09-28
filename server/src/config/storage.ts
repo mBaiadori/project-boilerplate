@@ -623,7 +623,7 @@ function verifyAndRepairStructure(
   }
 }
 
-export function ensureDefaultRepoFiles(repoName: string): void {
+export async function ensureDefaultRepoFiles(repoName: string): Promise<void> {
   if (!repoName) return;
 
   const defaultDir = getSSOTDefaultDir();
@@ -648,39 +648,67 @@ export function ensureDefaultRepoFiles(repoName: string): void {
     ".hidden_files.json",
   ];
 
-  // Guarantee defaultDir exists with minimal blank structure if missing
-  if (!fs.existsSync(defaultDir)) {
-    fs.mkdirSync(defaultDir, { recursive: true });
-    fs.mkdirSync(path.join(defaultDir, ".spec-memory"), { recursive: true });
+  // 1. If remote repo is missing or has no .git, clone and pull FIRST
+  const isRemote =
+    (cfg.active_repo?.name === repoName && Boolean(cfg.active_repo?.html_url)) ||
+    (Boolean(cfg.token) && repoName !== "default" && repoName !== "_default");
+  let remoteUrl =
+    cfg.active_repo?.name === repoName ? cfg.active_repo?.html_url : undefined;
+  if (!remoteUrl && cfg.token && cfg.user?.login && repoName !== "default" && repoName !== "_default") {
+    remoteUrl = `https://github.com/${cfg.user.login}/${repoName}.git`;
+  }
+  const token = cfg.token;
 
+  if (
+    isRemote &&
+    (!fs.existsSync(targetDir) || !fs.existsSync(path.join(targetDir, ".git")))
+  ) {
+    const { ensureGitRepo } = await import("../utils/git.js");
+    await ensureGitRepo(targetDir, cfg.user, remoteUrl, token, repoName, true);
+  }
+
+  // Ensure target directory exists
+  if (!fs.existsSync(targetDir)) {
+    fs.mkdirSync(targetDir, { recursive: true });
+  }
+
+  // 2. Now that repository files exist on disk, check and repair SSOT files
+  // .hidden_files.json: verify schema if exists, create if missing
+  const hiddenPath = path.join(targetDir, ".hidden_files.json");
+  const defaultHiddenPath = path.join(defaultDir, ".hidden_files.json");
+  if (!fs.existsSync(hiddenPath)) {
+    fs.writeFileSync(
+      hiddenPath,
+      JSON.stringify(defaultHiddenFiles, null, 2),
+      "utf-8",
+    );
+  } else {
+    verifyAndRepairStructure(
+      defaultHiddenPath,
+      hiddenPath,
+      ".hidden_files.json",
+      repoName,
+    );
+  }
+
+  // .project.config.json: verify schema if exists, create if missing
+  const projectConfigPath = path.join(targetDir, ".project.config.json");
+  const defaultProjectConfigPath = path.join(
+    defaultDir,
+    ".project.config.json",
+  );
+  if (!fs.existsSync(projectConfigPath)) {
     const defaultCfg = {
       project: {
-        name: "Projeto d",
-        description:
-          "Documentação técnica, RFCs, especificações e base de conhecimento d.",
+        name: repoName,
+        description: "Repositório de documentação e especificações.",
         version: "1.0.0",
         architecture_pattern: "Documentação Viva & Git",
-        repository_url: "",
-        lead: "@equipe",
+        repository_url: cfg.active_repo?.html_url || "",
+        lead: cfg.user?.login ? `@${cfg.user.login}` : "@equipe",
       },
-      categories: [
-        "geral",
-        "engenharia",
-        "produto",
-        "arquitetura",
-        "guias",
-        "reunioes",
-      ],
-      tags: [
-        "rfc",
-        "prd",
-        "api",
-        "backend",
-        "frontend",
-        "infra",
-        "guia",
-        "nota",
-      ],
+      categories: ["geral", "engenharia", "produto", "arquitetura", "guias"],
+      tags: ["rfc", "prd", "api", "backend", "frontend", "infra"],
       statuses: [
         { key: "draft", label: "Rascunho (DRAFT)", badge: "badge-neutral" },
         { key: "review", label: "Em Revisão (REVIEW)", badge: "badge-info" },
@@ -698,64 +726,67 @@ export function ensureDefaultRepoFiles(repoName: string): void {
       governance_rules: { min_approvals_default: 1 },
       reviewers: [],
       ai_assistant_prompt:
-        "Você é o assistente inteligente de documentação e engenharia d.",
+        "Você é o assistente inteligente de documentação e engenharia.",
     };
     fs.writeFileSync(
-      path.join(defaultDir, ".project.config.json"),
+      projectConfigPath,
       JSON.stringify(defaultCfg, null, 2),
       "utf-8",
     );
-    fs.writeFileSync(
-      path.join(defaultDir, ".docs.metadata.json"),
-      JSON.stringify([], null, 2),
-      "utf-8",
-    );
-    fs.writeFileSync(
-      path.join(defaultDir, ".hidden_files.json"),
-      JSON.stringify(defaultHiddenFiles, null, 2),
-      "utf-8",
+  } else {
+    verifyAndRepairStructure(
+      defaultProjectConfigPath,
+      projectConfigPath,
+      ".project.config.json",
+      repoName,
     );
   }
 
-  // Ensure .hidden_files.json exists in defaultDir
-  const defaultHiddenPath = path.join(defaultDir, ".hidden_files.json");
-  if (!fs.existsSync(defaultHiddenPath)) {
-    fs.writeFileSync(
-      defaultHiddenPath,
-      JSON.stringify(defaultHiddenFiles, null, 2),
-      "utf-8",
+  // .docs.metadata.json: verify schema if exists, create if missing
+  const docsMetaPath = path.join(targetDir, ".docs.metadata.json");
+  const defaultDocsMetaPath = path.join(defaultDir, ".docs.metadata.json");
+  if (!fs.existsSync(docsMetaPath)) {
+    fs.writeFileSync(docsMetaPath, JSON.stringify([], null, 2), "utf-8");
+  } else {
+    verifyAndRepairStructure(
+      defaultDocsMetaPath,
+      docsMetaPath,
+      ".docs.metadata.json",
+      repoName,
     );
   }
 
-  // Ensure default repo itself has an independent .git
-  if (!fs.existsSync(path.join(defaultDir, ".git"))) {
-    import("../utils/git.js").then(({ ensureGitRepo }) => {
-      ensureGitRepo(defaultDir, cfg.user).catch(() => {});
-    });
+  // .dictionary.json: verify schema if exists, create if missing
+  const dictPath = path.join(targetDir, ".dictionary.json");
+  const defaultDictPath = path.join(defaultDir, ".dictionary.json");
+  if (!fs.existsSync(dictPath)) {
+    fs.writeFileSync(dictPath, JSON.stringify([], null, 2), "utf-8");
+  } else {
+    verifyAndRepairStructure(
+      defaultDictPath,
+      dictPath,
+      ".dictionary.json",
+      repoName,
+    );
   }
 
-  // If this is the default repo itself, we are done
-  if (repoName === "default" || repoName === "_default") return;
+  // .templates.json: verify schema if exists, create if missing
+  const templatesPath = path.join(targetDir, ".templates.json");
+  const defaultTemplatesPath = path.join(defaultDir, ".templates.json");
+  if (!fs.existsSync(templatesPath)) {
+    fs.writeFileSync(templatesPath, JSON.stringify([], null, 2), "utf-8");
+  } else {
+    verifyAndRepairStructure(
+      defaultTemplatesPath,
+      templatesPath,
+      ".templates.json",
+      repoName,
+    );
+  }
 
-  // Sync from default blueprint to target repository
-  syncBlueprint(defaultDir, targetDir, repoName);
-
-  // Auto-scan and populate .docs.metadata.json for all markdown documents in the repo
-  import("../modules/workspace/docs-metadata.service.js")
-    .then(({ docsMetadataService }) => {
-      docsMetadataService.loadDocsMetadata(repoName);
-    })
-    .catch((err) => {
-      console.warn(
-        `[Onboarding] Erro ao sincronizar docs metadata para ${repoName}:`,
-        err,
-      );
-    });
-
-  // Ensure target repo has its own independent .git initialized
+  // Ensure target repo has an independent .git initialized
   if (!fs.existsSync(path.join(targetDir, ".git"))) {
-    import("../utils/git.js").then(({ ensureGitRepo }) => {
-      ensureGitRepo(targetDir, cfg.user).catch(() => {});
-    });
+    const { ensureGitRepo } = await import("../utils/git.js");
+    await ensureGitRepo(targetDir, cfg.user, remoteUrl, token, repoName, true);
   }
 }

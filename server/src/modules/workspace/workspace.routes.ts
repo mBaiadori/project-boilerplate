@@ -7,7 +7,7 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
   fastify.get('/api/project/tree', async (request, reply) => {
     try {
       const query = request.query as { repo?: string };
-      return reply.send(workspaceService.getTree(query.repo));
+      return reply.send(await workspaceService.getTree(query.repo));
     } catch (err: any) {
       return reply.status(500).send({ error: err.message });
     }
@@ -111,7 +111,7 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
       const cfg = loadConfig();
       const repoName = body.repo || cfg.active_repo?.name || 'local';
       const result = docsMetadataService.updateDocMetadataItem(repoName, cleanPath, body.meta || {});
-      const tree = workspaceService.getTree().tree;
+      const tree = (await workspaceService.getTree(repoName)).tree;
       return reply.send({
         success: true,
         meta: result.meta,
@@ -128,7 +128,7 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
       return reply.status(400).send({ error: 'Parâmetro path é obrigatório' });
     }
     try {
-      return reply.send(workspaceService.saveFile(body.path, body.content || '', body.meta));
+      return reply.send(await workspaceService.saveFile(body.path, body.content || '', body.meta));
     } catch (err: any) {
       return reply.status(400).send({ error: err.message });
     }
@@ -167,7 +167,7 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
         prompt: body.meta?.prompt || '',
       };
 
-      const result = workspaceService.createFile(body.path || '', content, isFolder, meta);
+      const result = await workspaceService.createFile(body.path || '', content, isFolder, meta);
       return reply.send({ ...result, templatePrompt, systemPrompt: templatePrompt, templateId });
     } catch (err: any) {
       return reply.status(400).send({ error: err.message });
@@ -194,7 +194,7 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
         return reply.status(400).send({ error: 'Nenhum arquivo enviado para importação.' });
       }
 
-      const result = workspaceService.importFiles(targetFolder, files, body.repo);
+      const result = await workspaceService.importFiles(targetFolder, files, body.repo);
       return reply.send(result);
     } catch (err: any) {
       return reply.status(400).send({ error: err.message });
@@ -206,7 +206,7 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
     const oldPath = body.old_path || body.oldPath || '';
     const newPath = body.new_path || body.newPath || '';
     try {
-      return reply.send(workspaceService.renameFile(oldPath, newPath));
+      return reply.send(await workspaceService.renameFile(oldPath, newPath));
     } catch (err: any) {
       return reply.status(400).send({ error: err.message });
     }
@@ -215,7 +215,7 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
   fastify.delete('/api/project/file', async (request, reply) => {
     const query = request.query as { path?: string };
     try {
-      return reply.send(workspaceService.deleteFile(query.path || ''));
+      return reply.send(await workspaceService.deleteFile(query.path || ''));
     } catch (err: any) {
       return reply.status(400).send({ error: err.message });
     }
@@ -237,7 +237,7 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
   });
 
   fastify.get('/api/project/status', async (_request, reply) => {
-    const treeData = workspaceService.getTree();
+    const treeData = await workspaceService.getTree();
     const changesData = workspaceService.getWorkspaceChanges();
     return reply.send({
       repo: treeData.repo,
@@ -260,7 +260,7 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
   });
 
   fastify.post('/api/project/bootstrap', async (_request, reply) => {
-    const treeData = workspaceService.getTree();
+    const treeData = await workspaceService.getTree();
     return reply.send({
       success: true,
       message: 'Workspace inicializado com sucesso!',
@@ -275,7 +275,7 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
     const fullRelPath = `${folder}/${filename}`;
 
     try {
-      const created = workspaceService.createFile(fullRelPath, `# ${body.title || 'Nova Especificação'}\n\nEspecificação estruturada.`, false, {
+      const created = await workspaceService.createFile(fullRelPath, `# ${body.title || 'Nova Especificação'}\n\nEspecificação estruturada.`, false, {
         title: body.title || 'Nova Especificação',
         categories: 'geral',
         status: 'draft',

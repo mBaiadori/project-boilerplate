@@ -4,6 +4,8 @@ import { PROJECTS_DIR } from '../../config/constants.js';
 import { loadConfig, saveConfig, ensureDefaultRepoFiles } from '../../config/storage.js';
 import { callGitHubAPI, applyBranchProtection, ensureGitRepo } from '../../utils/git.js';
 
+import { workspaceService } from '../workspace/workspace.service.js';
+
 export class ReposService {
   async listRepos() {
     const cfg = loadConfig();
@@ -71,17 +73,33 @@ export class ReposService {
     }
 
     const cfg = loadConfig();
+    let htmlUrl = repo.html_url || '';
+
+    // If html_url is missing but we are authenticated, resolve from GitHub
+    if (!htmlUrl && cfg.authenticated && cfg.token && repo.name !== 'default') {
+      try {
+        const { data: userRepos } = await callGitHubAPI('/user/repos?per_page=100', cfg.token);
+        if (Array.isArray(userRepos)) {
+          const match = userRepos.find((r: any) => r.name.toLowerCase() === repo.name.toLowerCase());
+          if (match && match.html_url) {
+            htmlUrl = match.html_url;
+          }
+        }
+      } catch {}
+    }
+
     cfg.active_repo = {
       name: repo.name,
-      full_name: repo.full_name || repo.name,
-      html_url: repo.html_url || '',
+      full_name: repo.full_name || (htmlUrl ? htmlUrl.replace('https://github.com/', '') : repo.name),
+      html_url: htmlUrl,
       description: repo.description || '',
       is_private: Boolean(repo.is_private),
       default_branch: repo.default_branch || 'main',
     };
 
     const repoDir = path.join(PROJECTS_DIR, repo.name);
-    await ensureGitRepo(repoDir, cfg.user, repo.html_url, cfg.token, repo.name);
+    workspaceService.invalidateTreeCache(repo.name);
+    await ensureGitRepo(repoDir, cfg.user, htmlUrl, cfg.token, repo.name);
     ensureDefaultRepoFiles(repo.name);
     saveConfig(cfg);
 

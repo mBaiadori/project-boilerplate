@@ -173,19 +173,54 @@ export function ensureGitIgnore(repoDir: string): void {
   }
 }
 
+const gitSyncLocks = new Map<string, Promise<{ success: boolean; message: string }>>();
+
 export async function ensureGitRepo(
   repoDir: string,
   user?: { name?: string; login?: string; email?: string } | null,
   remoteUrl?: string,
   token?: string,
   repoName?: string,
+  pullLatest: boolean = true,
+): Promise<{ success: boolean; message: string }> {
+  const lockKey = path.resolve(repoDir);
+  const existingLock = gitSyncLocks.get(lockKey);
+  if (existingLock) {
+    return await existingLock;
+  }
+
+  const syncPromise = (async () => {
+    try {
+      return await internalEnsureGitRepo(repoDir, user, remoteUrl, token, repoName, pullLatest);
+    } finally {
+      gitSyncLocks.delete(lockKey);
+    }
+  })();
+
+  gitSyncLocks.set(lockKey, syncPromise);
+  return await syncPromise;
+}
+
+async function internalEnsureGitRepo(
+  repoDir: string,
+  user?: { name?: string; login?: string; email?: string } | null,
+  remoteUrl?: string,
+  token?: string,
+  repoName?: string,
+  pullLatest: boolean = true,
 ): Promise<{ success: boolean; message: string }> {
   const gitExists = await isGitRepo(repoDir);
 
+  // Auto-resolve remoteUrl if missing and token exists
+  let targetRemoteUrl = remoteUrl;
+  if (!targetRemoteUrl && token && user?.login && repoName && repoName !== "default" && repoName !== "_default") {
+    targetRemoteUrl = `https://github.com/${user.login}/${repoName}.git`;
+  }
+
   // Form authenticated clone URL if applicable
-  let authRemoteUrl = remoteUrl || "";
-  if (remoteUrl && token && remoteUrl.startsWith("https://github.com/")) {
-    const repoPath = remoteUrl
+  let authRemoteUrl = targetRemoteUrl || "";
+  if (targetRemoteUrl && token && targetRemoteUrl.startsWith("https://github.com/")) {
+    const repoPath = targetRemoteUrl
       .replace("https://github.com/", "")
       .replace(/\.git$/, "");
     authRemoteUrl = `https://x-access-token:${token}@github.com/${repoPath}.git`;
@@ -207,17 +242,26 @@ export async function ensureGitRepo(
       if (!cloneRes.success || !(await isGitRepo(repoDir))) {
         console.warn(`[Git] Fallback clone para ${repoDir}:`, cloneRes.stderr);
         // Fallback init
+        if (fs.existsSync(repoDir)) {
+          try {
+            fs.rmSync(repoDir, { recursive: true, force: true });
+          } catch {}
+        }
         fs.mkdirSync(repoDir, { recursive: true });
         await executeGitCommand("git init -b main", repoDir);
         await executeGitCommand(
           `git remote add origin "${authRemoteUrl}"`,
           repoDir,
         );
+        await executeGitCommand("git fetch origin", repoDir);
+        await executeGitCommand(
+          "git reset --hard origin/main || git reset --hard origin/master || true",
+          repoDir,
+        );
+        await executeGitCommand("git clean -fd", repoDir);
       }
-    }
-
-    // Ensure remote origin without destructive resets or auto-pulls
-    if (await isGitRepo(repoDir)) {
+    } else {
+      // Ensure remote origin
       const remoteCheck = await executeGitCommand(
         "git remote get-url origin",
         repoDir,
@@ -232,6 +276,24 @@ export async function ensureGitRepo(
           `git remote add origin "${authRemoteUrl}"`,
           repoDir,
         );
+      }
+
+      // If pullLatest requested, fetch and pull remote changes
+      if (pullLatest) {
+        try {
+          await executeGitCommand("git fetch origin", repoDir);
+          const branchRes = await executeGitCommand(
+            "git rev-parse --abbrev-ref HEAD",
+            repoDir,
+          );
+          const activeBranch = branchRes.stdout?.trim() || "main";
+          await executeGitCommand(
+            `git pull origin ${activeBranch} --allow-unrelated-histories --no-edit`,
+            repoDir,
+          );
+        } catch (pullErr) {
+          console.warn(`[Git] Aviso ao sincronizar remote em ${repoDir}:`, pullErr);
+        }
       }
     }
   } else {

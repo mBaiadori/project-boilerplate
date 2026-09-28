@@ -31,9 +31,12 @@ export class GitService {
     const cfg = loadConfig();
     const repoName = cfg.active_repo?.name || 'local';
     const repoDir = this.getRepoDir(repoName);
-    const remoteUrl = cfg.active_repo?.html_url;
+    let remoteUrl = cfg.active_repo?.html_url;
+    if (!remoteUrl && cfg.token && cfg.user?.login && repoName !== "default" && repoName !== "_default") {
+      remoteUrl = `https://github.com/${cfg.user.login}/${repoName}.git`;
+    }
     const token = cfg.token;
-    return await ensureGitRepo(repoDir, cfg.user, remoteUrl, token);
+    return await ensureGitRepo(repoDir, cfg.user, remoteUrl, token, repoName, true);
   }
 
   async getStatus() {

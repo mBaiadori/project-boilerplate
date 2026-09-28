@@ -119,11 +119,18 @@ export class WorkspaceService {
     });
   }
 
-  getTree(targetRepoName?: string, forceRefresh = false) {
+  async getTree(targetRepoName?: string, forceRefresh = false) {
     const cfg = loadConfig();
     const repoName = targetRepoName || cfg.active_repo?.name || "local";
-    
-    if (!forceRefresh) {
+    const repoDir = this.getRepoDir(repoName);
+    const repoDirExists =
+      fs.existsSync(repoDir) && fs.existsSync(path.join(repoDir, ".git"));
+
+    if (!repoDirExists) {
+      this.invalidateTreeCache(repoName);
+    }
+
+    if (!forceRefresh && repoDirExists) {
       const cached = this.treeCache.get(repoName);
       if (cached && Date.now() - cached.timestamp < 30000) {
         return {
@@ -133,8 +140,7 @@ export class WorkspaceService {
       }
     }
 
-    ensureDefaultRepoFiles(repoName);
-    const repoDir = this.getRepoDir(repoName);
+    await ensureDefaultRepoFiles(repoName);
 
     const docsMetadata = docsMetadataService.loadDocsMetadata(repoName);
     const metaMap = new Map(docsMetadata.map((d) => [d.path, d]));
@@ -251,7 +257,7 @@ export class WorkspaceService {
     };
   }
 
-  saveFile(filePath: string, content: string, meta?: any) {
+  async saveFile(filePath: string, content: string, meta?: any) {
     const cfg = loadConfig();
     const repoName = cfg.active_repo?.name || "local";
     const cleanPath = (filePath || "").trim().replace(/^\/+/, "");
@@ -285,7 +291,7 @@ export class WorkspaceService {
     );
 
     this.invalidateTreeCache(repoName);
-    const newTree = this.getTree(repoName, true).tree;
+    const newTree = (await this.getTree(repoName, true)).tree;
 
     return {
       success: true,
@@ -295,7 +301,7 @@ export class WorkspaceService {
     };
   }
 
-  createFile(
+  async createFile(
     filePath: string,
     initialContent: string = "",
     isFolder: boolean = false,
@@ -323,7 +329,7 @@ export class WorkspaceService {
       recordChange(repoName, cleanPath, "ADDED", "", "");
 
       this.invalidateTreeCache(repoName);
-      const newTree = this.getTree(repoName, true).tree;
+      const newTree = (await this.getTree(repoName, true)).tree;
       return {
         success: true,
         path: cleanPath,
@@ -355,7 +361,7 @@ export class WorkspaceService {
     );
 
     this.invalidateTreeCache(repoName);
-    const newTree = this.getTree(repoName, true).tree;
+    const newTree = (await this.getTree(repoName, true)).tree;
 
     return {
       success: true,
@@ -366,7 +372,7 @@ export class WorkspaceService {
     };
   }
 
-  importFiles(
+  async importFiles(
     targetFolder: string = "",
     filesToImport: Array<{
       name: string;
@@ -479,7 +485,7 @@ export class WorkspaceService {
     }
 
     this.invalidateTreeCache(repoName);
-    const newTree = this.getTree(repoName, true).tree;
+    const newTree = (await this.getTree(repoName, true)).tree;
 
     return {
       success: importedFiles.length > 0,
@@ -489,7 +495,7 @@ export class WorkspaceService {
     };
   }
 
-  renameFile(oldPath: string, newPath: string) {
+  async renameFile(oldPath: string, newPath: string) {
     const cfg = loadConfig();
     const repoName = cfg.active_repo?.name || "local";
     const cleanOld = (oldPath || "")
@@ -531,7 +537,7 @@ export class WorkspaceService {
     docsMetadataService.renameDocMetadata(repoName, cleanOld, cleanNew);
 
     this.invalidateTreeCache(repoName);
-    const newTree = this.getTree(repoName, true).tree;
+    const newTree = (await this.getTree(repoName, true)).tree;
 
     return {
       success: true,
@@ -541,7 +547,7 @@ export class WorkspaceService {
     };
   }
 
-  deleteFile(filePath: string) {
+  async deleteFile(filePath: string) {
     const cfg = loadConfig();
     const repoName = cfg.active_repo?.name || "local";
     const cleanPath = (filePath || "").trim().replace(/^\/+/, "");
@@ -567,7 +573,7 @@ export class WorkspaceService {
     docsMetadataService.deleteDocMetadata(repoName, cleanPath);
 
     this.invalidateTreeCache(repoName);
-    const newTree = this.getTree(repoName, true).tree;
+    const newTree = (await this.getTree(repoName, true)).tree;
 
     return {
       success: true,
@@ -721,7 +727,7 @@ export class WorkspaceService {
     saveConfig(cfg);
 
     this.invalidateTreeCache(repoName);
-    const newTree = this.getTree(repoName, true).tree;
+    const newTree = (await this.getTree(repoName, true)).tree;
     return {
       success: true,
       message: "Alterações descartadas com sucesso.",
