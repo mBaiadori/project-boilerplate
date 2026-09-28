@@ -1,9 +1,18 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  useRef,
+} from "react";
 import { useAuth } from "../../context/AuthContext";
 import { useAI } from "../../context/AIContext";
 import { useWorkspace } from "../../context/WorkspaceContext";
 import { API } from "../../services/api";
-import { SelectDropdown, type SelectOption } from "../../components/common/SelectDropdown";
+import {
+  SelectDropdown,
+  type SelectOption,
+} from "../../components/common/SelectDropdown";
 import {
   Button,
   IconButton,
@@ -13,123 +22,330 @@ import {
   CardFooter,
   FormField,
   Input,
-  Textarea,
-  Switch,
   Badge,
   AlertBanner,
-  StatCard,
+  Modal,
 } from "../../components/ui";
+import { useNavigate } from "react-router-dom";
 import {
-  FolderGit2,
   Cpu,
-  Sparkles,
-  GitBranch,
-  ShieldCheck,
   RefreshCw,
   Edit2,
   Plus,
-  X,
+  Trash2,
   Save,
   LogOut,
+  Check,
+  Layers,
+  X,
+  AlertTriangle,
+  FileText,
+  ExternalLink,
 } from "lucide-react";
+import type { TaxonomyItem, DocumentMetadataItem } from "../../types";
+
+// 28 Cores do Arco-Íris (7 Matizes do Arco-Íris x 4 Variações de Tonalidade)
+export const RAINBOW_28_HUES = [
+  { name: "Vermelho", colors: ["#fca5a5", "#ef4444", "#dc2626", "#991b1b"] },
+  { name: "Laranja", colors: ["#fdba74", "#f97316", "#ea580c", "#9a3412"] },
+  { name: "Amarelo", colors: ["#fde047", "#eab308", "#ca8a04", "#854d0e"] },
+  { name: "Verde", colors: ["#86efac", "#22c55e", "#16a34a", "#166534"] },
+  { name: "Ciano", colors: ["#67e8f9", "#06b6d4", "#0891b2", "#155e75"] },
+  { name: "Azul", colors: ["#93c5fd", "#3b82f6", "#2563eb", "#1e40af"] },
+  { name: "Violeta", colors: ["#d8b4fe", "#a855f7", "#9333ea", "#581c87"] },
+];
+
+export const ALL_28_COLORS = RAINBOW_28_HUES.flatMap((h) => h.colors);
+
+
+
+// Helper para normalizar nome de status com hífen e minúsculas
+function formatStatusName(val: string): string {
+  return val
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9-_]/g, "");
+}
+
+// Componente Popover de Seleção de Cor Discreto (Círculo)
+const ColorDotPicker: React.FC<{
+  color: string;
+  onChange: (newColor: string) => void;
+  size?: number;
+}> = ({ color, onChange, size = 18 }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleOutside = (e: MouseEvent) => {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(e.target as Node)
+      ) {
+        setIsOpen(false);
+      }
+    };
+    if (isOpen) {
+      document.addEventListener("mousedown", handleOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleOutside);
+  }, [isOpen]);
+
+  return (
+    <div
+      ref={containerRef}
+      style={{
+        position: "relative",
+        display: "inline-flex",
+        alignItems: "center",
+      }}
+    >
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          setIsOpen(!isOpen);
+        }}
+        title={`Cor: ${color}. Clique para escolher.`}
+        style={{
+          width: size,
+          height: size,
+          borderRadius: "50%",
+          backgroundColor: color,
+          border: "2px solid #ffffff",
+          boxShadow: "0 0 0 1px rgba(0,0,0,0.15), 0 1px 2px rgba(0,0,0,0.1)",
+          cursor: "pointer",
+          padding: 0,
+          flexShrink: 0,
+          transition: "transform 0.15s ease",
+        }}
+        onMouseEnter={(e) => (e.currentTarget.style.transform = "scale(1.2)")}
+        onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
+      />
+
+      {isOpen && (
+        <div
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            position: "absolute",
+            top: "calc(100% + 6px)",
+            left: 0,
+            zIndex: 200,
+            background: "#ffffff",
+            border: "1px solid #e2e8f0",
+            borderRadius: "8px",
+            boxShadow:
+              "0 10px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1)",
+            padding: "8px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "6px",
+            minWidth: "155px",
+          }}
+        >
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(7, 1fr)",
+              gap: "4px",
+            }}
+          >
+            {RAINBOW_28_HUES.map((hueGroup) => (
+              <div
+                key={hueGroup.name}
+                style={{ display: "flex", flexDirection: "column", gap: "4px" }}
+              >
+                {hueGroup.colors.map((hex) => {
+                  const isSelected = color.toLowerCase() === hex.toLowerCase();
+                  return (
+                    <button
+                      key={hex}
+                      type="button"
+                      onClick={() => {
+                        onChange(hex);
+                        setIsOpen(false);
+                      }}
+                      title={`${hueGroup.name}: ${hex}`}
+                      style={{
+                        width: "16px",
+                        height: "16px",
+                        borderRadius: "50%",
+                        backgroundColor: hex,
+                        border: isSelected
+                          ? "2px solid #000"
+                          : "1px solid rgba(0,0,0,0.08)",
+                        boxShadow: isSelected
+                          ? "0 0 0 2px rgba(37,99,235,0.5)"
+                          : "none",
+                        cursor: "pointer",
+                        padding: 0,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      {isSelected && (
+                        <Check
+                          size={9}
+                          style={{
+                            color: [
+                              "#fca5a5",
+                              "#fdba74",
+                              "#fde047",
+                              "#86efac",
+                              "#67e8f9",
+                              "#93c5fd",
+                              "#d8b4fe",
+                            ].includes(hex)
+                              ? "#000"
+                              : "#fff",
+                            strokeWidth: 3,
+                          }}
+                        />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 export const SettingsSubView: React.FC = () => {
+  const navigate = useNavigate();
   const { user, logout } = useAuth();
   const { aiSettings, saveAISettings } = useAI();
-  const {
-    activeRepo,
-    gitStatus,
-    gitLog,
-    loadProjectConfig,
-    saveProjectConfig,
-  } = useWorkspace();
-  const [gitDiagnostic, setGitDiagnostic] = useState<{
-    version: string;
-    installed: boolean;
-  } | null>(null);
+  const { activeRepo, loadProjectConfig, saveProjectConfig } = useWorkspace();
 
   // AI Provider State
   const [provider, setProvider] = useState<string>("gemini");
   const [model, setModel] = useState<string>("gemini-2.5-flash");
   const [apiKey, setApiKey] = useState<string>("");
   const [endpoint, setEndpoint] = useState<string>("http://localhost:11434/v1");
-  const [modelsList, setModelsList] = useState<Array<{ id: string; name: string; description?: string }>>([]);
-  const [isLoadingModels, setIsLoadingModels] = useState<boolean>(false);
-  const [isDynamicList, setIsDynamicList] = useState<boolean>(false);
-  const [isCustomModelInput, setIsCustomModelInput] = useState<boolean>(false);
-
-  // Prompts State
-  const [globalPrompt, setGlobalPrompt] = useState<string>("");
-  const [tplCreatorPrompt, setTplCreatorPrompt] = useState<string>("");
-  const [autoPROn, setAutoPROn] = useState<boolean>(true);
-
-  // Project Config State (.project.config.json)
-  const [projectName, setProjectName] = useState<string>("");
-  const [projectDescription, setProjectDescription] = useState<string>("");
-  const [projectVersion, setProjectVersion] = useState<string>("1.0.0");
-  const [projectLead, setProjectLead] = useState<string>("@usuario");
-  const [projectArchPattern, setProjectArchPattern] =
-    useState<string>("Documentação Viva & Git");
-  const [projectRepoUrl, setProjectRepoUrl] = useState<string>("");
-  const [categories, setCategories] = useState<string[]>([]);
-  const [newCatInput, setNewCatInput] = useState<string>("");
-  const [tags, setTags] = useState<string[]>([]);
-  const [newTagInput, setNewTagInput] = useState<string>("");
-  const [statuses, setStatuses] = useState<
-    Array<{ key: string; label: string; badge?: string }>
+  const [modelsList, setModelsList] = useState<
+    Array<{ id: string; name: string; description?: string }>
   >([]);
-  const [newStatusKey, setNewStatusKey] = useState<string>("");
-  const [newStatusLabel, setNewStatusLabel] = useState<string>("");
-  const [newStatusBadge, setNewStatusBadge] = useState<string>("badge-neutral");
+  const [isLoadingModels, setIsLoadingModels] = useState<boolean>(false);
+
+  // Categories State
+  const [categories, setCategories] = useState<TaxonomyItem[]>([]);
+  const [isAddingCategory, setIsAddingCategory] = useState<boolean>(false);
+  const [newCatName, setNewCatName] = useState<string>("");
+  const [newCatColor, setNewCatColor] = useState<string>("#3b82f6");
+  const [editingCatIndex, setEditingCatIndex] = useState<number | null>(null);
+  const [editCatName, setEditCatName] = useState<string>("");
+  const [editCatColor, setEditCatColor] = useState<string>("#3b82f6");
+
+  // Tags State
+  const [tags, setTags] = useState<TaxonomyItem[]>([]);
+  const [isAddingTag, setIsAddingTag] = useState<boolean>(false);
+  const [newTagName, setNewTagName] = useState<string>("");
+  const [newTagColor, setNewTagColor] = useState<string>("#6366f1");
+  const [editingTagIndex, setEditingTagIndex] = useState<number | null>(null);
+  const [editTagName, setEditTagName] = useState<string>("");
+  const [editTagColor, setEditTagColor] = useState<string>("#6366f1");
+
+  // Statuses State (agora com { name, color })
+  const [statuses, setStatuses] = useState<TaxonomyItem[]>([]);
+  const [isAddingStatus, setIsAddingStatus] = useState<boolean>(false);
+  const [newStatusName, setNewStatusName] = useState<string>("");
+  const [newStatusColor, setNewStatusColor] = useState<string>("#22c55e");
+  const [editingStatusIndex, setEditingStatusIndex] = useState<number | null>(
+    null,
+  );
+  const [editStatusName, setEditStatusName] = useState<string>("");
+  const [editStatusColor, setEditStatusColor] = useState<string>("#22c55e");
+
+  // Documentos no workspace para verificar referências
+  const [docMetadataList, setDocMetadataList] = useState<
+    DocumentMetadataItem[]
+  >([]);
+
+  // Estado de confirmação de exclusão com alerta de referências
+  const [deleteDialog, setDeleteDialog] = useState<{
+    isOpen: boolean;
+    type: "status" | "category" | "tag";
+    nameOrKey: string;
+    label: string;
+    referencingDocs: DocumentMetadataItem[];
+    onConfirm: () => Promise<void>;
+  }>({
+    isOpen: false,
+    type: "status",
+    nameOrKey: "",
+    label: "",
+    referencingDocs: [],
+    onConfirm: async () => {},
+  });
+
+  // AI Template Prompt State
   const [projectTemplatePrompt, setProjectTemplatePrompt] =
     useState<string>("");
   const [minApprovals, setMinApprovals] = useState<number>(1);
 
   // Status feedback
   const [saveStatus, setSaveStatus] = useState<string | null>(null);
+  const [isSavingAll, setIsSavingAll] = useState<boolean>(false);
 
-  const fetchModelsForProvider = useCallback(async (provId: string, customKey?: string, customEp?: string) => {
-    setIsLoadingModels(true);
-    try {
-      const res = await API.getAIModels({
-        provider: provId,
-        api_key: customKey || apiKey || undefined,
-        custom_endpoint: customEp || endpoint || undefined,
-      });
+  const fetchModelsForProvider = useCallback(
+    async (provId: string, customKey?: string, customEp?: string) => {
+      setIsLoadingModels(true);
+      try {
+        const res = await API.getAIModels({
+          provider: provId,
+          api_key: customKey || apiKey || undefined,
+          custom_endpoint: customEp || endpoint || undefined,
+        });
 
-      if (res.ok && res.data) {
-        let items: Array<{ id: string; name: string; description?: string }> = [];
-        if (res.data.detailedModels && res.data.detailedModels.length > 0) {
-          items = res.data.detailedModels;
-        } else if (res.data.models && res.data.models.length > 0) {
-          items = res.data.models.map((m: any) => typeof m === "string" ? { id: m, name: m } : m);
-        }
+        if (res.ok && res.data) {
+          let items: Array<{ id: string; name: string; description?: string }> =
+            [];
+          if (res.data.detailedModels && res.data.detailedModels.length > 0) {
+            items = res.data.detailedModels;
+          } else if (res.data.models && res.data.models.length > 0) {
+            items = res.data.models.map((m: any) =>
+              typeof m === "string" ? { id: m, name: m } : m,
+            );
+          }
 
-        if (items.length > 0) {
-          setModelsList(items);
-          setIsDynamicList(true);
+          if (items.length > 0) {
+            setModelsList(items);
+          } else {
+            setModelsList([]);
+          }
         } else {
           setModelsList([]);
-          setIsDynamicList(false);
         }
-      } else {
+      } catch (err) {
+        console.error(
+          "[SettingsSubView] Erro ao buscar lista de modelos:",
+          err,
+        );
         setModelsList([]);
-        setIsDynamicList(false);
+      } finally {
+        setIsLoadingModels(false);
       }
-    } catch (err) {
-      console.error("[SettingsSubView] Erro ao buscar lista de modelos:", err);
-      setModelsList([]);
-      setIsDynamicList(false);
-    } finally {
-      setIsLoadingModels(false);
-    }
-  }, [apiKey, endpoint]);
+    },
+    [apiKey, endpoint],
+  );
 
   useEffect(() => {
     if (aiSettings) {
-      const activeProv = aiSettings.active_provider || aiSettings.provider || "gemini";
+      const activeProv =
+        aiSettings.active_provider || aiSettings.provider || "gemini";
       setProvider(activeProv);
-      setModel(aiSettings.active_model || aiSettings.model || (activeProv === "gemini" ? "gemini-2.5-flash" : "gpt-4o"));
+      setModel(
+        aiSettings.active_model ||
+          aiSettings.model ||
+          (activeProv === "gemini" ? "gemini-2.5-flash" : "gpt-4o"),
+      );
       setEndpoint(aiSettings.custom_endpoint || "http://localhost:11434/v1");
       fetchModelsForProvider(activeProv, undefined, aiSettings.custom_endpoint);
     }
@@ -139,15 +355,34 @@ export const SettingsSubView: React.FC = () => {
     if (modelsList.length === 0) {
       return [
         { value: model, label: model, description: "Modelo ativo selecionado" },
-        { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash", description: "Alta velocidade e capacidades multimodais", badge: "Flash", badgeType: "success" },
-        { value: "gemini-2.5-pro", label: "Gemini 2.5 Pro", description: "Raciocínio complexo e codificação profunda", badge: "Pro", badgeType: "warning" },
-        { value: "gemini-1.5-flash", label: "Gemini 1.5 Flash", description: "Modelo versátil", badge: "Flash", badgeType: "info" },
+        {
+          value: "gemini-2.5-flash",
+          label: "Gemini 2.5 Flash",
+          description: "Alta velocidade e capacidades multimodais",
+          badge: "Flash",
+          badgeType: "success",
+        },
+        {
+          value: "gemini-2.5-pro",
+          label: "Gemini 2.5 Pro",
+          description: "Raciocínio complexo e codificação profunda",
+          badge: "Pro",
+          badgeType: "warning",
+        },
+        {
+          value: "gemini-1.5-flash",
+          label: "Gemini 1.5 Flash",
+          description: "Modelo versátil",
+          badge: "Flash",
+          badgeType: "info",
+        },
       ];
     }
 
     return modelsList.map((m) => {
       let badge: string | undefined;
-      let badgeType: "primary" | "success" | "warning" | "neutral" | "info" = "primary";
+      let badgeType: "primary" | "success" | "warning" | "neutral" | "info" =
+        "primary";
 
       if (m.id.includes("pro")) {
         badge = "Pro";
@@ -171,124 +406,368 @@ export const SettingsSubView: React.FC = () => {
     });
   }, [modelsList, model]);
 
+  // Carregar Configurações e Documentos
   const loadAllSettings = useCallback(async () => {
     try {
-      // 1. Carregar configurações gerais do sistema
-      const res = await API.getSettings();
-      if (res) {
-        if (res.system_prompts?.global) {
-          setGlobalPrompt(res.system_prompts.global);
-        }
-        if (res.system_prompts?.template_creator) {
-          setTplCreatorPrompt(res.system_prompts.template_creator);
-        }
-        if (res.governance?.auto_pr !== undefined) {
-          setAutoPROn(res.governance.auto_pr);
-        }
-      }
-
-      // 2. Carregar configurações customizadas do projeto (.project.config.json)
+      // 1. Carregar .project.config.json
       const pCfg = await loadProjectConfig();
       if (pCfg) {
-        if (pCfg.project) {
-          setProjectName(pCfg.project.name || "");
-          setProjectDescription(pCfg.project.description || "");
-          setProjectVersion(pCfg.project.version || "1.0.0");
-          setProjectLead(pCfg.project.lead || "@usuario");
-          setProjectArchPattern(
-            pCfg.project.architecture_pattern || "Documentação Viva & Git",
-          );
-          setProjectRepoUrl(pCfg.project.repository_url || "");
-        }
         if (Array.isArray(pCfg.categories)) {
-          setCategories(pCfg.categories);
+          const parsedCats: TaxonomyItem[] = pCfg.categories.map(
+            (c: any, idx: number) => {
+              if (typeof c === "string") {
+                return {
+                  name: c,
+                  color: ALL_28_COLORS[idx % ALL_28_COLORS.length],
+                };
+              }
+              return {
+                name: String(c.name || ""),
+                color: String(
+                  c.color || ALL_28_COLORS[idx % ALL_28_COLORS.length],
+                ),
+              };
+            },
+          );
+          setCategories(parsedCats);
         }
+
         if (Array.isArray(pCfg.tags)) {
-          setTags(pCfg.tags);
+          const parsedTags: TaxonomyItem[] = pCfg.tags.map(
+            (t: any, idx: number) => {
+              if (typeof t === "string") {
+                return {
+                  name: t,
+                  color: ALL_28_COLORS[(idx + 4) % ALL_28_COLORS.length],
+                };
+              }
+              return {
+                name: String(t.name || ""),
+                color: String(
+                  t.color || ALL_28_COLORS[(idx + 4) % ALL_28_COLORS.length],
+                ),
+              };
+            },
+          );
+          setTags(parsedTags);
         }
+
         if (Array.isArray(pCfg.statuses)) {
-          setStatuses(pCfg.statuses);
+          const defaultColors: Record<string, string> = {
+            draft: "#fdba74",
+            review: "#67e8f9",
+            "in-review": "#67e8f9",
+            proposed: "#fde047",
+            approved: "#86efac",
+            superseded: "#d8b4fe",
+            deprecated: "#fca5a5",
+          };
+          const parsedStatuses: TaxonomyItem[] = pCfg.statuses.map(
+            (s: any, idx: number) => {
+              if (typeof s === "string") {
+                const name = formatStatusName(s);
+                return {
+                  name,
+                  color: ALL_28_COLORS[(idx * 3) % ALL_28_COLORS.length],
+                };
+              }
+              const name = formatStatusName(
+                String(s.name || s.key || s.label || `status-${idx + 1}`),
+              );
+              const color = String(
+                s.color ||
+                  defaultColors[name] ||
+                  ALL_28_COLORS[(idx * 3) % ALL_28_COLORS.length],
+              );
+              return { name, color };
+            },
+          );
+          setStatuses(parsedStatuses);
         }
+
         if (pCfg.ai_template_prompt) {
           setProjectTemplatePrompt(pCfg.ai_template_prompt);
         }
+
         if (pCfg.governance_rules?.min_approvals_default !== undefined) {
           setMinApprovals(pCfg.governance_rules.min_approvals_default);
         }
       }
 
-      // 3. Diagnóstico do Git
-      const diag = await API.getGitDiagnostic();
-      if (diag.ok && diag.data) {
-        setGitDiagnostic(diag.data);
+      // 2. Carregar metadados dos documentos para checar referências
+      const metaRes = await API.getProjectMetadata(activeRepo?.name);
+      if (metaRes.ok && Array.isArray(metaRes.data)) {
+        setDocMetadataList(metaRes.data);
       }
     } catch (err) {
       console.error("[SettingsSubView] Erro ao carregar configurações:", err);
     }
-  }, [loadProjectConfig]);
+  }, [loadProjectConfig, activeRepo?.name]);
 
   useEffect(() => {
     loadAllSettings();
   }, [loadAllSettings]);
 
-  // Handlers para Categorias
-  const handleAddCategory = () => {
-    const trimmed = newCatInput.trim().toLowerCase();
-    if (!trimmed || categories.includes(trimmed)) return;
-    setCategories([...categories, trimmed]);
-    setNewCatInput("");
+  // Propagação de renomeação de categoria em documentos
+  const propagateCategoryRename = async (oldName: string, newName: string) => {
+    if (oldName === newName) return;
+    const affectedDocs = docMetadataList.filter(
+      (d) => d.categories === oldName || d.category === oldName,
+    );
+    for (const doc of affectedDocs) {
+      try {
+        await API.updateDocumentMetadataItem({
+          path: doc.path,
+          meta: { categories: newName },
+          repo: activeRepo?.name,
+        });
+      } catch (err) {
+        console.warn(
+          `Erro ao atualizar categoria no documento ${doc.path}:`,
+          err,
+        );
+      }
+    }
   };
 
-  const handleRemoveCategory = (catToRemove: string) => {
-    setCategories(categories.filter((c) => c !== catToRemove));
+  // Propagação de renomeação de tag em documentos
+  const propagateTagRename = async (oldName: string, newName: string) => {
+    if (oldName === newName) return;
+    const affectedDocs = docMetadataList.filter(
+      (d) => Array.isArray(d.tags) && d.tags.includes(oldName),
+    );
+    for (const doc of affectedDocs) {
+      const updatedTags = doc.tags.map((t) => (t === oldName ? newName : t));
+      try {
+        await API.updateDocumentMetadataItem({
+          path: doc.path,
+          meta: { tags: updatedTags },
+          repo: activeRepo?.name,
+        });
+      } catch (err) {
+        console.warn(`Erro ao atualizar tag no documento ${doc.path}:`, err);
+      }
+    }
+  };
+
+  // Propagação de renomeação de status em documentos
+  const propagateStatusRename = async (oldName: string, newName: string) => {
+    if (oldName === newName) return;
+    const affectedDocs = docMetadataList.filter((d) => d.status === oldName);
+    for (const doc of affectedDocs) {
+      try {
+        await API.updateDocumentMetadataItem({
+          path: doc.path,
+          meta: { status: newName },
+          repo: activeRepo?.name,
+        });
+      } catch (err) {
+        console.warn(`Erro ao atualizar status no documento ${doc.path}:`, err);
+      }
+    }
+  };
+
+  // Handlers para Categorias
+  const handleAddCategory = () => {
+    const trimmed = newCatName.trim().toLowerCase();
+    if (!trimmed || categories.some((c) => c.name.toLowerCase() === trimmed))
+      return;
+    setCategories([...categories, { name: trimmed, color: newCatColor }]);
+    setNewCatName("");
+    setIsAddingCategory(false);
+  };
+
+  const handleRequestRemoveCategory = (index: number) => {
+    const target = categories[index];
+    if (!target) return;
+    const referencing = docMetadataList.filter(
+      (d) => d.categories === target.name || d.category === target.name,
+    );
+
+    if (referencing.length > 0) {
+      setDeleteDialog({
+        isOpen: true,
+        type: "category",
+        nameOrKey: target.name,
+        label: target.name.toUpperCase(),
+        referencingDocs: referencing,
+        onConfirm: async () => {
+          // Desvincular nos documentos
+          for (const doc of referencing) {
+            try {
+              await API.updateDocumentMetadataItem({
+                path: doc.path,
+                meta: { categories: "" },
+                repo: activeRepo?.name,
+              });
+            } catch {}
+          }
+          setCategories((prev) => prev.filter((_, i) => i !== index));
+          setDeleteDialog((d) => ({ ...d, isOpen: false }));
+        },
+      });
+    } else {
+      setCategories(categories.filter((_, i) => i !== index));
+      if (editingCatIndex === index) setEditingCatIndex(null);
+    }
+  };
+
+  const handleStartEditCategory = (index: number) => {
+    setEditingCatIndex(index);
+    setEditCatName(categories[index].name);
+    setEditCatColor(categories[index].color);
+  };
+
+  const handleSaveEditCategory = async () => {
+    if (editingCatIndex === null) return;
+    const oldName = categories[editingCatIndex].name;
+    const trimmed = editCatName.trim().toLowerCase();
+    if (!trimmed) return;
+
+    const updated = [...categories];
+    updated[editingCatIndex] = { name: trimmed, color: editCatColor };
+    setCategories(updated);
+    setEditingCatIndex(null);
+
+    if (oldName !== trimmed) {
+      await propagateCategoryRename(oldName, trimmed);
+    }
   };
 
   // Handlers para Tags
   const handleAddTag = () => {
-    const trimmed = newTagInput.trim().toLowerCase();
-    if (!trimmed || tags.includes(trimmed)) return;
-    setTags([...tags, trimmed]);
-    setNewTagInput("");
+    const trimmed = newTagName.trim().toLowerCase();
+    if (!trimmed || tags.some((t) => t.name.toLowerCase() === trimmed)) return;
+    setTags([...tags, { name: trimmed, color: newTagColor }]);
+    setNewTagName("");
+    setIsAddingTag(false);
   };
 
-  const handleRemoveTag = (tagToRemove: string) => {
-    setTags(tags.filter((t) => t !== tagToRemove));
+  const handleRequestRemoveTag = (index: number) => {
+    const target = tags[index];
+    if (!target) return;
+    const referencing = docMetadataList.filter(
+      (d) => Array.isArray(d.tags) && d.tags.includes(target.name),
+    );
+
+    if (referencing.length > 0) {
+      setDeleteDialog({
+        isOpen: true,
+        type: "tag",
+        nameOrKey: target.name,
+        label: `#${target.name}`,
+        referencingDocs: referencing,
+        onConfirm: async () => {
+          for (const doc of referencing) {
+            const cleanTags = doc.tags.filter((t) => t !== target.name);
+            try {
+              await API.updateDocumentMetadataItem({
+                path: doc.path,
+                meta: { tags: cleanTags },
+                repo: activeRepo?.name,
+              });
+            } catch {}
+          }
+          setTags((prev) => prev.filter((_, i) => i !== index));
+          setDeleteDialog((d) => ({ ...d, isOpen: false }));
+        },
+      });
+    } else {
+      setTags(tags.filter((_, i) => i !== index));
+      if (editingTagIndex === index) setEditingTagIndex(null);
+    }
   };
 
-  // Handlers para Status
+  const handleStartEditTag = (index: number) => {
+    setEditingTagIndex(index);
+    setEditTagName(tags[index].name);
+    setEditTagColor(tags[index].color);
+  };
+
+  const handleSaveEditTag = async () => {
+    if (editingTagIndex === null) return;
+    const oldName = tags[editingTagIndex].name;
+    const trimmed = editTagName.trim().toLowerCase();
+    if (!trimmed) return;
+
+    const updated = [...tags];
+    updated[editingTagIndex] = { name: trimmed, color: editTagColor };
+    setTags(updated);
+    setEditingTagIndex(null);
+
+    if (oldName !== trimmed) {
+      await propagateTagRename(oldName, trimmed);
+    }
+  };
+
+  // Handlers para Statuses (com formatação hífen/minúscula e Cores)
   const handleAddStatus = () => {
-    const keyTrimmed = newStatusKey.trim().toLowerCase();
-    const labelTrimmed = newStatusLabel.trim();
-    if (
-      !keyTrimmed ||
-      !labelTrimmed ||
-      statuses.some((s) => s.key === keyTrimmed)
-    )
-      return;
-    setStatuses([
-      ...statuses,
-      { key: keyTrimmed, label: labelTrimmed, badge: newStatusBadge },
-    ]);
-    setNewStatusKey("");
-    setNewStatusLabel("");
-    setNewStatusBadge("badge-neutral");
+    const formatted = formatStatusName(newStatusName);
+    if (!formatted || statuses.some((s) => s.name === formatted)) return;
+
+    setStatuses([...statuses, { name: formatted, color: newStatusColor }]);
+    setNewStatusName("");
+    setIsAddingStatus(false);
   };
 
-  const handleRemoveStatus = (keyToRemove: string) => {
-    setStatuses(statuses.filter((s) => s.key !== keyToRemove));
+  const handleRequestRemoveStatus = (index: number) => {
+    const target = statuses[index];
+    if (!target) return;
+    const referencing = docMetadataList.filter((d) => d.status === target.name);
+
+    if (referencing.length > 0) {
+      setDeleteDialog({
+        isOpen: true,
+        type: "status",
+        nameOrKey: target.name,
+        label: target.name.toUpperCase(),
+        referencingDocs: referencing,
+        onConfirm: async () => {
+          for (const doc of referencing) {
+            try {
+              await API.updateDocumentMetadataItem({
+                path: doc.path,
+                meta: { status: "" },
+                repo: activeRepo?.name,
+              });
+            } catch {}
+          }
+          setStatuses((prev) => prev.filter((_, i) => i !== index));
+          setDeleteDialog((d) => ({ ...d, isOpen: false }));
+        },
+      });
+    } else {
+      setStatuses(statuses.filter((_, i) => i !== index));
+      if (editingStatusIndex === index) setEditingStatusIndex(null);
+    }
   };
 
-  const handleUpdateStatusLabel = (key: string, newLabel: string) => {
-    setStatuses(
-      statuses.map((s) => (s.key === key ? { ...s, label: newLabel } : s)),
-    );
+  const handleStartEditStatus = (index: number) => {
+    setEditingStatusIndex(index);
+    setEditStatusName(statuses[index].name);
+    setEditStatusColor(statuses[index].color || "#22c55e");
   };
 
-  const handleUpdateStatusBadge = (key: string, newBadge: string) => {
-    setStatuses(
-      statuses.map((s) => (s.key === key ? { ...s, badge: newBadge } : s)),
-    );
+  const handleSaveEditStatus = async () => {
+    if (editingStatusIndex === null) return;
+    const oldName = statuses[editingStatusIndex].name;
+    const formatted = formatStatusName(editStatusName);
+    if (!formatted) return;
+
+    const updated = [...statuses];
+    updated[editingStatusIndex] = {
+      name: formatted,
+      color: editStatusColor,
+    };
+    setStatuses(updated);
+    setEditingStatusIndex(null);
+
+    if (oldName !== formatted) {
+      await propagateStatusRename(oldName, formatted);
+    }
   };
+
+
 
   const handleSaveAISettings = async () => {
     try {
@@ -302,31 +781,10 @@ export const SettingsSubView: React.FC = () => {
   };
 
   const handleSaveAllSettings = async () => {
+    setIsSavingAll(true);
     try {
-      // 1. Salvar IA
       await saveAISettings(provider, model, apiKey, endpoint);
-
-      // 2. Salvar Prompts & Governança Geral
-      await API.saveSettings({
-        system_prompts: {
-          global: globalPrompt,
-          template_creator: tplCreatorPrompt,
-        },
-        governance: {
-          auto_pr: autoPROn,
-        },
-      });
-
-      // 3. Salvar .project.config.json customizado do repositório
       await saveProjectConfig({
-        project: {
-          name: projectName,
-          description: projectDescription,
-          version: projectVersion,
-          lead: projectLead,
-          architecture_pattern: projectArchPattern,
-          repository_url: projectRepoUrl,
-        },
         categories,
         tags,
         statuses,
@@ -341,6 +799,8 @@ export const SettingsSubView: React.FC = () => {
     } catch (err) {
       console.error("[SettingsSubView] Erro ao salvar tudo:", err);
       setSaveStatus("Erro ao salvar configurações gerais.");
+    } finally {
+      setIsSavingAll(false);
     }
   };
 
@@ -353,41 +813,83 @@ export const SettingsSubView: React.FC = () => {
         height: "100%",
         width: "100%",
         overflowY: "auto",
-        background: "var(--md-sys-color-surface-container-low, #f8f9fa)",
+        background: "#f8fafc",
       }}
     >
-      <div
+      {/* Cabeçalho */}
+      <header
         style={{
-          maxWidth: "1000px",
+          position: "sticky",
+          top: 0,
+          zIndex: 30,
+          background: "#ffffff",
+          borderBottom: "1px solid #e2e8f0",
+          boxShadow: "0 1px 2px rgba(0, 0, 0, 0.02)",
+          padding: "0 32px",
+        }}
+      >
+        <div
+          style={{
+            maxWidth: "960px",
+            margin: "0 auto",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            height: "56px",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+            }}
+          >
+            <span
+              style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a" }}
+            >
+              Configurações
+            </span>
+            <span
+              style={{
+                fontSize: "11px",
+                fontWeight: 600,
+                color: "#2563eb",
+                background: "#eff6ff",
+                padding: "1px 7px",
+                borderRadius: "10px",
+                border: "1px solid #dbeafe",
+              }}
+            >
+              {activeRepo?.name || "local"}
+            </span>
+          </div>
+
+          <Button
+            id="btn-save-top-all-settings"
+            variant="primary"
+            size="sm"
+            leftIcon={<Save size={13} />}
+            onClick={handleSaveAllSettings}
+            disabled={isSavingAll}
+          >
+            {isSavingAll ? "Salvando..." : "Salvar"}
+          </Button>
+        </div>
+      </header>
+
+      {/* Conteúdo Principal */}
+      <main
+        style={{
+          maxWidth: "960px",
           width: "100%",
           margin: "0 auto",
-          padding: "24px 32px",
+          padding: "24px 32px 64px 32px",
           display: "flex",
           flexDirection: "column",
           gap: "24px",
         }}
       >
-        {/* Cabeçalho da Página */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div>
-            <h2 style={{ margin: 0, fontSize: "20px", fontWeight: 700, color: "var(--md-sys-color-on-surface, #202124)" }}>
-              Configurações & Governança do Projeto
-            </h2>
-            <p style={{ margin: "4px 0 0 0", fontSize: "13px", color: "var(--md-sys-color-on-surface-variant, #5f6368)" }}>
-              Personalize o repositório ativo, motores de IA, prompts e regras de governança.
-            </p>
-          </div>
-          <Button
-            id="btn-save-system-settings"
-            variant="primary"
-            size="md"
-            leftIcon={<Save size={16} />}
-            onClick={handleSaveAllSettings}
-          >
-            Salvar Tudo
-          </Button>
-        </div>
-
         {saveStatus && (
           <AlertBanner
             type={saveStatus.includes("Erro") ? "error" : "success"}
@@ -396,573 +898,1273 @@ export const SettingsSubView: React.FC = () => {
           />
         )}
 
-        {/* SEÇÃO 1: CONFIGURAÇÕES DO PROJETO ATIVO (.project.config.json) */}
-        <Card id="card-project-custom-config" variant="elevated">
-          <CardHeader
-            title={
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <FolderGit2 size={20} style={{ color: "var(--md-sys-color-primary, #1a73e8)" }} />
-                <span>Configurações do Projeto (.project.config.json)</span>
-              </div>
-            }
-            subtitle={`Customizações de metadados, categorias, tags e status do repositório ${activeRepo?.name || "ativo"}.`}
-            actions={
-              <Badge variant="primary">
-                {activeRepo?.name || "local"}
-              </Badge>
-            }
-          />
-
-          <CardContent style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            {/* Grid de Informações Básicas do Projeto */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14 }}>
-              <FormField label="Nome do Projeto:">
-                <Input
-                  id="cfg-proj-name"
-                  value={projectName}
-                  onChange={(e) => setProjectName(e.target.value)}
-                  placeholder="Ex: Condominiums..."
-                />
-              </FormField>
-
-              <FormField label="Versão Semântica:">
-                <Input
-                  id="cfg-proj-version"
-                  value={projectVersion}
-                  onChange={(e) => setProjectVersion(e.target.value)}
-                  placeholder="1.0.0"
-                />
-              </FormField>
-
-              <FormField label="Líder / Tech Lead:">
-                <Input
-                  id="cfg-proj-lead"
-                  value={projectLead}
-                  onChange={(e) => setProjectLead(e.target.value)}
-                  placeholder="@usuario"
-                />
-              </FormField>
-
-              <FormField label="Padrão de Arquitetura:">
-                <Input
-                  id="cfg-proj-pattern"
-                  value={projectArchPattern}
-                  onChange={(e) => setProjectArchPattern(e.target.value)}
-                  placeholder="Documentação Viva / Markdown Docs"
-                />
-              </FormField>
+        {/* 1. SEÇÃO: CATEGORIAS, TAGS & STATUS */}
+        <section id="categories-tags" style={{ scrollMarginTop: "72px" }}>
+          <div
+            style={{
+              background: "#ffffff",
+              borderRadius: "10px",
+              border: "1px solid #e2e8f0",
+              padding: "20px 24px",
+              display: "flex",
+              flexDirection: "column",
+              gap: "20px",
+            }}
+          >
+            <div
+              style={{
+                borderBottom: "1px solid #f1f5f9",
+                paddingBottom: "12px",
+              }}
+            >
+              <h3
+                style={{
+                  margin: 0,
+                  fontSize: "14.5px",
+                  fontWeight: 700,
+                  color: "#0f172a",
+                }}
+              >
+                Taxonomia & Governança do Projeto
+              </h3>
+              <p
+                style={{
+                  margin: "2px 0 0 0",
+                  fontSize: "12px",
+                  color: "#64748b",
+                }}
+              >
+                Personalize categorias, tags e status com cores hexadecimais
+                integradas.
+              </p>
             </div>
 
-            <FormField label="URL do Repositório (Git):">
-              <Input
-                id="cfg-proj-repo-url"
-                value={projectRepoUrl}
-                onChange={(e) => setProjectRepoUrl(e.target.value)}
-                placeholder="https://github.com/org/repo.git"
-              />
-            </FormField>
-
-            <FormField label="Descrição do Projeto:">
-              <Textarea
-                id="cfg-proj-desc"
-                rows={2}
-                value={projectDescription}
-                onChange={(e) => setProjectDescription(e.target.value)}
-                placeholder="Descreva o propósito e o domínio do projeto..."
-              />
-            </FormField>
-
-            {/* Categorias Oficiais */}
-            <div style={{ borderTop: "1px solid var(--md-sys-color-outline-variant, #dadce0)", paddingTop: 14 }}>
-              <FormField
-                label="Categorias Oficiais de Especificação (categories):"
-                helperText="Opções disponíveis nos seletores de metadados do documento (.docs.metadata.json)."
+            {/* 1.1 Categorias */}
+            <div
+              style={{ display: "flex", flexDirection: "column", gap: "8px" }}
+            >
+              <span
+                style={{ fontSize: "12px", fontWeight: 600, color: "#334155" }}
               >
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8, alignItems: "center" }}>
-                  {categories.map((cat) => (
-                    <Badge key={cat} variant="primary" size="md">
-                      {cat}
-                      <IconButton
-                        size="sm"
-                        tooltip={`Remover categoria ${cat}`}
-                        style={{ width: 18, height: 18, marginLeft: 4 }}
-                        onClick={() => handleRemoveCategory(cat)}
+                Categorias
+              </span>
+
+              {/* Lista de Chips com Edição Inline no Próprio Chip */}
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: "6px",
+                  alignItems: "center",
+                }}
+              >
+                {categories.map((cat, idx) => {
+                  const isEditing = editingCatIndex === idx;
+
+                  if (isEditing) {
+                    return (
+                      <div
+                        key={idx}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "5px",
+                          padding: "3px 6px 3px 8px",
+                          borderRadius: "14px",
+                          backgroundColor: `${editCatColor}16`,
+                          border: `1.5px solid ${editCatColor}`,
+                          fontSize: "12px",
+                          fontWeight: 600,
+                          color: editCatColor,
+                        }}
                       >
-                        <X size={12} />
-                      </IconButton>
-                    </Badge>
-                  ))}
-                </div>
-                <div style={{ display: "flex", gap: 8, maxWidth: 400 }}>
-                  <Input
-                    placeholder="Nova categoria (ex: financeiro, auth)..."
-                    value={newCatInput}
-                    onChange={(e) => setNewCatInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        handleAddCategory();
-                      }
-                    }}
-                  />
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    leftIcon={<Plus size={14} />}
-                    onClick={handleAddCategory}
-                    disabled={!newCatInput.trim()}
-                  >
-                    Adicionar
-                  </Button>
-                </div>
-              </FormField>
-            </div>
+                        <ColorDotPicker
+                          color={editCatColor}
+                          onChange={setEditCatColor}
+                          size={14}
+                        />
+                        <input
+                          type="text"
+                          value={editCatName}
+                          onChange={(e) => setEditCatName(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") handleSaveEditCategory();
+                            if (e.key === "Escape") setEditingCatIndex(null);
+                          }}
+                          style={{
+                            border: "none",
+                            background: "transparent",
+                            outline: "none",
+                            fontSize: "12px",
+                            fontWeight: 600,
+                            width: `${Math.max(editCatName.length, 6)}ch`,
+                            color: editCatColor,
+                            padding: 0,
+                          }}
+                          autoFocus
+                        />
+                        <button
+                          type="button"
+                          onClick={handleSaveEditCategory}
+                          style={{
+                            background: "none",
+                            border: "none",
+                            cursor: "pointer",
+                            padding: 0,
+                            color: editCatColor,
+                            opacity: 0.8,
+                          }}
+                          title="Salvar (Enter)"
+                        >
+                          <Check size={12} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditingCatIndex(null)}
+                          style={{
+                            background: "none",
+                            border: "none",
+                            cursor: "pointer",
+                            padding: 0,
+                            color: "#94a3b8",
+                          }}
+                          title="Cancelar (Esc)"
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
+                    );
+                  }
 
-            {/* Tags de Taxonomia */}
-            <div style={{ borderTop: "1px solid var(--md-sys-color-outline-variant, #dadce0)", paddingTop: 14 }}>
-              <FormField
-                label="Tags de Taxonomia do Projeto (tags):"
-                helperText="Tags canônicas para categorização rápida de requisitos e especificações."
-              >
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8, alignItems: "center" }}>
-                  {tags.map((tag) => (
-                    <Badge key={tag} variant="success" size="md">
-                      #{tag}
-                      <IconButton
-                        size="sm"
-                        tooltip={`Remover tag ${tag}`}
-                        style={{ width: 18, height: 18, marginLeft: 4 }}
-                        onClick={() => handleRemoveTag(tag)}
-                      >
-                        <X size={12} />
-                      </IconButton>
-                    </Badge>
-                  ))}
-                </div>
-                <div style={{ display: "flex", gap: 8, maxWidth: 400 }}>
-                  <Input
-                    placeholder="Nova tag (ex: database, mobile)..."
-                    value={newTagInput}
-                    onChange={(e) => setNewTagInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        handleAddTag();
-                      }
-                    }}
-                  />
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    leftIcon={<Plus size={14} />}
-                    onClick={handleAddTag}
-                    disabled={!newTagInput.trim()}
-                  >
-                    Adicionar
-                  </Button>
-                </div>
-              </FormField>
-            </div>
-
-            {/* Status do Ciclo de Vida */}
-            <div style={{ borderTop: "1px solid var(--md-sys-color-outline-variant, #dadce0)", paddingTop: 14 }}>
-              <FormField
-                label="Ciclo de Vida & Status Permitidos (statuses):"
-                helperText="Estados de governança suportados pelo projeto no editor e no fluxo de aprovação."
-              >
-                <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
-                  {statuses.map((st) => (
+                  return (
                     <div
-                      key={st.key}
+                      key={idx}
                       style={{
-                        display: "flex",
+                        display: "inline-flex",
                         alignItems: "center",
-                        justifyContent: "space-between",
-                        padding: "8px 12px",
-                        borderRadius: 8,
-                        background: "var(--md-sys-color-surface, #ffffff)",
-                        border: "1px solid var(--md-sys-color-outline-variant, #dadce0)",
-                        gap: 12,
+                        gap: "6px",
+                        padding: "3px 8px 3px 10px",
+                        borderRadius: "14px",
+                        backgroundColor: `${cat.color}14`,
+                        border: `1px solid ${cat.color}40`,
+                        fontSize: "12px",
+                        fontWeight: 600,
+                        color: cat.color,
+                        transition: "all 0.12s ease",
                       }}
                     >
-                      <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1 }}>
-                        <code style={{ fontSize: "12px", color: "var(--md-sys-color-primary, #1a73e8)", minWidth: 90 }}>
-                          {st.key}
-                        </code>
-                        <Input
-                          value={st.label}
-                          style={{ height: 32, fontSize: "12.5px" }}
-                          onChange={(e) => handleUpdateStatusLabel(st.key, e.target.value)}
-                        />
-                      </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <select
-                          className="ui-input"
-                          style={{ height: 32, fontSize: "12px", width: 140 }}
-                          value={st.badge || "badge-neutral"}
-                          onChange={(e) => handleUpdateStatusBadge(st.key, e.target.value)}
+                      <div
+                        style={{
+                          width: 6,
+                          height: 6,
+                          borderRadius: "50%",
+                          backgroundColor: cat.color,
+                        }}
+                      />
+                      <span
+                        onClick={() => handleStartEditCategory(idx)}
+                        style={{ cursor: "pointer" }}
+                        title="Clique para editar"
+                      >
+                        {cat.name.toUpperCase()}
+                      </span>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "2px",
+                        }}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => handleStartEditCategory(idx)}
+                          style={{
+                            background: "transparent",
+                            border: "none",
+                            cursor: "pointer",
+                            padding: "1px",
+                            display: "flex",
+                            alignItems: "center",
+                            color: cat.color,
+                            opacity: 0.6,
+                          }}
+                          title="Editar"
                         >
-                          <option value="badge-neutral">Neutro (Cinza)</option>
-                          <option value="badge-primary">Primário (Azul)</option>
-                          <option value="badge-success">Sucesso (Verde)</option>
-                          <option value="badge-warning">Alerta (Amarelo)</option>
-                          <option value="badge-danger">Perigo (Vermelho)</option>
-                          <option value="badge-purple">Especial (Roxo)</option>
-                        </select>
-                        <IconButton
-                          size="sm"
-                          tooltip="Remover status"
-                          onClick={() => handleRemoveStatus(st.key)}
+                          <Edit2 size={10} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleRequestRemoveCategory(idx)}
+                          style={{
+                            background: "transparent",
+                            border: "none",
+                            cursor: "pointer",
+                            padding: "1px",
+                            display: "flex",
+                            alignItems: "center",
+                            color: cat.color,
+                            opacity: 0.6,
+                          }}
+                          title="Remover"
                         >
-                          <X size={14} />
-                        </IconButton>
+                          <Trash2 size={10} />
+                        </button>
                       </div>
                     </div>
-                  ))}
-                </div>
+                  );
+                })}
 
-                <div style={{ display: "flex", gap: 8, maxWidth: 520 }}>
-                  <Input
-                    placeholder="Chave (ex: in_review)..."
-                    value={newStatusKey}
-                    onChange={(e) => setNewStatusKey(e.target.value)}
-                    style={{ flex: 1 }}
-                  />
-                  <Input
-                    placeholder="Rótulo (ex: Em Revisão)..."
-                    value={newStatusLabel}
-                    onChange={(e) => setNewStatusLabel(e.target.value)}
-                    style={{ flex: 1 }}
-                  />
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    leftIcon={<Plus size={14} />}
-                    onClick={handleAddStatus}
-                    disabled={!newStatusKey.trim() || !newStatusLabel.trim()}
-                  >
-                    Adicionar
-                  </Button>
-                </div>
-              </FormField>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* SEÇÃO 2: MOTOR DE INTELIGÊNCIA ARTIFICIAL */}
-        <Card id="card-ai-engine-settings" variant="elevated">
-          <CardHeader
-            title={
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <Cpu size={20} style={{ color: "#10b981" }} />
-                <span>Motor de Inteligência Artificial & Provedor</span>
-              </div>
-            }
-            subtitle="Conecte seu modelo LLM preferido para geração de documentos, agentes e copiloto."
-            actions={
-              <Badge variant="success" hasDot>
-                {provider.toUpperCase()}
-              </Badge>
-            }
-          />
-
-          <CardContent style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            {/* Seletor de Provedor em Cartões */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10 }}>
-              {[
-                { id: "gemini", name: "Google Gemini", sub: "Flash 2.5 & Pro" },
-                { id: "openai", name: "OpenAI", sub: "GPT-4o & o3-mini" },
-                { id: "anthropic", name: "Anthropic", sub: "Claude 3.7 & 3.5" },
-                { id: "deepseek", name: "DeepSeek", sub: "V3 & R1 Reasoner" },
-                { id: "local", name: "Ollama Local", sub: "Offline / Localhost" },
-              ].map((p) => {
-                const isSelected = provider === p.id;
-                return (
+                {/* Botão + ou Chip de Adicionar Categoria */}
+                {isAddingCategory ? (
                   <div
-                    key={p.id}
-                    onClick={() => {
-                      setProvider(p.id);
-                      fetchModelsForProvider(p.id, apiKey, endpoint);
-                    }}
                     style={{
-                      padding: "12px 14px",
-                      borderRadius: 8,
-                      border: isSelected ? "2px solid #10b981" : "1px solid var(--md-sys-color-outline-variant, #dadce0)",
-                      background: isSelected ? "rgba(16, 185, 129, 0.08)" : "var(--md-sys-color-surface, #ffffff)",
-                      cursor: "pointer",
-                      transition: "all 0.16s ease",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "5px",
+                      padding: "3px 6px 3px 8px",
+                      borderRadius: "14px",
+                      backgroundColor: `${newCatColor}16`,
+                      border: `1.5px solid ${newCatColor}`,
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      color: newCatColor,
                     }}
                   >
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                      <strong style={{ fontSize: "13.5px", color: isSelected ? "#059669" : "inherit" }}>
-                        {p.name}
-                      </strong>
-                      <input
-                        type="radio"
-                        name="settings-ai-provider"
-                        checked={isSelected}
-                        onChange={() => {}}
-                        style={{ accentColor: "#10b981" }}
-                      />
-                    </div>
-                    <span style={{ fontSize: "11px", color: "var(--md-sys-color-on-surface-variant, #5f6368)", marginTop: 2, display: "block" }}>
-                      {p.sub}
-                    </span>
+                    <ColorDotPicker
+                      color={newCatColor}
+                      onChange={setNewCatColor}
+                      size={14}
+                    />
+                    <input
+                      type="text"
+                      placeholder="categoria..."
+                      value={newCatName}
+                      onChange={(e) => setNewCatName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleAddCategory();
+                        if (e.key === "Escape") {
+                          setIsAddingCategory(false);
+                          setNewCatName("");
+                        }
+                      }}
+                      style={{
+                        border: "none",
+                        background: "transparent",
+                        outline: "none",
+                        fontSize: "12px",
+                        fontWeight: 600,
+                        width: `${Math.max(newCatName.length, 10)}ch`,
+                        color: newCatColor,
+                        padding: 0,
+                      }}
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddCategory}
+                      disabled={!newCatName.trim()}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        cursor: newCatName.trim() ? "pointer" : "default",
+                        padding: 0,
+                        color: newCatColor,
+                        opacity: newCatName.trim() ? 0.9 : 0.4,
+                      }}
+                      title="Criar (Enter)"
+                    >
+                      <Check size={12} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsAddingCategory(false);
+                        setNewCatName("");
+                      }}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        cursor: "pointer",
+                        padding: 0,
+                        color: "#94a3b8",
+                      }}
+                      title="Cancelar (Esc)"
+                    >
+                      <X size={12} />
+                    </button>
                   </div>
-                );
-              })}
-            </div>
-
-            {/* Model & API Key Inputs */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-              <FormField
-                label="Modelo Selecionado:"
-                helperText={isDynamicList ? "Lista obtida diretamente da API do provedor." : undefined}
-              >
-                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <div style={{ flex: 1 }}>
-                    {isCustomModelInput ? (
-                      <Input
-                        id="settings-ai-model-input"
-                        placeholder="Ex: gemini-2.5-flash, gpt-4o"
-                        value={model}
-                        onChange={(e) => setModel(e.target.value)}
-                      />
-                    ) : (
-                      <SelectDropdown
-                        id="settings-ai-model-input"
-                        value={model}
-                        options={selectOptions}
-                        onChange={(val) => setModel(val)}
-                        placeholder="Selecione o modelo de IA..."
-                        searchable={selectOptions.length > 5}
-                        searchPlaceholder="Filtrar modelos..."
-                        leadingIcon="smart_toy"
-                      />
-                    )}
-                  </div>
-                  <IconButton
-                    size="sm"
-                    bordered
-                    tooltip="Buscar modelos do provedor"
-                    onClick={() => fetchModelsForProvider(provider, apiKey, endpoint)}
-                    disabled={isLoadingModels}
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setIsAddingCategory(true)}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      width: "24px",
+                      height: "24px",
+                      borderRadius: "50%",
+                      border: "1px dashed #cbd5e1",
+                      background: "#ffffff",
+                      color: "#64748b",
+                      cursor: "pointer",
+                      padding: 0,
+                      transition: "all 0.12s ease",
+                    }}
+                    title="Adicionar Categoria"
                   >
-                    <RefreshCw size={14} className={isLoadingModels ? "spinning" : ""} />
-                  </IconButton>
-                  <IconButton
-                    size="sm"
-                    bordered
-                    tooltip={isCustomModelInput ? "Usar lista" : "Digitar modelo customizado"}
-                    onClick={() => setIsCustomModelInput(!isCustomModelInput)}
-                  >
-                    <Edit2 size={14} />
-                  </IconButton>
-                </div>
-              </FormField>
-
-              <FormField label="Chave de API (API Key):">
-                <Input
-                  type="password"
-                  id="settings-ai-key-input"
-                  placeholder="Cole sua chave aqui..."
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                  onBlur={() => {
-                    if (apiKey.trim()) {
-                      fetchModelsForProvider(provider, apiKey, endpoint);
-                    }
-                  }}
-                />
-              </FormField>
+                    <Plus size={13} />
+                  </button>
+                )}
+              </div>
             </div>
 
-            {provider === "local" && (
-              <FormField label="Endpoint Local (Ollama / vLLM):">
-                <Input
-                  id="settings-ai-endpoint-input"
-                  value={endpoint}
-                  onChange={(e) => setEndpoint(e.target.value)}
-                />
-              </FormField>
-            )}
-          </CardContent>
-
-          <CardFooter>
-            <Button
-              id="btn-save-ai-settings-direct"
-              variant="primary"
-              size="sm"
-              leftIcon={<Save size={14} />}
-              onClick={handleSaveAISettings}
-            >
-              Salvar Motor de IA
-            </Button>
-          </CardFooter>
-        </Card>
-
-        {/* SEÇÃO 3: PROMPTS MESTRE DO SISTEMA */}
-        <Card variant="elevated">
-          <CardHeader
-            title={
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <Sparkles size={20} style={{ color: "var(--md-sys-color-primary, #1a73e8)" }} />
-                <span>Prompts Mestre do Sistema</span>
-              </div>
-            }
-            subtitle="Defina as diretrizes oficiais injetadas nos assistentes e geradores."
-            actions={<Badge variant="info">System Prompts</Badge>}
-          />
-
-          <CardContent style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            <FormField
-              label="Prompt Global do Agent (Chat no Workspace):"
-              helperText="Instrução base injetada em todas as conversas do Agentic Chat."
-            >
-              <Textarea
-                id="sys-global-system-prompt"
-                rows={4}
-                style={{ fontFamily: "var(--md-sys-typescale-font-code, monospace)", fontSize: "12.5px" }}
-                value={globalPrompt}
-                onChange={(e) => setGlobalPrompt(e.target.value)}
-                placeholder="Você é o Arquiteto e Assistente Oficial de Especificações..."
-              />
-            </FormField>
-
-            <FormField
-              label="Prompt do Criador de Templates:"
-              helperText="Meta-prompt que orienta a IA na geração de novos templates estruturados."
-            >
-              <Textarea
-                id="sys-template-creator-prompt"
-                rows={3}
-                style={{ fontFamily: "var(--md-sys-typescale-font-code, monospace)", fontSize: "12.5px" }}
-                value={tplCreatorPrompt}
-                onChange={(e) => setTplCreatorPrompt(e.target.value)}
-                placeholder="Gere templates no padrão oficial de governança com frontmatter estruturado..."
-              />
-            </FormField>
-          </CardContent>
-        </Card>
-
-        {/* SEÇÃO 4: GOVERNANÇA DE VERSÕES & REPOSITÓRIO */}
-        <Card variant="elevated">
-          <CardHeader
-            title={
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <GitBranch size={20} style={{ color: "var(--md-sys-color-primary, #1a73e8)" }} />
-                <span>Governança de Versões & Repositório</span>
-              </div>
-            }
-            subtitle="Status do controle de versões, trilhas ativas e fluxo de aprovação de propostas."
-            actions={
-              <Badge variant={gitDiagnostic?.installed ? "success" : "warning"} hasDot>
-                {gitDiagnostic?.installed ? "Controle de Versões Ativo" : "Modo Offline"}
-              </Badge>
-            }
-          />
-
-          <CardContent style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
-              <StatCard
-                title="Repositório Ativo"
-                value={activeRepo?.name || "local"}
-                icon={<FolderGit2 size={20} />}
-              />
-              <StatCard
-                title="Motor de Versionamento"
-                value={gitDiagnostic?.version || "Git"}
-                icon={<GitBranch size={20} />}
-              />
-              <StatCard
-                title="Trilha Ativa"
-                value={gitStatus?.branch || "main"}
-                icon={<GitBranch size={20} />}
-              />
-              <StatCard
-                title="Versões Registradas"
-                value={`${gitLog.length} ${gitLog.length === 1 ? "versão" : "versões"}`}
-                icon={<ShieldCheck size={20} />}
-              />
-            </div>
-
-            <Switch
-              id="sys-auto-pr-check"
-              checked={autoPROn}
-              onChange={setAutoPROn}
-              label="Modo Ágil (Acúmulo de Alterações)"
-              description="Permite edição contínua no workspace acumulando alterações em 1 única proposta unificada"
-            />
-          </CardContent>
-        </Card>
-
-        {/* SEÇÃO 5: CONTA GITHUB & CONEXÃO */}
-        <Card variant="elevated">
-          <CardHeader
-            title="Conexão GitHub & Sessão"
-            subtitle="Credenciais e conta vinculada ao framework."
-          />
-
-          <CardContent>
+            {/* 1.2 Tags */}
             <div
               style={{
                 display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                padding: "14px 16px",
-                background: "var(--md-sys-color-surface, #ffffff)",
-                borderRadius: 8,
-                border: "1px solid var(--md-sys-color-outline-variant, #dadce0)",
+                flexDirection: "column",
+                gap: "8px",
+                borderTop: "1px solid #f8fafc",
+                paddingTop: "14px",
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <img
-                  id="settings-user-avatar"
-                  src={
-                    user?.avatar_url ||
-                    `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.name || "User")}&background=1a73e8&color=fff`
+              <span
+                style={{ fontSize: "12px", fontWeight: 600, color: "#334155" }}
+              >
+                Tags
+              </span>
+
+              {/* Lista de Chips de Tags com Edição Inline */}
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: "6px",
+                  alignItems: "center",
+                }}
+              >
+                {tags.map((tag, idx) => {
+                  const isEditing = editingTagIndex === idx;
+
+                  if (isEditing) {
+                    return (
+                      <div
+                        key={idx}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "5px",
+                          padding: "2px 6px 2px 8px",
+                          borderRadius: "12px",
+                          backgroundColor: `${editTagColor}16`,
+                          border: `1.5px solid ${editTagColor}`,
+                          fontSize: "11.5px",
+                          fontWeight: 500,
+                          color: editTagColor,
+                        }}
+                      >
+                        <ColorDotPicker
+                          color={editTagColor}
+                          onChange={setEditTagColor}
+                          size={14}
+                        />
+                        <span style={{ opacity: 0.7 }}>#</span>
+                        <input
+                          type="text"
+                          value={editTagName}
+                          onChange={(e) => setEditTagName(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") handleSaveEditTag();
+                            if (e.key === "Escape") setEditingTagIndex(null);
+                          }}
+                          style={{
+                            border: "none",
+                            background: "transparent",
+                            outline: "none",
+                            fontSize: "11.5px",
+                            fontWeight: 500,
+                            width: `${Math.max(editTagName.length, 5)}ch`,
+                            color: editTagColor,
+                            padding: 0,
+                          }}
+                          autoFocus
+                        />
+                        <button
+                          type="button"
+                          onClick={handleSaveEditTag}
+                          style={{
+                            background: "none",
+                            border: "none",
+                            cursor: "pointer",
+                            padding: 0,
+                            color: editTagColor,
+                            opacity: 0.8,
+                          }}
+                          title="Salvar (Enter)"
+                        >
+                          <Check size={12} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditingTagIndex(null)}
+                          style={{
+                            background: "none",
+                            border: "none",
+                            cursor: "pointer",
+                            padding: 0,
+                            color: "#94a3b8",
+                          }}
+                          title="Cancelar (Esc)"
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
+                    );
                   }
-                  alt="Avatar"
-                  style={{ width: 40, height: 40, borderRadius: "50%" }}
-                />
-                <div>
-                  <strong id="settings-user-name" style={{ fontSize: "14px", display: "block" }}>
-                    {user?.name || "Usuário Autenticado"}
-                  </strong>
-                  <span id="settings-user-login" style={{ fontSize: "12px", color: "var(--md-sys-color-on-surface-variant, #5f6368)" }}>
-                    @{user?.login || "github"}
-                  </span>
-                </div>
+
+                  return (
+                    <div
+                      key={idx}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "4px",
+                        padding: "2px 6px 2px 8px",
+                        borderRadius: "12px",
+                        backgroundColor: `${tag.color}12`,
+                        border: `1px solid ${tag.color}35`,
+                        fontSize: "11.5px",
+                        fontWeight: 500,
+                        color: tag.color,
+                        transition: "all 0.12s ease",
+                      }}
+                    >
+                      <span
+                        onClick={() => handleStartEditTag(idx)}
+                        style={{ cursor: "pointer" }}
+                        title="Clique para editar tag"
+                      >
+                        #{tag.name}
+                      </span>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "1px",
+                        }}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => handleStartEditTag(idx)}
+                          style={{
+                            background: "transparent",
+                            border: "none",
+                            cursor: "pointer",
+                            padding: "1px",
+                            display: "flex",
+                            alignItems: "center",
+                            color: tag.color,
+                            opacity: 0.6,
+                          }}
+                          title="Editar"
+                        >
+                          <Edit2 size={9} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleRequestRemoveTag(idx)}
+                          style={{
+                            background: "transparent",
+                            border: "none",
+                            cursor: "pointer",
+                            padding: "1px",
+                            display: "flex",
+                            alignItems: "center",
+                            color: tag.color,
+                            opacity: 0.6,
+                          }}
+                          title="Remover"
+                        >
+                          <Trash2 size={9} />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {/* Botão + ou Chip de Adicionar Tag */}
+                {isAddingTag ? (
+                  <div
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "5px",
+                      padding: "2px 6px 2px 8px",
+                      borderRadius: "12px",
+                      backgroundColor: `${newTagColor}16`,
+                      border: `1.5px solid ${newTagColor}`,
+                      fontSize: "11.5px",
+                      fontWeight: 500,
+                      color: newTagColor,
+                    }}
+                  >
+                    <ColorDotPicker
+                      color={newTagColor}
+                      onChange={setNewTagColor}
+                      size={14}
+                    />
+                    <span style={{ opacity: 0.7 }}>#</span>
+                    <input
+                      type="text"
+                      placeholder="tag..."
+                      value={newTagName}
+                      onChange={(e) => setNewTagName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleAddTag();
+                        if (e.key === "Escape") {
+                          setIsAddingTag(false);
+                          setNewTagName("");
+                        }
+                      }}
+                      style={{
+                        border: "none",
+                        background: "transparent",
+                        outline: "none",
+                        fontSize: "11.5px",
+                        fontWeight: 500,
+                        width: `${Math.max(newTagName.length, 6)}ch`,
+                        color: newTagColor,
+                        padding: 0,
+                      }}
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddTag}
+                      disabled={!newTagName.trim()}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        cursor: newTagName.trim() ? "pointer" : "default",
+                        padding: 0,
+                        color: newTagColor,
+                        opacity: newTagName.trim() ? 0.9 : 0.4,
+                      }}
+                      title="Criar (Enter)"
+                    >
+                      <Check size={12} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsAddingTag(false);
+                        setNewTagName("");
+                      }}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        cursor: "pointer",
+                        padding: 0,
+                        color: "#94a3b8",
+                      }}
+                      title="Cancelar (Esc)"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setIsAddingTag(true)}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      width: "22px",
+                      height: "22px",
+                      borderRadius: "50%",
+                      border: "1px dashed #cbd5e1",
+                      background: "#ffffff",
+                      color: "#64748b",
+                      cursor: "pointer",
+                      padding: 0,
+                      transition: "all 0.12s ease",
+                    }}
+                    title="Adicionar Tag"
+                  >
+                    <Plus size={12} />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* 1.3 Statuses (Com Cores Rainbow e Formatação Automática) */}
+            <div
+              style={{
+                borderTop: "1px solid #f8fafc",
+                paddingTop: "14px",
+                display: "flex",
+                flexDirection: "column",
+                gap: "8px",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: "12px",
+                    fontWeight: 600,
+                    color: "#334155",
+                  }}
+                >
+                  Status de Governança
+                </span>
               </div>
 
-              <Button
-                id="btn-settings-logout"
-                variant="danger"
-                size="sm"
-                leftIcon={<LogOut size={14} />}
-                onClick={logout}
+              {/* Chips de Status com Edição Inline */}
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: "6px",
+                  alignItems: "center",
+                }}
               >
-                Desconectar Conta
-              </Button>
-            </div>
-          </CardContent>
+                {statuses.map((st, idx) => {
+                  const isEditing = editingStatusIndex === idx;
+                  const stColor = st.color || "#22c55e";
 
-          <CardFooter>
-            <Button
-              id="btn-save-system-settings"
-              variant="primary"
-              size="md"
-              leftIcon={<Save size={16} />}
-              onClick={handleSaveAllSettings}
+                  if (isEditing) {
+                    return (
+                      <div
+                        key={idx}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "5px",
+                          padding: "3px 6px 3px 8px",
+                          borderRadius: "14px",
+                          backgroundColor: `${editStatusColor}16`,
+                          border: `1.5px solid ${editStatusColor}`,
+                          fontSize: "12px",
+                          fontWeight: 600,
+                          color: editStatusColor,
+                        }}
+                      >
+                        <ColorDotPicker
+                          color={editStatusColor}
+                          onChange={setEditStatusColor}
+                          size={14}
+                        />
+                        <input
+                          type="text"
+                          value={editStatusName}
+                          onChange={(e) => setEditStatusName(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") handleSaveEditStatus();
+                            if (e.key === "Escape") setEditingStatusIndex(null);
+                          }}
+                          style={{
+                            border: "none",
+                            background: "transparent",
+                            outline: "none",
+                            fontSize: "12px",
+                            fontWeight: 600,
+                            width: `${Math.max(editStatusName.length, 6)}ch`,
+                            color: editStatusColor,
+                            padding: 0,
+                          }}
+                          autoFocus
+                        />
+                        <button
+                          type="button"
+                          onClick={handleSaveEditStatus}
+                          style={{
+                            background: "none",
+                            border: "none",
+                            cursor: "pointer",
+                            padding: 0,
+                            color: editStatusColor,
+                            opacity: 0.85,
+                          }}
+                          title="Salvar (Enter)"
+                        >
+                          <Check size={12} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditingStatusIndex(null)}
+                          style={{
+                            background: "none",
+                            border: "none",
+                            cursor: "pointer",
+                            padding: 0,
+                            color: "#94a3b8",
+                          }}
+                          title="Cancelar (Esc)"
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div
+                      key={idx}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        padding: "3px 8px 3px 10px",
+                        borderRadius: "14px",
+                        backgroundColor: `${stColor}14`,
+                        border: `1px solid ${stColor}40`,
+                        fontSize: "12px",
+                        fontWeight: 600,
+                        color: stColor,
+                        transition: "all 0.12s ease",
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: 6,
+                          height: 6,
+                          borderRadius: "50%",
+                          backgroundColor: stColor,
+                        }}
+                      />
+                      <span
+                        onClick={() => handleStartEditStatus(idx)}
+                        style={{ cursor: "pointer" }}
+                        title="Clique para editar status"
+                      >
+                        {st.name.toUpperCase()}
+                      </span>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "2px",
+                        }}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => handleStartEditStatus(idx)}
+                          style={{
+                            background: "transparent",
+                            border: "none",
+                            cursor: "pointer",
+                            padding: "1px",
+                            display: "flex",
+                            alignItems: "center",
+                            color: stColor,
+                            opacity: 0.6,
+                          }}
+                          title="Editar"
+                        >
+                          <Edit2 size={10} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleRequestRemoveStatus(idx)}
+                          style={{
+                            background: "transparent",
+                            border: "none",
+                            cursor: "pointer",
+                            padding: "1px",
+                            display: "flex",
+                            alignItems: "center",
+                            color: stColor,
+                            opacity: 0.6,
+                          }}
+                          title="Remover"
+                        >
+                          <Trash2 size={10} />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {/* Botão + ou Chip de Adicionar Status */}
+                {isAddingStatus ? (
+                  <div
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "5px",
+                      padding: "3px 6px 3px 8px",
+                      borderRadius: "14px",
+                      backgroundColor: `${newStatusColor}16`,
+                      border: `1.5px solid ${newStatusColor}`,
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      color: newStatusColor,
+                    }}
+                  >
+                    <ColorDotPicker
+                      color={newStatusColor}
+                      onChange={setNewStatusColor}
+                      size={14}
+                    />
+                    <input
+                      type="text"
+                      placeholder="status..."
+                      value={newStatusName}
+                      onChange={(e) => setNewStatusName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleAddStatus();
+                        if (e.key === "Escape") {
+                          setIsAddingStatus(false);
+                          setNewStatusName("");
+                        }
+                      }}
+                      style={{
+                        border: "none",
+                        background: "transparent",
+                        outline: "none",
+                        fontSize: "12px",
+                        fontWeight: 600,
+                        width: `${Math.max(newStatusName.length, 8)}ch`,
+                        color: newStatusColor,
+                        padding: 0,
+                      }}
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddStatus}
+                      disabled={!newStatusName.trim()}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        cursor: newStatusName.trim() ? "pointer" : "default",
+                        padding: 0,
+                        color: newStatusColor,
+                        opacity: newStatusName.trim() ? 0.9 : 0.4,
+                      }}
+                      title="Criar (Enter)"
+                    >
+                      <Check size={12} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsAddingStatus(false);
+                        setNewStatusName("");
+                      }}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        cursor: "pointer",
+                        padding: 0,
+                        color: "#94a3b8",
+                      }}
+                      title="Cancelar (Esc)"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setIsAddingStatus(true)}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      width: "24px",
+                      height: "24px",
+                      borderRadius: "50%",
+                      border: "1px dashed #cbd5e1",
+                      background: "#ffffff",
+                      color: "#64748b",
+                      cursor: "pointer",
+                      padding: 0,
+                      transition: "all 0.12s ease",
+                    }}
+                    title="Adicionar Status"
+                  >
+                    <Plus size={13} />
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* 2. SEÇÃO: MOTOR DE IA */}
+        <section id="ai-engine" style={{ scrollMarginTop: "72px" }}>
+          <Card variant="elevated">
+            <CardHeader
+              title={
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <Cpu size={17} style={{ color: "#10b981" }} />
+                  <span>Motor de Inteligência Artificial</span>
+                </div>
+              }
+              subtitle="Provedor e modelo para assistência e copiloto."
+              actions={
+                <Badge variant="success">{provider.toUpperCase()}</Badge>
+              }
+            />
+
+            <CardContent
+              style={{ display: "flex", flexDirection: "column", gap: 14 }}
             >
-              Salvar Todas as Configurações
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+                  gap: 8,
+                }}
+              >
+                {[
+                  {
+                    id: "gemini",
+                    name: "Google Gemini",
+                    sub: "Flash 2.5 & Pro",
+                  },
+                  { id: "openai", name: "OpenAI", sub: "GPT-4o & o3-mini" },
+                  {
+                    id: "anthropic",
+                    name: "Anthropic",
+                    sub: "Claude 3.7 & 3.5",
+                  },
+                  { id: "deepseek", name: "DeepSeek", sub: "V3 & R1" },
+                  { id: "local", name: "Ollama Local", sub: "Localhost" },
+                ].map((p) => {
+                  const isSelected = provider === p.id;
+                  return (
+                    <div
+                      key={p.id}
+                      onClick={() => {
+                        setProvider(p.id);
+                        fetchModelsForProvider(p.id, apiKey, endpoint);
+                      }}
+                      style={{
+                        padding: "8px 10px",
+                        borderRadius: "6px",
+                        border: isSelected
+                          ? "1.5px solid #10b981"
+                          : "1px solid #e2e8f0",
+                        background: isSelected ? "#f0fdf4" : "#ffffff",
+                        cursor: "pointer",
+                        transition: "all 0.12s ease",
+                      }}
+                    >
+                      <strong
+                        style={{
+                          fontSize: "12px",
+                          color: isSelected ? "#047857" : "#1e293b",
+                          display: "block",
+                        }}
+                      >
+                        {p.name}
+                      </strong>
+                      <span style={{ fontSize: "10.5px", color: "#64748b" }}>
+                        {p.sub}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: 12,
+                }}
+              >
+                <FormField label="Modelo Selecionado:">
+                  <div
+                    style={{ display: "flex", gap: 6, alignItems: "center" }}
+                  >
+                    <div style={{ flex: 1 }}>
+                      <SelectDropdown
+                        value={model}
+                        options={selectOptions}
+                        onChange={(val) => setModel(val)}
+                        placeholder="Selecione o modelo..."
+                        searchable={selectOptions.length > 5}
+                        searchPlaceholder="Filtrar..."
+                        leadingIcon="smart_toy"
+                      />
+                    </div>
+                    <IconButton
+                      size="sm"
+                      bordered
+                      tooltip="Recarregar modelos do provedor"
+                      onClick={() =>
+                        fetchModelsForProvider(provider, apiKey, endpoint)
+                      }
+                      disabled={isLoadingModels}
+                    >
+                      <RefreshCw
+                        size={13}
+                        className={isLoadingModels ? "spinning" : ""}
+                      />
+                    </IconButton>
+                  </div>
+                </FormField>
+
+                <FormField label="Chave de API (API Key):">
+                  <Input
+                    type="password"
+                    placeholder="Cole sua chave aqui..."
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                    onBlur={() =>
+                      apiKey.trim() &&
+                      fetchModelsForProvider(provider, apiKey, endpoint)
+                    }
+                  />
+                </FormField>
+              </div>
+
+              {provider === "local" && (
+                <FormField label="Endpoint Local (Ollama):">
+                  <Input
+                    value={endpoint}
+                    onChange={(e) => setEndpoint(e.target.value)}
+                  />
+                </FormField>
+              )}
+            </CardContent>
+
+            <CardFooter>
+              <Button
+                variant="primary"
+                size="sm"
+                leftIcon={<Save size={13} />}
+                onClick={handleSaveAISettings}
+              >
+                Salvar Motor de IA
+              </Button>
+            </CardFooter>
+          </Card>
+        </section>
+
+        {/* 3. SEÇÃO: CRIADOR DE TEMPLATES */}
+        <section id="template-prompt" style={{ scrollMarginTop: "72px" }}>
+          <Card variant="elevated">
+            <CardHeader
+              title={
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <Layers size={17} style={{ color: "#8b5cf6" }} />
+                  <span>Criador de Templates</span>
+                </div>
+              }
+              subtitle="Crie, customize e gerencie templates de documentação viva no editor dedicado."
+              actions={<Badge variant="purple">Template Studio</Badge>}
+            />
+
+            <CardContent>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "16px 20px",
+                  borderRadius: "8px",
+                  background: "#f8fafc",
+                  border: "1px solid #e2e8f0",
+                }}
+              >
+                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  <strong style={{ fontSize: "13px", color: "#0f172a" }}>
+                    Editor & Estúdio de Templates
+                  </strong>
+                  <span style={{ fontSize: "12px", color: "#64748b" }}>
+                    Acesse o editor rico para criar novos templates, importar modelos da comunidade e editar o conteúdo em Markdown.
+                  </span>
+                </div>
+
+                <Button
+                  variant="primary"
+                  onClick={() =>
+                    navigate(`/projects/${activeRepo?.name || "default"}/templates`)
+                  }
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    padding: "8px 16px",
+                    flexShrink: 0,
+                  }}
+                >
+                  <ExternalLink size={14} />
+                  Abrir Editor de Templates
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </section>
+
+        {/* 4. SEÇÃO: SESSÃO & GITHUB */}
+        <section id="user-session" style={{ scrollMarginTop: "72px" }}>
+          <div
+            style={{
+              background: "#ffffff",
+              borderRadius: "10px",
+              border: "1px solid #e2e8f0",
+              padding: "14px 18px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <img
+                src={
+                  user?.avatar_url ||
+                  `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.name || "User")}&background=2563eb&color=fff`
+                }
+                alt="Avatar"
+                style={{ width: 34, height: 34, borderRadius: "50%" }}
+              />
+              <div>
+                <strong
+                  style={{
+                    fontSize: "13px",
+                    color: "#0f172a",
+                    display: "block",
+                  }}
+                >
+                  {user?.name || "Usuário Autenticado"}
+                </strong>
+                <span style={{ fontSize: "11px", color: "#64748b" }}>
+                  @{user?.login || "github"}
+                </span>
+              </div>
+            </div>
+
+            <Button
+              variant="danger"
+              size="sm"
+              leftIcon={<LogOut size={13} />}
+              onClick={logout}
+            >
+              Desconectar
             </Button>
-          </CardFooter>
-        </Card>
-      </div>
+          </div>
+        </section>
+      </main>
+
+      {/* Modal de Alerta de Referências na Exclusão */}
+      <Modal
+        isOpen={deleteDialog.isOpen}
+        onClose={() => setDeleteDialog((d) => ({ ...d, isOpen: false }))}
+        title={
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              color: "#b91c1c",
+            }}
+          >
+            <AlertTriangle size={18} />
+            <span>
+              Remover{" "}
+              {deleteDialog.type === "status"
+                ? "Status"
+                : deleteDialog.type === "category"
+                  ? "Categoria"
+                  : "Tag"}{" "}
+              em Uso
+            </span>
+          </div>
+        }
+        size="md"
+        footer={
+          <div
+            style={{ display: "flex", justifyContent: "flex-end", gap: "8px" }}
+          >
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setDeleteDialog((d) => ({ ...d, isOpen: false }))}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              leftIcon={<Trash2 size={13} />}
+              onClick={deleteDialog.onConfirm}
+            >
+              Desvincular e Remover
+            </Button>
+          </div>
+        }
+      >
+        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+          <p
+            style={{
+              margin: 0,
+              fontSize: "13px",
+              color: "#334155",
+              lineHeight: 1.5,
+            }}
+          >
+            O item <strong>{deleteDialog.label}</strong> está atualmente
+            vinculado a{" "}
+            <strong>{deleteDialog.referencingDocs.length} documento(s)</strong>{" "}
+            no projeto.
+          </p>
+          <div
+            style={{
+              maxHeight: "150px",
+              overflowY: "auto",
+              padding: "8px 12px",
+              borderRadius: "6px",
+              background: "#f8fafc",
+              border: "1px solid #e2e8f0",
+              display: "flex",
+              flexDirection: "column",
+              gap: "6px",
+            }}
+          >
+            {deleteDialog.referencingDocs.map((doc) => (
+              <div
+                key={doc.path}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  fontSize: "11.5px",
+                  color: "#475569",
+                }}
+              >
+                <FileText size={12} style={{ color: "#94a3b8" }} />
+                <span style={{ fontWeight: 500 }}>{doc.title || doc.name}</span>
+                <span
+                  style={{
+                    fontSize: "10.5px",
+                    color: "#94a3b8",
+                    fontFamily: "monospace",
+                  }}
+                >
+                  ({doc.path})
+                </span>
+              </div>
+            ))}
+          </div>
+          <span style={{ fontSize: "11.5px", color: "#dc2626" }}>
+            Ao confirmar, este item será removido das opções e os documentos
+            acima serão atualizados automaticamente.
+          </span>
+        </div>
+      </Modal>
     </div>
   );
 };

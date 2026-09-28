@@ -2,13 +2,11 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "ProjectConfig",
   "type": "object",
-  "required": ["project"],
   "properties": {
     "project": {
       "type": "object",
-      "required": ["name"],
       "properties": {
-        "name": { "type": "string", "minLength": 1 },
+        "name": { "type": "string" },
         "description": { "type": "string" },
         "version": { "type": "string" },
         "architecture_pattern": { "type": "string" },
@@ -18,22 +16,59 @@
     },
     "tags": {
       "type": "array",
-      "items": { "type": "string" }
+      "items": {
+        "anyOf": [
+          { "type": "string" },
+          {
+            "type": "object",
+            "required": ["name"],
+            "properties": {
+              "name": { "type": "string" },
+              "color": { "type": "string" }
+            }
+          }
+        ]
+      }
     },
     "categories": {
       "type": "array",
-      "items": { "type": "string" }
+      "items": {
+        "anyOf": [
+          { "type": "string" },
+          {
+            "type": "object",
+            "required": ["name"],
+            "properties": {
+              "name": { "type": "string" },
+              "color": { "type": "string" }
+            }
+          }
+        ]
+      }
     },
     "statuses": {
       "type": "array",
       "items": {
-        "type": "object",
-        "required": ["key", "label"],
-        "properties": {
-          "key": { "type": "string" },
-          "label": { "type": "string" },
-          "badge": { "type": "string" }
-        }
+        "anyOf": [
+          { "type": "string" },
+          {
+            "type": "object",
+            "required": ["name"],
+            "properties": {
+              "name": { "type": "string" },
+              "color": { "type": "string" }
+            }
+          },
+          {
+            "type": "object",
+            "properties": {
+              "key": { "type": "string" },
+              "label": { "type": "string" },
+              "badge": { "type": "string" },
+              "color": { "type": "string" }
+            }
+          }
+        ]
       }
     },
     "governance_rules": {

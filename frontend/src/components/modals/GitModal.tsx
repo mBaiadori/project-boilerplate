@@ -1237,7 +1237,7 @@ export const GitModal: React.FC<GitModalProps> = ({
                         color: "var(--text-heading)",
                       }}
                     >
-                      Novidades d nesta Trilha
+                      Novidades
                     </h4>
                     <span
                       style={{

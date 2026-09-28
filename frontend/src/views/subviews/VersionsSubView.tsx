@@ -2,12 +2,11 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useWorkspace } from "../../context/WorkspaceContext";
 import { API } from "../../services/api";
-import { isPathHidden, getSystemFileFriendlyName } from "../../utils/hidden-files";
 import {
-  Button,
-  AlertBanner,
-  Tabs,
-} from "../../components/ui";
+  isPathHidden,
+  getSystemFileFriendlyName,
+} from "../../utils/hidden-files";
+import { Button, AlertBanner, Tabs } from "../../components/ui";
 import {
   Sparkles,
   FileEdit,
@@ -220,7 +219,6 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
   }, [gitStatus?.systemFiles, systemPendingChanges]);
 
   const changedFiles = allDraftFiles;
-  const currentBranch = gitStatus?.branch || "main";
   const isClean = allDraftFiles.length === 0;
 
   // Load status and fresh data on mount
@@ -785,21 +783,26 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
                 id: "whats-new",
                 label: "Novidades da Equipe",
                 icon: <Sparkles size={16} />,
-                count: whatsNewFiles.length > 0 ? whatsNewFiles.length : undefined,
+                count:
+                  whatsNewFiles.length > 0 ? whatsNewFiles.length : undefined,
                 badgeVariant: "success",
               },
               {
                 id: "drafts",
                 label: "Minhas Edições",
                 icon: <FileEdit size={16} />,
-                count: changedFiles.length > 0 ? changedFiles.length : undefined,
+                count:
+                  changedFiles.length > 0 ? changedFiles.length : undefined,
                 badgeVariant: "warning",
               },
               {
                 id: "system",
                 label: "Sistema",
                 icon: <Settings size={16} />,
-                count: allSystemDraftFiles.length > 0 ? allSystemDraftFiles.length : undefined,
+                count:
+                  allSystemDraftFiles.length > 0
+                    ? allSystemDraftFiles.length
+                    : undefined,
                 badgeVariant: "info",
               },
             ]}
@@ -878,7 +881,7 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
                         color: "#0f172a",
                       }}
                     >
-                      Novidades d nesta Trilha
+                      Novidades
                     </h3>
                     <span
                       style={{
@@ -1175,27 +1178,6 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
                     boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
                   }}
                 >
-                  <div
-                    style={{
-                      padding: "12px 18px",
-                      background: "#f8fafc",
-                      borderBottom: "1px solid #e2e8f0",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontWeight: 600,
-                        fontSize: "14px",
-                        color: "#0f172a",
-                      }}
-                    >
-                      Documentos Trazidos pel ({filteredWhatsNewFiles.length})
-                    </span>
-                  </div>
-
                   {filteredWhatsNewFiles.length === 0 ? (
                     <div
                       style={{
@@ -1547,80 +1529,6 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
             <div
               style={{ display: "flex", flexDirection: "column", gap: "24px" }}
             >
-              {/* Quick Status Bar */}
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  background: "#ffffff",
-                  padding: "16px 22px",
-                  borderRadius: "12px",
-                  border: "1px solid #e2e8f0",
-                  boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
-                  flexWrap: "wrap",
-                  gap: "12px",
-                }}
-              >
-                <div
-                  style={{ display: "flex", alignItems: "center", gap: "10px" }}
-                >
-                  <span
-                    className={`pill-dot ${isClean ? "success" : "warning"}`}
-                  >
-                    <span className="dot"></span>{" "}
-                    {isClean
-                      ? "Nenhum rascunho pendente no momento"
-                      : `${changedFiles.length} documento(s) com rascunhos pendentes de publicação`}
-                  </span>
-                  {gitStatus?.ahead ? (
-                    <span
-                      style={{
-                        fontSize: "11.5px",
-                        padding: "2px 8px",
-                        borderRadius: "6px",
-                        background: "#e8f0fe",
-                        color: "#1a73e8",
-                        fontWeight: 600,
-                      }}
-                    >
-                      {gitStatus.ahead} marco(s) pendentes de envio
-                    </span>
-                  ) : null}
-                </div>
-
-                <div style={{ display: "flex", gap: "10px" }}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (refreshGitStatus) refreshGitStatus();
-                      if (refreshPendingChanges) refreshPendingChanges();
-                    }}
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "6px",
-                      padding: "7px 14px",
-                      borderRadius: "8px",
-                      background: "#f8fafc",
-                      border: "1px solid #e2e8f0",
-                      color: "#334155",
-                      cursor: "pointer",
-                      fontSize: "13px",
-                      fontWeight: 500,
-                    }}
-                  >
-                    <span
-                      className="material-symbols-outlined"
-                      style={{ fontSize: "16px" }}
-                    >
-                      sync
-                    </span>
-                    Atualizar Rascunhos
-                  </button>
-                </div>
-              </div>
-
               {/* Changed Files List */}
               <div
                 style={{
@@ -1947,7 +1855,7 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
                     >
                       alt_route
                     </span>
-                    Propor Atualização de Versão (Abrir Pull Request)
+                    Propor Atualização de Versão
                   </h3>
 
                   <button
@@ -1988,19 +1896,6 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
                       : "Gerar Resumo Automático"}
                   </button>
                 </div>
-
-                <p
-                  style={{
-                    fontSize: "12.5px",
-                    color: "#64748b",
-                    margin: "0 0 14px 0",
-                  }}
-                >
-                  Ao salvar, uma branch de evolução será criada a partir de{" "}
-                  <code>{currentBranch}</code> e uma Proposta (PR) será aberta
-                  para revisão da equipe, protegendo a trilha principal.
-                </p>
-
                 <div style={{ marginBottom: "12px" }}>
                   <label
                     style={{
@@ -2152,86 +2047,6 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
             <div
               style={{ display: "flex", flexDirection: "column", gap: "24px" }}
             >
-              {/* Top Summary Banner */}
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  background: "#ffffff",
-                  padding: "18px 24px",
-                  borderRadius: "12px",
-                  border: "1px solid #e2e8f0",
-                  boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
-                  flexWrap: "wrap",
-                  gap: "16px",
-                }}
-              >
-                <div
-                  style={{ display: "flex", alignItems: "center", gap: "14px" }}
-                >
-                  <div
-                    style={{
-                      width: "46px",
-                      height: "46px",
-                      borderRadius: "12px",
-                      background: "#eff6ff",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      color: "#2563eb",
-                    }}
-                  >
-                    <span
-                      className="material-symbols-outlined"
-                      style={{ fontSize: "26px" }}
-                    >
-                      settings_suggest
-                    </span>
-                  </div>
-                  <div>
-                    <h3
-                      style={{
-                        margin: 0,
-                        fontSize: "16px",
-                        fontWeight: 700,
-                        color: "#0f172a",
-                      }}
-                    >
-                      Arquivos de Sistema, Templates & Configurações
-                    </h3>
-                    <p
-                      style={{
-                        margin: "3px 0 0 0",
-                        fontSize: "13px",
-                        color: "#64748b",
-                      }}
-                    >
-                      Alterações em templates de documentos (<code>.templates.json</code>), termos de dicionário (<code>.dictionary.json</code>), metadados e configurações da governança.
-                    </p>
-                  </div>
-                </div>
-
-                <div
-                  style={{ display: "flex", alignItems: "center", gap: "10px" }}
-                >
-                  <span
-                    style={{
-                      padding: "4px 12px",
-                      borderRadius: "16px",
-                      fontSize: "12px",
-                      fontWeight: 600,
-                      background:
-                        allSystemDraftFiles.length > 0 ? "#eff6ff" : "#f1f5f9",
-                      color:
-                        allSystemDraftFiles.length > 0 ? "#2563eb" : "#64748b",
-                    }}
-                  >
-                    {allSystemDraftFiles.length} arquivo(s) de sistema modificado(s)
-                  </span>
-                </div>
-              </div>
-
               {allSystemDraftFiles.length === 0 ? (
                 <div
                   style={{
@@ -2272,7 +2087,10 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
                       lineHeight: "1.5",
                     }}
                   >
-                    Todos os templates (<code>.templates.json</code>), termos do dicionário (<code>.dictionary.json</code>) e arquivos de configuração do projeto estão sincronizados com a versão oficial.
+                    Todos os templates (<code>.templates.json</code>), termos do
+                    dicionário (<code>.dictionary.json</code>) e arquivos de
+                    configuração do projeto estão sincronizados com a versão
+                    oficial.
                   </p>
                 </div>
               ) : (
@@ -2348,8 +2166,7 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
                                 <div
                                   style={{
                                     fontSize: "12px",
-                                    fontFamily:
-                                      "var(--font-mono, monospace)",
+                                    fontFamily: "var(--font-mono, monospace)",
                                     color: "#64748b",
                                   }}
                                 >
@@ -2525,7 +2342,9 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
                               : "none",
                           }}
                         >
-                          {isGeneratingAI ? "progress_activity" : "auto_fix_high"}
+                          {isGeneratingAI
+                            ? "progress_activity"
+                            : "auto_fix_high"}
                         </span>
                         {isGeneratingAI
                           ? "Gerando resumo..."
@@ -2540,7 +2359,9 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
                         margin: "0 0 14px 0",
                       }}
                     >
-                      Ao criar a proposta, uma revisão será aberta para que os novos templates e configurações sejam compartilhados e replicados para toda a equipe.
+                      Ao criar a proposta, uma revisão será aberta para que os
+                      novos templates e configurações sejam compartilhados e
+                      replicados para toda a equipe.
                     </p>
 
                     <div style={{ marginBottom: "12px" }}>

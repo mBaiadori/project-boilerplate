@@ -79,10 +79,26 @@ export interface DocumentMetadataItem {
   [key: string]: any;
 }
 
+export interface TaxonomyItem {
+  name: string;
+  color: string;
+}
+
+export type CategoryOption = string | TaxonomyItem;
+export type TagOption = string | TaxonomyItem;
+
+export interface StatusItem {
+  name?: string;
+  color?: string;
+  key?: string;
+  label?: string;
+  badge?: string;
+}
+
 export interface ProjectMetadataOptions {
-  categories: string[];
-  statuses: Array<{ key: string; label: string; badge?: string }>;
-  tags: string[];
+  categories: CategoryOption[];
+  statuses: StatusItem[];
+  tags: TagOption[];
 }
 
 export interface PR {

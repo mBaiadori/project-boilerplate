@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { API } from "../../services/api";
 import { useWorkspace } from "../../context/WorkspaceContext";
+import type { TaxonomyItem, StatusItem } from "../../types";
 
 interface DocConnectivityBarProps {
   filePath: string;
@@ -77,28 +78,45 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
   const currentPrompt = fileMetadata?.prompt || "";
 
   // Opções do projeto
-  const statusOptions = projectMetaOptions?.statuses || [
-    { key: "draft", label: "Rascunho (DRAFT)", badge: "badge-neutral" },
-    { key: "proposed", label: "Proposto (PROPOSED)", badge: "badge-warning" },
-    { key: "review", label: "Em Revisão (REVIEW)", badge: "badge-info" },
-    { key: "approved", label: "Aprovado (APPROVED)", badge: "badge-success" },
-    { key: "superseded", label: "Substituído (SUPERSEDED)", badge: "badge-secondary" },
-    { key: "deprecated", label: "Obsoleto (DEPRECATED)", badge: "badge-danger" },
-  ];
+  const statusOptions = useMemo<StatusItem[]>(() => {
+    const raw = projectMetaOptions?.statuses || [
+      { name: "draft", color: "#fdba74" },
+      { name: "in-review", color: "#67e8f9" },
+      { name: "approved", color: "#86efac" },
+      { name: "deprecated", color: "#fca5a5" },
+    ];
+    return raw.map((s: any) => {
+      const name = String(s.name || s.key || s.label || "").toLowerCase().replace(/\s+/g, "-");
+      const label = s.label || name.toUpperCase().replace(/-/g, " ");
+      const key = s.key || name;
+      const color = s.color || "#3b82f6";
+      return { name, key, label, color };
+    });
+  }, [projectMetaOptions?.statuses]);
 
-  const categoryOptions = projectMetaOptions?.categories || [
-    "geral",
-    "arquitetura",
-    "engenharia",
-    "produto",
-    "segurança",
-    "infraestrutura",
-    "dados",
-  ];
+  const categoryOptions = useMemo<TaxonomyItem[]>(() => {
+    const raw = projectMetaOptions?.categories || [
+      "geral",
+      "arquitetura",
+      "engenharia",
+      "produto",
+      "segurança",
+      "infraestrutura",
+      "dados",
+    ];
+    return raw.map((c: any) =>
+      typeof c === "string" ? { name: c, color: "#3b82f6" } : { name: c.name || "", color: c.color || "#3b82f6" }
+    );
+  }, [projectMetaOptions?.categories]);
 
-  const availableTags = projectMetaOptions?.tags || [
-    "backend", "frontend", "api", "database", "security", "core", "auth", "mobile", "spec"
-  ];
+  const availableTags = useMemo<TaxonomyItem[]>(() => {
+    const raw = projectMetaOptions?.tags || [
+      "backend", "frontend", "api", "database", "security", "core", "auth", "mobile", "spec"
+    ];
+    return raw.map((t: any) =>
+      typeof t === "string" ? { name: t, color: "#6366f1" } : { name: t.name || "", color: t.color || "#6366f1" }
+    );
+  }, [projectMetaOptions?.tags]);
 
   const handleStatusChange = (newStatus: string) => {
     updateFileMetadata({ status: newStatus });
@@ -134,10 +152,11 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
     updateFileMetadata({ approvers: updated });
   };
 
-  const activeStatusObj = statusOptions.find((s) => s.key === currentStatus) || {
+  const activeStatusObj = statusOptions.find((s) => s.name === currentStatus || s.key === currentStatus) || {
+    name: currentStatus,
     key: currentStatus,
-    label: currentStatus ? currentStatus.toUpperCase() : "DRAFT",
-    badge: "badge-neutral-subtle",
+    label: currentStatus ? currentStatus.toUpperCase().replace(/-/g, " ") : "DRAFT",
+    color: "#64748b",
   };
 
   return (
@@ -344,8 +363,8 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
                     }}
                   >
                     {statusOptions.map((opt) => (
-                      <option key={opt.key} value={opt.key}>
-                        {opt.label}
+                      <option key={opt.name || opt.key || ""} value={opt.name || opt.key || ""}>
+                        {opt.label || (opt.name ? opt.name.toUpperCase() : (opt.key ? opt.key.toUpperCase() : ""))}
                       </option>
                     ))}
                   </select>
@@ -369,8 +388,8 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
                   >
                     <option value="">(Nenhuma)</option>
                     {categoryOptions.map((cat) => (
-                      <option key={cat} value={cat}>
-                        {cat.toUpperCase()}
+                      <option key={cat.name} value={cat.name}>
+                        {cat.name.toUpperCase()}
                       </option>
                     ))}
                   </select>
@@ -439,10 +458,10 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
                   >
                     <option value="">+ Escolher tag do projeto...</option>
                     {availableTags
-                      .filter((t) => !currentTags.includes(t))
+                      .filter((t) => !currentTags.includes(t.name))
                       .map((t) => (
-                        <option key={t} value={t}>
-                          #{t}
+                        <option key={t.name} value={t.name}>
+                          #{t.name}
                         </option>
                       ))}
                   </select>

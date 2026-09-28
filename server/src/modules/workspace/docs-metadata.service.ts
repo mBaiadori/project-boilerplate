@@ -21,9 +21,9 @@ export interface DocumentMetadataItem {
 }
 
 export interface ProjectMetadataOptions {
-  categories: string[];
+  categories: Array<string | { name: string; color?: string }>;
   statuses: Array<{ key: string; label: string; badge?: string }>;
-  tags: string[];
+  tags: Array<string | { name: string; color?: string }>;
 }
 
 export function generateDocId(filePath: string): string {

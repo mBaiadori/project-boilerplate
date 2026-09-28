@@ -38,7 +38,6 @@ import {
   SlidersHorizontal,
   ChevronLeft,
   Save,
-  Info,
   Globe,
   Folder,
   Tag,
@@ -83,7 +82,8 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
   const updateActiveEditingTemplate = useTemplateStore(
     (s) => s.updateActiveEditingTemplate,
   );
-  const { setIsTemplateEditorMode, setDynamicContext, setActiveSkillId } = useAI();
+  const { setIsTemplateEditorMode, setDynamicContext, setActiveSkillId } =
+    useAI();
 
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [activeTab, setActiveTab] = useState<Tab>("projeto");
@@ -126,8 +126,12 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
         API.getSkillsHub(),
         API.getSkillsProject(),
       ]);
-      const hubList = hubRes.ok && hubRes.data?.skills ? hubRes.data.skills : [];
-      const projList = projRes.ok && projRes.data?.installed_skills ? projRes.data.installed_skills : [];
+      const hubList =
+        hubRes.ok && hubRes.data?.skills ? hubRes.data.skills : [];
+      const projList =
+        projRes.ok && projRes.data?.installed_skills
+          ? projRes.data.installed_skills
+          : [];
       // Combine unique by ID
       const map = new Map<string, SkillItem>();
       [...hubList, ...projList].forEach((s) => map.set(s.id, s));
@@ -204,8 +208,12 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
     setTplBadge("DOC");
     setTplDesc("");
     setTplTags("");
-    setTplContent("# Novo Documento Técnico\n\n## 1. Visão Geral\nDescreva aqui o propósito.");
-    setTplPrompt("Atue como um Arquiteto de Software sênior guiando o usuário no preenchimento desta especificação.");
+    setTplContent(
+      "# Novo Documento Técnico\n\n## 1. Visão Geral\nDescreva aqui o propósito.",
+    );
+    setTplPrompt(
+      "Atue como um Arquiteto de Software sênior guiando o usuário no preenchimento desta especificação.",
+    );
     setTplSkills([]);
     setSaveError("");
     setSaveSuccessMsg("");
@@ -259,7 +267,8 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
       setSaveError("O título do template é obrigatório.");
       return;
     }
-    const finalId = tplId.trim() || tplTitle.toLowerCase().replace(/[^a-z0-9-_]/g, "");
+    const finalId =
+      tplId.trim() || tplTitle.toLowerCase().replace(/[^a-z0-9-_]/g, "");
     if (!finalId) {
       setSaveError("Slug/Identificador inválido.");
       return;
@@ -319,7 +328,11 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
   };
 
   const handleDelete = async (tpl: TemplateItem, isCommunity: boolean) => {
-    if (window.confirm(`Tem certeza que deseja remover o template "${tpl.title}"?`)) {
+    if (
+      window.confirm(
+        `Tem certeza que deseja remover o template "${tpl.title}"?`,
+      )
+    ) {
       try {
         await deleteTemplate(tpl.id, isCommunity);
       } catch (err: any) {
@@ -369,7 +382,15 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
   // ═════════════════════════════════════════════════════════════════════════════
   if (viewMode === "editor") {
     return (
-      <div style={{ display: "flex", flexDirection: "column", height: "100%", width: "100%", background: "var(--color-surface)" }}>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          height: "100%",
+          width: "100%",
+          background: "var(--color-surface)",
+        }}
+      >
         {/* Top Bar Navigation */}
         <div
           style={{
@@ -399,7 +420,13 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
               {isEditMode ? "Modo Edição" : "Novo Template"}
             </Badge>
 
-            <span style={{ fontSize: "13px", color: "var(--color-outline)", fontFamily: "var(--font-mono, monospace)" }}>
+            <span
+              style={{
+                fontSize: "13px",
+                color: "var(--color-outline)",
+                fontFamily: "var(--font-mono, monospace)",
+              }}
+            >
               templates/{tplTemplateName || tplId || "novo-template"}.md
             </span>
           </div>
@@ -419,7 +446,13 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
               size="sm"
               onClick={handleSaveTemplate}
               disabled={isSaving}
-              icon={isSaving ? <RefreshCw size={14} className="animate-spin" /> : <Save size={14} />}
+              icon={
+                isSaving ? (
+                  <RefreshCw size={14} className="animate-spin" />
+                ) : (
+                  <Save size={14} />
+                )
+              }
             >
               {isSaving ? "Salvando..." : "Salvar Template"}
             </Button>
@@ -455,7 +488,13 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
               flexShrink: 0,
             }}
           >
-            <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr 1.2fr", gap: "12px" }}>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1.2fr 1fr 1fr 1.2fr",
+                gap: "12px",
+              }}
+            >
               <FormField label="Título do Template" required>
                 <Input
                   placeholder="ex: Especificação de Microsserviço"
@@ -464,7 +503,9 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
                 />
               </FormField>
 
-              <FormField label={`Identificador / Slug ${!isEditMode ? "*" : ""}`}>
+              <FormField
+                label={`Identificador / Slug ${!isEditMode ? "*" : ""}`}
+              >
                 <Input
                   placeholder="ex: microservice-spec"
                   value={tplId}
@@ -500,7 +541,13 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
               </FormField>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "12px" }}>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "2fr 1fr",
+                gap: "12px",
+              }}
+            >
               <FormField label="Descrição Curta (Finalidade do Template)">
                 <Input
                   placeholder="Descreva quando e por que utilizar este modelo..."
@@ -520,13 +567,27 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
 
             {/* Skills selection */}
             <div>
-              <div style={{ fontSize: "11.5px", fontWeight: 700, color: "var(--color-outline)", marginBottom: "6px", display: "flex", alignItems: "center", gap: "6px" }}>
+              <div
+                style={{
+                  fontSize: "11.5px",
+                  fontWeight: 700,
+                  color: "var(--color-outline)",
+                  marginBottom: "6px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                }}
+              >
                 <Sparkles size={13} style={{ color: "var(--color-primary)" }} />
                 Skills Recomendadas / Vinculadas ao Template (Padrão ECC):
               </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
                 {availableSkills.length === 0 ? (
-                  <span style={{ fontSize: "12px", color: "var(--color-outline)" }}>Carregando catálogo de skills...</span>
+                  <span
+                    style={{ fontSize: "12px", color: "var(--color-outline)" }}
+                  >
+                    Carregando catálogo de skills...
+                  </span>
                 ) : (
                   availableSkills.map((skill) => {
                     const isSelected = tplSkills.includes(skill.id);
@@ -536,7 +597,9 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
                         type="button"
                         onClick={() => {
                           if (isSelected) {
-                            setTplSkills(tplSkills.filter((id) => id !== skill.id));
+                            setTplSkills(
+                              tplSkills.filter((id) => id !== skill.id),
+                            );
                           } else {
                             setTplSkills([...tplSkills, skill.id]);
                           }
@@ -547,16 +610,26 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
                           gap: "5px",
                           padding: "4px 10px",
                           borderRadius: "14px",
-                          border: isSelected ? "1px solid var(--color-primary)" : "1px solid var(--color-outline-variant)",
+                          border: isSelected
+                            ? "1px solid var(--color-primary)"
+                            : "1px solid var(--color-outline-variant)",
                           fontSize: "11.5px",
                           fontWeight: 600,
                           cursor: "pointer",
-                          background: isSelected ? "var(--color-primary-container)" : "var(--color-surface-container-high)",
-                          color: isSelected ? "var(--color-primary)" : "var(--color-on-surface-variant)",
+                          background: isSelected
+                            ? "var(--color-primary-container)"
+                            : "var(--color-surface-container-high)",
+                          color: isSelected
+                            ? "var(--color-primary)"
+                            : "var(--color-on-surface-variant)",
                           transition: "all 0.15s ease",
                         }}
                       >
-                        {isSelected ? <CheckCircle2 size={13} /> : <Plus size={13} />}
+                        {isSelected ? (
+                          <CheckCircle2 size={13} />
+                        ) : (
+                          <Plus size={13} />
+                        )}
                         {skill.title || skill.name}
                       </button>
                     );
@@ -568,7 +641,14 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
         )}
 
         {/* Embedded Notion Document Editor */}
-        <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+        <div
+          style={{
+            flex: 1,
+            overflow: "hidden",
+            display: "flex",
+            flexDirection: "column",
+          }}
+        >
           <NotionEditor
             content={tplContent}
             onChange={handleContentChange}
@@ -583,7 +663,9 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
             customTitle={tplTitle}
             onCustomTitleChange={handleTitleChange}
             onCustomSave={handleSaveTemplate}
-            customSaveStatus={isSaving ? "Salvando template..." : "Template Pronto"}
+            customSaveStatus={
+              isSaving ? "Salvando template..." : "Template Pronto"
+            }
           />
         </div>
       </div>
@@ -594,25 +676,79 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
   // RENDER 2: MODO GRID DE TEMPLATES (PROJETO & COMUNIDADE)
   // ═════════════════════════════════════════════════════════════════════════════
   const tabList = [
-    { id: "projeto", label: "Projeto", badge: templates.length, icon: <Folder size={14} /> },
-    { id: "comunidade", label: "Comunidade Global", badge: communityTemplates.length, icon: <Globe size={14} /> },
+    {
+      id: "projeto",
+      label: "Projeto",
+      badge: templates.length,
+      icon: <Folder size={14} />,
+    },
+    {
+      id: "comunidade",
+      label: "Comunidade Global",
+      badge: communityTemplates.length,
+      icon: <Globe size={14} />,
+    },
   ];
 
   return (
-    <div id="subview-templates" style={{ padding: "24px 32px", maxWidth: "1400px", margin: "0 auto", width: "100%", boxSizing: "border-box" }}>
+    <div
+      id="subview-templates"
+      style={{
+        padding: "24px 32px",
+        maxWidth: "1400px",
+        margin: "0 auto",
+        width: "100%",
+        boxSizing: "border-box",
+      }}
+    >
       {/* Header Row */}
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "20px", flexWrap: "wrap", gap: "16px" }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          marginBottom: "20px",
+          flexWrap: "wrap",
+          gap: "16px",
+        }}
+      >
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <h1 style={{ margin: 0, fontSize: "22px", fontWeight: 700, color: "var(--color-on-surface)", letterSpacing: "-0.02em" }}>
+            <h1
+              style={{
+                margin: 0,
+                fontSize: "22px",
+                fontWeight: 700,
+                color: "var(--color-on-surface)",
+                letterSpacing: "-0.02em",
+              }}
+            >
               Gerenciador de Templates
             </h1>
             <Badge variant="primary" size="md">
-              {templates.length} {templates.length === 1 ? 'modelo' : 'modelos'}
+              {templates.length} {templates.length === 1 ? "modelo" : "modelos"}
             </Badge>
           </div>
-          <p style={{ margin: "6px 0 0 0", fontSize: "13.5px", color: "var(--color-on-surface-variant)" }}>
-            Central de modelos técnicos padronizados com Prompt de Copilot integrado (<code style={{ fontFamily: "var(--font-mono, monospace)", background: "var(--color-surface-container-high)", padding: "2px 6px", borderRadius: "4px" }}>.templates.json</code>).
+          <p
+            style={{
+              margin: "6px 0 0 0",
+              fontSize: "13.5px",
+              color: "var(--color-on-surface-variant)",
+            }}
+          >
+            Central de modelos técnicos padronizados com Prompt de Copilot
+            integrado (
+            <code
+              style={{
+                fontFamily: "var(--font-mono, monospace)",
+                background: "var(--color-surface-container-high)",
+                padding: "2px 6px",
+                borderRadius: "4px",
+              }}
+            >
+              .templates.json
+            </code>
+            ).
           </p>
         </div>
 
@@ -643,8 +779,23 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
       </div>
 
       {/* Tabs & Search & Category Bar */}
-      <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginBottom: "24px" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "12px" }}>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: "12px",
+          marginBottom: "24px",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: "12px",
+          }}
+        >
           <Tabs
             tabs={tabList}
             activeTab={activeTab}
@@ -663,27 +814,6 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
           </div>
         </div>
 
-        {activeTab === "comunidade" && (
-          <div
-            style={{
-              padding: "10px 14px",
-              borderRadius: "var(--radius-md, 8px)",
-              background: "var(--color-surface-container-high)",
-              border: "1px solid var(--color-outline-variant)",
-              display: "flex",
-              gap: "8px",
-              alignItems: "center",
-              fontSize: "12.5px",
-              color: "var(--color-on-surface-variant)",
-            }}
-          >
-            <Info size={16} style={{ color: "var(--color-primary)", flexShrink: 0 }} />
-            <span>
-              Templates globais da comunidade. Importe-os para o <code>.templates.json</code> do projeto para usá-los e personalizá-los livremente.
-            </span>
-          </div>
-        )}
-
         {/* Categories Chips */}
         <FilterChips
           items={[
@@ -698,25 +828,43 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
 
       {/* Cards Grid */}
       {loading ? (
-        <div style={{ padding: "60px 0", display: "flex", justifyContent: "center" }}>
+        <div
+          style={{
+            padding: "60px 0",
+            display: "flex",
+            justifyContent: "center",
+          }}
+        >
           <Spinner size="lg" message="Carregando templates..." />
         </div>
       ) : filteredTemplates.length === 0 ? (
         <EmptyState
           icon={<Layers size={48} />}
-          title={activeTab === "projeto" ? "Nenhum template no projeto" : "Nenhum template na comunidade"}
+          title={
+            activeTab === "projeto"
+              ? "Nenhum template no projeto"
+              : "Nenhum template na comunidade"
+          }
           description={
             searchQuery
               ? `Nenhum resultado encontrado para "${searchQuery}".`
               : activeTab === "projeto"
-              ? "Crie modelos estruturados de RFCs, ADRs e especificações técnicas."
-              : "Explore e importe modelos da comunidade global."
+                ? "Crie modelos estruturados de RFCs, ADRs e especificações técnicas."
+                : "Explore e importe modelos da comunidade global."
           }
-          actionLabel={activeTab === "projeto" ? "Criar Primeiro Template" : undefined}
+          actionLabel={
+            activeTab === "projeto" ? "Criar Primeiro Template" : undefined
+          }
           onAction={activeTab === "projeto" ? handleOpenCreate : undefined}
         />
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "16px" }}>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
+            gap: "16px",
+          }}
+        >
           {filteredTemplates.map((tpl) => {
             const fb = importFeedback[tpl.id];
             const alreadyImported =
@@ -724,7 +872,14 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
               templates.some((t) => t.id === tpl.id);
 
             return (
-              <Card key={tpl.id} style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+              <Card
+                key={tpl.id}
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  height: "100%",
+                }}
+              >
                 <CardHeader
                   title={tpl.title}
                   subtitle={tpl.templateName || tpl.id}
@@ -747,8 +902,23 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
                   }
                 />
 
-                <CardContent style={{ flex: 1, display: "flex", flexDirection: "column", gap: "10px" }}>
-                  <p style={{ margin: 0, fontSize: "12.5px", color: "var(--color-on-surface-variant)", lineHeight: 1.5, flex: 1 }}>
+                <CardContent
+                  style={{
+                    flex: 1,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "10px",
+                  }}
+                >
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: "12.5px",
+                      color: "var(--color-on-surface-variant)",
+                      lineHeight: 1.5,
+                      flex: 1,
+                    }}
+                  >
                     {tpl.description ||
                       (tpl.prompt
                         ? `Prompt: ${tpl.prompt.slice(0, 90)}...`
@@ -756,7 +926,9 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
                   </p>
 
                   {(tpl.tags || []).length > 0 && (
-                    <div style={{ display: "flex", gap: "4px", flexWrap: "wrap" }}>
+                    <div
+                      style={{ display: "flex", gap: "4px", flexWrap: "wrap" }}
+                    >
                       {(tpl.tags || []).slice(0, 4).map((tag) => (
                         <span
                           key={tag}
@@ -779,7 +951,9 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
                   )}
 
                   {(tpl.skills || []).length > 0 && (
-                    <div style={{ display: "flex", gap: "4px", flexWrap: "wrap" }}>
+                    <div
+                      style={{ display: "flex", gap: "4px", flexWrap: "wrap" }}
+                    >
                       {(tpl.skills || []).map((skillId: string) => (
                         <span
                           key={skillId}
@@ -803,13 +977,28 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
                   )}
 
                   {fb && (
-                    <div style={{ fontSize: "11.5px", color: fb.ok ? "var(--color-success)" : "var(--color-error)", fontWeight: 600 }}>
+                    <div
+                      style={{
+                        fontSize: "11.5px",
+                        color: fb.ok
+                          ? "var(--color-success)"
+                          : "var(--color-error)",
+                        fontWeight: 600,
+                      }}
+                    >
                       {fb.ok ? "✓" : "✗"} {fb.msg}
                     </div>
                   )}
                 </CardContent>
 
-                <CardFooter style={{ borderTop: "1px solid var(--color-outline-variant)", display: "flex", gap: "8px", alignItems: "center" }}>
+                <CardFooter
+                  style={{
+                    borderTop: "1px solid var(--color-outline-variant)",
+                    display: "flex",
+                    gap: "8px",
+                    alignItems: "center",
+                  }}
+                >
                   {activeTab === "projeto" ? (
                     <>
                       <Button
@@ -827,11 +1016,23 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
                         size="sm"
                         tooltip="Remover template"
                         onClick={() => handleDelete(tpl, false)}
-                        icon={<Trash2 size={15} style={{ color: "var(--color-error)" }} />}
+                        icon={
+                          <Trash2
+                            size={15}
+                            style={{ color: "var(--color-error)" }}
+                          />
+                        }
                       />
                     </>
                   ) : alreadyImported ? (
-                    <div style={{ display: "flex", gap: "6px", width: "100%", alignItems: "center" }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: "6px",
+                        width: "100%",
+                        alignItems: "center",
+                      }}
+                    >
                       <span
                         style={{
                           flex: 1,
@@ -854,7 +1055,12 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
                         variant="ghost"
                         size="sm"
                         onClick={() => handleDelete(tpl, false)}
-                        icon={<MinusCircle size={14} style={{ color: "var(--color-warning)" }} />}
+                        icon={
+                          <MinusCircle
+                            size={14}
+                            style={{ color: "var(--color-warning)" }}
+                          />
+                        }
                       >
                         Remover
                       </Button>
@@ -869,7 +1075,9 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
                       onClick={() => handleImport(tpl)}
                       icon={<Download size={14} />}
                     >
-                      {importingId === tpl.id ? "Importando..." : "Importar para o Projeto"}
+                      {importingId === tpl.id
+                        ? "Importando..."
+                        : "Importar para o Projeto"}
                     </Button>
                   )}
                 </CardFooter>
