@@ -457,6 +457,16 @@ export const API = {
     return { ok: res.ok, data: await res.json() };
   },
 
+  async rollbackVersion(payload: { id?: number | string; commit_hash?: string; repo?: string }): Promise<ApiResponse<{ success?: boolean; message?: string; new_commit_hash?: string; error?: string }>> {
+    const res = await fetch('/api/prs/rollback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+
   async getPRFileDiff(params: { path: string; commit?: string; repo?: string }): Promise<ApiResponse<{ diff: string }>> {
     const query = new URLSearchParams();
     query.set('path', params.path);

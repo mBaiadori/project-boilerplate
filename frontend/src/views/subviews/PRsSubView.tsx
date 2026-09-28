@@ -5,11 +5,11 @@ import { useWorkspace } from "../../context/WorkspaceContext";
 import { VisualMarkdownDiff } from "../../components/editor/VisualMarkdownDiff";
 
 interface PRsSubViewProps {
-  onOpenDiffModal: () => void;
+  onOpenDiffModal?: () => void;
 }
 
-export const PRsSubView: React.FC<PRsSubViewProps> = ({ onOpenDiffModal }) => {
-  const { activeRepo } = useWorkspace();
+export const PRsSubView: React.FC<PRsSubViewProps> = () => {
+  const { activeRepo, refreshGitStatus, refreshPendingChanges } = useWorkspace();
   const repoName = activeRepo?.name || "local";
 
   const [prs, setPrs] = useState<PR[]>([]);
@@ -35,8 +35,11 @@ export const PRsSubView: React.FC<PRsSubViewProps> = ({ onOpenDiffModal }) => {
   } | null>(null);
   const [actionLoading, setActionLoading] = useState<{
     id: number | string;
-    action: "approve" | "merge" | "reject";
+    action: "approve" | "merge" | "reject" | "rollback";
   } | null>(null);
+
+  // Rollback modal state
+  const [rollbackTarget, setRollbackTarget] = useState<PR | null>(null);
 
   const loadPRs = useCallback(async () => {
     setIsLoading(true);
@@ -49,7 +52,7 @@ export const PRsSubView: React.FC<PRsSubViewProps> = ({ onOpenDiffModal }) => {
       }
     } catch (err) {
       console.error(
-        `[PRsSubView] Erro ao carregar propostas do repositório ${repoName}:`,
+        `[PRsSubView] Erro ao carregar revisões do repositório ${repoName}:`,
         err,
       );
     } finally {
@@ -65,7 +68,7 @@ export const PRsSubView: React.FC<PRsSubViewProps> = ({ onOpenDiffModal }) => {
     const nextState = !expandedPRs[id];
     setExpandedPRs((prev) => ({ ...prev, [id]: nextState }));
 
-    // If expanding a commit revision that has files without diff_text, auto-load diffs
+    // If expanding a revision that has files without diff_text, auto-load diffs
     if (
       nextState &&
       pr.is_direct_commit &&
@@ -114,6 +117,8 @@ export const PRsSubView: React.FC<PRsSubViewProps> = ({ onOpenDiffModal }) => {
           type: "success",
         });
         await loadPRs();
+        refreshGitStatus?.();
+        refreshPendingChanges?.();
       } else {
         setActionFeedback({
           id,
@@ -142,10 +147,12 @@ export const PRsSubView: React.FC<PRsSubViewProps> = ({ onOpenDiffModal }) => {
           id,
           message:
             res.data?.message ||
-            "Proposta publicada na versão oficial com sucesso!",
+            "Versão publicada e integrada com sucesso!",
           type: "success",
         });
         await loadPRs();
+        refreshGitStatus?.();
+        refreshPendingChanges?.();
       } else {
         setActionFeedback({
           id,
@@ -166,7 +173,7 @@ export const PRsSubView: React.FC<PRsSubViewProps> = ({ onOpenDiffModal }) => {
 
   const handleReject = async (id: number | string) => {
     const reason = window.prompt(
-      "Informe o motivo da rejeição da proposta (opcional):",
+      "Informe o motivo da rejeição (opcional):",
     );
     if (reason === null) return;
 
@@ -177,10 +184,12 @@ export const PRsSubView: React.FC<PRsSubViewProps> = ({ onOpenDiffModal }) => {
       if (res.ok) {
         setActionFeedback({
           id,
-          message: "Proposta rejeitada e arquivada.",
+          message: "Proposta arquivada e rejeitada.",
           type: "success",
         });
         await loadPRs();
+        refreshGitStatus?.();
+        refreshPendingChanges?.();
       } else {
         setActionFeedback({
           id,
@@ -192,6 +201,49 @@ export const PRsSubView: React.FC<PRsSubViewProps> = ({ onOpenDiffModal }) => {
       setActionFeedback({
         id,
         message: err.message || "Erro ao rejeitar proposta.",
+        type: "error",
+      });
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleRollback = async () => {
+    if (!rollbackTarget) return;
+    const target = rollbackTarget;
+    setActionLoading({ id: target.id, action: "rollback" });
+    setActionFeedback(null);
+
+    try {
+      const res = await API.rollbackVersion({
+        id: target.id,
+        commit_hash: target.commit_hash,
+        repo: repoName,
+      });
+
+      if (res.ok) {
+        setActionFeedback({
+          id: target.id,
+          message:
+            res.data?.message ||
+            `Versão #${target.short_id || target.id} restaurada como a versão atual! O histórico foi preservado.`,
+          type: "success",
+        });
+        setRollbackTarget(null);
+        await loadPRs();
+        refreshGitStatus?.();
+        refreshPendingChanges?.();
+      } else {
+        setActionFeedback({
+          id: target.id,
+          message: res.data?.error || "Erro ao restaurar versão.",
+          type: "error",
+        });
+      }
+    } catch (err: any) {
+      setActionFeedback({
+        id: target.id,
+        message: err.message || "Erro ao restaurar versão.",
         type: "error",
       });
     } finally {
@@ -225,8 +277,6 @@ export const PRsSubView: React.FC<PRsSubViewProps> = ({ onOpenDiffModal }) => {
         pr.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         (pr.author &&
           pr.author.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        (pr.branch &&
-          pr.branch.toLowerCase().includes(searchQuery.toLowerCase())) ||
         (pr.description &&
           pr.description.toLowerCase().includes(searchQuery.toLowerCase())) ||
         String(pr.id).includes(searchQuery);
@@ -246,28 +296,37 @@ export const PRsSubView: React.FC<PRsSubViewProps> = ({ onOpenDiffModal }) => {
         overflowY: "auto",
       }}
     >
-      <div className="prs-view-wrapper">
-        <div className="template-store-header">
-          <div className="templates-header" style={{ marginBottom: 0 }}>
+      <div className="prs-view-wrapper" style={{ maxWidth: "1100px", margin: "0 auto", padding: "20px" }}>
+        {/* Header */}
+        <div className="template-store-header" style={{ marginBottom: "20px" }}>
+          <div
+            className="templates-header"
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              flexWrap: "wrap",
+              gap: "12px",
+              marginBottom: 0,
+            }}
+          >
             <div>
-              <div
-                style={{ display: "flex", alignItems: "center", gap: "8px" }}
-              >
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                 <span
                   className="material-symbols-outlined"
-                  style={{ fontSize: "26px", color: "var(--primary, #3b82f6)" }}
+                  style={{ fontSize: "28px", color: "var(--primary, #3b82f6)" }}
                 >
-                  rate_review
+                  history_edu
                 </span>
-                <h2 style={{ margin: 0 }}>
-                  Central de Revisão & Propostas de Evolução (PRs)
+                <h2 style={{ margin: 0, fontSize: "22px", fontWeight: 700, color: "var(--text-heading)" }}>
+                  Revisões & Versões
                 </h2>
               </div>
               <div
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  gap: "8px",
+                  gap: "10px",
                   marginTop: "6px",
                   flexWrap: "wrap",
                 }}
@@ -290,31 +349,12 @@ export const PRsSubView: React.FC<PRsSubViewProps> = ({ onOpenDiffModal }) => {
                   </span>
                   Repositório: <strong>{repoName}</strong>
                 </span>
-                {activeRepo?.full_name && !activeRepo?.is_local && (
-                  <span
-                    className="badge badge-neutral"
-                    style={{
-                      fontSize: "11px",
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "4px",
-                    }}
-                  >
-                    <span
-                      className="material-symbols-outlined"
-                      style={{ fontSize: "13px" }}
-                    >
-                      cloud_sync
-                    </span>
-                    GitHub: {activeRepo.full_name}
-                  </span>
-                )}
-                <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>
-                  Todas as revisões e commits na <code>main</code> de{" "}
-                  <strong>{repoName}</strong>.
+                <span style={{ fontSize: "13px", color: "var(--text-muted)" }}>
+                  Acompanhe aprovações, revisões ativas e histórico com capacidade de restauração segura.
                 </span>
               </div>
             </div>
+
             <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
               <button
                 id="btn-refresh-prs"
@@ -322,19 +362,12 @@ export const PRsSubView: React.FC<PRsSubViewProps> = ({ onOpenDiffModal }) => {
                 title={`Recarregar revisões de ${repoName}`}
                 type="button"
                 onClick={() => loadPRs()}
+                style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
               >
                 <span className="material-symbols-outlined icon-xs">
                   refresh
                 </span>
                 Atualizar
-              </button>
-              <button
-                className="btn btn-primary btn-sm"
-                type="button"
-                onClick={onOpenDiffModal}
-              >
-                <span className="material-symbols-outlined icon-xs">add</span>
-                Nova Proposta de Evolução
               </button>
             </div>
           </div>
@@ -346,98 +379,100 @@ export const PRsSubView: React.FC<PRsSubViewProps> = ({ onOpenDiffModal }) => {
               alignItems: "center",
               justifyContent: "space-between",
               flexWrap: "wrap",
-              gap: "10px",
+              gap: "12px",
               marginTop: "16px",
             }}
           >
-            <div className="store-filter-bar" id="prs-status-filters">
+            <div className="store-filter-bar" id="prs-status-filters" style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
               <button
                 className={`store-filter-chip ${activeStatus === "all" ? "active" : ""}`}
-                data-status="all"
                 type="button"
                 onClick={() => setActiveStatus("all")}
               >
-                Todas (<span id="count-prs-all">{countAll}</span>)
+                Todas ({countAll})
               </button>
               <button
                 className={`store-filter-chip ${activeStatus === "open" ? "active" : ""}`}
-                data-status="open"
                 type="button"
                 onClick={() => setActiveStatus("open")}
               >
-                Em Revisão (<span id="count-prs-open">{countOpen}</span>)
+                Em Aberto / Revisão ({countOpen})
               </button>
               <button
                 className={`store-filter-chip ${activeStatus === "merged" ? "active" : ""}`}
-                data-status="merged"
                 type="button"
                 onClick={() => setActiveStatus("merged")}
               >
-                Publicadas / Commits na Main (
-                <span id="count-prs-merged">{countMerged}</span>)
+                Publicadas ({countMerged})
               </button>
               <button
                 className={`store-filter-chip ${activeStatus === "closed" ? "active" : ""}`}
-                data-status="closed"
                 type="button"
                 onClick={() => setActiveStatus("closed")}
               >
-                Arquivadas / Rejeitadas (
-                <span id="count-prs-closed">{countClosed}</span>)
+                Arquivadas ({countClosed})
               </button>
             </div>
 
-            <div className="store-search-box">
+            <div className="store-search-box" style={{ minWidth: "260px" }}>
               <input
                 type="text"
                 id="prs-search-input"
-                placeholder={`Buscar propostas ou revisões em ${repoName}...`}
+                placeholder="Buscar revisões ou autores..."
                 spellCheck="false"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "6px 12px",
+                  borderRadius: "6px",
+                  border: "1px solid var(--border-color)",
+                  background: "var(--bg-surface)",
+                  color: "var(--text-main)",
+                  fontSize: "13px",
+                }}
               />
             </div>
           </div>
         </div>
 
-        {/* PRs List Grid */}
+        {/* Revisions List */}
         <div
           id="prs-full-list"
           className="prs-full-grid"
           style={{
-            marginTop: "16px",
             display: "flex",
             flexDirection: "column",
-            gap: "12px",
+            gap: "14px",
           }}
         >
           {isLoading ? (
             <div
               className="loading-state"
-              style={{ padding: "32px", textAlign: "center" }}
+              style={{ padding: "40px", textAlign: "center" }}
             >
               <span
                 className="material-symbols-outlined"
                 style={{
                   animation: "spin 1s linear infinite",
-                  fontSize: "28px",
+                  fontSize: "30px",
                   color: "var(--primary)",
                 }}
               >
                 progress_activity
               </span>
-              <div style={{ marginTop: "8px" }}>
-                Carregando propostas de {repoName}...
+              <div style={{ marginTop: "10px", fontSize: "14px", color: "var(--text-muted)" }}>
+                Carregando histórico de revisões de {repoName}...
               </div>
             </div>
           ) : filteredPRs.length === 0 ? (
             <div
               style={{
                 textAlign: "center",
-                padding: "40px 24px",
+                padding: "48px 24px",
                 color: "var(--text-muted)",
                 border: "1px dashed var(--border-color)",
-                borderRadius: "8px",
+                borderRadius: "10px",
                 background: "var(--bg-surface)",
               }}
             >
@@ -445,8 +480,8 @@ export const PRsSubView: React.FC<PRsSubViewProps> = ({ onOpenDiffModal }) => {
                 className="material-symbols-outlined icon-lg"
                 style={{
                   color: "var(--text-dim)",
-                  marginBottom: "8px",
-                  fontSize: "36px",
+                  marginBottom: "10px",
+                  fontSize: "40px",
                 }}
               >
                 inbox
@@ -454,33 +489,23 @@ export const PRsSubView: React.FC<PRsSubViewProps> = ({ onOpenDiffModal }) => {
               <div
                 style={{
                   fontWeight: 600,
-                  fontSize: "15px",
+                  fontSize: "16px",
                   color: "var(--text-heading)",
                 }}
               >
-                Nenhuma Proposta ou Revisão em "{repoName}"
+                Nenhuma Revisão Encontrada em "{repoName}"
               </div>
               <p
                 style={{
                   fontSize: "13px",
-                  margin: "6px 0 16px 0",
-                  maxWidth: "500px",
-                  marginLeft: "auto",
-                  marginRight: "auto",
+                  margin: "8px auto 0 auto",
+                  maxWidth: "460px",
+                  lineHeight: "1.5",
+                  color: "var(--text-muted)",
                 }}
               >
-                Faça alterações nos documentos de <strong>{repoName}</strong> e
-                clique em "Nova Proposta de Evolução" para abrir uma revisão com
-                diff visual.
+                As revisões e propostas são geradas automaticamente conforme os documentos e especificações são editados e versionados.
               </p>
-              <button
-                type="button"
-                className="btn btn-primary btn-sm"
-                onClick={onOpenDiffModal}
-              >
-                <span className="material-symbols-outlined icon-xs">add</span>
-                Criar Nova Proposta em {repoName}
-              </button>
             </div>
           ) : (
             filteredPRs.map((pr) => {
@@ -493,12 +518,14 @@ export const PRsSubView: React.FC<PRsSubViewProps> = ({ onOpenDiffModal }) => {
               const prFiles = Array.isArray(pr.files) ? pr.files : [];
               const isDirectCommit = !!pr.is_direct_commit;
 
-              const statusText =
+              const statusBadgeText =
                 isDirectCommit || isMerged
-                  ? "PUBLICADA"
+                  ? "VERSÃO PUBLICADA"
                   : isClosed
                     ? "ARQUIVADA"
                     : "EM REVISÃO";
+
+              const revisionId = pr.short_id || (pr.commit_hash ? pr.commit_hash.slice(0, 7) : pr.id);
 
               return (
                 <div
@@ -506,13 +533,13 @@ export const PRsSubView: React.FC<PRsSubViewProps> = ({ onOpenDiffModal }) => {
                   className="pr-card"
                   style={{
                     border: "1px solid var(--border-color)",
-                    borderRadius: "8px",
-                    padding: "16px",
+                    borderRadius: "10px",
+                    padding: "18px",
                     background: "var(--bg-surface)",
                     display: "flex",
                     flexDirection: "column",
-                    gap: "12px",
-                    boxShadow: "var(--shadow-sm, 0 1px 3px rgba(0,0,0,0.05))",
+                    gap: "14px",
+                    boxShadow: "0 1px 3px rgba(0, 0, 0, 0.04)",
                   }}
                 >
                   {/* Top Bar */}
@@ -521,37 +548,33 @@ export const PRsSubView: React.FC<PRsSubViewProps> = ({ onOpenDiffModal }) => {
                       display: "flex",
                       alignItems: "flex-start",
                       justifyContent: "space-between",
-                      gap: "10px",
+                      gap: "12px",
                     }}
                   >
                     <div
                       style={{
                         display: "flex",
                         alignItems: "flex-start",
-                        gap: "10px",
+                        gap: "12px",
                       }}
                     >
                       <span
                         className="material-symbols-outlined"
                         style={{
-                          color: isDirectCommit
+                          color: isDirectCommit || isMerged
                             ? "var(--primary, #3b82f6)"
-                            : isMerged
-                              ? "var(--primary, #3b82f6)"
-                              : isClosed
-                                ? "var(--danger, #ef4444)"
-                                : "var(--success, #16a34a)",
-                          fontSize: "24px",
+                            : isClosed
+                              ? "var(--danger, #ef4444)"
+                              : "var(--success, #16a34a)",
+                          fontSize: "26px",
                           marginTop: "2px",
                         }}
                       >
-                        {isDirectCommit
-                          ? "commit"
-                          : isMerged
-                            ? "check_circle"
-                            : isClosed
-                              ? "cancel"
-                              : "rate_review"}
+                        {isDirectCommit || isMerged
+                          ? "check_circle"
+                          : isClosed
+                            ? "cancel"
+                            : "rate_review"}
                       </span>
                       <div>
                         <div
@@ -564,35 +587,13 @@ export const PRsSubView: React.FC<PRsSubViewProps> = ({ onOpenDiffModal }) => {
                         >
                           <strong
                             style={{
-                              fontSize: "15.5px",
+                              fontSize: "16px",
                               color: "var(--text-heading)",
+                              fontWeight: 600,
                             }}
                           >
-                            {isDirectCommit
-                              ? `Commit #${pr.short_id || pr.id}: `
-                              : `#${pr.id} `}
-                            {pr.title}
+                            Revisão #{revisionId}: {pr.title}
                           </strong>
-                          {isDirectCommit && (
-                            <span
-                              className="badge badge-success"
-                              style={{
-                                fontSize: "11px",
-                                display: "inline-flex",
-                                alignItems: "center",
-                                gap: "3px",
-                              }}
-                              title="Revisão comitada na branch principal (main)"
-                            >
-                              <span
-                                className="material-symbols-outlined"
-                                style={{ fontSize: "12px" }}
-                              >
-                                history_edu
-                              </span>
-                              Revisão Oficial (main)
-                            </span>
-                          )}
                           {pr.github_number && (
                             <span
                               className="badge"
@@ -604,7 +605,7 @@ export const PRsSubView: React.FC<PRsSubViewProps> = ({ onOpenDiffModal }) => {
                                 background: "#24292f",
                                 color: "#fff",
                               }}
-                              title="Sincronizado com o GitHub"
+                              title="Sincronizado remotamente"
                             >
                               GitHub #{pr.github_number}
                             </span>
@@ -612,14 +613,12 @@ export const PRsSubView: React.FC<PRsSubViewProps> = ({ onOpenDiffModal }) => {
                         </div>
                         <div
                           style={{
-                            fontSize: "12px",
+                            fontSize: "12.5px",
                             color: "var(--text-muted)",
-                            marginTop: "3px",
+                            marginTop: "4px",
                           }}
                         >
-                          {isDirectCommit ? "Comitado por " : "Proposto por "}
-                          <strong>{pr.author}</strong> em {pr.created_at} &bull;
-                          Trilha/Branch: <code>{pr.branch}</code>
+                          Autor: <strong>{pr.author}</strong> &bull; Data: {pr.created_at}
                         </div>
                       </div>
                     </div>
@@ -629,53 +628,99 @@ export const PRsSubView: React.FC<PRsSubViewProps> = ({ onOpenDiffModal }) => {
                         display: "flex",
                         alignItems: "center",
                         gap: "8px",
+                        flexShrink: 0,
                       }}
                     >
                       <span
                         className={`pill-dot ${isMerged || isDirectCommit ? "info" : isClosed ? "danger" : "success"}`}
+                        style={{
+                          fontSize: "11.5px",
+                          fontWeight: 600,
+                          padding: "4px 10px",
+                          borderRadius: "12px",
+                        }}
                       >
-                        <span className="dot"></span> {statusText}
+                        <span className="dot"></span> {statusBadgeText}
                       </span>
                     </div>
                   </div>
 
                   {/* PR Description */}
                   {pr.description && (
-                    <p
+                    <div
                       style={{
                         margin: 0,
                         fontSize: "13px",
                         color: "var(--text-normal)",
                         lineHeight: "1.5",
                         background: "var(--bg-surface-secondary, #f8fafc)",
-                        padding: "10px 12px",
-                        borderRadius: "6px",
+                        padding: "10px 14px",
+                        borderRadius: "8px",
+                        border: "1px solid var(--border-light, #e2e8f0)",
                       }}
                     >
                       {pr.description}
-                    </p>
+                    </div>
                   )}
 
-                  {/* Approvals & Reviewers */}
+                  {/* Approvals Section (Quem Aprovou) */}
                   <div
                     style={{
                       display: "flex",
                       alignItems: "center",
                       gap: "8px",
                       flexWrap: "wrap",
-                      fontSize: "12px",
+                      fontSize: "12.5px",
+                      background: "var(--bg-surface-tertiary, #f1f5f9)",
+                      padding: "8px 12px",
+                      borderRadius: "6px",
                     }}
                   >
                     <span
-                      style={{ color: "var(--text-muted)", fontWeight: 600 }}
+                      style={{
+                        color: "var(--text-heading)",
+                        fontWeight: 600,
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "4px",
+                      }}
                     >
-                      Governança & Status:
-                    </span>
-                    {isDirectCommit ? (
                       <span
-                        className="badge badge-neutral"
+                        className="material-symbols-outlined"
+                        style={{ fontSize: "16px", color: "var(--primary)" }}
+                      >
+                        verified_user
+                      </span>
+                      Aprovações:
+                    </span>
+
+                    {approvals.length > 0 ? (
+                      approvals.map((app, idx) => (
+                        <span
+                          key={idx}
+                          className="badge badge-success"
+                          style={{
+                            fontSize: "11.5px",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "4px",
+                            padding: "3px 8px",
+                          }}
+                        >
+                          <span
+                            className="material-symbols-outlined"
+                            style={{ fontSize: "13px" }}
+                          >
+                            check_circle
+                          </span>
+                          Aprovado por: <strong>{app}</strong>
+                        </span>
+                      ))
+                    ) : isMerged || isDirectCommit ? (
+                      <span
+                        className="badge badge-success"
                         style={{
-                          fontSize: "11px",
+                          fontSize: "11.5px",
                           display: "inline-flex",
                           alignItems: "center",
                           gap: "4px",
@@ -683,40 +728,30 @@ export const PRsSubView: React.FC<PRsSubViewProps> = ({ onOpenDiffModal }) => {
                       >
                         <span
                           className="material-symbols-outlined"
-                          style={{ fontSize: "12px" }}
+                          style={{ fontSize: "13px" }}
                         >
                           verified
                         </span>
-                        Integrado diretamente na main
-                      </span>
-                    ) : approvals.length === 0 ? (
-                      <span
-                        className="badge badge-neutral"
-                        style={{ fontSize: "11px" }}
-                      >
-                        Aguardando revisores
+                        Aprovado e publicado na versão oficial
                       </span>
                     ) : (
-                      approvals.map((app, idx) => (
+                      <span
+                        className="badge badge-neutral"
+                        style={{
+                          fontSize: "11.5px",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "4px",
+                        }}
+                      >
                         <span
-                          key={idx}
-                          className="badge badge-success"
-                          style={{
-                            fontSize: "11px",
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "4px",
-                          }}
+                          className="material-symbols-outlined"
+                          style={{ fontSize: "13px" }}
                         >
-                          <span
-                            className="material-symbols-outlined"
-                            style={{ fontSize: "12px" }}
-                          >
-                            check
-                          </span>
-                          {app}
+                          hourglass_top
                         </span>
-                      ))
+                        Aguardando aprovação de revisor
+                      </span>
                     )}
                   </div>
 
@@ -724,9 +759,9 @@ export const PRsSubView: React.FC<PRsSubViewProps> = ({ onOpenDiffModal }) => {
                   {actionFeedback && actionFeedback.id === pr.id && (
                     <div
                       style={{
-                        padding: "8px 12px",
+                        padding: "10px 14px",
                         borderRadius: "6px",
-                        fontSize: "12.5px",
+                        fontSize: "13px",
                         background:
                           actionFeedback.type === "success"
                             ? "#f0fdf4"
@@ -742,7 +777,7 @@ export const PRsSubView: React.FC<PRsSubViewProps> = ({ onOpenDiffModal }) => {
                     </div>
                   )}
 
-                  {/* Files & Diffs Toggle */}
+                  {/* Files & Diffs Accordion */}
                   {prFiles.length > 0 && (
                     <div
                       style={{
@@ -757,8 +792,11 @@ export const PRsSubView: React.FC<PRsSubViewProps> = ({ onOpenDiffModal }) => {
                         style={{
                           display: "inline-flex",
                           alignItems: "center",
-                          gap: "4px",
-                          fontSize: "12px",
+                          gap: "6px",
+                          fontSize: "12.5px",
+                          fontWeight: 600,
+                          color: "var(--text-main)",
+                          padding: "4px 8px",
                         }}
                       >
                         <span className="material-symbols-outlined icon-xs">
@@ -766,16 +804,16 @@ export const PRsSubView: React.FC<PRsSubViewProps> = ({ onOpenDiffModal }) => {
                         </span>
                         {isExpanded
                           ? "Ocultar alterações dos documentos"
-                          : `Ver ${prFiles.length} documento(s) alterados`}
+                          : `Visualizar ${prFiles.length} documento(s) alterados`}
                       </button>
 
                       {isExpanded && (
                         <div
                           style={{
-                            marginTop: "8px",
+                            marginTop: "10px",
                             display: "flex",
                             flexDirection: "column",
-                            gap: "8px",
+                            gap: "10px",
                           }}
                         >
                           {prFiles.map((f: any, fIdx: number) => {
@@ -790,7 +828,7 @@ export const PRsSubView: React.FC<PRsSubViewProps> = ({ onOpenDiffModal }) => {
                                 key={fIdx}
                                 style={{
                                   border: "1px solid var(--border-color)",
-                                  borderRadius: "6px",
+                                  borderRadius: "8px",
                                   overflow: "hidden",
                                   fontSize: "12px",
                                   background: "var(--bg-surface)",
@@ -862,7 +900,7 @@ export const PRsSubView: React.FC<PRsSubViewProps> = ({ onOpenDiffModal }) => {
                                         }))
                                       }
                                       style={{
-                                        padding: "2px 6px",
+                                        padding: "2px 8px",
                                         border: "none",
                                         borderRadius: "3px",
                                         fontSize: "11px",
@@ -876,7 +914,7 @@ export const PRsSubView: React.FC<PRsSubViewProps> = ({ onOpenDiffModal }) => {
                                           : "#64748b",
                                       }}
                                     >
-                                      Visual (Doc)
+                                      Visualização Formatada
                                     </button>
                                     <button
                                       type="button"
@@ -887,7 +925,7 @@ export const PRsSubView: React.FC<PRsSubViewProps> = ({ onOpenDiffModal }) => {
                                         }))
                                       }
                                       style={{
-                                        padding: "2px 6px",
+                                        padding: "2px 8px",
                                         border: "none",
                                         borderRadius: "3px",
                                         fontSize: "11px",
@@ -901,7 +939,7 @@ export const PRsSubView: React.FC<PRsSubViewProps> = ({ onOpenDiffModal }) => {
                                           : "#64748b",
                                       }}
                                     >
-                                      Patch Técnico
+                                      Código (Diff)
                                     </button>
                                   </div>
                                 </div>
@@ -909,18 +947,18 @@ export const PRsSubView: React.FC<PRsSubViewProps> = ({ onOpenDiffModal }) => {
                                 {isLoadingDiff ? (
                                   <div
                                     style={{
-                                      padding: "12px",
+                                      padding: "14px",
                                       textAlign: "center",
                                       color: "var(--text-muted)",
                                     }}
                                   >
-                                    Carregando diff do commit...
+                                    Carregando diferenças da versão...
                                   </div>
                                 ) : isVisual &&
                                   (f.old_content || f.new_content) ? (
                                   <div
                                     style={{
-                                      maxHeight: "350px",
+                                      maxHeight: "380px",
                                       overflowY: "auto",
                                     }}
                                   >
@@ -935,7 +973,7 @@ export const PRsSubView: React.FC<PRsSubViewProps> = ({ onOpenDiffModal }) => {
                                     <pre
                                       style={{
                                         margin: 0,
-                                        padding: "8px 10px",
+                                        padding: "10px 12px",
                                         fontSize: "11.5px",
                                         background: "#0d1117",
                                         color: "#f8fafc",
@@ -962,9 +1000,9 @@ export const PRsSubView: React.FC<PRsSubViewProps> = ({ onOpenDiffModal }) => {
                       alignItems: "center",
                       justifyContent: "space-between",
                       borderTop: "1px solid var(--border-color)",
-                      paddingTop: "10px",
+                      paddingTop: "12px",
                       flexWrap: "wrap",
-                      gap: "8px",
+                      gap: "10px",
                     }}
                   >
                     <div>
@@ -982,9 +1020,7 @@ export const PRsSubView: React.FC<PRsSubViewProps> = ({ onOpenDiffModal }) => {
                             gap: "4px",
                           }}
                         >
-                          {isDirectCommit
-                            ? "Ver Commit no GitHub"
-                            : "Ver PR no GitHub"}{" "}
+                          Ver no GitHub
                           <span
                             className="material-symbols-outlined"
                             style={{ fontSize: "13px" }}
@@ -996,119 +1032,136 @@ export const PRsSubView: React.FC<PRsSubViewProps> = ({ onOpenDiffModal }) => {
                         <span
                           style={{ fontSize: "12px", color: "var(--text-dim)" }}
                         >
-                          {isDirectCommit
-                            ? "Revisão Oficial no Git"
-                            : "Governança Local"}
+                          Versão Canônica Registrada
                         </span>
                       )}
                     </div>
 
-                    {isOpen && (
-                      <div
-                        style={{
-                          display: "flex",
-                          gap: "8px",
-                          alignItems: "center",
-                        }}
-                      >
+                    <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                      {/* Rollback button on Merged/Published versions */}
+                      {(isMerged || isDirectCommit) && (
                         <button
                           className="btn btn-secondary btn-xs"
                           type="button"
-                          onClick={() => handleReject(pr.id)}
+                          onClick={() => setRollbackTarget(pr)}
                           disabled={actionLoading?.id === pr.id}
                           style={{
-                            color: "var(--danger, #ef4444)",
                             display: "inline-flex",
                             alignItems: "center",
-                            gap: "4px",
+                            gap: "5px",
+                            color: "var(--text-main)",
                           }}
-                          title="Rejeitar e arquivar esta proposta de evolução"
+                          title="Restaurar o estado desta revisão como a versão ativa atual (Rollback seguro)"
                         >
-                          <span
-                            className="material-symbols-outlined icon-xs"
-                            style={
-                              actionLoading?.id === pr.id &&
-                              actionLoading.action === "reject"
-                                ? { animation: "spin 1s linear infinite" }
-                                : {}
-                            }
+                          <span className="material-symbols-outlined icon-xs">
+                            history
+                          </span>
+                          Restaurar esta Versão (Rollback)
+                        </button>
+                      )}
+
+                      {/* Open PR actions: Reject, Approve, Merge */}
+                      {isOpen && (
+                        <>
+                          <button
+                            className="btn btn-secondary btn-xs"
+                            type="button"
+                            onClick={() => handleReject(pr.id)}
+                            disabled={actionLoading?.id === pr.id}
+                            style={{
+                              color: "var(--danger, #ef4444)",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "4px",
+                            }}
+                            title="Rejeitar e arquivar esta proposta"
                           >
+                            <span
+                              className="material-symbols-outlined icon-xs"
+                              style={
+                                actionLoading?.id === pr.id &&
+                                actionLoading.action === "reject"
+                                  ? { animation: "spin 1s linear infinite" }
+                                  : {}
+                              }
+                            >
+                              {actionLoading?.id === pr.id &&
+                              actionLoading.action === "reject"
+                                ? "progress_activity"
+                                : "close"}
+                            </span>
                             {actionLoading?.id === pr.id &&
                             actionLoading.action === "reject"
-                              ? "progress_activity"
-                              : "close"}
-                          </span>
-                          {actionLoading?.id === pr.id &&
-                          actionLoading.action === "reject"
-                            ? "Rejeitando..."
-                            : "Rejeitar"}
-                        </button>
+                              ? "Rejeitando..."
+                              : "Rejeitar"}
+                          </button>
 
-                        <button
-                          className="btn btn-secondary btn-xs"
-                          type="button"
-                          onClick={() => handleApprove(pr.id)}
-                          disabled={actionLoading?.id === pr.id}
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "4px",
-                          }}
-                          title="Aprovar proposta como revisor"
-                        >
-                          <span
-                            className="material-symbols-outlined icon-xs"
-                            style={
-                              actionLoading?.id === pr.id &&
-                              actionLoading.action === "approve"
-                                ? { animation: "spin 1s linear infinite" }
-                                : {}
-                            }
+                          <button
+                            className="btn btn-secondary btn-xs"
+                            type="button"
+                            onClick={() => handleApprove(pr.id)}
+                            disabled={actionLoading?.id === pr.id}
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "4px",
+                            }}
+                            title="Registrar aprovação nesta revisão"
                           >
+                            <span
+                              className="material-symbols-outlined icon-xs"
+                              style={
+                                actionLoading?.id === pr.id &&
+                                actionLoading.action === "approve"
+                                  ? { animation: "spin 1s linear infinite" }
+                                  : {}
+                              }
+                            >
+                              {actionLoading?.id === pr.id &&
+                              actionLoading.action === "approve"
+                                ? "progress_activity"
+                                : "thumb_up"}
+                            </span>
                             {actionLoading?.id === pr.id &&
                             actionLoading.action === "approve"
-                              ? "progress_activity"
-                              : "thumb_up"}
-                          </span>
-                          {actionLoading?.id === pr.id &&
-                          actionLoading.action === "approve"
-                            ? "Aprovando..."
-                            : `Aprovar Proposta ${approvals.length > 0 ? `(${approvals.length})` : ""}`}
-                        </button>
+                              ? "Aprovando..."
+                              : `Aprovar Revisão ${approvals.length > 0 ? `(${approvals.length})` : ""}`}
+                          </button>
 
-                        <button
-                          className="btn btn-primary btn-xs"
-                          type="button"
-                          onClick={() => handleMerge(pr.id)}
-                          disabled={actionLoading?.id === pr.id}
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "6px",
-                          }}
-                          title="Publicar alterações na versão oficial da documentação"
-                        >
-                          <span
-                            className="material-symbols-outlined icon-xs"
-                            style={
-                              actionLoading?.id === pr.id &&
-                              actionLoading.action === "merge"
-                                ? { animation: "spin 1s linear infinite" }
-                                : {}
-                            }
+                          <button
+                            className="btn btn-primary btn-xs"
+                            type="button"
+                            onClick={() => handleMerge(pr.id)}
+                            disabled={actionLoading?.id === pr.id}
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "6px",
+                            }}
+                            title="Publicar alterações e integrar na versão ativa"
                           >
+                            <span
+                              className="material-symbols-outlined icon-xs"
+                              style={
+                                actionLoading?.id === pr.id &&
+                                actionLoading.action === "merge"
+                                  ? { animation: "spin 1s linear infinite" }
+                                  : {}
+                              }
+                            >
+                              {actionLoading?.id === pr.id &&
+                              actionLoading.action === "merge"
+                                ? "progress_activity"
+                                : "publish"}
+                            </span>
                             {actionLoading?.id === pr.id &&
                             actionLoading.action === "merge"
-                              ? "progress_activity"
-                              : "publish"}
-                          </span>
-                          {actionLoading?.id === pr.id &&
-                          actionLoading.action === "merge"
-                            ? "Publicando versão oficial..."
-                            : "Publicar na Versão Oficial"}
-                        </button>
-                      </div>
-                    )}
+                              ? "Publicando..."
+                              : "Publicar Versão Oficial"}
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
               );
@@ -1116,6 +1169,152 @@ export const PRsSubView: React.FC<PRsSubViewProps> = ({ onOpenDiffModal }) => {
           )}
         </div>
       </div>
+
+      {/* Rollback Confirmation Modal */}
+      {rollbackTarget && (
+        <div
+          className="modal-overlay"
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.5)",
+            backdropFilter: "blur(2px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 9999,
+          }}
+          onClick={() => !actionLoading && setRollbackTarget(null)}
+        >
+          <div
+            className="modal-container"
+            style={{
+              background: "var(--bg-surface, #ffffff)",
+              borderRadius: "12px",
+              padding: "24px",
+              width: "100%",
+              maxWidth: "520px",
+              boxShadow: "0 10px 25px rgba(0,0,0,0.2)",
+              border: "1px solid var(--border-color)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "10px",
+                marginBottom: "16px",
+              }}
+            >
+              <span
+                className="material-symbols-outlined"
+                style={{
+                  fontSize: "28px",
+                  color: "var(--primary, #3b82f6)",
+                }}
+              >
+                history
+              </span>
+              <h3
+                style={{
+                  margin: 0,
+                  fontSize: "18px",
+                  color: "var(--text-heading)",
+                  fontWeight: 700,
+                }}
+              >
+                Restaurar Versão (Rollback Seguro)
+              </h3>
+            </div>
+
+            <p
+              style={{
+                fontSize: "14px",
+                color: "var(--text-normal)",
+                lineHeight: "1.6",
+                margin: "0 0 16px 0",
+              }}
+            >
+              Você está prestes a restaurar o projeto para o estado da revisão:
+              <br />
+              <strong style={{ color: "var(--text-heading)", display: "block", marginTop: "6px" }}>
+                #{rollbackTarget.short_id || rollbackTarget.id} &bull; {rollbackTarget.title}
+              </strong>
+            </p>
+
+            <div
+              style={{
+                background: "var(--bg-surface-secondary, #f8fafc)",
+                border: "1px solid var(--border-color)",
+                borderRadius: "8px",
+                padding: "12px 14px",
+                fontSize: "13px",
+                color: "var(--text-muted)",
+                lineHeight: "1.5",
+                marginBottom: "20px",
+              }}
+            >
+              <strong style={{ color: "var(--text-heading)" }}>
+                💡 Como funciona a restauração segura:
+              </strong>
+              <div style={{ marginTop: "4px" }}>
+                O estado desta versão será promovido como a nova versão ativa. <strong>Todo o histórico de revisões anteriores é preservado integralmente</strong>, permitindo avançar ou recuar no tempo com total segurança.
+              </div>
+            </div>
+
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: "10px",
+              }}
+            >
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setRollbackTarget(null)}
+                disabled={actionLoading?.action === "rollback"}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handleRollback}
+                disabled={actionLoading?.action === "rollback"}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                }}
+              >
+                {actionLoading?.action === "rollback" ? (
+                  <>
+                    <span
+                      className="material-symbols-outlined icon-xs"
+                      style={{ animation: "spin 1s linear infinite" }}
+                    >
+                      progress_activity
+                    </span>
+                    Restaurando Versão...
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined icon-xs">
+                      restore
+                    </span>
+                    Confirmar Restauração
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

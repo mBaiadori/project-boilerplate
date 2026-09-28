@@ -11,6 +11,7 @@ import {
   getGitLog,
   getGitStatus,
   getGitDiff,
+  rollbackToCommit,
 } from '../../utils/git.js';
 import { computeDiff } from '../../utils/diff.js';
 import { isPathHidden, loadHiddenFiles } from '../../utils/hidden-files.js';
@@ -621,6 +622,53 @@ Retorne APENAS um JSON válido no formato:
       success: true,
       pr: target,
       message: `PR #${prId} foi rejeitado e fechado.`,
+    };
+  }
+
+  async rollbackRevision(payload: { id?: string | number; commit_hash?: string; repo?: string }) {
+    const cfg = loadConfig();
+    const activeRepo = cfg.active_repo;
+    const repoName = payload.repo || activeRepo?.name || 'local';
+    const repoDir = this.getRepoDir(repoName);
+
+    let targetHash = payload.commit_hash;
+    let targetTitle = '';
+
+    if (!targetHash && payload.id) {
+      // Check PR list
+      const pr = (cfg.prs || []).find((p: any) => String(p.id) === String(payload.id));
+      if (pr) {
+        targetHash = pr.commit_hash || String(pr.id);
+        targetTitle = pr.title || '';
+      } else {
+        targetHash = String(payload.id);
+      }
+    }
+
+    if (!targetHash) {
+      throw new Error('Identificador da versão ou código da revisão não informado.');
+    }
+
+    const result = await rollbackToCommit(repoDir, targetHash, targetTitle);
+    if (!result.success) {
+      throw new Error(result.message);
+    }
+
+    // If GitHub remote repo is active and authenticated, push to remote main
+    if (cfg.authenticated && cfg.token && activeRepo?.full_name && !activeRepo?.is_local && activeRepo?.name === repoName) {
+      try {
+        await executeGitCommand(`git push origin main`, repoDir);
+      } catch (pushErr) {
+        console.warn('[PRsService] Aviso ao sincronizar rollback com o GitHub remoto:', pushErr);
+      }
+    }
+
+    clearWorkspaceChanges(repoName);
+
+    return {
+      success: true,
+      message: result.message,
+      new_commit_hash: result.newCommitHash,
     };
   }
 

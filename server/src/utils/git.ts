@@ -570,6 +570,98 @@ export async function syncGit(
   };
 }
 
+export async function rollbackToCommit(
+  repoDir: string,
+  targetCommitHash: string,
+  commitTitle?: string,
+): Promise<{ success: boolean; message: string; newCommitHash?: string }> {
+  const isRepo = await isGitRepo(repoDir);
+  if (!isRepo) {
+    return { success: false, message: "Diretório não é um repositório Git." };
+  }
+
+  // 1. Verify target commit
+  const checkRes = await executeGitCommand(
+    `git cat-file -t ${targetCommitHash}`,
+    repoDir,
+  );
+  if (!checkRes.success || checkRes.stdout !== "commit") {
+    return {
+      success: false,
+      message: `Revisão ${targetCommitHash} inválida ou não encontrada.`,
+    };
+  }
+
+  // 2. Checkout main
+  await executeGitCommand("git checkout main", repoDir);
+
+  // 3. Check if target commit is already HEAD
+  const headRes = await executeGitCommand("git rev-parse HEAD", repoDir);
+  const targetFullRes = await executeGitCommand(
+    `git rev-parse ${targetCommitHash}`,
+    repoDir,
+  );
+  if (
+    headRes.success &&
+    targetFullRes.success &&
+    headRes.stdout.trim() === targetFullRes.stdout.trim()
+  ) {
+    return {
+      success: false,
+      message: "Esta versão já é a versão ativa mais recente.",
+    };
+  }
+
+  // 4. Discard any unstaged changes in repo
+  await executeGitCommand("git reset --hard HEAD", repoDir);
+
+  // 5. Restore tree of targetCommitHash (safe rollback preserving history)
+  const treeRes = await executeGitCommand(
+    `git read-tree -u --reset ${targetCommitHash}`,
+    repoDir,
+  );
+  if (!treeRes.success) {
+    await executeGitCommand(`git checkout ${targetCommitHash} -- .`, repoDir);
+  }
+
+  // 6. Get short hash of target
+  const shortTargetRes = await executeGitCommand(
+    `git rev-parse --short ${targetCommitHash}`,
+    repoDir,
+  );
+  const shortTarget = shortTargetRes.stdout || targetCommitHash.slice(0, 7);
+
+  const cleanTitle = commitTitle ? `: ${commitTitle.slice(0, 60)}` : "";
+  const commitMsg = `Reversão segura: restaurar versão para ${shortTarget}${cleanTitle}`;
+  const safeMsg = commitMsg.replace(/"/g, '\\"');
+
+  const commitRes = await executeGitCommand(
+    `git commit -m "${safeMsg}"`,
+    repoDir,
+  );
+  if (!commitRes.success && !commitRes.stderr.includes("nothing to commit")) {
+    return {
+      success: false,
+      message:
+        commitRes.stderr ||
+        "Não foi possível criar a nova versão de reversão.",
+    };
+  }
+
+  const newHashRes = await executeGitCommand(
+    "git rev-parse --short HEAD",
+    repoDir,
+  );
+  const newHash = newHashRes.stdout || "";
+
+  return {
+    success: true,
+    message: `Versão restaurada com sucesso! Uma nova versão (#${newHash}) foi promovida com o estado de #${shortTarget}, preservando todo o histórico anterior.`,
+    newCommitHash: newHash,
+  };
+}
+
+
 export interface WhatsNewItem {
   hash: string;
   shortHash: string;

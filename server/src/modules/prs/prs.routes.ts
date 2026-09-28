@@ -57,4 +57,15 @@ export async function prsRoutes(fastify: FastifyInstance) {
       return reply.status(400).send({ error: err.message });
     }
   });
+
+  fastify.post('/api/prs/rollback', async (request, reply) => {
+    const body = request.body as { id?: number | string; commit_hash?: string; repo?: string };
+    try {
+      const result = await prsService.rollbackRevision(body);
+      return reply.send(result);
+    } catch (err: any) {
+      return reply.status(400).send({ error: err.message });
+    }
+  });
 }
+
