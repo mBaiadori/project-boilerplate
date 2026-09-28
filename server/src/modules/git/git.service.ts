@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { PROJECTS_DIR } from '../../config/constants.js';
 import { loadConfig, clearWorkspaceChanges } from '../../config/storage.js';
+import { workspaceService } from '../workspace/workspace.service.js';
 import {
   ensureGitRepo,
   getGitStatus,
@@ -105,7 +106,9 @@ export class GitService {
     const cfg = loadConfig();
     const repoName = cfg.active_repo?.name || 'local';
     const repoDir = this.getRepoDir(repoName);
-    return await createAndCheckoutBranch(repoDir, branchName);
+    const res = await createAndCheckoutBranch(repoDir, branchName);
+    workspaceService.invalidateTreeCache(repoName);
+    return res;
   }
 
   async commit(message: string, files?: string[]) {
@@ -113,7 +116,9 @@ export class GitService {
     const cfg = loadConfig();
     const repoName = cfg.active_repo?.name || 'local';
     const repoDir = this.getRepoDir(repoName);
-    return await commitChanges(repoDir, message, files);
+    const res = await commitChanges(repoDir, message, files);
+    workspaceService.invalidateTreeCache(repoName);
+    return res;
   }
 
   async sync(branch?: string) {
@@ -123,6 +128,7 @@ export class GitService {
     const repoDir = this.getRepoDir(repoName);
     const targetBranch = branch || cfg.active_repo?.default_branch || 'main';
     const result = await syncGit(repoDir, 'origin', targetBranch);
+    workspaceService.invalidateTreeCache(repoName);
 
     // Reconcilia e limpa alterações se o git status estiver limpo
     try {

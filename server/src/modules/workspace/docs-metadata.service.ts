@@ -142,9 +142,28 @@ export class DocsMetadataService {
     return { statuses, categories, tags };
   }
 
-  loadDocsMetadata(repoName: string): DocumentMetadataItem[] {
-    const metaPath = this.getDocsMetadataPath(repoName);
-    const repoDir = this.getRepoDir(repoName);
+  private metaCache = new Map<string, { data: DocumentMetadataItem[]; timestamp: number }>();
+  private reconciliationInProgress = new Set<string>();
+
+  clearCache(repoName?: string): void {
+    if (repoName) {
+      this.metaCache.delete(repoName);
+    } else {
+      this.metaCache.clear();
+    }
+  }
+
+  loadDocsMetadata(repoName: string, forceDiskScan = false): DocumentMetadataItem[] {
+    const cleanRepo = repoName || 'local';
+    const cached = this.metaCache.get(cleanRepo);
+    
+    // Return cached metadata if available (valid for 30s or until invalidated)
+    if (cached && !forceDiskScan && Date.now() - cached.timestamp < 30000) {
+      return cached.data;
+    }
+
+    const metaPath = this.getDocsMetadataPath(cleanRepo);
+    const repoDir = this.getRepoDir(cleanRepo);
     let metaList: DocumentMetadataItem[] = [];
 
     if (fs.existsSync(metaPath)) {
@@ -183,94 +202,123 @@ export class DocsMetadataService {
       }
     }
 
-    // Auto-Reconciliação com o disco
-    let changed = false;
+    // Save in cache immediately
+    this.metaCache.set(cleanRepo, { data: metaList, timestamp: Date.now() });
+
+    // Schedule background reconciliation without blocking the current request
     if (fs.existsSync(repoDir)) {
-      const diskFiles: string[] = [];
-      const scanDir = (dir: string) => {
-        const entries = fs.readdirSync(dir, { withFileTypes: true });
-        for (const entry of entries) {
-          if (entry.name.startsWith('.') || entry.name === 'node_modules') continue;
-          const full = path.join(dir, entry.name);
-          if (entry.isDirectory()) {
-            scanDir(full);
-          } else if (entry.isFile() && (entry.name.endsWith('.md') || entry.name.endsWith('.markdown'))) {
-            diskFiles.push(path.relative(repoDir, full).replace(/\\/g, '/'));
-          }
-        }
-      };
-      try {
-        scanDir(repoDir);
-      } catch {}
-
-      // 1. Garantir que todo documento existente no workspace tenha metadados e links sincronizados
-      for (const relPath of diskFiles) {
-        const existingIdx = metaList.findIndex((d) => d.path === relPath);
-        const full = path.join(repoDir, relPath);
-        let content = '';
-        try {
-          content = fs.readFileSync(full, 'utf-8');
-        } catch {}
-        const extractedLinks = extractDocLinksFromMarkdown(content);
-        const extractedTitle = extractDocTitleFromMarkdown(content);
-
-        if (existingIdx >= 0) {
-          const item = metaList[existingIdx];
-          let itemModified = false;
-          const currentLinksJson = JSON.stringify(Array.isArray(item.links) ? item.links : []);
-          const extractedLinksJson = JSON.stringify(extractedLinks);
-          if (currentLinksJson !== extractedLinksJson) {
-            item.links = extractedLinks;
-            itemModified = true;
-          }
-          if (!item.title && extractedTitle) {
-            item.title = extractedTitle;
-            itemModified = true;
-          }
-          if (itemModified) {
-            changed = true;
-          }
-        } else {
-          const name = path.basename(relPath, path.extname(relPath));
-          const ext = path.extname(relPath).replace(/^\./, '') || 'md';
-          metaList.push(
-            this.sanitizeMetaItem({
-              id: generateDocId(relPath),
-              name,
-              title: extractedTitle || name,
-              ext,
-              path: relPath,
-              status: '',
-              categories: '',
-              tags: [],
-              updated_at: new Date().toISOString(),
-              approvers: [],
-              links: extractedLinks,
-              templateId: '',
-            })
-          );
-          changed = true;
-        }
-      }
-
-      // 2. Remover entradas órfãs (arquivos apagados manualmente no disco)
-      const validMetaList = metaList.filter((d) => diskFiles.includes(d.path));
-      if (validMetaList.length !== metaList.length) {
-        metaList = validMetaList;
-        changed = true;
-      }
-    }
-
-    if (changed || (!fs.existsSync(metaPath) && metaList.length > 0)) {
-      this.saveDocsMetadata(repoName, metaList);
+      this.scheduleBackgroundReconciliation(cleanRepo);
     }
 
     return metaList;
   }
 
+  /**
+   * Executa reconciliação de metadados em segundo plano para não travar a Event Loop em repositórios grandes
+   */
+  scheduleBackgroundReconciliation(repoName: string): void {
+    const cleanRepo = repoName || 'local';
+    if (this.reconciliationInProgress.has(cleanRepo)) return;
+
+    this.reconciliationInProgress.add(cleanRepo);
+    setImmediate(async () => {
+      try {
+        const repoDir = this.getRepoDir(cleanRepo);
+        if (!fs.existsSync(repoDir)) return;
+
+        const diskFiles: string[] = [];
+        const scanDir = (dir: string) => {
+          try {
+            const entries = fs.readdirSync(dir, { withFileTypes: true });
+            for (const entry of entries) {
+              if (entry.name.startsWith('.') || entry.name === 'node_modules') continue;
+              const full = path.join(dir, entry.name);
+              if (entry.isDirectory()) {
+                scanDir(full);
+              } else if (entry.isFile() && (entry.name.endsWith('.md') || entry.name.endsWith('.markdown'))) {
+                diskFiles.push(path.relative(repoDir, full).replace(/\\/g, '/'));
+              }
+            }
+          } catch {}
+        };
+        scanDir(repoDir);
+
+        const currentCached = this.metaCache.get(cleanRepo)?.data || [];
+        let metaList = [...currentCached];
+        let changed = false;
+
+        for (const relPath of diskFiles) {
+          const existingIdx = metaList.findIndex((d) => d.path === relPath);
+          const full = path.join(repoDir, relPath);
+          let content = '';
+          try {
+            content = fs.readFileSync(full, 'utf-8');
+          } catch {}
+          const extractedLinks = extractDocLinksFromMarkdown(content);
+          const extractedTitle = extractDocTitleFromMarkdown(content);
+
+          if (existingIdx >= 0) {
+            const item = metaList[existingIdx];
+            let itemModified = false;
+            const currentLinksJson = JSON.stringify(Array.isArray(item.links) ? item.links : []);
+            const extractedLinksJson = JSON.stringify(extractedLinks);
+            if (currentLinksJson !== extractedLinksJson) {
+              item.links = extractedLinks;
+              itemModified = true;
+            }
+            if (!item.title && extractedTitle) {
+              item.title = extractedTitle;
+              itemModified = true;
+            }
+            if (itemModified) {
+              changed = true;
+            }
+          } else {
+            const name = path.basename(relPath, path.extname(relPath));
+            const ext = path.extname(relPath).replace(/^\./, '') || 'md';
+            metaList.push(
+              this.sanitizeMetaItem({
+                id: generateDocId(relPath),
+                name,
+                title: extractedTitle || name,
+                ext,
+                path: relPath,
+                status: '',
+                categories: '',
+                tags: [],
+                updated_at: new Date().toISOString(),
+                approvers: [],
+                links: extractedLinks,
+                templateId: '',
+              })
+            );
+            changed = true;
+          }
+        }
+
+        const validMetaList = metaList.filter((d) => diskFiles.includes(d.path));
+        if (validMetaList.length !== metaList.length) {
+          metaList = validMetaList;
+          changed = true;
+        }
+
+        if (changed) {
+          this.saveDocsMetadata(cleanRepo, metaList);
+        }
+      } catch (err) {
+        console.warn(`[DocsMetadataService] Erro na reconciliação de segundo plano em ${cleanRepo}:`, err);
+      } finally {
+        this.reconciliationInProgress.delete(cleanRepo);
+      }
+    });
+  }
+
   saveDocsMetadata(repoName: string, metaList: DocumentMetadataItem[]): void {
-    const metaPath = this.getDocsMetadataPath(repoName);
+    const cleanRepo = repoName || 'local';
+    const metaPath = this.getDocsMetadataPath(cleanRepo);
     const sanitizedList = metaList.map((item) => this.sanitizeMetaItem(item));
+    this.metaCache.set(cleanRepo, { data: sanitizedList, timestamp: Date.now() });
+
     const valRes = validateJsonSchema('docs.metadata', sanitizedList);
     if (!valRes.valid) {
       console.warn(`[DocsMetadataService] Aviso de validação docs.metadata.json:`, valRes.errors);

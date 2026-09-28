@@ -19,12 +19,31 @@ export const DEFAULT_HIDDEN_FILES = [
   ".hidden_files.json",
 ];
 
+const DEFAULT_HIDDEN_SET = new Set(
+  DEFAULT_HIDDEN_FILES.map((item) => item.trim().replace(/^\.?\//, "").replace(/\/+$/, ""))
+);
+
+const hiddenCache = new Map<string, { list: string[]; set: Set<string>; timestamp: number }>();
+
 export function loadHiddenFiles(repoDir: string): string[] {
+  const cached = hiddenCache.get(repoDir);
+  if (cached && Date.now() - cached.timestamp < 30000) {
+    return cached.list;
+  }
+
   const hiddenPath = path.join(repoDir, ".hidden_files.json");
   if (fs.existsSync(hiddenPath)) {
     try {
       const data = JSON.parse(fs.readFileSync(hiddenPath, "utf-8"));
-      if (Array.isArray(data)) return data;
+      if (Array.isArray(data)) {
+        const cleanList = data.map((item: string) => String(item).trim().replace(/^\.?\//, "").replace(/\/+$/, "")).filter(Boolean);
+        hiddenCache.set(repoDir, {
+          list: data,
+          set: new Set([...cleanList, ...DEFAULT_HIDDEN_SET]),
+          timestamp: Date.now(),
+        });
+        return data;
+      }
     } catch (e) {
       console.warn(
         `[HiddenFiles] Erro ao ler .hidden_files.json em ${repoDir}:`,
@@ -32,20 +51,42 @@ export function loadHiddenFiles(repoDir: string): string[] {
       );
     }
   }
+
+  hiddenCache.set(repoDir, {
+    list: DEFAULT_HIDDEN_FILES,
+    set: DEFAULT_HIDDEN_SET,
+    timestamp: Date.now(),
+  });
   return DEFAULT_HIDDEN_FILES;
 }
 
 export function isPathHidden(filePath: string, hiddenList?: string[]): boolean {
   if (!filePath) return false;
-  const list =
-    hiddenList && hiddenList.length > 0 ? hiddenList : DEFAULT_HIDDEN_FILES;
   const cleanPath = filePath.trim().replace(/^\/+/, "").replace(/\\/g, "/");
   if (!cleanPath) return false;
 
   const segments = cleanPath.split("/").filter(Boolean);
 
-  // 1. Direct match with configured hidden list (files or directory prefixes)
-  for (const item of list) {
+  // 1. Fast check: Any dot segment (e.g. .git, .spec-memory, .DS_Store)
+  for (let i = 0; i < segments.length; i++) {
+    const seg = segments[i];
+    if (seg.charCodeAt(0) === 46 /* '.' */ && seg !== "." && seg !== "..") {
+      return true;
+    }
+  }
+
+  // 2. Direct Set matching if using default list
+  if (!hiddenList || hiddenList === DEFAULT_HIDDEN_FILES) {
+    if (DEFAULT_HIDDEN_SET.has(cleanPath)) return true;
+    for (let i = 0; i < segments.length; i++) {
+      if (DEFAULT_HIDDEN_SET.has(segments[i])) return true;
+    }
+    return false;
+  }
+
+  // 3. Custom list matching
+  for (let i = 0; i < hiddenList.length; i++) {
+    const item = hiddenList[i];
     const cleanItem = item.trim().replace(/^\.?\//, "").replace(/\/+$/, "");
     if (!cleanItem) continue;
 
@@ -54,27 +95,6 @@ export function isPathHidden(filePath: string, hiddenList?: string[]): boolean {
       cleanPath.startsWith(cleanItem + "/") ||
       segments.includes(cleanItem)
     ) {
-      return true;
-    }
-  }
-
-  // 2. Safety check against default hidden files/folders
-  for (const item of DEFAULT_HIDDEN_FILES) {
-    const cleanItem = item.trim().replace(/^\.?\//, "").replace(/\/+$/, "");
-    if (!cleanItem) continue;
-
-    if (
-      cleanPath === cleanItem ||
-      cleanPath.startsWith(cleanItem + "/") ||
-      segments.includes(cleanItem)
-    ) {
-      return true;
-    }
-  }
-
-  // 3. Any segment that starts with a dot (e.g. .hidden, .config, etc.)
-  for (const seg of segments) {
-    if (seg.startsWith(".") && seg !== "." && seg !== "..") {
       return true;
     }
   }

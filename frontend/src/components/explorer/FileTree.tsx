@@ -1161,57 +1161,61 @@ export const FileTree: React.FC<FileTreeProps> = ({
     }));
   };
 
+  // Indexed Maps for O(1) status lookups during render
+  const gitStatusMap = useMemo(() => {
+    const map = new Map<string, any>();
+    if (gitStatus?.files && Array.isArray(gitStatus.files)) {
+      for (let i = 0; i < gitStatus.files.length; i++) {
+        const f = gitStatus.files[i];
+        map.set(f.path, f);
+      }
+    }
+    return map;
+  }, [gitStatus]);
+
+  const pendingChangesMap = useMemo(() => {
+    const map = new Map<string, any>();
+    if (pendingChanges && Array.isArray(pendingChanges)) {
+      for (let i = 0; i < pendingChanges.length; i++) {
+        const c = pendingChanges[i];
+        map.set(c.path, c);
+      }
+    }
+    return map;
+  }, [pendingChanges]);
+
   // Build display nodes based on search query (displaying ALL files, searching by name and title)
   const displayNodes = useMemo(() => {
     if (!tree || tree.length === 0) return [];
+    if (!searchTerm.trim()) return tree;
 
-    const cleanNodes = (nodesList: TreeNode[]): TreeNode[] => {
-      return nodesList.map((n) => {
-        if (n.children && n.children.length > 0) {
-          return {
-            ...n,
-            children: cleanNodes(n.children),
-          };
-        }
-        return n;
-      });
+    const q = searchTerm.trim().toLowerCase();
+    const matchNode = (node: TreeNode): TreeNode | null => {
+      const nameMatch = Boolean(
+        (node.name && node.name.toLowerCase().includes(q)) ||
+        (node.title && node.title.toLowerCase().includes(q)),
+      );
+      const isDir =
+        node.type === "dir" || node.type === "directory" || (node as any).is_directory;
+
+      if (!isDir) {
+        return nameMatch ? node : null;
+      }
+
+      const filteredChildren = (node.children || [])
+        .map(matchNode)
+        .filter((c): c is TreeNode => c !== null);
+
+      if (nameMatch || filteredChildren.length > 0) {
+        return {
+          ...node,
+          children: filteredChildren,
+        };
+      }
+      return null;
     };
 
-    let nodes: TreeNode[] = cleanNodes(tree);
-
-    // Filter by search term if present (matching specifically by name and document title, avoiding noisy path matches)
-    if (searchTerm.trim()) {
-      const q = searchTerm.trim().toLowerCase();
-      const matchNode = (node: TreeNode): TreeNode | null => {
-        const nameMatch = Boolean(
-          (node.name && node.name.toLowerCase().includes(q)) ||
-          (node.title && node.title.toLowerCase().includes(q)),
-        );
-        const isDir =
-          node.type === "dir" || node.type === "directory" || node.is_directory;
-
-        if (!isDir) {
-          return nameMatch ? node : null;
-        }
-
-        const filteredChildren = (node.children || [])
-          .map(matchNode)
-          .filter((c): c is TreeNode => c !== null);
-
-        if (nameMatch || filteredChildren.length > 0) {
-          return {
-            ...node,
-            children:
-              filteredChildren.length > 0 ? filteredChildren : node.children,
-          };
-        }
-        return null;
-      };
-
-      return nodes.map(matchNode).filter((n): n is TreeNode => n !== null);
-    }
-
-    return nodes;
+    return tree.map(matchNode).filter((n): n is TreeNode => n !== null);
   }, [tree, searchTerm]);
 
   // Handle tree scroll position tracking
@@ -1524,10 +1528,8 @@ export const FileTree: React.FC<FileTreeProps> = ({
 
     const badgeClass = node.badge ? node.badge.toLowerCase() : "t1";
 
-    const gitFile = gitStatus?.files?.find(
-      (f) => f.path === node.path || f.path.endsWith(node.path),
-    );
-    const pendingChange = pendingChanges?.find((c) => c.path === node.path);
+    const gitFile = gitStatusMap.get(node.path);
+    const pendingChange = pendingChangesMap.get(node.path);
     const gitStatusCode = gitFile
       ? gitFile.status === "??"
         ? "U"

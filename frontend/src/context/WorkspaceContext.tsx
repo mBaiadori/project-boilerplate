@@ -629,19 +629,25 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
         const data = await API.getProjectTree(repo.name);
         setTree(data.tree || []);
 
-        await Promise.all([
+        setIsLoadingTree(false);
+        setIsLoadingWorkspace(false);
+
+        const fileToOpen = initialFile || findFirstMdFile(data.tree || []);
+        if (fileToOpen) {
+          loadFile(fileToOpen).catch((e) =>
+            console.warn("[WorkspaceContext] Erro ao carregar arquivo inicial:", e)
+          );
+        }
+
+        // Executa carregamentos secundários em segundo plano sem bloquear a árvore/editor
+        Promise.allSettled([
           loadProjectMetadataOptions(),
           loadProjectConfig(),
           refreshPendingChanges(),
           refreshGitStatus(),
           refreshGitLog(15),
           refreshWhatsNew(),
-        ]);
-
-        const fileToOpen = initialFile || findFirstMdFile(data.tree || []);
-        if (fileToOpen) {
-          await loadFile(fileToOpen);
-        }
+        ]).catch(() => {});
       } finally {
         inFlightRepoRef.current = null;
         setIsLoadingTree(false);

@@ -35,6 +35,18 @@ export { DEFAULT_HIDDEN_FILES, loadHiddenFiles, isPathHidden } from "../../utils
 import { DEFAULT_HIDDEN_FILES, loadHiddenFiles, isPathHidden } from "../../utils/hidden-files.js";
 
 export class WorkspaceService {
+  private treeCache = new Map<string, { tree: TreeNode[]; timestamp: number }>();
+
+  invalidateTreeCache(repoName?: string): void {
+    if (repoName) {
+      this.treeCache.delete(repoName);
+      docsMetadataService.clearCache(repoName);
+    } else {
+      this.treeCache.clear();
+      docsMetadataService.clearCache();
+    }
+  }
+
   private getRepoDir(repoName: string): string {
     return path.join(PROJECTS_DIR, repoName || "local");
   }
@@ -45,22 +57,32 @@ export class WorkspaceService {
 
   saveDocsMetadata(repoName: string, metaList: DocumentMetadataItem[]): void {
     docsMetadataService.saveDocsMetadata(repoName, metaList);
+    this.invalidateTreeCache(repoName);
   }
 
   buildTree(
     dir: string,
     baseDir: string,
-    docsMetadata?: DocumentMetadataItem[],
+    docsMetadata?: DocumentMetadataItem[] | Map<string, DocumentMetadataItem>,
     hiddenFiles?: string[],
   ): TreeNode[] {
     if (!fs.existsSync(dir)) return [];
     const entries = fs.readdirSync(dir, { withFileTypes: true });
     const nodes: TreeNode[] = [];
 
-    const metaList = docsMetadata || [];
+    const metaMap: Map<string, DocumentMetadataItem> =
+      docsMetadata instanceof Map
+        ? docsMetadata
+        : new Map((docsMetadata || []).map((d) => [d.path, d]));
+
     const hiddenList = hiddenFiles || loadHiddenFiles(baseDir);
 
-    for (const entry of entries) {
+    for (let i = 0; i < entries.length; i++) {
+      const entry = entries[i];
+      if (entry.name.charCodeAt(0) === 46 /* '.' */) {
+        if (isPathHidden(entry.name, hiddenList)) continue;
+      }
+
       const fullPath = path.join(dir, entry.name);
       const relPath = path.relative(baseDir, fullPath).replace(/\\/g, "/");
 
@@ -71,26 +93,22 @@ export class WorkspaceService {
           name: entry.name,
           path: relPath,
           type: "directory",
-          children: this.buildTree(fullPath, baseDir, metaList, hiddenList),
+          children: this.buildTree(fullPath, baseDir, metaMap, hiddenList),
         });
       } else if (entry.isFile()) {
-        const docMeta =
-          metaList.find((d) => d.path === relPath) ||
-          ({} as Partial<DocumentMetadataItem>);
-        const stat = fs.statSync(fullPath);
+        const docMeta = metaMap.get(relPath);
 
         nodes.push({
           name: entry.name,
           path: relPath,
           type: "file",
           title:
-            docMeta.title ||
-            docMeta.name ||
+            docMeta?.title ||
+            docMeta?.name ||
             entry.name.replace(/\.[^/.]+$/, ""),
-          categories: docMeta.categories || "",
-          category: docMeta.categories || "",
-          status: docMeta.status || "",
-          last_modified: stat.mtimeMs,
+          categories: docMeta?.categories || "",
+          category: docMeta?.categories || "",
+          status: docMeta?.status || "",
         });
       }
     }
@@ -101,14 +119,32 @@ export class WorkspaceService {
     });
   }
 
-  getTree(targetRepoName?: string) {
+  getTree(targetRepoName?: string, forceRefresh = false) {
     const cfg = loadConfig();
     const repoName = targetRepoName || cfg.active_repo?.name || "local";
+    
+    if (!forceRefresh) {
+      const cached = this.treeCache.get(repoName);
+      if (cached && Date.now() - cached.timestamp < 30000) {
+        return {
+          repo: repoName,
+          tree: cached.tree,
+        };
+      }
+    }
+
     ensureDefaultRepoFiles(repoName);
     const repoDir = this.getRepoDir(repoName);
 
     const docsMetadata = docsMetadataService.loadDocsMetadata(repoName);
-    const tree = this.buildTree(repoDir, repoDir, docsMetadata);
+    const metaMap = new Map(docsMetadata.map((d) => [d.path, d]));
+    const tree = this.buildTree(repoDir, repoDir, metaMap);
+
+    this.treeCache.set(repoName, {
+      tree,
+      timestamp: Date.now(),
+    });
+
     return {
       repo: repoName,
       tree,
@@ -248,9 +284,8 @@ export class WorkspaceService {
       metaUpdatePayload,
     );
 
-    const repoDir = this.getRepoDir(repoName);
-    const docsMetadata = docsMetadataService.loadDocsMetadata(repoName);
-    const newTree = this.buildTree(repoDir, repoDir, docsMetadata);
+    this.invalidateTreeCache(repoName);
+    const newTree = this.getTree(repoName, true).tree;
 
     return {
       success: true,
@@ -287,8 +322,8 @@ export class WorkspaceService {
       fs.mkdirSync(fullPath, { recursive: true });
       recordChange(repoName, cleanPath, "ADDED", "", "");
 
-      const docsMetadata = docsMetadataService.loadDocsMetadata(repoName);
-      const newTree = this.buildTree(repoDir, repoDir, docsMetadata);
+      this.invalidateTreeCache(repoName);
+      const newTree = this.getTree(repoName, true).tree;
       return {
         success: true,
         path: cleanPath,
@@ -319,8 +354,8 @@ export class WorkspaceService {
       metaPayload,
     );
 
-    const docsMetadata = docsMetadataService.loadDocsMetadata(repoName);
-    const newTree = this.buildTree(repoDir, repoDir, docsMetadata);
+    this.invalidateTreeCache(repoName);
+    const newTree = this.getTree(repoName, true).tree;
 
     return {
       success: true,
@@ -443,8 +478,8 @@ export class WorkspaceService {
       }
     }
 
-    const docsMetadata = docsMetadataService.loadDocsMetadata(repoName);
-    const newTree = this.buildTree(repoDir, repoDir, docsMetadata);
+    this.invalidateTreeCache(repoName);
+    const newTree = this.getTree(repoName, true).tree;
 
     return {
       success: importedFiles.length > 0,
@@ -495,9 +530,8 @@ export class WorkspaceService {
 
     docsMetadataService.renameDocMetadata(repoName, cleanOld, cleanNew);
 
-    const repoDir = this.getRepoDir(repoName);
-    const docsMetadata = docsMetadataService.loadDocsMetadata(repoName);
-    const newTree = this.buildTree(repoDir, repoDir, docsMetadata);
+    this.invalidateTreeCache(repoName);
+    const newTree = this.getTree(repoName, true).tree;
 
     return {
       success: true,
@@ -532,9 +566,8 @@ export class WorkspaceService {
 
     docsMetadataService.deleteDocMetadata(repoName, cleanPath);
 
-    const repoDir = this.getRepoDir(repoName);
-    const docsMetadata = docsMetadataService.loadDocsMetadata(repoName);
-    const newTree = this.buildTree(repoDir, repoDir, docsMetadata);
+    this.invalidateTreeCache(repoName);
+    const newTree = this.getTree(repoName, true).tree;
 
     return {
       success: true,
@@ -662,8 +695,8 @@ export class WorkspaceService {
     cfg.workspace_changes[repoName] = remainingChanges;
     saveConfig(cfg);
 
-    const docsMetadata = docsMetadataService.loadDocsMetadata(repoName);
-    const newTree = this.buildTree(repoDir, repoDir, docsMetadata);
+    this.invalidateTreeCache(repoName);
+    const newTree = this.getTree(repoName, true).tree;
     return {
       success: true,
       message: "Alterações descartadas com sucesso.",
