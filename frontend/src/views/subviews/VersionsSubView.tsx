@@ -3,6 +3,18 @@ import { useSearchParams } from "react-router-dom";
 import { useWorkspace } from "../../context/WorkspaceContext";
 import { API } from "../../services/api";
 import { isPathHidden, getSystemFileFriendlyName } from "../../utils/hidden-files";
+import {
+  Button,
+  AlertBanner,
+  Tabs,
+} from "../../components/ui";
+import {
+  Sparkles,
+  FileEdit,
+  Settings,
+  RefreshCw,
+  CloudUpload,
+} from "lucide-react";
 
 interface VersionsSubViewProps {
   onOpenFile?: (path: string) => void;
@@ -734,241 +746,64 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
 
           {/* Action Header Buttons */}
           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <button
+            <Button
               type="button"
+              variant="secondary"
+              size="sm"
+              leftIcon={<RefreshCw size={14} />}
               onClick={() => {
                 if (refreshGitStatus) refreshGitStatus();
                 if (refreshPendingChanges) refreshPendingChanges();
                 if (refreshWhatsNew) refreshWhatsNew();
               }}
               title="Atualizar dados e status"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "6px",
-                padding: "8px 14px",
-                borderRadius: "8px",
-                background: "#f8fafc",
-                border: "1px solid #e2e8f0",
-                color: "#334155",
-                cursor: "pointer",
-                fontSize: "13px",
-                fontWeight: 500,
-              }}
             >
-              <span
-                className="material-symbols-outlined"
-                style={{ fontSize: "16px" }}
-              >
-                sync
-              </span>
               Atualizar
-            </button>
+            </Button>
 
-            <button
+            <Button
               type="button"
+              variant="primary"
+              size="sm"
+              leftIcon={<CloudUpload size={15} />}
               onClick={handleSync}
-              disabled={isSyncing}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "6px",
-                padding: "8px 16px",
-                borderRadius: "8px",
-                background: "#1a73e8",
-                border: "none",
-                color: "#ffffff",
-                cursor: isSyncing ? "default" : "pointer",
-                fontWeight: 600,
-                fontSize: "13px",
-                boxShadow: "0 1px 3px rgba(26, 115, 232, 0.3)",
-              }}
+              isLoading={isSyncing}
             >
-              <span
-                className="material-symbols-outlined"
-                style={{
-                  fontSize: "18px",
-                  animation: isSyncing ? "spin 1s linear infinite" : "none",
-                }}
-              >
-                cloud_sync
-              </span>
-              {isSyncing ? "Sincronizando..." : "Sincronizar com "}
-            </button>
+              {isSyncing ? "Sincronizando..." : "Sincronizar com GitHub"}
+            </Button>
           </div>
         </div>
 
-        {/* Navigation Tab Bar - Clean Light */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "8px",
-            padding: "0 36px",
-            overflowX: "auto",
-          }}
-        >
-          {/* Tab 1: Novidades d */}
-          <button
-            type="button"
-            onClick={() => handleTabChange("whats-new")}
-            style={{
-              height: "46px",
-              padding: "0 18px",
-              border: "none",
-              borderBottom:
-                activeTab === "whats-new"
-                  ? "3px solid #16a34a"
-                  : "3px solid transparent",
-              background: "transparent",
-              color: activeTab === "whats-new" ? "#16a34a" : "#64748b",
-              fontWeight: 600,
-              fontSize: "14px",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              position: "relative",
-              transition: "border-color 0.15s ease, color 0.15s ease",
-            }}
-          >
-            <span
-              className="material-symbols-outlined"
-              style={{
-                fontSize: "20px",
-                color: activeTab === "whats-new" ? "#16a34a" : "#64748b",
-              }}
-            >
-              auto_awesome
-            </span>
-            <span>Novidades d</span>
-            {whatsNewFiles.length > 0 && (
-              <span
-                style={{
-                  padding: "2px 8px",
-                  borderRadius: "12px",
-                  fontSize: "11px",
-                  fontWeight: 700,
-                  background: activeTab === "whats-new" ? "#16a34a" : "#dcfce7",
-                  color: activeTab === "whats-new" ? "#ffffff" : "#16a34a",
-                }}
-              >
-                {whatsNewFiles.length}
-              </span>
-            )}
-            {hasUnreadWhatsNew && (
-              <span
-                style={{
-                  width: "8px",
-                  height: "8px",
-                  borderRadius: "50%",
-                  backgroundColor: "#22c55e",
-                  boxShadow: "0 0 6px #22c55e",
-                  display: "inline-block",
-                  marginLeft: "2px",
-                }}
-                title="Novidades não visualizadas!"
-              />
-            )}
-          </button>
-
-          {/* Tab 2: Meus Rascunhos */}
-          <button
-            type="button"
-            onClick={() => handleTabChange("drafts")}
-            style={{
-              height: "46px",
-              padding: "0 18px",
-              border: "none",
-              borderBottom:
-                activeTab === "drafts"
-                  ? "3px solid #1a73e8"
-                  : "3px solid transparent",
-              background: "transparent",
-              color: activeTab === "drafts" ? "#1a73e8" : "#64748b",
-              fontWeight: 600,
-              fontSize: "14px",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              transition: "border-color 0.15s ease, color 0.15s ease",
-            }}
-          >
-            <span
-              className="material-symbols-outlined"
-              style={{
-                fontSize: "20px",
-                color: activeTab === "drafts" ? "#1a73e8" : "#64748b",
-              }}
-            >
-              edit_note
-            </span>
-            <span>Minhas edições</span>
-            {changedFiles.length > 0 && (
-              <span
-                style={{
-                  padding: "2px 8px",
-                  borderRadius: "12px",
-                  fontSize: "11px",
-                  fontWeight: 700,
-                  background: activeTab === "drafts" ? "#1a73e8" : "#fef3c7",
-                  color: activeTab === "drafts" ? "#ffffff" : "#b45309",
-                }}
-              >
-                {changedFiles.length}
-              </span>
-            )}
-          </button>
-
-          {/* Tab 3: Sistema & Configurações */}
-          <button
-            type="button"
-            onClick={() => handleTabChange("system")}
-            style={{
-              height: "46px",
-              padding: "0 18px",
-              border: "none",
-              borderBottom:
-                activeTab === "system"
-                  ? "3px solid #2563eb"
-                  : "3px solid transparent",
-              background: "transparent",
-              color: activeTab === "system" ? "#2563eb" : "#64748b",
-              fontWeight: 600,
-              fontSize: "14px",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              transition: "border-color 0.15s ease, color 0.15s ease",
-            }}
-          >
-            <span
-              className="material-symbols-outlined"
-              style={{
-                fontSize: "20px",
-                color: activeTab === "system" ? "#2563eb" : "#64748b",
-              }}
-            >
-              settings_suggest
-            </span>
-            <span>Sistema</span>
-            {allSystemDraftFiles.length > 0 && (
-              <span
-                style={{
-                  padding: "2px 8px",
-                  borderRadius: "12px",
-                  fontSize: "11px",
-                  fontWeight: 700,
-                  background: activeTab === "system" ? "#2563eb" : "#dbeafe",
-                  color: activeTab === "system" ? "#ffffff" : "#1e40af",
-                }}
-              >
-                {allSystemDraftFiles.length}
-              </span>
-            )}
-          </button>
+        {/* Navigation Tab Bar - Design System Tabs */}
+        <div style={{ padding: "0 36px" }}>
+          <Tabs<TabType>
+            activeTab={activeTab}
+            onChange={handleTabChange}
+            variant="underline"
+            tabs={[
+              {
+                id: "whats-new",
+                label: "Novidades da Equipe",
+                icon: <Sparkles size={16} />,
+                count: whatsNewFiles.length > 0 ? whatsNewFiles.length : undefined,
+                badgeVariant: "success",
+              },
+              {
+                id: "drafts",
+                label: "Minhas Edições",
+                icon: <FileEdit size={16} />,
+                count: changedFiles.length > 0 ? changedFiles.length : undefined,
+                badgeVariant: "warning",
+              },
+              {
+                id: "system",
+                label: "Sistema",
+                icon: <Settings size={16} />,
+                count: allSystemDraftFiles.length > 0 ? allSystemDraftFiles.length : undefined,
+                badgeVariant: "info",
+              },
+            ]}
+          />
         </div>
       </div>
 
@@ -983,50 +818,11 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
         <div style={{ maxWidth: "1200px", width: "100%", margin: "0 auto" }}>
           {/* Feedback Alert */}
           {feedback && (
-            <div
-              style={{
-                marginBottom: "24px",
-                padding: "12px 18px",
-                borderRadius: "8px",
-                fontSize: "13.5px",
-                fontWeight: 500,
-                background: feedback.type === "success" ? "#dcfce7" : "#fee2e2",
-                border: `1px solid ${feedback.type === "success" ? "#86efac" : "#fca5a5"}`,
-                color: feedback.type === "success" ? "#16a34a" : "#dc2626",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-              }}
-            >
-              <div
-                style={{ display: "flex", alignItems: "center", gap: "10px" }}
-              >
-                <span
-                  className="material-symbols-outlined"
-                  style={{ fontSize: "20px" }}
-                >
-                  {feedback.type === "success" ? "check_circle" : "error"}
-                </span>
-                <span>{feedback.message}</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setFeedback(null)}
-                style={{
-                  background: "transparent",
-                  border: "none",
-                  color: "inherit",
-                  cursor: "pointer",
-                }}
-              >
-                <span
-                  className="material-symbols-outlined"
-                  style={{ fontSize: "18px" }}
-                >
-                  close
-                </span>
-              </button>
-            </div>
+            <AlertBanner
+              type={feedback.type === "success" ? "success" : "error"}
+              message={feedback.message}
+              onClose={() => setFeedback(null)}
+            />
           )}
 
           {/* ═══════════════════════════════════════════════════════════════════════

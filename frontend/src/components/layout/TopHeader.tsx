@@ -1,13 +1,19 @@
 import React, { useMemo } from "react";
 import { useWorkspace } from "../../context/WorkspaceContext";
 import { isPathHidden } from "../../utils/hidden-files";
+import { IconButton, Button, Badge, Spinner } from "../ui";
+import {
+  ArrowLeft,
+  Sparkles,
+  HelpCircle,
+} from "lucide-react";
 
 interface TopHeaderProps {
   onBackToRepos: () => void;
   onOpenDiffModal: () => void;
   onToggleCopilot: () => void;
   onOpenGitModal?: () => void;
-  onNavigateToEdits?: (tab?: 'drafts' | 'whats-new') => void;
+  onNavigateToEdits?: (tab?: "drafts" | "whats-new") => void;
   onOpenTour?: () => void;
 }
 
@@ -24,14 +30,14 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
 
   const filteredPendingChanges = useMemo(() => {
     return (pendingChanges || []).filter(
-      (c) => c?.path && !isPathHidden(c.path)
+      (c) => c?.path && !isPathHidden(c.path),
     );
   }, [pendingChanges]);
 
-  const handleGoToEdits = (tab?: 'drafts' | 'whats-new') => {
+  const handleGoToEdits = (tab?: "drafts" | "whats-new") => {
     if (onNavigateToEdits) {
       onNavigateToEdits(tab);
-    } else if (tab === 'drafts' && onOpenDiffModal) {
+    } else if (tab === "drafts" && onOpenDiffModal) {
       onOpenDiffModal();
     } else {
       onOpenGitModal();
@@ -56,20 +62,15 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
         </div>
       )}
       <div className="dash-brand">
-        <button
+        <IconButton
           id="btn-back-to-repos"
-          className="btn-dash-back"
-          type="button"
-          title="Voltar para a lista de Repositórios"
+          bordered
+          size="md"
+          tooltip="Voltar para a lista de Repositórios"
           onClick={onBackToRepos}
         >
-          <span
-            className="material-symbols-outlined"
-            style={{ fontSize: "20px" }}
-          >
-            arrow_back
-          </span>
-        </button>
+          <ArrowLeft size={18} />
+        </IconButton>
         <div className="dash-brand-divider"></div>
         <div className="dash-title-wrap">
           <div className="dash-title-row">
@@ -96,64 +97,49 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
               </a>
             )}
             {isLoadingWorkspace && (
-              <span
-                className="material-symbols-outlined spinning"
-                style={{
-                  fontSize: "16px",
-                  color: "var(--md-sys-color-primary, #1a73e8)",
-                }}
-                title="Carregando workspace..."
-              >
-                progress_activity
-              </span>
+              <Spinner size="sm" style={{ marginLeft: 4 }} />
             )}
           </div>
         </div>
       </div>
 
-      <div className="dash-nav-right">
+      <div className="dash-nav-right" style={{ display: "flex", alignItems: "center", gap: 8 }}>
         {filteredPendingChanges.length > 0 && (
-          <button
+          <Button
             id="btn-open-workspace-diff"
-            className="btn btn-warning btn-sm"
-            onClick={() => handleGoToEdits('drafts')}
+            variant="subtle"
+            size="sm"
+            onClick={() => handleGoToEdits("drafts")}
             title="Ver minhas alterações e rascunhos na Central de Edições"
+            leftIcon={<Badge variant="warning" size="sm" hasDot>{filteredPendingChanges.length}</Badge>}
           >
-            <span className="dot warning-dot"></span>
             <span id="pending-changes-badge-text">
-              {filteredPendingChanges.length} {filteredPendingChanges.length === 1 ? 'alteração' : 'alterações'}
+              {filteredPendingChanges.length === 1
+                ? "alteração"
+                : "alterações"}
             </span>
-          </button>
+          </Button>
         )}
 
-        <button
+        <IconButton
           id="btn-open-onboarding-tour"
-          className="btn-dash-tour"
-          type="button"
-          title="Guia Rápido & Funcionalidades do Sistema"
+          size="md"
+          tooltip="Guia Rápido & Funcionalidades do Sistema"
           onClick={onOpenTour}
-          style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
         >
-          <span
-            className="material-symbols-outlined"
-            style={{ fontSize: "17px", color: "var(--primary, #3b82f6)" }}
-          >
-            explore
-          </span>
-        </button>
+          <HelpCircle size={18} style={{ color: "var(--md-sys-color-primary, #1a73e8)" }} />
+        </IconButton>
 
-        <button
+        <Button
           id="btn-global-ai-copilot"
-          className="btn-dash-ai-copilot"
-          type="button"
-          title="Abrir Assistente & Copilot IA em Qualquer Tela"
+          variant="primary"
+          size="sm"
+          leftIcon={<Sparkles size={16} />}
           onClick={onToggleCopilot}
+          title="Abrir Assistente & Copilot IA em Qualquer Tela"
         >
-          <span className="material-symbols-outlined ai-sparkle-icon">
-            auto_awesome
-          </span>
-          <span className="ai-copilot-label">Copilot IA</span>
-        </button>
+          Copilot IA
+        </Button>
       </div>
     </header>
   );

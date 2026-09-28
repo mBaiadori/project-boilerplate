@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { Card, CardContent, FormField, Input, Button, AlertBanner } from '../components/ui';
+import { ShieldCheck, Monitor, Lightbulb, ExternalLink } from 'lucide-react';
 
 interface AuthViewProps {
   onLoginSuccess: () => void;
@@ -29,7 +31,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
       } else {
         setStatusMessage({ text: result.error || 'Token inválido ou expirado.', type: 'error' });
       }
-    } catch (err) {
+    } catch {
       setStatusMessage({ text: 'Erro ao conectar ao servidor local.', type: 'error' });
     } finally {
       setIsLoading(false);
@@ -42,7 +44,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
     try {
       await loginLocal();
       onLoginSuccess();
-    } catch (err) {
+    } catch {
       setStatusMessage({ text: 'Erro ao iniciar modo local.', type: 'error' });
     } finally {
       setIsLoading(false);
@@ -50,88 +52,154 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
   };
 
   return (
-    <div id="view-auth" className="screen-view" style={{ display: 'flex' }}>
-      <div className="auth-card">
-        <div className="logo-box">
-          <span className="material-symbols-outlined icon-xl" style={{ color: 'var(--md-sys-color-primary)' }}>
-            account_balance
-          </span>
-        </div>
-        <h1>Governance Platform</h1>
-        <p className="subtitle">
-          Conecte sua conta do GitHub para gerenciar documentos, domínios e aprovações de propostas de evolução.
-        </p>
-
-        <div className="action-box">
-          <a
-            id="btn-open-github-token"
-            href="https://github.com/settings/tokens/new?scopes=repo,read:org&description=Governance+Platform"
-            target="_blank"
-            rel="noreferrer"
-            className="btn btn-github btn-large"
-          >
-            <svg height="18" width="18" viewBox="0 0 16 16" fill="currentColor">
-              <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path>
-            </svg>
-            1. Abrir GitHub para Gerar Token (1-Click)
-          </a>
-          <span className="hint-text">
-            <span className="material-symbols-outlined icon-xs">lightbulb</span> O link acima já abre o GitHub com as permissões <code>repo</code> e <code>read:org</code> pré-marcadas!
-          </span>
-
-          <div className="divider"><span>2. Cole o Token gerado abaixo</span></div>
-
-          <form onSubmit={handleTokenLogin} className="form-group">
-            <input
-              type="password"
-              id="pat-token-input"
-              placeholder="ghp_xxxxxxxxxxxxxxxxxxxx ou github_pat_xxxx"
-              autoComplete="off"
-              value={token}
-              onChange={e => setToken(e.target.value)}
-            />
-            <button
-              id="btn-token-login"
-              className="btn btn-primary btn-large"
-              type="submit"
-              disabled={isLoading}
+    <div
+      id="view-auth"
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: '100vh',
+        width: '100%',
+        padding: '24px',
+        boxSizing: 'border-box',
+        background: 'var(--color-surface)',
+      }}
+    >
+      <div style={{ width: '100%', maxWidth: '480px' }}>
+        <Card>
+          <CardContent style={{ padding: '32px 28px', display: 'flex', flexDirection: 'column', gap: '20px', textAlign: 'center' }}>
+            <div
+              style={{
+                width: '56px',
+                height: '56px',
+                borderRadius: 'var(--radius-lg, 16px)',
+                background: 'var(--color-primary-container)',
+                color: 'var(--color-primary)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0 auto',
+              }}
             >
-              {isLoading ? 'Conectando...' : 'Conectar Conta & Acessar'}
-            </button>
-            {statusMessage && (
-              <div
-                id="auth-status-msg"
+              <ShieldCheck size={32} />
+            </div>
+
+            <div>
+              <h1 style={{ margin: 0, fontSize: '24px', fontWeight: 700, color: 'var(--color-on-surface)', letterSpacing: '-0.02em' }}>
+                Governance Platform
+              </h1>
+              <p style={{ margin: '8px 0 0 0', fontSize: '13.5px', color: 'var(--color-on-surface-variant)', lineHeight: 1.5 }}>
+                Conecte sua conta do GitHub para gerenciar documentos, domínios e aprovações de propostas de evolução.
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', textAlign: 'left' }}>
+              <a
+                id="btn-open-github-token"
+                href="https://github.com/settings/tokens/new?scopes=repo,read:org&description=Governance+Platform"
+                target="_blank"
+                rel="noreferrer"
                 style={{
-                  display: 'block',
-                  padding: '10px 14px',
-                  borderRadius: '8px',
-                  fontSize: '13px',
-                  lineHeight: '1.4',
-                  marginTop: '8px',
-                  textAlign: 'left',
-                  backgroundColor: statusMessage.type === 'error' ? '#fef2f2' : statusMessage.type === 'success' ? '#f0fdf4' : '#eff6ff',
-                  color: statusMessage.type === 'error' ? '#991b1b' : statusMessage.type === 'success' ? '#166534' : '#1e40af',
-                  border: `1px solid ${statusMessage.type === 'error' ? '#fecaca' : statusMessage.type === 'success' ? '#bbf7d0' : '#bfdbfe'}`
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  padding: '10px 16px',
+                  borderRadius: 'var(--radius-md, 8px)',
+                  background: 'var(--color-surface-container-high)',
+                  color: 'var(--color-on-surface)',
+                  fontWeight: 600,
+                  fontSize: '13.5px',
+                  textDecoration: 'none',
+                  border: '1px solid var(--color-outline-variant)',
+                  transition: 'all 0.15s ease',
                 }}
               >
-                {statusMessage.text}
+                <span>1. Abrir GitHub para Gerar Token (1-Click)</span>
+                <ExternalLink size={15} />
+              </a>
+
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '8px',
+                  fontSize: '12px',
+                  color: 'var(--color-outline)',
+                  background: 'var(--color-surface-container-low)',
+                  padding: '8px 12px',
+                  borderRadius: 'var(--radius-md, 6px)',
+                  border: '1px solid var(--color-outline-variant)',
+                }}
+              >
+                <Lightbulb size={16} style={{ color: 'var(--color-warning)', flexShrink: 0, marginTop: '2px' }} />
+                <span>
+                  O link acima já abre o GitHub com as permissões <code style={{ fontFamily: 'var(--font-mono, monospace)', background: 'var(--color-surface-container-highest)', padding: '1px 4px', borderRadius: '3px' }}>repo</code> e <code style={{ fontFamily: 'var(--font-mono, monospace)', background: 'var(--color-surface-container-highest)', padding: '1px 4px', borderRadius: '3px' }}>read:org</code> pré-marcadas!
+                </span>
               </div>
-            )}
-          </form>
 
-          <div className="divider"><span>OU</span></div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: '4px 0' }}>
+                <div style={{ flex: 1, height: '1px', background: 'var(--color-outline-variant)' }} />
+                <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-outline)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  2. Cole o Token abaixo
+                </span>
+                <div style={{ flex: 1, height: '1px', background: 'var(--color-outline-variant)' }} />
+              </div>
 
-          <button
-            type="button"
-            className="btn btn-secondary btn-large"
-            onClick={handleLocalModeLogin}
-            disabled={isLoading}
-            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
-          >
-            <span className="material-symbols-outlined icon-xs">desktop_windows</span>
-            Modo Local / Offline (Sem Conexão Externa)
-          </button>
-        </div>
+              <form onSubmit={handleTokenLogin} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <FormField label="GitHub Personal Access Token (PAT)">
+                  <Input
+                    type="password"
+                    id="pat-token-input"
+                    placeholder="ghp_xxxxxxxxxxxxxxxxxxxx ou github_pat_xxxx"
+                    autoComplete="off"
+                    value={token}
+                    onChange={(e) => setToken(e.target.value)}
+                  />
+                </FormField>
+
+                <Button
+                  id="btn-token-login"
+                  variant="primary"
+                  size="md"
+                  fullWidth
+                  type="submit"
+                  loading={isLoading}
+                >
+                  Conectar Conta & Acessar
+                </Button>
+
+                {statusMessage && (
+                  <AlertBanner
+                    variant={statusMessage.type}
+                    title={statusMessage.text}
+                    onClose={() => setStatusMessage(null)}
+                  />
+                )}
+              </form>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: '4px 0' }}>
+                <div style={{ flex: 1, height: '1px', background: 'var(--color-outline-variant)' }} />
+                <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-outline)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  OU
+                </span>
+                <div style={{ flex: 1, height: '1px', background: 'var(--color-outline-variant)' }} />
+              </div>
+
+              <Button
+                variant="secondary"
+                size="md"
+                fullWidth
+                type="button"
+                onClick={handleLocalModeLogin}
+                disabled={isLoading}
+                icon={<Monitor size={16} />}
+              >
+                Modo Local / Offline (Sem Conexão Externa)
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

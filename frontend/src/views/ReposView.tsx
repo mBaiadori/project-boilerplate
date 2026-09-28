@@ -4,6 +4,35 @@ import type { Repo } from "../types";
 import { useAuth } from "../context/AuthContext";
 import { useWorkspace } from "../context/WorkspaceContext";
 import { API } from "../services/api";
+import {
+  Button,
+  IconButton,
+  Card,
+  CardHeader,
+  CardContent,
+  CardFooter,
+  FormField,
+  Input,
+  SearchInput,
+  Badge,
+  EmptyState,
+  Spinner,
+  Switch,
+} from "../components/ui";
+import {
+  Plus,
+  LogOut,
+  X,
+  LayoutGrid,
+  List,
+  FolderGit2,
+  Lock,
+  Globe,
+  GitBranch,
+  ShieldCheck,
+  Building2,
+  ArrowRight,
+} from "lucide-react";
 
 interface ReposViewProps {
   onSelectRepo?: (repo: Repo) => void;
@@ -18,7 +47,7 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [openingRepoName, setOpeningRepoName] = useState<string | null>(null);
 
-  // Create Repo Card
+  // Create Repo State
   const [isCreatingRepo, setIsCreatingRepo] = useState(false);
   const [newRepoName, setNewRepoName] = useState("");
   const [newRepoDesc, setNewRepoDesc] = useState(
@@ -123,7 +152,7 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
           overflowY: "auto",
         }}
       >
-        {/* Navbar */}
+        {/* Navbar Topo */}
         <header className="repos-navbar">
           <div
             className="user-badge"
@@ -133,7 +162,7 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
               id="user-avatar"
               src={
                 user?.avatar_url ||
-                `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.name || "User")}&background=6366f1&color=fff`
+                `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.name || "User")}&background=1a73e8&color=fff`
               }
               alt="Avatar"
               style={{ width: "36px", height: "36px", borderRadius: "50%" }}
@@ -155,27 +184,28 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
           </div>
 
           <div className="nav-actions" style={{ display: "flex", gap: "8px" }}>
-            <button
+            <Button
               id="btn-open-create-repo"
-              className="btn btn-primary btn-sm"
-              type="button"
+              variant={isCreatingRepo ? "secondary" : "primary"}
+              size="sm"
+              leftIcon={isCreatingRepo ? <X size={15} /> : <Plus size={15} />}
               onClick={() => setIsCreatingRepo(!isCreatingRepo)}
             >
-              <span className="material-symbols-outlined icon-xs">add</span>
               {isCreatingRepo ? "Fechar Painel" : "Novo Repositório"}
-            </button>
-            <button
+            </Button>
+            <Button
               id="btn-logout"
-              className="btn btn-ghost btn-sm"
-              type="button"
+              variant="ghost"
+              size="sm"
+              leftIcon={<LogOut size={15} />}
               onClick={logout}
             >
               Desconectar
-            </button>
+            </Button>
           </div>
         </header>
 
-        {/* Main Content */}
+        {/* Conteúdo Principal */}
         <main
           className="repos-content"
           style={{
@@ -186,232 +216,153 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
             width: "100%",
           }}
         >
-          {/* Create Repo Form Card */}
+          {/* Card de Criação de Repositório */}
           {isCreatingRepo && (
-            <div
+            <Card
               id="create-repo-card"
-              className="card"
-              style={{
-                padding: "20px",
-                marginBottom: "24px",
-                border: "1.5px solid var(--border-color)",
-                background: "var(--bg-surface)",
-              }}
+              variant="elevated"
+              style={{ marginBottom: 24 }}
             >
-              <div
-                className="card-header"
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  marginBottom: "16px",
-                }}
-              >
-                <div>
-                  <h3 style={{ margin: 0, fontSize: "16px" }}>
-                    Criar Novo Repositório com Governança
-                  </h3>
-                  <span
-                    className="subtitle"
-                    style={{ fontSize: "12px", color: "var(--text-muted)" }}
+              <CardHeader
+                title="Criar Novo Repositório com Governança"
+                subtitle="Inicialize o repositório com branch protection e templates SDD oficiais"
+                actions={
+                  <IconButton
+                    size="sm"
+                    tooltip="Fechar"
+                    onClick={() => setIsCreatingRepo(false)}
                   >
-                    Inicialize o repositório com branch protection e templates
-                    SDD oficiais
-                  </span>
-                </div>
-                <button
-                  className="btn-close"
-                  type="button"
-                  onClick={() => setIsCreatingRepo(false)}
-                >
-                  <span className="material-symbols-outlined icon-sm">
-                    close
-                  </span>
-                </button>
-              </div>
-
+                    <X size={16} />
+                  </IconButton>
+                }
+              />
               <form onSubmit={handleCreateRepo}>
-                <div className="form-row">
-                  <div className="form-group flex-1">
-                    <label htmlFor="create-repo-owner">
-                      Proprietário / Organização:
-                    </label>
-                    <select
-                      id="create-repo-owner"
-                      className="form-select"
-                      value={selectedOrg}
-                      onChange={(e) => setSelectedOrg(e.target.value)}
-                    >
-                      <option value="all">{user?.login} (Conta Pessoal)</option>
-                      {orgs.map((o) => (
-                        <option key={o} value={o}>
-                          {o} (Organização)
-                        </option>
-                      ))}
-                    </select>
+                <CardContent style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 16 }}>
+                    <FormField label="Proprietário / Organização:">
+                      <select
+                        id="create-repo-owner"
+                        className="ui-input"
+                        value={selectedOrg}
+                        onChange={(e) => setSelectedOrg(e.target.value)}
+                      >
+                        <option value="all">{user?.login} (Conta Pessoal)</option>
+                        {orgs.map((o) => (
+                          <option key={o} value={o}>
+                            {o} (Organização)
+                          </option>
+                        ))}
+                      </select>
+                    </FormField>
+
+                    <FormField label="Nome do Repositório:" required>
+                      <Input
+                        id="create-repo-name"
+                        placeholder="ex: fintech-billing"
+                        value={newRepoName}
+                        onChange={(e) => setNewRepoName(e.target.value)}
+                        required
+                        autoFocus
+                      />
+                    </FormField>
                   </div>
 
-                  <div className="form-group flex-2">
-                    <label htmlFor="create-repo-name">
-                      Nome do Repositório:
-                    </label>
-                    <input
-                      type="text"
-                      id="create-repo-name"
-                      placeholder="ex: fintech-billing"
-                      value={newRepoName}
-                      onChange={(e) => setNewRepoName(e.target.value)}
-                      required
-                      autoFocus
-                    />
-                  </div>
-                </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 16 }}>
+                    <FormField label="Descrição:">
+                      <Input
+                        id="create-repo-desc"
+                        value={newRepoDesc}
+                        onChange={(e) => setNewRepoDesc(e.target.value)}
+                      />
+                    </FormField>
 
-                <div className="form-row">
-                  <div className="form-group flex-2">
-                    <label htmlFor="create-repo-desc">Descrição:</label>
-                    <input
-                      type="text"
-                      id="create-repo-desc"
-                      value={newRepoDesc}
-                      onChange={(e) => setNewRepoDesc(e.target.value)}
-                    />
+                    <FormField label="Aprovações necessárias:">
+                      <select
+                        id="create-repo-approvals"
+                        className="ui-input"
+                        value={newRepoApprovals}
+                        onChange={(e) =>
+                          setNewRepoApprovals(Number(e.target.value))
+                        }
+                      >
+                        <option value="1">1 Aprovação (1-of-N)</option>
+                        <option value="2">2 Aprovações</option>
+                      </select>
+                    </FormField>
                   </div>
 
-                  <div className="form-group flex-1">
-                    <label htmlFor="create-repo-approvals">
-                      Aprovações necessárias:
-                    </label>
-                    <select
-                      id="create-repo-approvals"
-                      className="form-select"
-                      value={newRepoApprovals}
-                      onChange={(e) =>
-                        setNewRepoApprovals(Number(e.target.value))
-                      }
-                    >
-                      <option value="1">1 Aprovação (1-of-N)</option>
-                      <option value="2">2 Aprovações</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div
-                  className="form-group-checkbox"
-                  style={{ marginTop: "8px" }}
-                >
-                  <label>
-                    <input
-                      type="checkbox"
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 4 }}>
+                    <Switch
                       id="create-repo-protection"
                       checked={newRepoProtection}
-                      onChange={(e) => setNewRepoProtection(e.target.checked)}
+                      onChange={setNewRepoProtection}
+                      label={<span>Bloquear branch <code>main</code> (Exige PR obrigatório)</span>}
+                      description="Garante que nenhuma alteração direta seja feita sem revisão"
                     />
-                    <span>
-                      <strong>
-                        Bloquear branch <code>main</code>
-                      </strong>{" "}
-                      (Exige PR obrigatório antes de merge)
-                    </span>
-                  </label>
-                </div>
 
-                <div
-                  className="form-group-checkbox"
-                  style={{ marginTop: "4px" }}
-                >
-                  <label>
-                    <input
-                      type="checkbox"
+                    <Switch
                       id="create-repo-private"
                       checked={newRepoPrivate}
-                      onChange={(e) => setNewRepoPrivate(e.target.checked)}
+                      onChange={setNewRepoPrivate}
+                      label="Repositório Privado no GitHub"
+                      description="Visível apenas para você e colaboradores autorizados"
                     />
-                    <span>Repositório Privado no GitHub</span>
-                  </label>
-                </div>
+                  </div>
+                </CardContent>
 
-                <div
-                  className="card-footer"
-                  style={{
-                    display: "flex",
-                    justifyContent: "flex-end",
-                    gap: "8px",
-                    marginTop: "16px",
-                  }}
-                >
-                  <button
-                    className="btn btn-ghost btn-sm"
+                <CardFooter>
+                  <Button
                     type="button"
+                    variant="ghost"
+                    size="sm"
                     onClick={() => setIsCreatingRepo(false)}
                   >
                     Cancelar
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     id="btn-submit-create-repo"
-                    className="btn btn-primary btn-sm"
                     type="submit"
-                    disabled={isSubmitting || !newRepoName.trim()}
+                    variant="primary"
+                    size="sm"
+                    isLoading={isSubmitting}
+                    disabled={!newRepoName.trim()}
                   >
-                    {isSubmitting
-                      ? "Criando no GitHub..."
-                      : "Criar Repositório"}
-                  </button>
-                </div>
+                    Criar Repositório
+                  </Button>
+                </CardFooter>
               </form>
-            </div>
+            </Card>
           )}
 
-          {/* Repos Section Header & Toolbar */}
+          {/* Cabeçalho da Seção de Repositórios & Barra de Ferramentas */}
           <div className="repos-section-header">
             <div className="section-title">
               <h2>Seus Repositórios</h2>
-              <span
-                className="badge badge-primary-subtle"
-                id="repos-count-badge"
-              >
+              <Badge id="repos-count-badge" variant="primary">
                 {filteredRepos.length} repositório(s)
-              </span>
+              </Badge>
             </div>
 
-            {/* Toolbar: Search Bar, Org Filter & View Switcher */}
-            <div className="repos-toolbar">
-              <div className="repos-search-box">
-                <span className="material-symbols-outlined icon-sm search-icon">
-                  search
-                </span>
-                <input
-                  type="text"
+            {/* Barra de Ferramentas: Busca, Filtro de Org e Alternador de Modo */}
+            <div className="repos-toolbar" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{ width: 280 }}>
+                <SearchInput
                   id="repos-search-input"
                   placeholder="Buscar repositório por nome ou descrição..."
-                  autoComplete="off"
-                  spellCheck="false"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
+                  onClear={() => setSearchTerm("")}
                 />
-                {searchTerm && (
-                  <button
-                    id="btn-clear-search"
-                    className="btn-clear-search"
-                    type="button"
-                    title="Limpar busca"
-                    onClick={() => setSearchTerm("")}
-                  >
-                    <span className="material-symbols-outlined icon-xs">
-                      close
-                    </span>
-                  </button>
-                )}
               </div>
 
-              <div className="repos-filters-actions">
+              <div className="repos-filters-actions" style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <select
-                  className="form-select"
+                  className="ui-input"
                   style={{
-                    fontSize: "12px",
-                    padding: "6px 12px",
-                    borderRadius: "18px",
-                    border: "1px solid var(--border-color)",
+                    height: 38,
+                    fontSize: "12.5px",
+                    borderRadius: "20px",
+                    width: "auto",
                   }}
                   value={selectedOrg}
                   onChange={(e) => setSelectedOrg(e.target.value)}
@@ -445,9 +396,7 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
                     type="button"
                     onClick={() => setViewMode("grid")}
                   >
-                    <span className="material-symbols-outlined icon-sm">
-                      grid_view
-                    </span>
+                    <LayoutGrid size={16} />
                     <span className="btn-label">Grade</span>
                   </button>
                   <button
@@ -457,9 +406,7 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
                     type="button"
                     onClick={() => setViewMode("list")}
                   >
-                    <span className="material-symbols-outlined icon-sm">
-                      view_list
-                    </span>
+                    <List size={16} />
                     <span className="btn-label">Lista</span>
                   </button>
                 </div>
@@ -467,30 +414,32 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
             </div>
           </div>
 
-          {/* Repos Grid / List */}
+          {/* Grade / Lista de Repositórios */}
           <div
             id="repos-list-grid"
             className={`repos-grid ${viewMode === "list" ? "list-view" : ""}`}
           >
             {isLoading ? (
-              <div className="loading-state">Carregando repositórios...</div>
+              <div style={{ gridColumn: "1 / -1", padding: 40, textAlign: "center" }}>
+                <Spinner size="lg" message="Carregando repositórios..." />
+              </div>
             ) : filteredRepos.length === 0 ? (
-              <div
-                className="repos-empty-state"
-                style={{ gridColumn: "1 / -1" }}
-              >
-                <div className="repos-empty-icon">
-                  <span className="material-symbols-outlined icon-md">
-                    inventory_2
-                  </span>
-                </div>
-                <div className="repos-empty-title">
-                  Nenhum repositório encontrado
-                </div>
-                <div className="repos-empty-desc">
-                  Tente ajustar os filtros ou clique em{" "}
-                  <strong>Novo Repositório</strong> acima para começar.
-                </div>
+              <div style={{ gridColumn: "1 / -1" }}>
+                <EmptyState
+                  icon={<FolderGit2 size={44} strokeWidth={1.4} />}
+                  title="Nenhum repositório encontrado"
+                  description="Tente ajustar os filtros ou clique em 'Novo Repositório' acima para começar."
+                  action={
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      leftIcon={<Plus size={15} />}
+                      onClick={() => setIsCreatingRepo(true)}
+                    >
+                      Novo Repositório
+                    </Button>
+                  }
+                />
               </div>
             ) : (
               filteredRepos.map((repo) => {
@@ -538,21 +487,18 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
                             className={`repo-icon-wrap ${isOpening ? "is-loading" : ""}`}
                             aria-hidden="true"
                           >
-                            <span
-                              className={`material-symbols-outlined icon-sm ${isOpening ? "spinning" : ""}`}
-                            >
-                              {isOpening ? "progress_activity" : "inventory_2"}
-                            </span>
+                            {isOpening ? (
+                              <span className="material-symbols-outlined icon-sm spinning">
+                                progress_activity
+                              </span>
+                            ) : (
+                              <FolderGit2 size={20} />
+                            )}
                           </div>
                           <div className="repo-titles-group">
                             {isOrg && (
                               <span className="repo-owner-tag">
-                                <span
-                                  className="material-symbols-outlined icon-xs"
-                                  style={{ fontSize: "13px" }}
-                                >
-                                  apartment
-                                </span>{" "}
+                                <Building2 size={13} style={{ marginRight: 3 }} />
                                 @{owner}
                               </span>
                             )}
@@ -565,14 +511,19 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
                           </div>
                         </div>
 
-                        <span
-                          className={`repo-visibility-pill ${repo.is_private ? "private" : "public"}`}
+                        <Badge
+                          variant={repo.is_private ? "warning" : "success"}
+                          size="sm"
+                          icon={
+                            repo.is_private ? (
+                              <Lock size={12} style={{ marginRight: 3 }} />
+                            ) : (
+                              <Globe size={12} style={{ marginRight: 3 }} />
+                            )
+                          }
                         >
-                          <span className="material-symbols-outlined icon-xs">
-                            {repo.is_private ? "lock" : "public"}
-                          </span>
-                          <span>{repo.is_private ? "Privado" : "Público"}</span>
-                        </span>
+                          {repo.is_private ? "Privado" : "Público"}
+                        </Badge>
                       </div>
 
                       <p
@@ -586,24 +537,12 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
 
                     <div className="repo-footer">
                       <div className="repo-footer-left">
-                        <span
-                          className="repo-branch-pill"
-                          title="Branch padrão"
-                        >
-                          <span
-                            className="material-symbols-outlined icon-xs"
-                            style={{ fontSize: "13px" }}
-                          >
-                            alt_route
-                          </span>
+                        <Badge variant="neutral" size="sm" icon={<GitBranch size={12} style={{ marginRight: 3 }} />}>
                           {repo.default_branch || "main"}
-                        </span>
-                        <span
-                          className="pill-dot protected"
-                          title="Branch protegida"
-                        >
-                          <span className="dot"></span> Protegido
-                        </span>
+                        </Badge>
+                        <Badge variant="success" size="sm" icon={<ShieldCheck size={12} style={{ marginRight: 3 }} />}>
+                          Protegido
+                        </Badge>
                       </div>
 
                       <div className="repo-footer-right">
@@ -618,12 +557,7 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
                             <span>Carregando...</span>
                           </div>
                         ) : (
-                          <span
-                            className="material-symbols-outlined icon-xs arrow-icon"
-                            style={{ color: "var(--text-muted)" }}
-                          >
-                            arrow_forward
-                          </span>
+                          <ArrowRight size={16} style={{ color: "var(--text-muted)" }} />
                         )}
                       </div>
                     </div>

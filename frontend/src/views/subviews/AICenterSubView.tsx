@@ -10,6 +10,8 @@ import type {
   CustomToolItem,
   CommunityToolItem,
 } from "../../types";
+import { Tabs, FilterChips, SearchInput } from "../../components/ui";
+import { Sparkles, Bot, Wrench, Cable } from "lucide-react";
 
 type MainTab = "skills" | "agents" | "tools" | "mcp";
 export type ScopeFilter = "installed" | "system" | "community";
@@ -832,66 +834,37 @@ return {
           )}
 
           {/* ── 2. Top-Level Main Tabs ── */}
-          <div
-            className="template-store-tabs"
-            role="tablist"
-            style={{
-              borderBottom: "1px solid var(--color-outline-variant, #e2e8f0)",
-              marginBottom: "16px",
-            }}
-          >
-            <button
-              className={`store-tab-btn ${activeMainTab === "skills" ? "active" : ""}`}
-              onClick={() => setActiveMainTab("skills")}
-            >
-              <span
-                className="material-symbols-outlined icon-xs"
-                style={{ marginRight: "6px" }}
-              >
-                auto_awesome
-              </span>
-              Skills ({installedSkills.length}/{hubSkills.length})
-            </button>
-
-            <button
-              className={`store-tab-btn ${activeMainTab === "agents" ? "active" : ""}`}
-              onClick={() => setActiveMainTab("agents")}
-            >
-              <span
-                className="material-symbols-outlined icon-xs"
-                style={{ marginRight: "6px" }}
-              >
-                psychology
-              </span>
-              Agentes ({installedAgents.length}/{hubAgents.length})
-            </button>
-
-            <button
-              className={`store-tab-btn ${activeMainTab === "tools" ? "active" : ""}`}
-              onClick={() => setActiveMainTab("tools")}
-            >
-              <span
-                className="material-symbols-outlined icon-xs"
-                style={{ marginRight: "6px" }}
-              >
-                build
-              </span>
-              Tools ({customTools.length + toolsList.length + communityTools.length})
-            </button>
-
-            <button
-              className={`store-tab-btn ${activeMainTab === "mcp" ? "active" : ""}`}
-              onClick={() => setActiveMainTab("mcp")}
-            >
-              <span
-                className="material-symbols-outlined icon-xs"
-                style={{ marginRight: "6px" }}
-              >
-                cable
-              </span>
-              Conectores MCP ({projectMcpServers.length})
-            </button>
-          </div>
+          <Tabs<MainTab>
+            activeTab={activeMainTab}
+            onChange={(t) => setActiveMainTab(t)}
+            variant="underline"
+            tabs={[
+              {
+                id: "skills",
+                label: "Skills",
+                icon: <Sparkles size={15} />,
+                count: installedSkills.length,
+              },
+              {
+                id: "agents",
+                label: "Agentes",
+                icon: <Bot size={15} />,
+                count: installedAgents.length,
+              },
+              {
+                id: "tools",
+                label: "Tools",
+                icon: <Wrench size={15} />,
+                count: customTools.length + toolsList.length + communityTools.length,
+              },
+              {
+                id: "mcp",
+                label: "Conectores MCP",
+                icon: <Cable size={15} />,
+                count: projectMcpServers.length,
+              },
+            ]}
+          />
         </div>
 
         {/* ========================================================================= */}
@@ -917,72 +890,34 @@ return {
                   gap: "12px",
                 }}
               >
-                <div style={{ display: "flex", gap: "6px" }}>
-                  <button
-                    type="button"
-                    onClick={() => setSkillScope("installed")}
-                    className={`store-filter-chip ${skillScope === "installed" ? "active" : ""}`}
-                  >
-                    📁 Instaladas ({installedSkills.length})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSkillScope("system")}
-                    className={`store-filter-chip ${skillScope === "system" ? "active" : ""}`}
-                  >
-                    ⚙️ Sistema ({systemSkills.length})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSkillScope("community")}
-                    className={`store-filter-chip ${skillScope === "community" ? "active" : ""}`}
-                  >
-                    🌐 Comunidade ({communitySkills.length})
-                  </button>
-                </div>
+                <FilterChips
+                  items={[
+                    { id: "installed", label: "Instaladas", count: installedSkills.length },
+                    { id: "system", label: "Sistema", count: systemSkills.length },
+                    { id: "community", label: "Comunidade", count: communitySkills.length },
+                  ]}
+                  activeId={skillScope}
+                  onChange={(s) => setSkillScope(s as any)}
+                  size="sm"
+                />
 
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                  }}
-                >
-                  <input
-                    type="text"
+                <div style={{ width: "220px" }}>
+                  <SearchInput
                     placeholder="Filtrar skills..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    style={{
-                      fontSize: "12px",
-                      padding: "5px 12px",
-                      borderRadius: "16px",
-                      border: "1px solid var(--color-outline-variant, #cbd5e1)",
-                      background: "var(--color-surface, #ffffff)",
-                      color: "var(--color-on-surface, #202124)",
-                      width: "180px",
-                    }}
+                    onClear={() => setSearchQuery("")}
                   />
                 </div>
               </div>
 
               {/* Category chips */}
-              <div
-                className="store-filter-bar"
-                style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}
-              >
-                {CATEGORY_CHIPS.map((c) => (
-                  <button
-                    key={c.id}
-                    type="button"
-                    onClick={() => setSelectedCategory(c.id)}
-                    className={`store-filter-chip ${selectedCategory === c.id ? "active" : ""}`}
-                    style={{ fontSize: "11px", padding: "3px 10px" }}
-                  >
-                    {c.label}
-                  </button>
-                ))}
-              </div>
+              <FilterChips
+                items={CATEGORY_CHIPS}
+                activeId={selectedCategory}
+                onChange={(c) => setSelectedCategory(c)}
+                size="sm"
+              />
             </div>
 
             {/* Skills Grid */}
@@ -1292,29 +1227,16 @@ return {
                 marginBottom: "16px",
               }}
             >
-              <div style={{ display: "flex", gap: "6px" }}>
-                <button
-                  type="button"
-                  onClick={() => setAgentScope("installed")}
-                  className={`store-filter-chip ${agentScope === "installed" ? "active" : ""}`}
-                >
-                  📁 Instaladas ({installedAgents.length})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAgentScope("system")}
-                  className={`store-filter-chip ${agentScope === "system" ? "active" : ""}`}
-                >
-                  ⚙️ Sistema ({systemAgents.length})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAgentScope("community")}
-                  className={`store-filter-chip ${agentScope === "community" ? "active" : ""}`}
-                >
-                  🌐 Comunidade ({communityAgents.length})
-                </button>
-              </div>
+              <FilterChips
+                items={[
+                  { id: "installed", label: "Instaladas", count: installedAgents.length },
+                  { id: "system", label: "Sistema", count: systemAgents.length },
+                  { id: "community", label: "Comunidade", count: communityAgents.length },
+                ]}
+                activeId={agentScope}
+                onChange={(s) => setAgentScope(s as any)}
+                size="sm"
+              />
             </div>
 
             <div
@@ -1581,29 +1503,16 @@ return {
                 marginBottom: "16px",
               }}
             >
-              <div style={{ display: "flex", gap: "6px" }}>
-                <button
-                  type="button"
-                  onClick={() => setToolScope("installed")}
-                  className={`store-filter-chip ${toolScope === "installed" ? "active" : ""}`}
-                >
-                  📁 Instaladas ({customTools.length})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setToolScope("system")}
-                  className={`store-filter-chip ${toolScope === "system" ? "active" : ""}`}
-                >
-                  ⚙️ Sistema ({toolsList.length})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setToolScope("community")}
-                  className={`store-filter-chip ${toolScope === "community" ? "active" : ""}`}
-                >
-                  🌐 Comunidade ({communityTools.length})
-                </button>
-              </div>
+              <FilterChips
+                items={[
+                  { id: "installed", label: "Instaladas", count: customTools.length },
+                  { id: "system", label: "Sistema", count: toolsList.length },
+                  { id: "community", label: "Comunidade", count: communityTools.length },
+                ]}
+                activeId={toolScope}
+                onChange={(s) => setToolScope(s as any)}
+                size="sm"
+              />
 
               {toolScope === "installed" && (
                 <button

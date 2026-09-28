@@ -4,10 +4,38 @@ import { useAI } from "../../context/AIContext";
 import { useWorkspace } from "../../context/WorkspaceContext";
 import { API } from "../../services/api";
 import { SelectDropdown, type SelectOption } from "../../components/common/SelectDropdown";
+import {
+  Button,
+  IconButton,
+  Card,
+  CardHeader,
+  CardContent,
+  CardFooter,
+  FormField,
+  Input,
+  Textarea,
+  Switch,
+  Badge,
+  AlertBanner,
+  StatCard,
+} from "../../components/ui";
+import {
+  FolderGit2,
+  Cpu,
+  Sparkles,
+  GitBranch,
+  ShieldCheck,
+  RefreshCw,
+  Edit2,
+  Plus,
+  X,
+  Save,
+  LogOut,
+} from "lucide-react";
 
 export const SettingsSubView: React.FC = () => {
   const { user, logout } = useAuth();
-  const { aiSettings, saveSettings: saveAISettings } = useAI();
+  const { aiSettings, saveAISettings } = useAI();
   const {
     activeRepo,
     gitStatus,
@@ -79,25 +107,29 @@ export const SettingsSubView: React.FC = () => {
 
         if (items.length > 0) {
           setModelsList(items);
-          setIsDynamicList(Boolean(res.data.isDynamic));
-          const exists = items.some((m) => m.id === model);
-          if (!exists && items[0]) {
-            setModel(items[0].id);
-          }
+          setIsDynamicList(true);
+        } else {
+          setModelsList([]);
+          setIsDynamicList(false);
         }
+      } else {
+        setModelsList([]);
+        setIsDynamicList(false);
       }
     } catch (err) {
-      console.warn("[SettingsSubView] Erro ao carregar modelos:", err);
+      console.error("[SettingsSubView] Erro ao buscar lista de modelos:", err);
+      setModelsList([]);
+      setIsDynamicList(false);
     } finally {
       setIsLoadingModels(false);
     }
-  }, [apiKey, endpoint, model]);
+  }, [apiKey, endpoint]);
 
   useEffect(() => {
     if (aiSettings) {
-      const activeProv = aiSettings.active_provider || "gemini";
+      const activeProv = aiSettings.active_provider || aiSettings.provider || "gemini";
       setProvider(activeProv);
-      setModel(aiSettings.active_model || (activeProv === "gemini" ? "gemini-2.5-flash" : "gpt-4o"));
+      setModel(aiSettings.active_model || aiSettings.model || (activeProv === "gemini" ? "gemini-2.5-flash" : "gpt-4o"));
       setEndpoint(aiSettings.custom_endpoint || "http://localhost:11434/v1");
       fetchModelsForProvider(activeProv, undefined, aiSettings.custom_endpoint);
     }
@@ -252,67 +284,29 @@ export const SettingsSubView: React.FC = () => {
     );
   };
 
-  // Salvamento das configurações de IA
-  const handleSaveAISettings = async () => {
-    setSaveStatus("Salvando configurações de IA...");
-    try {
-      await saveAISettings({
-        active_provider: provider,
-        active_model: model,
-        api_keys: apiKey ? { [provider]: apiKey } : undefined,
-        custom_endpoint: provider === "local" ? endpoint : undefined,
-      });
-      setSaveStatus("Configurações de IA salvas com sucesso!");
-      setTimeout(() => setSaveStatus(null), 3000);
-    } catch (err) {
-      console.error("Erro ao salvar IA:", err);
-      setSaveStatus("Erro ao salvar IA.");
-    }
-  };
-
-  // Salvamento das configurações específicas do projeto (.project.config.json)
-  const handleSaveProjectConfig = async () => {
-    setSaveStatus(
-      "Salvando configurações do projeto (.project.config.json)...",
+  const handleUpdateStatusBadge = (key: string, newBadge: string) => {
+    setStatuses(
+      statuses.map((s) => (s.key === key ? { ...s, badge: newBadge } : s)),
     );
-    const projectConfigPayload = {
-      project: {
-        name: projectName,
-        description: projectDescription,
-        version: projectVersion,
-        architecture_pattern: projectArchPattern,
-        repository_url: projectRepoUrl,
-        lead: projectLead,
-      },
-      categories: categories,
-      tags: tags,
-      statuses: statuses,
-      governance_rules: {
-        min_approvals_default: minApprovals,
-      },
-      reviewers: [],
-      ai_template_prompt: projectTemplatePrompt,
-    };
+  };
 
-    const res = await saveProjectConfig(projectConfigPayload);
-    if (res.success) {
-      setSaveStatus(
-        "Configurações do .project.config.json salvas com sucesso!",
-      );
+  const handleSaveAISettings = async () => {
+    try {
+      await saveAISettings(provider, model, apiKey, endpoint);
+      setSaveStatus("Configurações do Motor de IA salvas com sucesso!");
       setTimeout(() => setSaveStatus(null), 3500);
-    } else {
-      setSaveStatus(
-        `Erro ao salvar projeto: ${res.error || "Falha ao gravar"}`,
-      );
+    } catch (err) {
+      console.error("[SettingsSubView] Erro ao salvar IA:", err);
+      setSaveStatus("Erro ao salvar configurações de IA.");
     }
   };
 
-  // Salvamento unificado de todas as configurações
   const handleSaveAllSettings = async () => {
-    setSaveStatus("Salvando todas as configurações...");
     try {
-      await handleSaveAISettings();
-      await handleSaveProjectConfig();
+      // 1. Salvar IA
+      await saveAISettings(provider, model, apiKey, endpoint);
+
+      // 2. Salvar Prompts & Governança Geral
       await API.saveSettings({
         system_prompts: {
           global: globalPrompt,
@@ -322,1358 +316,652 @@ export const SettingsSubView: React.FC = () => {
           auto_pr: autoPROn,
         },
       });
-      setSaveStatus("Todas as configurações foram sincronizadas com sucesso!");
+
+      // 3. Salvar .project.config.json customizado do repositório
+      await saveProjectConfig({
+        project: {
+          name: projectName,
+          description: projectDescription,
+          version: projectVersion,
+          lead: projectLead,
+          architecture_pattern: projectArchPattern,
+          repository_url: projectRepoUrl,
+        },
+        categories,
+        tags,
+        statuses,
+        ai_template_prompt: projectTemplatePrompt,
+        governance_rules: {
+          min_approvals_default: minApprovals,
+        },
+      });
+
+      setSaveStatus("Todas as configurações foram salvas com sucesso!");
       setTimeout(() => setSaveStatus(null), 3500);
     } catch (err) {
-      console.error("Erro ao salvar configurações:", err);
-      setSaveStatus("Erro ao salvar configurações.");
+      console.error("[SettingsSubView] Erro ao salvar tudo:", err);
+      setSaveStatus("Erro ao salvar configurações gerais.");
     }
   };
 
   return (
     <div
-      id="subview-settings"
-      className="dash-subview"
+      className="settings-subview-container"
       style={{
-        display: "block",
-        width: "100%",
+        display: "flex",
+        flexDirection: "column",
         height: "100%",
+        width: "100%",
         overflowY: "auto",
+        background: "var(--md-sys-color-surface-container-low, #f8f9fa)",
       }}
     >
-      <div className="settings-view-wrapper">
-        <div style={{ marginBottom: "24px" }}>
-          <h2>Configurações & Governança</h2>
-          <p className="subtitle">
-            Gerencie as configurações do projeto ativo (.project.config.json),
-            motor de Inteligência Artificial, prompts mestre e regras de
-            governança.
-          </p>
+      <div
+        style={{
+          maxWidth: "1000px",
+          width: "100%",
+          margin: "0 auto",
+          padding: "24px 32px",
+          display: "flex",
+          flexDirection: "column",
+          gap: "24px",
+        }}
+      >
+        {/* Cabeçalho da Página */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div>
+            <h2 style={{ margin: 0, fontSize: "20px", fontWeight: 700, color: "var(--md-sys-color-on-surface, #202124)" }}>
+              Configurações & Governança do Projeto
+            </h2>
+            <p style={{ margin: "4px 0 0 0", fontSize: "13px", color: "var(--md-sys-color-on-surface-variant, #5f6368)" }}>
+              Personalize o repositório ativo, motores de IA, prompts e regras de governança.
+            </p>
+          </div>
+          <Button
+            id="btn-save-system-settings"
+            variant="primary"
+            size="md"
+            leftIcon={<Save size={16} />}
+            onClick={handleSaveAllSettings}
+          >
+            Salvar Tudo
+          </Button>
         </div>
 
         {saveStatus && (
-          <div
-            style={{
-              padding: "10px 16px",
-              background: "var(--bg-subtle, #eff6ff)",
-              border: "1px solid var(--primary, #3b82f6)",
-              borderRadius: "8px",
-              color: "var(--primary, #2563eb)",
-              marginBottom: "16px",
-              fontSize: "13px",
-              fontWeight: 600,
-            }}
-          >
-            {saveStatus}
-          </div>
+          <AlertBanner
+            type={saveStatus.includes("Erro") ? "error" : "success"}
+            title={saveStatus}
+            onClose={() => setSaveStatus(null)}
+          />
         )}
 
         {/* SEÇÃO 1: CONFIGURAÇÕES DO PROJETO ATIVO (.project.config.json) */}
-        <div
-          className="gov-card"
-          style={{ marginBottom: "24px" }}
-          id="card-project-custom-config"
-        >
-          <div className="gov-card-header">
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <span
-                className="material-symbols-outlined icon-lg"
-                style={{ color: "var(--primary, #2563eb)" }}
-              >
-                folder_managed
-              </span>
-              <div>
-                <h3 style={{ margin: 0, fontSize: "15px" }}>
-                  Configurações do Projeto (.project.config.json)
-                </h3>
-                <p
-                  style={{
-                    fontSize: "12px",
-                    color: "var(--text-muted)",
-                    margin: "2px 0 0 0",
-                  }}
-                >
-                  Customizações de metadados, categorias, tags e status do
-                  repositório <strong>{activeRepo?.name || "ativo"}</strong>.
-                </p>
+        <Card id="card-project-custom-config" variant="elevated">
+          <CardHeader
+            title={
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <FolderGit2 size={20} style={{ color: "var(--md-sys-color-primary, #1a73e8)" }} />
+                <span>Configurações do Projeto (.project.config.json)</span>
               </div>
-            </div>
-            <span
-              className="badge badge-primary-subtle"
-              style={{ fontSize: "11px" }}
-            >
-              {activeRepo?.name || "local"}
-            </span>
-          </div>
+            }
+            subtitle={`Customizações de metadados, categorias, tags e status do repositório ${activeRepo?.name || "ativo"}.`}
+            actions={
+              <Badge variant="primary">
+                {activeRepo?.name || "local"}
+              </Badge>
+            }
+          />
 
-          {/* Grid de Informações Básicas do Projeto */}
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-              gap: "14px",
-              marginTop: "16px",
-            }}
-          >
-            <div className="form-group">
-              <label htmlFor="cfg-proj-name">Nome do Projeto:</label>
-              <input
-                type="text"
-                id="cfg-proj-name"
-                value={projectName}
-                onChange={(e) => setProjectName(e.target.value)}
-                placeholder="Ex: Condominiums..."
-              />
-            </div>
+          <CardContent style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {/* Grid de Informações Básicas do Projeto */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14 }}>
+              <FormField label="Nome do Projeto:">
+                <Input
+                  id="cfg-proj-name"
+                  value={projectName}
+                  onChange={(e) => setProjectName(e.target.value)}
+                  placeholder="Ex: Condominiums..."
+                />
+              </FormField>
 
-            <div className="form-group">
-              <label htmlFor="cfg-proj-version">Versão Semântica:</label>
-              <input
-                type="text"
-                id="cfg-proj-version"
-                value={projectVersion}
-                onChange={(e) => setProjectVersion(e.target.value)}
-                placeholder="1.0.0"
-              />
-            </div>
+              <FormField label="Versão Semântica:">
+                <Input
+                  id="cfg-proj-version"
+                  value={projectVersion}
+                  onChange={(e) => setProjectVersion(e.target.value)}
+                  placeholder="1.0.0"
+                />
+              </FormField>
 
-            <div className="form-group">
-              <label htmlFor="cfg-proj-lead">Líder / Tech Lead:</label>
-              <input
-                type="text"
-                id="cfg-proj-lead"
-                value={projectLead}
-                onChange={(e) => setProjectLead(e.target.value)}
-                placeholder="@usuario"
-              />
+              <FormField label="Líder / Tech Lead:">
+                <Input
+                  id="cfg-proj-lead"
+                  value={projectLead}
+                  onChange={(e) => setProjectLead(e.target.value)}
+                  placeholder="@usuario"
+                />
+              </FormField>
+
+              <FormField label="Padrão de Arquitetura:">
+                <Input
+                  id="cfg-proj-pattern"
+                  value={projectArchPattern}
+                  onChange={(e) => setProjectArchPattern(e.target.value)}
+                  placeholder="Documentação Viva / Markdown Docs"
+                />
+              </FormField>
             </div>
 
-            <div className="form-group">
-              <label htmlFor="cfg-proj-pattern">Padrão de Arquitetura:</label>
-              <input
-                type="text"
-                id="cfg-proj-pattern"
-                value={projectArchPattern}
-                onChange={(e) => setProjectArchPattern(e.target.value)}
-                placeholder="Documentação Viva / Markdown Docs"
-              />
-            </div>
-          </div>
-
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr",
-              gap: "14px",
-              marginTop: "10px",
-            }}
-          >
-            <div className="form-group">
-              <label htmlFor="cfg-proj-repo-url">
-                URL do Repositório (Git):
-              </label>
-              <input
-                type="text"
+            <FormField label="URL do Repositório (Git):">
+              <Input
                 id="cfg-proj-repo-url"
                 value={projectRepoUrl}
                 onChange={(e) => setProjectRepoUrl(e.target.value)}
                 placeholder="https://github.com/org/repo.git"
               />
-            </div>
+            </FormField>
 
-            <div className="form-group">
-              <label htmlFor="cfg-proj-desc">Descrição do Projeto:</label>
-              <textarea
+            <FormField label="Descrição do Projeto:">
+              <Textarea
                 id="cfg-proj-desc"
                 rows={2}
                 value={projectDescription}
                 onChange={(e) => setProjectDescription(e.target.value)}
                 placeholder="Descreva o propósito e o domínio do projeto..."
               />
-            </div>
-          </div>
+            </FormField>
 
-          {/* Categorias Oficiais do Projeto */}
-          <div
-            style={{
-              marginTop: "20px",
-              paddingTop: "16px",
-              borderTop: "1px solid var(--border-color)",
-            }}
-          >
-            <label
-              style={{
-                fontSize: "13px",
-                fontWeight: 600,
-                display: "block",
-                marginBottom: "4px",
-              }}
-            >
-              Categorias Oficiais de Especificação (<code>categories</code>):
-            </label>
-            <p
-              style={{
-                fontSize: "11.5px",
-                color: "var(--text-muted)",
-                margin: "0 0 10px 0",
-              }}
-            >
-              Opções disponíveis nos seletores de metadados do documento
-              (.docs.metadata.json).
-            </p>
-
-            <div
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: "6px",
-                marginBottom: "10px",
-                alignItems: "center",
-              }}
-            >
-              {categories.map((cat) => (
-                <span
-                  key={cat}
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "4px",
-                    fontSize: "11.5px",
-                    padding: "3px 9px",
-                    borderRadius: "14px",
-                    background: "rgba(37,99,235,0.1)",
-                    color: "#2563eb",
-                    fontWeight: 600,
-                  }}
-                >
-                  {cat}
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveCategory(cat)}
-                    style={{
-                      background: "transparent",
-                      border: "none",
-                      cursor: "pointer",
-                      padding: 0,
-                      display: "inline-flex",
-                      color: "#94a3b8",
-                    }}
-                    title={`Remover categoria ${cat}`}
-                  >
-                    <span
-                      className="material-symbols-outlined"
-                      style={{ fontSize: "13px" }}
-                    >
-                      close
-                    </span>
-                  </button>
-                </span>
-              ))}
-            </div>
-
-            <div style={{ display: "flex", gap: "8px", maxWidth: "380px" }}>
-              <input
-                type="text"
-                className="form-input"
-                placeholder="Nova categoria (ex: financeiro, auth)..."
-                value={newCatInput}
-                onChange={(e) => setNewCatInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    handleAddCategory();
-                  }
-                }}
-                style={{ fontSize: "12px" }}
-              />
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                onClick={handleAddCategory}
-                disabled={!newCatInput.trim()}
+            {/* Categorias Oficiais */}
+            <div style={{ borderTop: "1px solid var(--md-sys-color-outline-variant, #dadce0)", paddingTop: 14 }}>
+              <FormField
+                label="Categorias Oficiais de Especificação (categories):"
+                helperText="Opções disponíveis nos seletores de metadados do documento (.docs.metadata.json)."
               >
-                + Adicionar
-              </button>
-            </div>
-          </div>
-
-          {/* Tags de Taxonomia do Projeto */}
-          <div
-            style={{
-              marginTop: "20px",
-              paddingTop: "16px",
-              borderTop: "1px solid var(--border-color)",
-            }}
-          >
-            <label
-              style={{
-                fontSize: "13px",
-                fontWeight: 600,
-                display: "block",
-                marginBottom: "4px",
-              }}
-            >
-              Tags de Taxonomia do Projeto (<code>tags</code>):
-            </label>
-            <p
-              style={{
-                fontSize: "11.5px",
-                color: "var(--text-muted)",
-                margin: "0 0 10px 0",
-              }}
-            >
-              Tags canônicas para categorização rápida de requisitos e
-              especificações.
-            </p>
-
-            <div
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: "6px",
-                marginBottom: "10px",
-                alignItems: "center",
-              }}
-            >
-              {tags.map((tag) => (
-                <span
-                  key={tag}
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "4px",
-                    fontSize: "11.5px",
-                    padding: "3px 9px",
-                    borderRadius: "14px",
-                    background: "rgba(16,185,129,0.1)",
-                    color: "#059669",
-                    fontWeight: 600,
-                  }}
-                >
-                  #{tag}
-                  <button
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8, alignItems: "center" }}>
+                  {categories.map((cat) => (
+                    <Badge key={cat} variant="primary" size="md">
+                      {cat}
+                      <IconButton
+                        size="sm"
+                        tooltip={`Remover categoria ${cat}`}
+                        style={{ width: 18, height: 18, marginLeft: 4 }}
+                        onClick={() => handleRemoveCategory(cat)}
+                      >
+                        <X size={12} />
+                      </IconButton>
+                    </Badge>
+                  ))}
+                </div>
+                <div style={{ display: "flex", gap: 8, maxWidth: 400 }}>
+                  <Input
+                    placeholder="Nova categoria (ex: financeiro, auth)..."
+                    value={newCatInput}
+                    onChange={(e) => setNewCatInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleAddCategory();
+                      }
+                    }}
+                  />
+                  <Button
                     type="button"
-                    onClick={() => handleRemoveTag(tag)}
-                    style={{
-                      background: "transparent",
-                      border: "none",
-                      cursor: "pointer",
-                      padding: 0,
-                      display: "inline-flex",
-                      color: "#94a3b8",
-                    }}
-                    title={`Remover tag ${tag}`}
+                    variant="secondary"
+                    size="sm"
+                    leftIcon={<Plus size={14} />}
+                    onClick={handleAddCategory}
+                    disabled={!newCatInput.trim()}
                   >
-                    <span
-                      className="material-symbols-outlined"
-                      style={{ fontSize: "13px" }}
-                    >
-                      close
-                    </span>
-                  </button>
-                </span>
-              ))}
+                    Adicionar
+                  </Button>
+                </div>
+              </FormField>
             </div>
 
-            <div style={{ display: "flex", gap: "8px", maxWidth: "380px" }}>
-              <input
-                type="text"
-                className="form-input"
-                placeholder="Nova tag (ex: database, mobile)..."
-                value={newTagInput}
-                onChange={(e) => setNewTagInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    handleAddTag();
-                  }
-                }}
-                style={{ fontSize: "12px" }}
-              />
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                onClick={handleAddTag}
-                disabled={!newTagInput.trim()}
+            {/* Tags de Taxonomia */}
+            <div style={{ borderTop: "1px solid var(--md-sys-color-outline-variant, #dadce0)", paddingTop: 14 }}>
+              <FormField
+                label="Tags de Taxonomia do Projeto (tags):"
+                helperText="Tags canônicas para categorização rápida de requisitos e especificações."
               >
-                + Adicionar
-              </button>
-            </div>
-          </div>
-
-          {/* Ciclo de Vida de Status */}
-          <div
-            style={{
-              marginTop: "20px",
-              paddingTop: "16px",
-              borderTop: "1px solid var(--border-color)",
-            }}
-          >
-            <label
-              style={{
-                fontSize: "13px",
-                fontWeight: 600,
-                display: "block",
-                marginBottom: "4px",
-              }}
-            >
-              Ciclo de Vida & Status Permitidos (<code>statuses</code>):
-            </label>
-            <p
-              style={{
-                fontSize: "11.5px",
-                color: "var(--text-muted)",
-                margin: "0 0 10px 0",
-              }}
-            >
-              Estados de governança suportados pelo projeto no editor e no fluxo
-              de aprovação.
-            </p>
-
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "8px",
-                marginBottom: "14px",
-              }}
-            >
-              {statuses.map((st) => (
-                <div
-                  key={st.key}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    padding: "8px 12px",
-                    borderRadius: "6px",
-                    background: "var(--bg-surface)",
-                    border: "1px solid var(--border-color)",
-                    gap: "12px",
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "10px",
-                      flex: 1,
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8, alignItems: "center" }}>
+                  {tags.map((tag) => (
+                    <Badge key={tag} variant="success" size="md">
+                      #{tag}
+                      <IconButton
+                        size="sm"
+                        tooltip={`Remover tag ${tag}`}
+                        style={{ width: 18, height: 18, marginLeft: 4 }}
+                        onClick={() => handleRemoveTag(tag)}
+                      >
+                        <X size={12} />
+                      </IconButton>
+                    </Badge>
+                  ))}
+                </div>
+                <div style={{ display: "flex", gap: 8, maxWidth: 400 }}>
+                  <Input
+                    placeholder="Nova tag (ex: database, mobile)..."
+                    value={newTagInput}
+                    onChange={(e) => setNewTagInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleAddTag();
+                      }
                     }}
+                  />
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    leftIcon={<Plus size={14} />}
+                    onClick={handleAddTag}
+                    disabled={!newTagInput.trim()}
                   >
-                    <code
+                    Adicionar
+                  </Button>
+                </div>
+              </FormField>
+            </div>
+
+            {/* Status do Ciclo de Vida */}
+            <div style={{ borderTop: "1px solid var(--md-sys-color-outline-variant, #dadce0)", paddingTop: 14 }}>
+              <FormField
+                label="Ciclo de Vida & Status Permitidos (statuses):"
+                helperText="Estados de governança suportados pelo projeto no editor e no fluxo de aprovação."
+              >
+                <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
+                  {statuses.map((st) => (
+                    <div
+                      key={st.key}
                       style={{
-                        fontSize: "12px",
-                        fontWeight: 700,
-                        minWidth: "90px",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        padding: "8px 12px",
+                        borderRadius: 8,
+                        background: "var(--md-sys-color-surface, #ffffff)",
+                        border: "1px solid var(--md-sys-color-outline-variant, #dadce0)",
+                        gap: 12,
                       }}
                     >
-                      {st.key}
-                    </code>
-                    <input
-                      type="text"
-                      className="form-input"
-                      value={st.label}
-                      onChange={(e) =>
-                        handleUpdateStatusLabel(st.key, e.target.value)
-                      }
-                      style={{ fontSize: "12px", padding: "4px 8px", flex: 1 }}
-                      placeholder="Rótulo descritivo..."
-                    />
-                  </div>
-                  <button
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1 }}>
+                        <code style={{ fontSize: "12px", color: "var(--md-sys-color-primary, #1a73e8)", minWidth: 90 }}>
+                          {st.key}
+                        </code>
+                        <Input
+                          value={st.label}
+                          style={{ height: 32, fontSize: "12.5px" }}
+                          onChange={(e) => handleUpdateStatusLabel(st.key, e.target.value)}
+                        />
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <select
+                          className="ui-input"
+                          style={{ height: 32, fontSize: "12px", width: 140 }}
+                          value={st.badge || "badge-neutral"}
+                          onChange={(e) => handleUpdateStatusBadge(st.key, e.target.value)}
+                        >
+                          <option value="badge-neutral">Neutro (Cinza)</option>
+                          <option value="badge-primary">Primário (Azul)</option>
+                          <option value="badge-success">Sucesso (Verde)</option>
+                          <option value="badge-warning">Alerta (Amarelo)</option>
+                          <option value="badge-danger">Perigo (Vermelho)</option>
+                          <option value="badge-purple">Especial (Roxo)</option>
+                        </select>
+                        <IconButton
+                          size="sm"
+                          tooltip="Remover status"
+                          onClick={() => handleRemoveStatus(st.key)}
+                        >
+                          <X size={14} />
+                        </IconButton>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div style={{ display: "flex", gap: 8, maxWidth: 520 }}>
+                  <Input
+                    placeholder="Chave (ex: in_review)..."
+                    value={newStatusKey}
+                    onChange={(e) => setNewStatusKey(e.target.value)}
+                    style={{ flex: 1 }}
+                  />
+                  <Input
+                    placeholder="Rótulo (ex: Em Revisão)..."
+                    value={newStatusLabel}
+                    onChange={(e) => setNewStatusLabel(e.target.value)}
+                    style={{ flex: 1 }}
+                  />
+                  <Button
                     type="button"
-                    onClick={() => handleRemoveStatus(st.key)}
-                    className="btn-icon-subtle"
-                    title={`Remover status ${st.key}`}
-                    style={{ color: "#ef4444" }}
+                    variant="secondary"
+                    size="sm"
+                    leftIcon={<Plus size={14} />}
+                    onClick={handleAddStatus}
+                    disabled={!newStatusKey.trim() || !newStatusLabel.trim()}
                   >
-                    <span className="material-symbols-outlined icon-xs">
-                      delete
-                    </span>
-                  </button>
+                    Adicionar
+                  </Button>
                 </div>
-              ))}
+              </FormField>
             </div>
+          </CardContent>
+        </Card>
 
-            {/* Inserção de Novo Status */}
-            <div
-              style={{
-                display: "flex",
-                gap: "8px",
-                alignItems: "center",
-                flexWrap: "wrap",
-              }}
-            >
-              <input
-                type="text"
-                className="form-input"
-                placeholder="Chave (ex: in_qa)"
-                value={newStatusKey}
-                onChange={(e) => setNewStatusKey(e.target.value)}
-                style={{ fontSize: "12px", width: "130px" }}
-              />
-              <input
-                type="text"
-                className="form-input"
-                placeholder="Rótulo (ex: Em Testes QA)"
-                value={newStatusLabel}
-                onChange={(e) => setNewStatusLabel(e.target.value)}
-                style={{ fontSize: "12px", flex: 1, minWidth: "160px" }}
-              />
-              <select
-                className="form-select"
-                value={newStatusBadge}
-                onChange={(e) => setNewStatusBadge(e.target.value)}
-                style={{ fontSize: "12px", width: "140px" }}
-              >
-                <option value="badge-neutral">badge-neutral</option>
-                <option value="badge-warning">badge-warning</option>
-                <option value="badge-info">badge-info</option>
-                <option value="badge-success">badge-success</option>
-                <option value="badge-secondary">badge-secondary</option>
-                <option value="badge-danger">badge-danger</option>
-              </select>
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                onClick={handleAddStatus}
-                disabled={!newStatusKey.trim() || !newStatusLabel.trim()}
-              >
-                + Adicionar Status
-              </button>
-            </div>
-          </div>
-
-          {/* Prompt Especializado do Criador de Templates (.project.config.json) */}
-          <div
-            style={{
-              marginTop: "20px",
-              paddingTop: "16px",
-              borderTop: "1px solid var(--border-color)",
-            }}
-          >
-            <label
-              htmlFor="cfg-proj-tpl-prompt"
-              style={{
-                fontSize: "13px",
-                fontWeight: 600,
-                display: "block",
-                marginBottom: "4px",
-              }}
-            >
-              Prompt Especializado do Criador de Templates (
-              <code>ai_template_prompt</code>):
-            </label>
-            <p
-              style={{
-                fontSize: "11.5px",
-                color: "var(--text-muted)",
-                margin: "0 0 6px 0",
-              }}
-            >
-              Instrução ativada automaticamente no Copilot ao criar ou editar
-              templates neste repositório.
-            </p>
-            <textarea
-              id="cfg-proj-tpl-prompt"
-              rows={3}
-              style={{ fontFamily: "var(--font-mono)", fontSize: "12px" }}
-              value={projectTemplatePrompt}
-              onChange={(e) => setProjectTemplatePrompt(e.target.value)}
-              placeholder="Você é o Arquiteto de Templates do projeto..."
-            />
-          </div>
-
-          {/* Quórum de Aprovações */}
-          <div
-            style={{
-              marginTop: "16px",
-              display: "flex",
-              alignItems: "center",
-              gap: "12px",
-            }}
-          >
-            <label
-              htmlFor="cfg-proj-min-approvals"
-              style={{
-                fontSize: "12.5px",
-                fontWeight: 600,
-                color: "var(--text-normal)",
-              }}
-            >
-              Quórum Mínimo de Aprovações (PRs):
-            </label>
-            <input
-              type="number"
-              id="cfg-proj-min-approvals"
-              min={1}
-              max={10}
-              value={minApprovals}
-              onChange={(e) =>
-                setMinApprovals(parseInt(e.target.value, 10) || 1)
-              }
-              style={{ width: "70px", padding: "4px 8px", fontSize: "12px" }}
-            />
-          </div>
-
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "flex-end",
-              marginTop: "18px",
-            }}
-          >
-            <button
-              id="btn-save-project-config-direct"
-              className="btn btn-primary btn-sm"
-              type="button"
-              onClick={handleSaveProjectConfig}
-            >
-              Salvar Configurações do Projeto (.project.config.json)
-            </button>
-          </div>
-        </div>
-
-        {/* SEÇÃO 2: MOTOR DE INTELIGÊNCIA ARTIFICIAL (IA) */}
-        <div className="gov-card" style={{ marginBottom: "24px" }}>
-          <div className="gov-card-header">
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <span
-                className="material-symbols-outlined icon-lg"
-                style={{ color: "var(--md-sys-color-primary, #2563eb)" }}
-              >
-                smart_toy
-              </span>
-              <div>
-                <h3 style={{ margin: 0, fontSize: "15px" }}>
-                  Provedor de Inteligência Artificial & Modelos
-                </h3>
-                <p
-                  style={{
-                    fontSize: "12px",
-                    color: "var(--text-muted)",
-                    margin: "2px 0 0 0",
-                  }}
-                >
-                  Escolha o provedor de LLM utilizado pelo assistente em tempo
-                  real e geradores.
-                </p>
+        {/* SEÇÃO 2: MOTOR DE INTELIGÊNCIA ARTIFICIAL */}
+        <Card id="card-ai-engine-settings" variant="elevated">
+          <CardHeader
+            title={
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <Cpu size={20} style={{ color: "#10b981" }} />
+                <span>Motor de Inteligência Artificial & Provedor</span>
               </div>
-            </div>
-            <span className="pill-dot success" id="settings-ai-status-pill">
-              <span className="dot"></span> Ativo
-            </span>
-          </div>
+            }
+            subtitle="Conecte seu modelo LLM preferido para geração de documentos, agentes e copiloto."
+            actions={
+              <Badge variant="success" hasDot>
+                {provider.toUpperCase()}
+              </Badge>
+            }
+          />
 
-          {/* Provider Selection Cards Grid */}
-          <div
-            className="provider-cards-grid"
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))",
-              gap: "12px",
-              margin: "16px 0",
-            }}
-          >
-            <div
-              className={`provider-card-option ${provider === "gemini" ? "selected" : ""}`}
-              data-provider="gemini"
-              onClick={() => {
-                setProvider("gemini");
-                fetchModelsForProvider("gemini", apiKey, endpoint);
-              }}
-              style={{
-                padding: "12px",
-                border: provider === "gemini" ? "1.5px solid #10b981" : "1.5px solid var(--border-color)",
-                borderRadius: "8px",
-                cursor: "pointer",
-                background: provider === "gemini" ? "rgba(16, 185, 129, 0.08)" : "var(--bg-surface)",
-                boxShadow: provider === "gemini" ? "0 0 0 1px #10b981" : "none",
-                transition: "all 0.15s ease",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                }}
-              >
-                <strong style={{ color: provider === "gemini" ? "#059669" : "inherit" }}>Google Gemini</strong>
-                <input
-                  type="radio"
-                  name="settings-ai-provider"
-                  value="gemini"
-                  checked={provider === "gemini"}
-                  onChange={() => {}}
-                  style={{ accentColor: "#10b981" }}
-                />
-              </div>
-              <span
-                style={{
-                  fontSize: "11px",
-                  color: "var(--text-muted)",
-                  display: "block",
-                  marginTop: "4px",
-                }}
-              >
-                Flash 2.5 & Pro
-              </span>
-            </div>
-
-            <div
-              className={`provider-card-option ${provider === "openai" ? "selected" : ""}`}
-              data-provider="openai"
-              onClick={() => {
-                setProvider("openai");
-                fetchModelsForProvider("openai", apiKey, endpoint);
-              }}
-              style={{
-                padding: "12px",
-                border: provider === "openai" ? "1.5px solid #10b981" : "1.5px solid var(--border-color)",
-                borderRadius: "8px",
-                cursor: "pointer",
-                background: provider === "openai" ? "rgba(16, 185, 129, 0.08)" : "var(--bg-surface)",
-                boxShadow: provider === "openai" ? "0 0 0 1px #10b981" : "none",
-                transition: "all 0.15s ease",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                }}
-              >
-                <strong style={{ color: provider === "openai" ? "#059669" : "inherit" }}>OpenAI</strong>
-                <input
-                  type="radio"
-                  name="settings-ai-provider"
-                  value="openai"
-                  checked={provider === "openai"}
-                  onChange={() => {}}
-                  style={{ accentColor: "#10b981" }}
-                />
-              </div>
-              <span
-                style={{
-                  fontSize: "11px",
-                  color: "var(--text-muted)",
-                  display: "block",
-                  marginTop: "4px",
-                }}
-              >
-                GPT-4o & o3-mini
-              </span>
-            </div>
-
-            <div
-              className={`provider-card-option ${provider === "anthropic" ? "selected" : ""}`}
-              data-provider="anthropic"
-              onClick={() => {
-                setProvider("anthropic");
-                fetchModelsForProvider("anthropic", apiKey, endpoint);
-              }}
-              style={{
-                padding: "12px",
-                border: provider === "anthropic" ? "1.5px solid #10b981" : "1.5px solid var(--border-color)",
-                borderRadius: "8px",
-                cursor: "pointer",
-                background: provider === "anthropic" ? "rgba(16, 185, 129, 0.08)" : "var(--bg-surface)",
-                boxShadow: provider === "anthropic" ? "0 0 0 1px #10b981" : "none",
-                transition: "all 0.15s ease",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                }}
-              >
-                <strong style={{ color: provider === "anthropic" ? "#059669" : "inherit" }}>Anthropic</strong>
-                <input
-                  type="radio"
-                  name="settings-ai-provider"
-                  value="anthropic"
-                  checked={provider === "anthropic"}
-                  onChange={() => {}}
-                  style={{ accentColor: "#10b981" }}
-                />
-              </div>
-              <span
-                style={{
-                  fontSize: "11px",
-                  color: "var(--text-muted)",
-                  display: "block",
-                  marginTop: "4px",
-                }}
-              >
-                Claude 3.7 & 3.5
-              </span>
-            </div>
-
-            <div
-              className={`provider-card-option ${provider === "deepseek" ? "selected" : ""}`}
-              data-provider="deepseek"
-              onClick={() => {
-                setProvider("deepseek");
-                fetchModelsForProvider("deepseek", apiKey, endpoint);
-              }}
-              style={{
-                padding: "12px",
-                border: provider === "deepseek" ? "1.5px solid #10b981" : "1.5px solid var(--border-color)",
-                borderRadius: "8px",
-                cursor: "pointer",
-                background: provider === "deepseek" ? "rgba(16, 185, 129, 0.08)" : "var(--bg-surface)",
-                boxShadow: provider === "deepseek" ? "0 0 0 1px #10b981" : "none",
-                transition: "all 0.15s ease",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                }}
-              >
-                <strong style={{ color: provider === "deepseek" ? "#059669" : "inherit" }}>DeepSeek</strong>
-                <input
-                  type="radio"
-                  name="settings-ai-provider"
-                  value="deepseek"
-                  checked={provider === "deepseek"}
-                  onChange={() => {}}
-                  style={{ accentColor: "#10b981" }}
-                />
-              </div>
-              <span
-                style={{
-                  fontSize: "11px",
-                  color: "var(--text-muted)",
-                  display: "block",
-                  marginTop: "4px",
-                }}
-              >
-                V3 & R1 Reasoner
-              </span>
-            </div>
-
-            <div
-              className={`provider-card-option ${provider === "local" ? "selected" : ""}`}
-              data-provider="local"
-              onClick={() => {
-                setProvider("local");
-                fetchModelsForProvider("local", apiKey, endpoint);
-              }}
-              style={{
-                padding: "12px",
-                border: provider === "local" ? "1.5px solid #10b981" : "1.5px solid var(--border-color)",
-                borderRadius: "8px",
-                cursor: "pointer",
-                background: provider === "local" ? "rgba(16, 185, 129, 0.08)" : "var(--bg-surface)",
-                boxShadow: provider === "local" ? "0 0 0 1px #10b981" : "none",
-                transition: "all 0.15s ease",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                }}
-              >
-                <strong style={{ color: provider === "local" ? "#059669" : "inherit" }}>Ollama Local</strong>
-                <input
-                  type="radio"
-                  name="settings-ai-provider"
-                  value="local"
-                  checked={provider === "local"}
-                  onChange={() => {}}
-                  style={{ accentColor: "#10b981" }}
-                />
-              </div>
-              <span
-                style={{
-                  fontSize: "11px",
-                  color: "var(--text-muted)",
-                  display: "block",
-                  marginTop: "4px",
-                }}
-              >
-                Offline / Localhost
-              </span>
-            </div>
-          </div>
-
-          {/* Model & API Key Inputs */}
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: "14px",
-              marginTop: "10px",
-            }}
-          >
-            <div className="form-group">
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "4px" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                  <label htmlFor="settings-ai-model-input" style={{ marginBottom: 0 }}>
-                    Modelo Selecionado:
-                  </label>
-                  {isDynamicList && (
-                    <span className="badge badge-success" style={{ fontSize: "10px", padding: "1px 6px" }}>
-                      API Dinâmica
+          <CardContent style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {/* Seletor de Provedor em Cartões */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10 }}>
+              {[
+                { id: "gemini", name: "Google Gemini", sub: "Flash 2.5 & Pro" },
+                { id: "openai", name: "OpenAI", sub: "GPT-4o & o3-mini" },
+                { id: "anthropic", name: "Anthropic", sub: "Claude 3.7 & 3.5" },
+                { id: "deepseek", name: "DeepSeek", sub: "V3 & R1 Reasoner" },
+                { id: "local", name: "Ollama Local", sub: "Offline / Localhost" },
+              ].map((p) => {
+                const isSelected = provider === p.id;
+                return (
+                  <div
+                    key={p.id}
+                    onClick={() => {
+                      setProvider(p.id);
+                      fetchModelsForProvider(p.id, apiKey, endpoint);
+                    }}
+                    style={{
+                      padding: "12px 14px",
+                      borderRadius: 8,
+                      border: isSelected ? "2px solid #10b981" : "1px solid var(--md-sys-color-outline-variant, #dadce0)",
+                      background: isSelected ? "rgba(16, 185, 129, 0.08)" : "var(--md-sys-color-surface, #ffffff)",
+                      cursor: "pointer",
+                      transition: "all 0.16s ease",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <strong style={{ fontSize: "13.5px", color: isSelected ? "#059669" : "inherit" }}>
+                        {p.name}
+                      </strong>
+                      <input
+                        type="radio"
+                        name="settings-ai-provider"
+                        checked={isSelected}
+                        onChange={() => {}}
+                        style={{ accentColor: "#10b981" }}
+                      />
+                    </div>
+                    <span style={{ fontSize: "11px", color: "var(--md-sys-color-on-surface-variant, #5f6368)", marginTop: 2, display: "block" }}>
+                      {p.sub}
                     </span>
-                  )}
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                  <button
-                    className="btn btn-ghost btn-xs"
-                    type="button"
-                    title="Buscar modelos do provedor"
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Model & API Key Inputs */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+              <FormField
+                label="Modelo Selecionado:"
+                helperText={isDynamicList ? "Lista obtida diretamente da API do provedor." : undefined}
+              >
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <div style={{ flex: 1 }}>
+                    {isCustomModelInput ? (
+                      <Input
+                        id="settings-ai-model-input"
+                        placeholder="Ex: gemini-2.5-flash, gpt-4o"
+                        value={model}
+                        onChange={(e) => setModel(e.target.value)}
+                      />
+                    ) : (
+                      <SelectDropdown
+                        id="settings-ai-model-input"
+                        value={model}
+                        options={selectOptions}
+                        onChange={(val) => setModel(val)}
+                        placeholder="Selecione o modelo de IA..."
+                        searchable={selectOptions.length > 5}
+                        searchPlaceholder="Filtrar modelos..."
+                        leadingIcon="smart_toy"
+                      />
+                    )}
+                  </div>
+                  <IconButton
+                    size="sm"
+                    bordered
+                    tooltip="Buscar modelos do provedor"
                     onClick={() => fetchModelsForProvider(provider, apiKey, endpoint)}
                     disabled={isLoadingModels}
-                    style={{ fontSize: "11px", padding: "2px 8px", display: "inline-flex", alignItems: "center", gap: "4px" }}
                   >
-                    <span className={`material-symbols-outlined icon-xs ${isLoadingModels ? "spinning" : ""}`}>
-                      {isLoadingModels ? "progress_activity" : "refresh"}
-                    </span>
-                    {isLoadingModels ? "Buscando..." : "Atualizar"}
-                  </button>
-                  <button
-                    className="btn btn-ghost btn-xs"
-                    type="button"
+                    <RefreshCw size={14} className={isLoadingModels ? "spinning" : ""} />
+                  </IconButton>
+                  <IconButton
+                    size="sm"
+                    bordered
+                    tooltip={isCustomModelInput ? "Usar lista" : "Digitar modelo customizado"}
                     onClick={() => setIsCustomModelInput(!isCustomModelInput)}
-                    style={{ fontSize: "11px", padding: "2px 8px", display: "inline-flex", alignItems: "center", gap: "4px" }}
                   >
-                    <span className="material-symbols-outlined icon-xs">edit</span>
-                    {isCustomModelInput ? "Lista" : "Digitar"}
-                  </button>
+                    <Edit2 size={14} />
+                  </IconButton>
                 </div>
-              </div>
+              </FormField>
 
-              {isCustomModelInput ? (
-                <input
-                  type="text"
-                  id="settings-ai-model-input"
-                  className="form-input"
-                  placeholder="Ex: gemini-2.5-flash, gemini-2.5-pro, gpt-4o"
-                  value={model}
-                  onChange={(e) => setModel(e.target.value)}
+              <FormField label="Chave de API (API Key):">
+                <Input
+                  type="password"
+                  id="settings-ai-key-input"
+                  placeholder="Cole sua chave aqui..."
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  onBlur={() => {
+                    if (apiKey.trim()) {
+                      fetchModelsForProvider(provider, apiKey, endpoint);
+                    }
+                  }}
                 />
-              ) : (
-                <SelectDropdown
-                  id="settings-ai-model-input"
-                  value={model}
-                  options={selectOptions}
-                  onChange={(val) => setModel(val)}
-                  placeholder="Selecione o modelo de IA..."
-                  searchable={selectOptions.length > 5}
-                  searchPlaceholder="Filtrar modelos (ex: flash, pro, 2.5)..."
-                  leadingIcon="smart_toy"
+              </FormField>
+            </div>
+
+            {provider === "local" && (
+              <FormField label="Endpoint Local (Ollama / vLLM):">
+                <Input
+                  id="settings-ai-endpoint-input"
+                  value={endpoint}
+                  onChange={(e) => setEndpoint(e.target.value)}
                 />
-              )}
-            </div>
+              </FormField>
+            )}
+          </CardContent>
 
-            <div className="form-group" id="settings-ai-key-group">
-              <label htmlFor="settings-ai-key-input">
-                Chave de API (API Key):
-              </label>
-              <input
-                type="password"
-                id="settings-ai-key-input"
-                className="form-input"
-                placeholder="Cole sua chave aqui..."
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                onBlur={() => {
-                  if (apiKey.trim()) {
-                    fetchModelsForProvider(provider, apiKey, endpoint);
-                  }
-                }}
-              />
-            </div>
-          </div>
-
-          {provider === "local" && (
-            <div
-              className="form-group"
-              id="settings-ai-endpoint-group"
-              style={{ marginTop: "10px" }}
-            >
-              <label htmlFor="settings-ai-endpoint-input">
-                Endpoint Local (Ollama / vLLM):
-              </label>
-              <input
-                type="text"
-                id="settings-ai-endpoint-input"
-                value={endpoint}
-                onChange={(e) => setEndpoint(e.target.value)}
-              />
-            </div>
-          )}
-
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "flex-end",
-              marginTop: "14px",
-            }}
-          >
-            <button
+          <CardFooter>
+            <Button
               id="btn-save-ai-settings-direct"
-              className="btn btn-primary btn-sm"
-              type="button"
+              variant="primary"
+              size="sm"
+              leftIcon={<Save size={14} />}
               onClick={handleSaveAISettings}
             >
               Salvar Motor de IA
-            </button>
-          </div>
-        </div>
+            </Button>
+          </CardFooter>
+        </Card>
 
         {/* SEÇÃO 3: PROMPTS MESTRE DO SISTEMA */}
-        <div className="gov-card" style={{ marginBottom: "24px" }}>
-          <div className="gov-card-header">
-            <div>
-              <h3 style={{ margin: 0, fontSize: "15px" }}>
-                Prompts Mestre do Sistema
-              </h3>
-              <p
-                style={{
-                  fontSize: "12px",
-                  color: "var(--text-muted)",
-                  margin: "2px 0 0 0",
-                }}
-              >
-                Defina as diretrizes oficiais injetadas nos assistentes e
-                geradores.
-              </p>
-            </div>
-            <span className="pill-dot info">
-              <span className="dot"></span> System Prompts
-            </span>
-          </div>
-
-          <div className="form-group" style={{ marginTop: "14px" }}>
-            <label htmlFor="sys-global-system-prompt">
-              <strong>Prompt Global do Agent (Chat no Workspace):</strong>
-            </label>
-            <p
-              style={{
-                fontSize: "11.5px",
-                color: "var(--text-muted)",
-                margin: "2px 0 6px 0",
-              }}
-            >
-              Instrução base injetada em todas as conversas do Agentic Chat.
-            </p>
-            <textarea
-              id="sys-global-system-prompt"
-              rows={4}
-              style={{ fontFamily: "var(--font-mono)", fontSize: "12px" }}
-              value={globalPrompt}
-              onChange={(e) => setGlobalPrompt(e.target.value)}
-              placeholder="Você é o Arquiteto e Assistente Oficial de Especificações..."
-            />
-          </div>
-
-          <div className="form-group" style={{ marginTop: "14px" }}>
-            <label htmlFor="sys-template-creator-prompt">
-              <strong>Prompt do Criador de Templates:</strong>
-            </label>
-            <p
-              style={{
-                fontSize: "11.5px",
-                color: "var(--text-muted)",
-                margin: "2px 0 6px 0",
-              }}
-            >
-              Meta-prompt que orienta a IA na geração de novos templates
-              estruturados.
-            </p>
-            <textarea
-              id="sys-template-creator-prompt"
-              rows={3}
-              style={{ fontFamily: "var(--font-mono)", fontSize: "12px" }}
-              value={tplCreatorPrompt}
-              onChange={(e) => setTplCreatorPrompt(e.target.value)}
-              placeholder="Gere templates no padrão oficial de governança com frontmatter estruturado..."
-            />
-          </div>
-        </div>
-
-        {/* SEÇÃO 4: REGRAS DE GOVERNANÇA & VERSÕES */}
-        <div className="gov-card" style={{ marginBottom: "24px" }}>
-          <div className="gov-card-header">
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <span
-                className="material-symbols-outlined icon-lg"
-                style={{ color: "var(--md-sys-color-primary, #3b82f6)" }}
-              >
-                history_edu
-              </span>
-              <div>
-                <h3 style={{ margin: 0, fontSize: "15px" }}>
-                  Governança de Versões & Repositório
-                </h3>
-                <p
-                  style={{
-                    fontSize: "12px",
-                    color: "var(--text-muted)",
-                    margin: "2px 0 0 0",
-                  }}
-                >
-                  Status do controle de versões, trilhas ativas e fluxo de
-                  aprovação de propostas.
-                </p>
+        <Card variant="elevated">
+          <CardHeader
+            title={
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <Sparkles size={20} style={{ color: "var(--md-sys-color-primary, #1a73e8)" }} />
+                <span>Prompts Mestre do Sistema</span>
               </div>
-            </div>
-            <span
-              className={`pill-dot ${gitDiagnostic?.installed ? "success" : "warning"}`}
-            >
-              <span className="dot"></span>{" "}
-              {gitDiagnostic?.installed ? "Controle de Versões Ativo" : "Modo Offline"}
-            </span>
-          </div>
+            }
+            subtitle="Defina as diretrizes oficiais injetadas nos assistentes e geradores."
+            actions={<Badge variant="info">System Prompts</Badge>}
+          />
 
-          {/* Versões & Repositório Stats Panel */}
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-              gap: "12px",
-              marginTop: "14px",
-            }}
-          >
-            <div
-              style={{
-                padding: "12px",
-                background: "var(--bg-surface)",
-                borderRadius: "8px",
-                border: "1px solid var(--border-color)",
-              }}
+          <CardContent style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <FormField
+              label="Prompt Global do Agent (Chat no Workspace):"
+              helperText="Instrução base injetada em todas as conversas do Agentic Chat."
             >
-              <span
-                style={{
-                  fontSize: "11px",
-                  color: "var(--text-muted)",
-                  display: "block",
-                }}
-              >
-                Repositório Ativo
-              </span>
-              <strong
-                style={{ fontSize: "13px", fontFamily: "var(--font-mono)" }}
-              >
-                {activeRepo?.name || "local"}
-              </strong>
-            </div>
-
-            <div
-              style={{
-                padding: "12px",
-                background: "var(--bg-surface)",
-                borderRadius: "8px",
-                border: "1px solid var(--border-color)",
-              }}
-            >
-              <span
-                style={{
-                  fontSize: "11px",
-                  color: "var(--text-muted)",
-                  display: "block",
-                }}
-              >
-                Motor de Versionamento
-              </span>
-              <strong
-                style={{ fontSize: "13px", fontFamily: "var(--font-mono)" }}
-              >
-                {gitDiagnostic?.version || "Verificando..."}
-              </strong>
-            </div>
-
-            <div
-              style={{
-                padding: "12px",
-                background: "var(--bg-surface)",
-                borderRadius: "8px",
-                border: "1px solid var(--border-color)",
-              }}
-            >
-              <span
-                style={{
-                  fontSize: "11px",
-                  color: "var(--text-muted)",
-                  display: "block",
-                }}
-              >
-                Trilha Ativa
-              </span>
-              <strong
-                style={{ fontSize: "13px", fontFamily: "var(--font-mono)" }}
-              >
-                {gitStatus?.branch || "main"}
-              </strong>
-            </div>
-
-            <div
-              style={{
-                padding: "12px",
-                background: "var(--bg-surface)",
-                borderRadius: "8px",
-                border: "1px solid var(--border-color)",
-              }}
-            >
-              <span
-                style={{
-                  fontSize: "11px",
-                  color: "var(--text-muted)",
-                  display: "block",
-                }}
-              >
-                Servidor Remoto (Nuvem)
-              </span>
-              <strong
-                style={{
-                  fontSize: "12px",
-                  fontFamily: "var(--font-mono)",
-                  wordBreak: "break-all",
-                }}
-              >
-                {gitStatus?.remoteUrl || "Local (Sem servidor remoto)"}
-              </strong>
-            </div>
-
-            <div
-              style={{
-                padding: "12px",
-                background: "var(--bg-surface)",
-                borderRadius: "8px",
-                border: "1px solid var(--border-color)",
-              }}
-            >
-              <span
-                style={{
-                  fontSize: "11px",
-                  color: "var(--text-muted)",
-                  display: "block",
-                }}
-              >
-                Versões Registradas
-              </span>
-              <strong style={{ fontSize: "13px" }}>
-                {gitLog.length} {gitLog.length === 1 ? "versão" : "versões"}
-              </strong>
-            </div>
-          </div>
-
-          <div className="form-group-checkbox" style={{ marginTop: "16px" }}>
-            <label>
-              <input
-                type="checkbox"
-                id="sys-auto-pr-check"
-                checked={autoPROn}
-                onChange={(e) => setAutoPROn(e.target.checked)}
+              <Textarea
+                id="sys-global-system-prompt"
+                rows={4}
+                style={{ fontFamily: "var(--md-sys-typescale-font-code, monospace)", fontSize: "12.5px" }}
+                value={globalPrompt}
+                onChange={(e) => setGlobalPrompt(e.target.value)}
+                placeholder="Você é o Arquiteto e Assistente Oficial de Especificações..."
               />
-              <span>
-                <strong>Modo Ágil:</strong> Permitir edição contínua no
-                workspace acumulando alterações em 1 única proposta unificada
-              </span>
-            </label>
-          </div>
-        </div>
+            </FormField>
+
+            <FormField
+              label="Prompt do Criador de Templates:"
+              helperText="Meta-prompt que orienta a IA na geração de novos templates estruturados."
+            >
+              <Textarea
+                id="sys-template-creator-prompt"
+                rows={3}
+                style={{ fontFamily: "var(--md-sys-typescale-font-code, monospace)", fontSize: "12.5px" }}
+                value={tplCreatorPrompt}
+                onChange={(e) => setTplCreatorPrompt(e.target.value)}
+                placeholder="Gere templates no padrão oficial de governança com frontmatter estruturado..."
+              />
+            </FormField>
+          </CardContent>
+        </Card>
+
+        {/* SEÇÃO 4: GOVERNANÇA DE VERSÕES & REPOSITÓRIO */}
+        <Card variant="elevated">
+          <CardHeader
+            title={
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <GitBranch size={20} style={{ color: "var(--md-sys-color-primary, #1a73e8)" }} />
+                <span>Governança de Versões & Repositório</span>
+              </div>
+            }
+            subtitle="Status do controle de versões, trilhas ativas e fluxo de aprovação de propostas."
+            actions={
+              <Badge variant={gitDiagnostic?.installed ? "success" : "warning"} hasDot>
+                {gitDiagnostic?.installed ? "Controle de Versões Ativo" : "Modo Offline"}
+              </Badge>
+            }
+          />
+
+          <CardContent style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
+              <StatCard
+                title="Repositório Ativo"
+                value={activeRepo?.name || "local"}
+                icon={<FolderGit2 size={20} />}
+              />
+              <StatCard
+                title="Motor de Versionamento"
+                value={gitDiagnostic?.version || "Git"}
+                icon={<GitBranch size={20} />}
+              />
+              <StatCard
+                title="Trilha Ativa"
+                value={gitStatus?.branch || "main"}
+                icon={<GitBranch size={20} />}
+              />
+              <StatCard
+                title="Versões Registradas"
+                value={`${gitLog.length} ${gitLog.length === 1 ? "versão" : "versões"}`}
+                icon={<ShieldCheck size={20} />}
+              />
+            </div>
+
+            <Switch
+              id="sys-auto-pr-check"
+              checked={autoPROn}
+              onChange={setAutoPROn}
+              label="Modo Ágil (Acúmulo de Alterações)"
+              description="Permite edição contínua no workspace acumulando alterações em 1 única proposta unificada"
+            />
+          </CardContent>
+        </Card>
 
         {/* SEÇÃO 5: CONTA GITHUB & CONEXÃO */}
-        <div className="gov-card">
-          <div className="gov-card-header">
-            <div>
-              <h3 style={{ margin: 0, fontSize: "15px" }}>
-                Conexão GitHub & Sessão
-              </h3>
-              <p
-                style={{
-                  fontSize: "12px",
-                  color: "var(--text-muted)",
-                  margin: "2px 0 0 0",
-                }}
-              >
-                Credenciais e conta vinculada ao framework.
-              </p>
-            </div>
-          </div>
+        <Card variant="elevated">
+          <CardHeader
+            title="Conexão GitHub & Sessão"
+            subtitle="Credenciais e conta vinculada ao framework."
+          />
 
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              marginTop: "14px",
-              padding: "12px",
-              background: "var(--bg-surface)",
-              borderRadius: "8px",
-              border: "1px solid var(--border-color)",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-              <img
-                id="settings-user-avatar"
-                src={
-                  user?.avatar_url ||
-                  `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.name || "User")}&background=6366f1&color=fff`
-                }
-                alt="Avatar"
-                style={{ width: "38px", height: "38px", borderRadius: "50%" }}
-              />
-              <div>
-                <strong
-                  id="settings-user-name"
-                  style={{
-                    fontSize: "13.5px",
-                    color: "var(--text-normal)",
-                    display: "block",
-                  }}
-                >
-                  {user?.name || "Usuário Autenticado"}
-                </strong>
-                <span
-                  id="settings-user-login"
-                  style={{ fontSize: "11.5px", color: "var(--text-muted)" }}
-                >
-                  @{user?.login || "github"}
-                </span>
-              </div>
-            </div>
-
-            <button
-              id="btn-settings-logout"
-              className="btn btn-secondary btn-sm"
-              type="button"
-              style={{ color: "#ef4444" }}
-              onClick={logout}
+          <CardContent>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "14px 16px",
+                background: "var(--md-sys-color-surface, #ffffff)",
+                borderRadius: 8,
+                border: "1px solid var(--md-sys-color-outline-variant, #dadce0)",
+              }}
             >
-              Desconectar Conta
-            </button>
-          </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <img
+                  id="settings-user-avatar"
+                  src={
+                    user?.avatar_url ||
+                    `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.name || "User")}&background=1a73e8&color=fff`
+                  }
+                  alt="Avatar"
+                  style={{ width: 40, height: 40, borderRadius: "50%" }}
+                />
+                <div>
+                  <strong id="settings-user-name" style={{ fontSize: "14px", display: "block" }}>
+                    {user?.name || "Usuário Autenticado"}
+                  </strong>
+                  <span id="settings-user-login" style={{ fontSize: "12px", color: "var(--md-sys-color-on-surface-variant, #5f6368)" }}>
+                    @{user?.login || "github"}
+                  </span>
+                </div>
+              </div>
 
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "flex-end",
-              marginTop: "18px",
-            }}
-          >
-            <button
+              <Button
+                id="btn-settings-logout"
+                variant="danger"
+                size="sm"
+                leftIcon={<LogOut size={14} />}
+                onClick={logout}
+              >
+                Desconectar Conta
+              </Button>
+            </div>
+          </CardContent>
+
+          <CardFooter>
+            <Button
               id="btn-save-system-settings"
-              className="btn btn-primary"
-              type="button"
+              variant="primary"
+              size="md"
+              leftIcon={<Save size={16} />}
               onClick={handleSaveAllSettings}
             >
               Salvar Todas as Configurações
-            </button>
-          </div>
-        </div>
+            </Button>
+          </CardFooter>
+        </Card>
       </div>
     </div>
   );

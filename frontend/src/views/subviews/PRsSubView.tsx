@@ -3,6 +3,17 @@ import type { PR } from "../../types";
 import { API } from "../../services/api";
 import { useWorkspace } from "../../context/WorkspaceContext";
 import { VisualMarkdownDiff } from "../../components/editor/VisualMarkdownDiff";
+import {
+  Button,
+  Badge,
+  SearchInput,
+  FilterChips,
+} from "../../components/ui";
+import {
+  GitPullRequest,
+  RefreshCw,
+  FolderGit2,
+} from "lucide-react";
 
 interface PRsSubViewProps {
   onOpenDiffModal?: () => void;
@@ -300,7 +311,6 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
         {/* Header */}
         <div className="template-store-header" style={{ marginBottom: "20px" }}>
           <div
-            className="templates-header"
             style={{
               display: "flex",
               justifyContent: "space-between",
@@ -312,13 +322,8 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
           >
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                <span
-                  className="material-symbols-outlined"
-                  style={{ fontSize: "28px", color: "var(--primary, #3b82f6)" }}
-                >
-                  history_edu
-                </span>
-                <h2 style={{ margin: 0, fontSize: "22px", fontWeight: 700, color: "var(--text-heading)" }}>
+                <GitPullRequest size={26} style={{ color: "var(--md-sys-color-primary, #1a73e8)" }} />
+                <h2 style={{ margin: 0, fontSize: "22px", fontWeight: 700, color: "var(--md-sys-color-on-surface, #202124)" }}>
                   Revisões & Versões
                 </h2>
               </div>
@@ -331,44 +336,27 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
                   flexWrap: "wrap",
                 }}
               >
-                <span
-                  className="badge badge-primary"
-                  style={{
-                    fontSize: "12px",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "4px",
-                    padding: "3px 8px",
-                  }}
-                >
-                  <span
-                    className="material-symbols-outlined"
-                    style={{ fontSize: "14px" }}
-                  >
-                    folder
-                  </span>
+                <Badge variant="primary" size="md">
+                  <FolderGit2 size={13} style={{ marginRight: 3 }} />
                   Repositório: <strong>{repoName}</strong>
-                </span>
-                <span style={{ fontSize: "13px", color: "var(--text-muted)" }}>
+                </Badge>
+                <span style={{ fontSize: "13px", color: "var(--md-sys-color-on-surface-variant, #5f6368)" }}>
                   Acompanhe aprovações, revisões ativas e histórico com capacidade de restauração segura.
                 </span>
               </div>
             </div>
 
             <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-              <button
+              <Button
                 id="btn-refresh-prs"
-                className="btn btn-secondary btn-sm"
+                variant="secondary"
+                size="sm"
                 title={`Recarregar revisões de ${repoName}`}
-                type="button"
+                leftIcon={<RefreshCw size={14} />}
                 onClick={() => loadPRs()}
-                style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
               >
-                <span className="material-symbols-outlined icon-xs">
-                  refresh
-                </span>
                 Atualizar
-              </button>
+              </Button>
             </div>
           </div>
 
@@ -383,54 +371,25 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
               marginTop: "16px",
             }}
           >
-            <div className="store-filter-bar" id="prs-status-filters" style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-              <button
-                className={`store-filter-chip ${activeStatus === "all" ? "active" : ""}`}
-                type="button"
-                onClick={() => setActiveStatus("all")}
-              >
-                Todas ({countAll})
-              </button>
-              <button
-                className={`store-filter-chip ${activeStatus === "open" ? "active" : ""}`}
-                type="button"
-                onClick={() => setActiveStatus("open")}
-              >
-                Em Aberto / Revisão ({countOpen})
-              </button>
-              <button
-                className={`store-filter-chip ${activeStatus === "merged" ? "active" : ""}`}
-                type="button"
-                onClick={() => setActiveStatus("merged")}
-              >
-                Publicadas ({countMerged})
-              </button>
-              <button
-                className={`store-filter-chip ${activeStatus === "closed" ? "active" : ""}`}
-                type="button"
-                onClick={() => setActiveStatus("closed")}
-              >
-                Arquivadas ({countClosed})
-              </button>
-            </div>
+            <FilterChips
+              items={[
+                { id: "all", label: "Todas", count: countAll },
+                { id: "open", label: "Em Aberto / Revisão", count: countOpen },
+                { id: "merged", label: "Publicadas", count: countMerged },
+                { id: "closed", label: "Arquivadas", count: countClosed },
+              ]}
+              activeId={activeStatus}
+              onChange={(status) => setActiveStatus(status as any)}
+              size="sm"
+            />
 
-            <div className="store-search-box" style={{ minWidth: "260px" }}>
-              <input
-                type="text"
+            <div style={{ width: 280 }}>
+              <SearchInput
                 id="prs-search-input"
                 placeholder="Buscar revisões ou autores..."
-                spellCheck="false"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                style={{
-                  width: "100%",
-                  padding: "6px 12px",
-                  borderRadius: "6px",
-                  border: "1px solid var(--border-color)",
-                  background: "var(--bg-surface)",
-                  color: "var(--text-main)",
-                  fontSize: "13px",
-                }}
+                onClear={() => setSearchQuery("")}
               />
             </div>
           </div>

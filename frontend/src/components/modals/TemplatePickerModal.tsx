@@ -1,6 +1,25 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { useTemplate } from '../../hooks/useTemplate';
-import type { TemplateItem } from '../../types';
+import React, { useState, useEffect, useMemo, useRef } from "react";
+import { useTemplate } from "../../hooks/useTemplate";
+import type { TemplateItem } from "../../types";
+import {
+  Modal,
+  Button,
+  Tabs,
+  SearchInput,
+  Badge,
+  AlertBanner,
+  EmptyState,
+  Spinner,
+  FilterChips,
+} from "../ui";
+import {
+  BookTemplate,
+  Globe,
+  FolderGit2,
+  FileText,
+  Check,
+  Download,
+} from "lucide-react";
 
 interface TemplatePickerModalProps {
   isOpen: boolean;
@@ -9,40 +28,55 @@ interface TemplatePickerModalProps {
   onSelect: (template: TemplateItem) => void;
 }
 
-type TabMode = 'projeto' | 'comunidade';
+type TabMode = "projeto" | "comunidade";
 
 export const TemplatePickerModal: React.FC<TemplatePickerModalProps> = ({
   isOpen,
   onClose,
   onSelect,
 }) => {
-  const { templates, communityTemplates, loading, importingId, error, fetchTemplates, fetchCommunityTemplates, importFromCommunity } = useTemplate();
-  const [search, setSearch] = useState('');
-  const [activeCategory, setActiveCategory] = useState<string>('Todos');
-  const [tab, setTab] = useState<TabMode>('projeto');
-  const [importFeedback, setImportFeedback] = useState<{ id: string; ok: boolean; msg: string } | null>(null);
+  const {
+    templates,
+    communityTemplates,
+    loading,
+    importingId,
+    error,
+    fetchTemplates,
+    fetchCommunityTemplates,
+    importFromCommunity,
+  } = useTemplate();
+  const [search, setSearch] = useState("");
+  const [activeCategory, setActiveCategory] = useState<string>("Todos");
+  const [tab, setTab] = useState<TabMode>("projeto");
+  const [importFeedback, setImportFeedback] = useState<{
+    id: string;
+    ok: boolean;
+    msg: string;
+  } | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (isOpen) {
       fetchTemplates();
       fetchCommunityTemplates();
-      setSearch('');
-      setActiveCategory('Todos');
-      setTab('projeto');
+      setSearch("");
+      setActiveCategory("Todos");
+      setTab("projeto");
       setImportFeedback(null);
       setTimeout(() => searchRef.current?.focus(), 50);
     }
   }, [isOpen, fetchTemplates, fetchCommunityTemplates]);
 
   // Active list depending on tab
-  const activeList = tab === 'comunidade' ? communityTemplates : templates;
+  const activeList = tab === "comunidade" ? communityTemplates : templates;
 
   // Derive unique categories from active list
   const categories = useMemo(() => {
     const cats = new Set<string>();
-    activeList.forEach((t) => { if (t.category) cats.add(t.category); });
-    return ['Todos', ...Array.from(cats).sort()];
+    activeList.forEach((t) => {
+      if (t.category) cats.add(t.category);
+    });
+    return ["Todos", ...Array.from(cats).sort()];
   }, [activeList]);
 
   // Filter by search and category
@@ -52,10 +86,10 @@ export const TemplatePickerModal: React.FC<TemplatePickerModalProps> = ({
       const matchesSearch =
         !q ||
         t.title.toLowerCase().includes(q) ||
-        (t.description || '').toLowerCase().includes(q) ||
+        (t.description || "").toLowerCase().includes(q) ||
         (t.tags || []).some((tag) => tag.toLowerCase().includes(q));
       const matchesCategory =
-        activeCategory === 'Todos' || t.category === activeCategory;
+        activeCategory === "Todos" || t.category === activeCategory;
       return matchesSearch && matchesCategory;
     });
   }, [activeList, search, activeCategory]);
@@ -65,232 +99,271 @@ export const TemplatePickerModal: React.FC<TemplatePickerModalProps> = ({
     setImportFeedback({ id: tpl.id, ok: result.success, msg: result.message });
     if (result.success) {
       // Auto-switch to project tab to show it
-      setTimeout(() => { setTab('projeto'); setImportFeedback(null); }, 1400);
+      setTimeout(() => {
+        setTab("projeto");
+        setImportFeedback(null);
+      }, 1400);
     }
   };
 
   if (!isOpen) return null;
 
   return (
-    <div id="template-picker-modal" className="modal-backdrop" style={{ display: 'flex', zIndex: 1100 }}>
-      <div
-        className="modal-box"
-        style={{ maxWidth: '700px', width: '100%', maxHeight: '82vh', display: 'flex', flexDirection: 'column' }}
-      >
-        {/* ── Header ─────────────────────────────────────────────────────── */}
-        <div className="modal-header">
-          <div>
-            <h3>Escolher Template</h3>
-            <span className="subtitle">Selecione um template ou importe da comunidade</span>
-          </div>
-          <button className="btn-close" aria-label="Fechar" onClick={onClose}>
-            <span className="material-symbols-outlined icon-sm">close</span>
-          </button>
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      size="lg"
+      title={
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <BookTemplate size={20} style={{ color: "var(--md-sys-color-primary, #1a73e8)" }} />
+          <span>Escolher Template</span>
         </div>
-
-        {/* ── Tabs ───────────────────────────────────────────────────────── */}
-        <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--color-outline-variant)', paddingInline: '20px' }}>
-          {(['projeto', 'comunidade'] as TabMode[]).map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => { setTab(t); setActiveCategory('Todos'); setSearch(''); }}
-              style={{
-                padding: '8px 16px', border: 'none', background: 'none', cursor: 'pointer',
-                fontSize: '12px', fontWeight: 600,
-                color: tab === t ? 'var(--color-primary)' : 'var(--color-on-surface-variant)',
-                borderBottom: tab === t ? '2px solid var(--color-primary)' : '2px solid transparent',
-                transition: 'all 0.15s ease',
-                textTransform: 'capitalize',
-              }}
-            >
-              {t === 'projeto' ? `📁 Projeto (${templates.length})` : `🌐 Comunidade (${communityTemplates.length})`}
-            </button>
-          ))}
+      }
+      subtitle="Selecione um template de especificação ou importe da comunidade"
+      footer={
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            width: "100%",
+          }}
+        >
+          <span style={{ fontSize: "12.5px", color: "var(--md-sys-color-on-surface-variant, #5f6368)" }}>
+            {filtered.length} template{filtered.length !== 1 ? "s" : ""} encontrado(s)
+          </span>
+          <Button variant="secondary" size="sm" onClick={onClose}>
+            Cancelar
+          </Button>
         </div>
+      }
+    >
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        {/* Abas */}
+        <Tabs<TabMode>
+          activeTab={tab}
+          onChange={(newTab) => {
+            setTab(newTab);
+            setActiveCategory("Todos");
+            setSearch("");
+          }}
+          variant="underline"
+          tabs={[
+            {
+              id: "projeto",
+              label: "Do Projeto",
+              icon: <FolderGit2 size={15} />,
+              count: templates.length,
+              badgeVariant: "primary",
+            },
+            {
+              id: "comunidade",
+              label: "Da Comunidade",
+              icon: <Globe size={15} />,
+              count: communityTemplates.length,
+              badgeVariant: "purple",
+            },
+          ]}
+        />
 
-        {/* ── Search ─────────────────────────────────────────────────────── */}
-        <div style={{ padding: '12px 20px', borderBottom: '1px solid var(--color-outline-variant)' }}>
-          <div style={{ position: 'relative' }}>
-            <span className="material-symbols-outlined" style={{
-              position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)',
-              fontSize: '16px', color: 'var(--color-outline)', pointerEvents: 'none',
-            }}>search</span>
-            <input
-              ref={searchRef}
-              id="template-picker-search"
-              type="text"
-              className="form-input"
-              placeholder="Pesquisar templates..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              style={{ paddingLeft: '34px' }}
+        {/* Busca */}
+        <SearchInput
+          ref={searchRef}
+          id="template-picker-search"
+          placeholder="Pesquisar templates por título, descrição ou tags..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          onClear={() => setSearch("")}
+        />
+
+        {/* Chips de Categoria */}
+        <FilterChips
+          items={categories}
+          activeId={activeCategory}
+          onChange={(cat) => setActiveCategory(cat)}
+          size="sm"
+        />
+
+        {/* Info Banner Comunidade */}
+        {tab === "comunidade" && (
+          <AlertBanner
+            type="info"
+            message="Templates da comunidade são somente-leitura. Importe-os para o projeto para poder utilizá-los no editor."
+          />
+        )}
+
+        {error && <AlertBanner type="error" message={error} />}
+
+        {/* Lista de Templates */}
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 8,
+            maxHeight: "360px",
+            overflowY: "auto",
+          }}
+        >
+          {loading ? (
+            <Spinner size="lg" message="Carregando templates..." />
+          ) : filtered.length === 0 ? (
+            <EmptyState
+              icon={<BookTemplate size={36} />}
+              title="Nenhum template encontrado"
+              description={
+                search
+                  ? `Nenhum resultado para "${search}".`
+                  : "Nenhum template disponível nesta categoria."
+              }
             />
-          </div>
-        </div>
+          ) : (
+            filtered.map((tpl) => {
+              const isImporting = importingId === tpl.id;
+              const feedback =
+                importFeedback?.id === tpl.id ? importFeedback : null;
+              const alreadyImported =
+                tab === "comunidade" && templates.some((t) => t.id === tpl.id);
 
-        {/* ── Category chips ─────────────────────────────────────────────── */}
-        <div style={{
-          display: 'flex', gap: '6px', padding: '10px 20px',
-          borderBottom: '1px solid var(--color-outline-variant)',
-          overflowX: 'auto', flexShrink: 0,
-        }}>
-          {categories.map((cat) => (
-            <button
-              key={cat}
-              type="button"
-              onClick={() => setActiveCategory(cat)}
-              style={{
-                padding: '4px 12px', borderRadius: '999px', border: '1px solid',
-                fontSize: '12px', fontWeight: 500, cursor: 'pointer', whiteSpace: 'nowrap',
-                background: activeCategory === cat ? 'var(--color-primary)' : 'transparent',
-                color: activeCategory === cat ? 'var(--color-on-primary)' : 'var(--color-on-surface-variant)',
-                borderColor: activeCategory === cat ? 'var(--color-primary)' : 'var(--color-outline-variant)',
-                transition: 'all 0.15s ease',
-              }}
-            >
-              {cat}
-            </button>
-          ))}
-        </div>
+              return (
+                <div
+                  key={tpl.id}
+                  style={{
+                    display: "flex",
+                    alignItems: "flex-start",
+                    gap: 12,
+                    padding: "12px 14px",
+                    borderRadius: 10,
+                    border: "1px solid var(--md-sys-color-outline-variant, #dadce0)",
+                    background: "var(--md-sys-color-surface, #ffffff)",
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 8,
+                      flexShrink: 0,
+                      background: "var(--md-sys-color-surface-container, #f1f3f4)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      color: "var(--md-sys-color-primary, #1a73e8)",
+                    }}
+                  >
+                    <FileText size={18} />
+                  </div>
 
-        {/* ── Template list ──────────────────────────────────────────────── */}
-        <div className="modal-body" style={{ flex: 1, overflowY: 'auto', gap: '8px', flexDirection: 'column' }}>
-
-          {/* Comunidade info banner */}
-          {tab === 'comunidade' && (
-            <div style={{
-              padding: '8px 12px', borderRadius: '8px', marginBottom: '4px',
-              background: 'var(--color-secondary-container)',
-              display: 'flex', alignItems: 'center', gap: '8px',
-            }}>
-              <span className="material-symbols-outlined" style={{ fontSize: '14px', color: 'var(--color-secondary)', flexShrink: 0 }}>info</span>
-              <span style={{ fontSize: '11px', color: 'var(--color-on-secondary-container)' }}>
-                Templates da comunidade são somente-leitura. Importe-os para o projeto para poder usá-los no picker.
-              </span>
-            </div>
-          )}
-
-          {loading && (
-            <div style={{ textAlign: 'center', padding: '40px', color: 'var(--color-outline)' }}>
-              <span className="material-symbols-outlined" style={{ fontSize: '32px', display: 'block', marginBottom: '8px' }}>hourglass_empty</span>
-              Carregando templates...
-            </div>
-          )}
-
-          {error && (
-            <div style={{ padding: '16px', color: 'var(--color-error)', background: 'var(--color-error-container)', borderRadius: '8px' }}>
-              {error}
-            </div>
-          )}
-
-          {!loading && !error && filtered.length === 0 && (
-            <div style={{ textAlign: 'center', padding: '40px', color: 'var(--color-outline)' }}>
-              <span className="material-symbols-outlined" style={{ fontSize: '32px', display: 'block', marginBottom: '8px' }}>search_off</span>
-              Nenhum template encontrado{search ? ` para "${search}"` : ''}.
-              {tab === 'comunidade' && !search && (
-                <p style={{ fontSize: '12px', marginTop: '8px' }}>
-                  Nenhum template disponível na biblioteca da comunidade.
-                </p>
-              )}
-            </div>
-          )}
-
-          {!loading && filtered.map((tpl) => {
-            const isImporting = importingId === tpl.id;
-            const feedback = importFeedback?.id === tpl.id ? importFeedback : null;
-            const alreadyImported = tab === 'comunidade' && templates.some(t => t.id === tpl.id);
-
-            return (
-              <div
-                key={tpl.id}
-                style={{
-                  display: 'flex', alignItems: 'flex-start', gap: '12px',
-                  padding: '12px 14px', borderRadius: '10px', border: '1px solid var(--color-outline-variant)',
-                  background: 'var(--color-surface-container)',
-                }}
-              >
-                {/* Icon */}
-                <div style={{
-                  width: '36px', height: '36px', borderRadius: '8px', flexShrink: 0,
-                  background: 'var(--color-secondary-container)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}>
-                  <span className="material-symbols-outlined" style={{ fontSize: '18px', color: 'var(--color-secondary)' }}>description</span>
-                </div>
-
-                {/* Info */}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px', flexWrap: 'wrap' }}>
-                    <span style={{ fontWeight: 600, fontSize: '13px', color: 'var(--color-on-surface)' }}>{tpl.title}</span>
-                    {tpl.badge && (
-                      <span style={{
-                        fontSize: '10px', padding: '1px 7px', borderRadius: '999px',
-                        background: tpl.source === 'community' ? 'var(--color-tertiary-container)' : 'var(--color-secondary-container)',
-                        color: tpl.source === 'community' ? 'var(--color-tertiary)' : 'var(--color-secondary)',
-                        fontWeight: 600,
-                      }}>{tpl.badge}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        marginBottom: 2,
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      <strong style={{ fontSize: "13.5px" }}>{tpl.title}</strong>
+                      {tpl.badge && (
+                        <Badge
+                          variant={
+                            tpl.source === "community" ? "purple" : "neutral"
+                          }
+                          size="sm"
+                        >
+                          {tpl.badge}
+                        </Badge>
+                      )}
+                      {alreadyImported && (
+                        <Badge variant="success" size="sm" icon={<Check size={11} />}>
+                          Importado
+                        </Badge>
+                      )}
+                    </div>
+                    <p
+                      style={{
+                        margin: 0,
+                        fontSize: "12px",
+                        color: "var(--md-sys-color-on-surface-variant, #5f6368)",
+                        lineHeight: 1.4,
+                      }}
+                    >
+                      {tpl.description}
+                    </p>
+                    {(tpl.tags || []).length > 0 && (
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: 4,
+                          marginTop: 6,
+                          flexWrap: "wrap",
+                        }}
+                      >
+                        {(tpl.tags || []).slice(0, 5).map((tag) => (
+                          <span
+                            key={tag}
+                            style={{
+                              fontSize: "10.5px",
+                              padding: "1px 6px",
+                              borderRadius: 4,
+                              background: "var(--md-sys-color-surface-container-high, #e8eaed)",
+                              color: "var(--md-sys-color-on-surface-variant, #5f6368)",
+                            }}
+                          >
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
                     )}
-                    {alreadyImported && (
-                      <span style={{ fontSize: '10px', padding: '1px 7px', borderRadius: '999px', background: 'var(--color-primary-container)', color: 'var(--color-primary)', fontWeight: 600 }}>
-                        ✓ Importado
-                      </span>
+                    {feedback && (
+                      <p
+                        style={{
+                          margin: "4px 0 0",
+                          fontSize: "11px",
+                          color: feedback.ok ? "#137333" : "#c5221f",
+                          fontWeight: 500,
+                        }}
+                      >
+                        {feedback.ok ? "✓ " : "✗ "}
+                        {feedback.msg}
+                      </p>
                     )}
                   </div>
-                  <p style={{ margin: 0, fontSize: '12px', color: 'var(--color-on-surface-variant)', lineHeight: 1.4 }}>{tpl.description}</p>
-                  {(tpl.tags || []).length > 0 && (
-                    <div style={{ display: 'flex', gap: '4px', marginTop: '6px', flexWrap: 'wrap' }}>
-                      {(tpl.tags || []).slice(0, 5).map((tag) => (
-                        <span key={tag} style={{
-                          fontSize: '10px', padding: '1px 6px', borderRadius: '4px',
-                          background: 'var(--color-surface-container-highest)', color: 'var(--color-on-surface-variant)',
-                        }}>{tag}</span>
-                      ))}
-                    </div>
-                  )}
-                  {feedback && (
-                    <p style={{ margin: '4px 0 0', fontSize: '11px', color: feedback.ok ? 'var(--color-primary)' : 'var(--color-error)' }}>
-                      {feedback.ok ? '✓' : '✗'} {feedback.msg}
-                    </p>
-                  )}
-                </div>
 
-                {/* Action */}
-                <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'flex-end' }}>
-                  {tab === 'projeto' ? (
-                    <button
-                      id={`btn-select-tpl-${tpl.id}`}
-                      type="button"
-                      className="btn btn-primary btn-sm"
-                      onClick={() => { onSelect(tpl); onClose(); }}
-                    >
-                      Usar
-                    </button>
-                  ) : (
-                    <button
-                      id={`btn-import-tpl-${tpl.id}`}
-                      type="button"
-                      className={`btn btn-sm ${alreadyImported ? 'btn-secondary' : 'btn-primary'}`}
-                      disabled={isImporting}
-                      onClick={() => handleImport(tpl)}
-                    >
-                      {isImporting ? '...' : alreadyImported ? 'Reimportar' : 'Importar'}
-                    </button>
-                  )}
+                  <div style={{ flexShrink: 0 }}>
+                    {tab === "projeto" ? (
+                      <Button
+                        id={`btn-select-tpl-${tpl.id}`}
+                        type="button"
+                        variant="primary"
+                        size="sm"
+                        onClick={() => {
+                          onSelect(tpl);
+                          onClose();
+                        }}
+                      >
+                        Usar
+                      </Button>
+                    ) : (
+                      <Button
+                        id={`btn-import-tpl-${tpl.id}`}
+                        type="button"
+                        variant={alreadyImported ? "secondary" : "primary"}
+                        size="sm"
+                        leftIcon={<Download size={13} />}
+                        isLoading={isImporting}
+                        onClick={() => handleImport(tpl)}
+                      >
+                        {alreadyImported ? "Reimportar" : "Importar"}
+                      </Button>
+                    )}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* ── Footer ─────────────────────────────────────────────────────── */}
-        <div className="modal-footer">
-          <button className="btn btn-secondary btn-sm" onClick={onClose}>Cancelar</button>
-          <span style={{ fontSize: '12px', color: 'var(--color-outline)' }}>
-            {filtered.length} template{filtered.length !== 1 ? 's' : ''}
-          </span>
+              );
+            })
+          )}
         </div>
       </div>
-    </div>
+    </Modal>
   );
 };

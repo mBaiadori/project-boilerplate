@@ -1,6 +1,14 @@
 import React, { useState } from "react";
 import { useWorkspace } from "../../context/WorkspaceContext";
 import { API } from "../../services/api";
+import { Modal, Button, FormField, Input } from "../ui";
+import {
+  FilePlus,
+  MessageSquare,
+  Lightbulb,
+  Code2,
+  CalendarCheck,
+} from "lucide-react";
 
 interface ScaffoldModalProps {
   isOpen: boolean;
@@ -13,7 +21,7 @@ interface DocPreset {
   id: string;
   name: string;
   description: string;
-  icon: string;
+  icon: React.ReactNode;
   defaultFolder: string;
   generateContent: (title: string, slug: string) => string;
 }
@@ -23,7 +31,7 @@ const PRESETS: DocPreset[] = [
     id: "rfc",
     name: "RFC / Proposta",
     description: "Proposta técnica e decisão para o time",
-    icon: "forum",
+    icon: <MessageSquare size={20} />,
     defaultFolder: "rfcs",
     generateContent: (title) => `---
 title: "${title}"
@@ -52,7 +60,7 @@ Detalhamento técnico da implementação recomendada.
     id: "prd",
     name: "PRD / Produto",
     description: "Requisitos de produto e jornada de usuário",
-    icon: "lightbulb",
+    icon: <Lightbulb size={20} />,
     defaultFolder: "docs/product",
     generateContent: (title) => `---
 title: "${title}"
@@ -84,7 +92,7 @@ Qual dor do cliente ou meta de negócio estamos atacando?
     id: "spec",
     name: "Tech Spec / API",
     description: "Especificação técnica e contratos de interface",
-    icon: "code",
+    icon: <Code2 size={20} />,
     defaultFolder: "docs/specs",
     generateContent: (title) => `---
 title: "${title}"
@@ -115,7 +123,7 @@ Descrição técnica, dependências e integrações.
     id: "notes",
     name: "Ata / Notas",
     description: "Alinhamento, ata de reunião e decisões",
-    icon: "event_note",
+    icon: <CalendarCheck size={20} />,
     defaultFolder: "notes",
     generateContent: (title) => `---
 title: "${title}"
@@ -212,177 +220,152 @@ export const ScaffoldModal: React.FC<ScaffoldModalProps> = ({
   };
 
   return (
-    <div
-      id="scaffold-wizard-modal"
-      className="modal-backdrop"
-      style={{ display: "flex" }}
-    >
-      <div className="modal-box" style={{ maxWidth: "620px" }}>
-        <div className="modal-header">
-          <div>
-            <h3>Criar Novo Documento</h3>
-            <span className="subtitle">
-              Escolha um modelo ou estruture livremente um documento para su
-            </span>
-          </div>
-          <button className="btn-close" aria-label="Fechar" onClick={onClose}>
-            <span className="material-symbols-outlined icon-sm">close</span>
-          </button>
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      size="md"
+      title={
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <FilePlus size={20} style={{ color: "var(--md-sys-color-primary, #1a73e8)" }} />
+          <span>Criar Novo Documento</span>
         </div>
-
-        <div className="modal-body" style={{ gap: "16px" }}>
-          {/* Preset Selector Grid */}
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(2, 1fr)",
-              gap: "10px",
-            }}
+      }
+      subtitle="Escolha um modelo e estruture um documento no workspace"
+      footer={
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", width: "100%" }}>
+          <Button variant="secondary" size="sm" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={handleConfirm}
+            isLoading={isSubmitting}
           >
-            {PRESETS.map((preset) => {
-              const isSelected = preset.id === selectedPresetId;
-              return (
-                <button
-                  key={preset.id}
-                  type="button"
-                  onClick={() => handleSelectPreset(preset)}
+            Criar Documento
+          </Button>
+        </div>
+      }
+    >
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        {/* Grade de Modelos */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(2, 1fr)",
+            gap: 10,
+          }}
+        >
+          {PRESETS.map((preset) => {
+            const isSelected = preset.id === selectedPresetId;
+            return (
+              <div
+                key={preset.id}
+                onClick={() => handleSelectPreset(preset)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 12,
+                  padding: 12,
+                  borderRadius: 8,
+                  border: isSelected
+                    ? "2px solid var(--md-sys-color-primary, #1a73e8)"
+                    : "1px solid var(--md-sys-color-outline-variant, #dadce0)",
+                  background: isSelected
+                    ? "var(--md-sys-color-primary-container, #d2e3fc)"
+                    : "var(--md-sys-color-surface, #ffffff)",
+                  cursor: "pointer",
+                  transition: "all 0.15s ease",
+                }}
+              >
+                <div
                   style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "12px",
-                    padding: "12px",
-                    borderRadius: "8px",
-                    border: isSelected
-                      ? "2px solid var(--color-primary, #6366f1)"
-                      : "1px solid var(--color-outline-variant, #e2e8f0)",
-                    background: isSelected
-                      ? "var(--color-primary-container, #eef2ff)"
-                      : "var(--color-surface, #ffffff)",
-                    cursor: "pointer",
-                    textAlign: "left",
+                    color: isSelected
+                      ? "var(--md-sys-color-on-primary-container, #041e49)"
+                      : "var(--md-sys-color-on-surface-variant, #5f6368)",
                   }}
                 >
-                  <span
-                    className="material-symbols-outlined"
+                  {preset.icon}
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                  <strong
                     style={{
-                      fontSize: "22px",
+                      fontSize: "13px",
                       color: isSelected
-                        ? "var(--color-primary, #6366f1)"
-                        : "var(--color-on-surface-variant, #64748b)",
+                        ? "var(--md-sys-color-on-primary-container, #041e49)"
+                        : "var(--md-sys-color-on-surface, #202124)",
                     }}
                   >
-                    {preset.icon}
-                  </span>
-                  <div
+                    {preset.name}
+                  </strong>
+                  <span
                     style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: "2px",
+                      fontSize: "11px",
+                      color: "var(--md-sys-color-on-surface-variant, #5f6368)",
                     }}
                   >
-                    <strong
-                      style={{
-                        fontSize: "13px",
-                        color: "var(--color-on-surface, #1e293b)",
-                      }}
-                    >
-                      {preset.name}
-                    </strong>
-                    <span
-                      style={{
-                        fontSize: "11px",
-                        color: "var(--color-outline, #64748b)",
-                      }}
-                    >
-                      {preset.description}
-                    </span>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: "12px",
-            }}
-          >
-            <div className="form-group">
-              <label htmlFor="scaffold-folder">Pasta de Destino:</label>
-              <input
-                id="scaffold-folder"
-                type="text"
-                className="form-input"
-                placeholder="ex: docs, rfcs, notes"
-                value={targetFolder}
-                onChange={(e) => setTargetFolder(e.target.value)}
-              />
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="scaffold-doc-name">Nome do Arquivo (Slug):</label>
-              <input
-                id="scaffold-doc-name"
-                type="text"
-                className="form-input"
-                placeholder="ex: autenticacao-oauth, release-v1"
-                value={docName}
-                onChange={(e) => handleSlugChange(e.target.value)}
-              />
-            </div>
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="scaffold-doc-title">Título do Documento:</label>
-            <input
-              id="scaffold-doc-title"
-              type="text"
-              className="form-input"
-              placeholder="ex: Proposta de Autenticação OAuth2 e SSO"
-              value={docTitle}
-              onChange={(e) => setDocTitle(e.target.value)}
-            />
-          </div>
-
-          <div
-            style={{
-              background: "var(--color-surface-container, #f8fafc)",
-              padding: "10px 14px",
-              borderRadius: "6px",
-              fontSize: "12px",
-              border: "1px solid var(--color-outline-variant, #e2e8f0)",
-            }}
-          >
-            <span style={{ color: "var(--color-outline, #64748b)" }}>
-              Arquivo gerado:{" "}
-            </span>
-            <code
-              style={{
-                fontFamily: "var(--font-mono, monospace)",
-                fontWeight: 600,
-                color: "var(--color-primary, #6366f1)",
-              }}
-            >
-              {targetPath}
-            </code>
-          </div>
+                    {preset.description}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
         </div>
 
-        <div className="modal-footer">
-          <button className="btn btn-secondary btn-sm" onClick={onClose}>
-            Cancelar
-          </button>
-          <button
-            className="btn btn-primary btn-sm"
-            onClick={handleConfirm}
-            disabled={isSubmitting}
+        {/* Campos de Pasta e Nome */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <FormField label="Pasta de Destino:">
+            <Input
+              id="scaffold-folder"
+              placeholder="ex: docs, rfcs, notes"
+              value={targetFolder}
+              onChange={(e) => setTargetFolder(e.target.value)}
+            />
+          </FormField>
+
+          <FormField label="Nome do Arquivo (Slug):">
+            <Input
+              id="scaffold-doc-name"
+              placeholder="ex: autenticacao-oauth"
+              value={docName}
+              onChange={(e) => handleSlugChange(e.target.value)}
+            />
+          </FormField>
+        </div>
+
+        <FormField label="Título do Documento:">
+          <Input
+            id="scaffold-doc-title"
+            placeholder="ex: Proposta de Autenticação OAuth2 e SSO"
+            value={docTitle}
+            onChange={(e) => setDocTitle(e.target.value)}
+          />
+        </FormField>
+
+        {/* Preview do Caminho Gerado */}
+        <div
+          style={{
+            background: "var(--md-sys-color-surface-container-low, #f8f9fa)",
+            padding: "10px 14px",
+            borderRadius: 6,
+            fontSize: "12.5px",
+            border: "1px solid var(--md-sys-color-outline-variant, #dadce0)",
+          }}
+        >
+          <span style={{ color: "var(--md-sys-color-on-surface-variant, #5f6368)" }}>
+            Arquivo gerado:{" "}
+          </span>
+          <code
+            style={{
+              fontFamily: "var(--md-sys-typescale-font-code, monospace)",
+              fontWeight: 600,
+              color: "var(--md-sys-color-primary, #1a73e8)",
+            }}
           >
-            {isSubmitting ? "Criando..." : "Criar Documento"}
-          </button>
+            {targetPath}
+          </code>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 };

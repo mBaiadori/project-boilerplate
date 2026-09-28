@@ -9,6 +9,42 @@ import { API } from "../../services/api";
 import { useTemplate, useTemplateStore } from "../../hooks/useTemplate";
 import { useAI } from "../../context/AIContext";
 import { NotionEditor } from "../../components/editor/NotionEditor";
+import {
+  Button,
+  IconButton,
+  Badge,
+  Tabs,
+  SearchInput,
+  FormField,
+  Input,
+  AlertBanner,
+  Card,
+  CardHeader,
+  CardContent,
+  CardFooter,
+  EmptyState,
+  Spinner,
+  FilterChips,
+} from "../../components/ui";
+import {
+  Layers,
+  Sparkles,
+  Plus,
+  Edit3,
+  Trash2,
+  Download,
+  Check,
+  RefreshCw,
+  SlidersHorizontal,
+  ChevronLeft,
+  Save,
+  Info,
+  Globe,
+  Folder,
+  Tag,
+  CheckCircle2,
+  MinusCircle,
+} from "lucide-react";
 
 interface TemplatesSubViewProps {
   onApplyTemplate?: (filePath: string) => void;
@@ -138,7 +174,7 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
     setActiveSkillId,
   ]);
 
-  // ── Derived list ────────────────────────────────────────────────────────────
+  // Derived list
   const activeList =
     activeTab === "comunidade" ? communityTemplates : templates;
   const allCategories = Array.from(
@@ -159,550 +195,338 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
     return matchesCat && matchesSearch;
   });
 
-  // ── Handlers para alternar para o Editor Rico ───────────────────────────────
   const handleOpenCreate = () => {
     setIsEditMode(false);
     setTplId("");
     setTplTemplateName("");
-    const defaultTitle = "Novo Template";
-    const defaultContent =
-      "# Novo Template\n\n## 1. Visão Geral & Objetivos\nDescreva a proposta deste documento.\n\n## 2. Requisitos Principais\n- [ ] Requisito inicial a ser definido\n\n## 3. Detalhamento Técnico\nEspecifique os pontos de implementação.\n";
-    const defaultPrompt =
-      "Você é o assistente especialista responsável por guiar o preenchimento deste documento.\nAjude o usuário a definir objetivos claros, revisar requisitos funcionais e estruturar decisões técnicas.";
-
-    setTplTitle(defaultTitle);
-    setTplCategory("geral");
-    setTplBadge("Local");
+    setTplTitle("Novo Template");
+    setTplCategory("engenharia");
+    setTplBadge("DOC");
     setTplDesc("");
     setTplTags("");
+    setTplContent("# Novo Documento Técnico\n\n## 1. Visão Geral\nDescreva aqui o propósito.");
+    setTplPrompt("Atue como um Arquiteto de Software sênior guiando o usuário no preenchimento desta especificação.");
     setTplSkills([]);
-    setTplContent(defaultContent);
-    setTplPrompt(defaultPrompt);
     setSaveError("");
     setSaveSuccessMsg("");
-    setShowConfigDrawer(true);
-    setViewMode("editor");
+    setShowConfigDrawer(false);
 
     setActiveEditingTemplate({
-      id: "",
-      templateName: "",
-      title: defaultTitle,
-      category: "geral",
-      badge: "Local",
+      id: "novo-template",
+      title: "Novo Template",
+      category: "engenharia",
       description: "",
-      tags: [],
+      prompt: "Atue como um Arquiteto de Software sênior.",
       skills: [],
-      content: defaultContent,
-      prompt: defaultPrompt,
     });
+
+    setViewMode("editor");
   };
 
   const handleOpenEdit = (tpl: TemplateItem) => {
     setIsEditMode(true);
     setTplId(tpl.id);
     setTplTemplateName(tpl.templateName || tpl.id);
-    setTplTitle(tpl.title || "");
+    setTplTitle(tpl.title);
     setTplCategory(tpl.category || "geral");
-    setTplBadge(
-      tpl.badge || (tpl.source === "community" ? "Comunidade" : "Local"),
-    );
+    setTplBadge(tpl.badge || "");
     setTplDesc(tpl.description || "");
     setTplTags((tpl.tags || []).join(", "));
+    setTplContent(tpl.content || "");
+    setTplPrompt(tpl.prompt || "");
     setTplSkills(tpl.skills || []);
-    const content =
-      tpl.content || `# ${tpl.title || "Template"}\n\n## 1. Visão Geral\n`;
-    const prompt =
-      tpl.prompt ||
-      tpl.systemPrompt ||
-      "Você é o assistente especialista deste documento.";
-    setTplContent(content);
-    setTplPrompt(prompt);
     setSaveError("");
     setSaveSuccessMsg("");
     setShowConfigDrawer(false);
-    setViewMode("editor");
 
     setActiveEditingTemplate({
       id: tpl.id,
       templateName: tpl.templateName || tpl.id,
-      title: tpl.title || "",
+      title: tpl.title,
       category: tpl.category || "geral",
-      badge: tpl.badge || (tpl.source === "community" ? "Comunidade" : "Local"),
-      description: tpl.description || "",
-      tags: tpl.tags || [],
+      badge: tpl.badge,
+      description: tpl.description,
+      tags: tpl.tags,
+      prompt: tpl.prompt,
       skills: tpl.skills || [],
-      content,
-      prompt,
     });
-  };
 
-  const handleContentChange = (content: string) => {
-    setTplContent(content);
-    updateActiveEditingTemplate({ content });
-  };
-
-  const handlePromptChange = (prompt: string) => {
-    setTplPrompt(prompt);
-    updateActiveEditingTemplate({ prompt, systemPrompt: prompt });
-  };
-
-  const handleTitleChange = (title: string) => {
-    setTplTitle(title);
-    updateActiveEditingTemplate({ title });
+    setViewMode("editor");
   };
 
   const handleSaveTemplate = async () => {
-    const finalTitle = tplTitle.trim();
-    const finalSlug =
-      tplId.trim() ||
-      tplTemplateName.trim() ||
-      finalTitle.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-
-    if (!finalTitle) {
+    if (!tplTitle.trim()) {
       setSaveError("O título do template é obrigatório.");
-      return { success: false, message: "O título do template é obrigatório." };
+      return;
     }
+    const finalId = tplId.trim() || tplTitle.toLowerCase().replace(/[^a-z0-9-_]/g, "");
+    if (!finalId) {
+      setSaveError("Slug/Identificador inválido.");
+      return;
+    }
+
+    const tagsArray = tplTags
+      .split(",")
+      .map((t) => t.trim())
+      .filter(Boolean);
+
+    const templateData: Partial<TemplateItem> = {
+      id: finalId,
+      templateName: finalId,
+      title: tplTitle.trim(),
+      category: tplCategory.trim() || "geral",
+      badge: tplBadge.trim() || undefined,
+      description: tplDesc.trim() || undefined,
+      tags: tagsArray,
+      content: tplContent,
+      prompt: tplPrompt.trim() || undefined,
+      skills: tplSkills,
+    };
 
     setIsSaving(true);
     setSaveError("");
     setSaveSuccessMsg("");
 
     try {
-      const payload: Partial<TemplateItem> = {
-        templateName: tplTemplateName.trim() || finalSlug,
-        title: finalTitle,
-        ext: "md",
-        category: tplCategory.trim() || "geral",
-        badge: tplBadge.trim() || "Local",
-        description: tplDesc.trim(),
-        tags: tplTags
-          .split(",")
-          .map((t) => t.trim())
-          .filter(Boolean),
-        skills: tplSkills,
-        content: tplContent.trim(),
-        prompt: tplPrompt.trim(),
-        systemPrompt: tplPrompt.trim(),
-        source: isEditMode ? undefined : "local",
-      };
-
-      let result;
       if (isEditMode) {
-        result = await updateTemplate(tplId || finalSlug, payload);
+        await updateTemplate(tplId, templateData);
+        setSaveSuccessMsg("Template atualizado com sucesso!");
       } else {
-        payload.id = finalSlug.toLowerCase().replace(/\s+/g, "-");
-        result = await createTemplate(payload);
+        await createTemplate(templateData as any);
+        setIsEditMode(true);
+        setTplId(finalId);
+        setSaveSuccessMsg("Template criado com sucesso!");
       }
 
-      if (result.success) {
-        setSaveSuccessMsg("Template salvo com sucesso no .templates.json!");
-        await fetchTemplates();
-        // Automaticamente retorna para a listagem após salvar com sucesso
-        setTimeout(() => {
-          setViewMode("grid");
-          setIsTemplateEditorMode(false);
-        }, 400);
-        return { success: true, message: "Template salvo com sucesso!" };
-      } else {
-        setSaveError(result.message || "Erro ao salvar template.");
-        return {
-          success: false,
-          message: result.message || "Erro ao salvar template.",
-        };
-      }
+      updateActiveEditingTemplate({
+        id: finalId,
+        templateName: finalId,
+        title: tplTitle.trim(),
+        category: tplCategory.trim(),
+        badge: tplBadge.trim() || undefined,
+        description: tplDesc.trim() || undefined,
+        tags: tagsArray,
+        prompt: tplPrompt.trim() || undefined,
+        skills: tplSkills,
+      });
+
+      setTimeout(() => setSaveSuccessMsg(""), 3000);
     } catch (err: any) {
-      setSaveError(err.message || "Erro de conexão.");
-      return { success: false, message: err.message || "Erro de conexão." };
+      setSaveError(err.message || "Erro ao salvar template.");
     } finally {
       setIsSaving(false);
     }
   };
 
-  const handleDelete = async (tpl: TemplateItem, isCommunity = false) => {
-    const contextName = isCommunity ? "da comunidade global" : "do projeto";
-    const ok = window.confirm(
-      `Deseja realmente remover o template "${tpl.title || tpl.id}" ${contextName}?\n\nℹ️ Seus documentos associados continuarão totalmente seguros e intactos.`,
-    );
-    if (!ok) return;
-
-    const result = await deleteTemplate(tpl.id, isCommunity);
-    if (result.success) {
-      setImportFeedback((prev) => ({
-        ...prev,
-        [tpl.id]: { ok: true, msg: result.message || "Removido com sucesso!" },
-      }));
-      setTimeout(
-        () =>
-          setImportFeedback((prev) => {
-            const n = { ...prev };
-            delete n[tpl.id];
-            return n;
-          }),
-        3000,
-      );
-    } else {
-      setImportFeedback((prev) => ({
-        ...prev,
-        [tpl.id]: { ok: false, msg: result.message || "Erro ao remover" },
-      }));
-      alert(result.message || "Erro ao remover template.");
+  const handleDelete = async (tpl: TemplateItem, isCommunity: boolean) => {
+    if (window.confirm(`Tem certeza que deseja remover o template "${tpl.title}"?`)) {
+      try {
+        await deleteTemplate(tpl.id, isCommunity);
+      } catch (err: any) {
+        alert(`Erro: ${err.message}`);
+      }
     }
   };
 
   const handleImport = async (tpl: TemplateItem) => {
-    const result = await importFromCommunity(tpl.id);
-    setImportFeedback((prev) => ({
-      ...prev,
-      [tpl.id]: { ok: result.success, msg: result.message },
-    }));
-    if (result.success) {
-      setTimeout(
-        () =>
-          setImportFeedback((prev) => {
-            const n = { ...prev };
-            delete n[tpl.id];
-            return n;
-          }),
-        3000,
-      );
+    try {
+      await importFromCommunity(tpl.id);
+      setImportFeedback((prev) => ({
+        ...prev,
+        [tpl.id]: { ok: true, msg: "Importado para o projeto!" },
+      }));
+      setTimeout(() => {
+        setImportFeedback((prev) => {
+          const next = { ...prev };
+          delete next[tpl.id];
+          return next;
+        });
+      }, 3500);
+    } catch (err: any) {
+      setImportFeedback((prev) => ({
+        ...prev,
+        [tpl.id]: { ok: false, msg: err.message || "Falha ao importar." },
+      }));
     }
   };
 
+  const handleContentChange = (newContent: string) => {
+    setTplContent(newContent);
+  };
+
+  const handlePromptChange = (newPrompt: string) => {
+    setTplPrompt(newPrompt);
+    updateActiveEditingTemplate({ prompt: newPrompt });
+  };
+
+  const handleTitleChange = (newTitle: string) => {
+    setTplTitle(newTitle);
+    updateActiveEditingTemplate({ title: newTitle });
+  };
+
   // ═════════════════════════════════════════════════════════════════════════════
-  // RENDER 1: MODO EDITOR RICO DE TEMPLATE (UNIFICADO NO NOTIONEDITOR)
+  // RENDER 1: MODO EDITOR RICO DE TEMPLATES
   // ═════════════════════════════════════════════════════════════════════════════
   if (viewMode === "editor") {
     return (
-      <div
-        id="template-rich-editor-view"
-        className="dash-subview"
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          width: "100%",
-          height: "100%",
-          overflow: "hidden",
-          background: "var(--color-surface)",
-        }}
-      >
-        {/* Top Header Bar */}
+      <div style={{ display: "flex", flexDirection: "column", height: "100%", width: "100%", background: "var(--color-surface)" }}>
+        {/* Top Bar Navigation */}
         <div
           style={{
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            padding: "8px 18px",
+            padding: "10px 20px",
             borderBottom: "1px solid var(--color-outline-variant)",
             background: "var(--color-surface-container-low)",
             flexShrink: 0,
-            gap: "12px",
           }}
         >
-          {/* Left: Back button & Title/Slug */}
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              minWidth: 0,
-            }}
-          >
-            <button
-              id="btn-back-to-templates-grid"
-              type="button"
-              className="btn btn-ghost btn-sm"
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={() => {
                 setViewMode("grid");
-                setIsTemplateEditorMode(false);
+                fetchTemplates();
               }}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "4px",
-              }}
-              title="Voltar à lista de templates"
+              icon={<ChevronLeft size={14} />}
             >
-              <span className="material-symbols-outlined icon-xs">
-                arrow_back
-              </span>
-              Voltar
-            </button>
-            <span style={{ color: "var(--color-outline)" }}>/</span>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "6px",
-                minWidth: 0,
-              }}
-            >
-              <span
-                className="material-symbols-outlined"
-                style={{ fontSize: "16px", color: "var(--color-primary)" }}
-              >
-                bookmark
-              </span>
-              <strong
-                style={{
-                  fontSize: "13px",
-                  whiteSpace: "nowrap",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                }}
-              >
-                {tplTitle || "Novo Template"}
-              </strong>
-              <span
-                className="badge badge-primary-subtle"
-                style={{ fontSize: "10px" }}
-              >
-                {tplCategory || "Geral"}
-              </span>
-            </div>
+              Voltar ao Catálogo
+            </Button>
+
+            <Badge variant="primary" size="md">
+              {isEditMode ? "Modo Edição" : "Novo Template"}
+            </Badge>
+
+            <span style={{ fontSize: "13px", color: "var(--color-outline)", fontFamily: "var(--font-mono, monospace)" }}>
+              templates/{tplTemplateName || tplId || "novo-template"}.md
+            </span>
           </div>
 
-          {/* Right: Metadados Drawer Toggle & Salvar Template */}
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              flexShrink: 0,
-            }}
-          >
-            <button
-              type="button"
-              className={`btn btn-sm ${showConfigDrawer ? "btn-secondary" : "btn-ghost"}`}
-              onClick={() => setShowConfigDrawer(!showConfigDrawer)}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "4px",
-                fontSize: "11.5px",
-              }}
-              title="Configurar Metadados do Template"
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <Button
+              variant={showConfigDrawer ? "primary" : "secondary"}
+              size="sm"
+              onClick={() => setShowConfigDrawer((v) => !v)}
+              icon={<SlidersHorizontal size={14} />}
             >
-              <span className="material-symbols-outlined icon-xs">tune</span>
-              Metadados
-              <span
-                className="material-symbols-outlined icon-xs"
-                style={{ fontSize: "14px" }}
-              >
-                {showConfigDrawer ? "expand_less" : "expand_more"}
-              </span>
-            </button>
+              {showConfigDrawer ? "Ocultar Metadados" : "Metadados & Skills"}
+            </Button>
 
-            <button
-              id="btn-save-template-editor"
-              type="button"
-              className="btn btn-primary btn-sm"
+            <Button
+              variant="primary"
+              size="sm"
               onClick={handleSaveTemplate}
               disabled={isSaving}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "6px",
-              }}
+              icon={isSaving ? <RefreshCw size={14} className="animate-spin" /> : <Save size={14} />}
             >
-              <span className="material-symbols-outlined icon-xs">
-                {isSaving ? "sync" : "save"}
-              </span>
               {isSaving ? "Salvando..." : "Salvar Template"}
-            </button>
+            </Button>
           </div>
         </div>
 
         {/* Feedback Banner */}
         {saveError && (
-          <div
-            style={{
-              padding: "6px 18px",
-              background: "var(--color-error-container)",
-              color: "var(--color-on-error-container)",
-              fontSize: "12px",
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              borderBottom: "1px solid var(--color-error)",
-            }}
-          >
-            <span className="material-symbols-outlined icon-xs">error</span>
-            <span>{saveError}</span>
-          </div>
+          <AlertBanner
+            variant="error"
+            title={saveError}
+            onClose={() => setSaveError("")}
+          />
         )}
         {saveSuccessMsg && (
-          <div
-            style={{
-              padding: "6px 18px",
-              background: "var(--color-primary-container)",
-              color: "var(--color-on-primary-container)",
-              fontSize: "12px",
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              borderBottom: "1px solid var(--color-primary)",
-            }}
-          >
-            <span className="material-symbols-outlined icon-xs">
-              check_circle
-            </span>
-            <span>{saveSuccessMsg}</span>
-          </div>
+          <AlertBanner
+            variant="success"
+            title={saveSuccessMsg}
+            onClose={() => setSaveSuccessMsg("")}
+          />
         )}
 
         {/* Metadados Dropdown Drawer */}
         {showConfigDrawer && (
           <div
             style={{
-              background: "var(--color-surface-container-low)",
+              background: "var(--color-surface-container)",
               borderBottom: "1px solid var(--color-outline-variant)",
-              padding: "12px 18px",
-              display: "grid",
-              gridTemplateColumns: "1.2fr 1fr 1fr 1.2fr",
-              gap: "10px",
+              padding: "14px 20px",
+              display: "flex",
+              flexDirection: "column",
+              gap: "12px",
               flexShrink: 0,
             }}
           >
-            <div>
-              <label
-                style={{
-                  fontSize: "11px",
-                  fontWeight: 600,
-                  display: "block",
-                  marginBottom: "3px",
-                  color: "var(--text-muted)",
-                }}
-              >
-                Título do Template *
-              </label>
-              <input
-                type="text"
-                placeholder="ex: Especificação de Microsserviço"
-                value={tplTitle}
-                onChange={(e) => setTplTitle(e.target.value)}
-                style={{
-                  width: "100%",
-                  fontSize: "12px",
-                  padding: "5px 8px",
-                  borderRadius: "6px",
-                  border: "1px solid var(--border)",
-                }}
-              />
-            </div>
-            <div>
-              <label
-                style={{
-                  fontSize: "11px",
-                  fontWeight: 600,
-                  display: "block",
-                  marginBottom: "3px",
-                  color: "var(--text-muted)",
-                }}
-              >
-                Identificador / Slug {!isEditMode && "*"}
-              </label>
-              <input
-                type="text"
-                placeholder="ex: microservice-spec"
-                value={tplId}
-                disabled={isEditMode}
-                onChange={(e) =>
-                  setTplId(
-                    e.target.value.toLowerCase().replace(/[^a-z0-9-_]/g, ""),
-                  )
-                }
-                style={{
-                  width: "100%",
-                  fontSize: "12px",
-                  padding: "5px 8px",
-                  borderRadius: "6px",
-                  border: "1px solid var(--border)",
-                  background: isEditMode
-                    ? "var(--color-surface-container)"
-                    : undefined,
-                }}
-              />
-            </div>
-            <div>
-              <label
-                style={{
-                  fontSize: "11px",
-                  fontWeight: 600,
-                  display: "block",
-                  marginBottom: "3px",
-                  color: "var(--text-muted)",
-                }}
-              >
-                Categoria
-              </label>
-              <input
-                type="text"
-                list="tpl-cat-suggestions"
-                placeholder="ex: engenharia"
-                value={tplCategory}
-                onChange={(e) => setTplCategory(e.target.value)}
-                style={{
-                  width: "100%",
-                  fontSize: "12px",
-                  padding: "5px 8px",
-                  borderRadius: "6px",
-                  border: "1px solid var(--border)",
-                }}
-              />
-              <datalist id="tpl-cat-suggestions">
-                {CATEGORY_SUGGESTIONS.map((c) => (
-                  <option key={c} value={c} />
-                ))}
-              </datalist>
-            </div>
-            <div>
-              <label
-                style={{
-                  fontSize: "11px",
-                  fontWeight: 600,
-                  display: "block",
-                  marginBottom: "3px",
-                  color: "var(--text-muted)",
-                }}
-              >
-                Tags (separadas por vírgula)
-              </label>
-              <input
-                type="text"
-                placeholder="ex: backend, api, rest"
-                value={tplTags}
-                onChange={(e) => setTplTags(e.target.value)}
-                style={{
-                  width: "100%",
-                  fontSize: "12px",
-                  padding: "5px 8px",
-                  borderRadius: "6px",
-                  border: "1px solid var(--border)",
-                }}
-              />
+            <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr 1.2fr", gap: "12px" }}>
+              <FormField label="Título do Template" required>
+                <Input
+                  placeholder="ex: Especificação de Microsserviço"
+                  value={tplTitle}
+                  onChange={(e) => setTplTitle(e.target.value)}
+                />
+              </FormField>
+
+              <FormField label={`Identificador / Slug ${!isEditMode ? "*" : ""}`}>
+                <Input
+                  placeholder="ex: microservice-spec"
+                  value={tplId}
+                  disabled={isEditMode}
+                  onChange={(e) =>
+                    setTplId(
+                      e.target.value.toLowerCase().replace(/[^a-z0-9-_]/g, ""),
+                    )
+                  }
+                />
+              </FormField>
+
+              <FormField label="Categoria">
+                <Input
+                  list="tpl-cat-suggestions"
+                  placeholder="ex: engenharia"
+                  value={tplCategory}
+                  onChange={(e) => setTplCategory(e.target.value)}
+                />
+                <datalist id="tpl-cat-suggestions">
+                  {CATEGORY_SUGGESTIONS.map((c) => (
+                    <option key={c} value={c} />
+                  ))}
+                </datalist>
+              </FormField>
+
+              <FormField label="Badge / Etiqueta Curta">
+                <Input
+                  placeholder="ex: RFC, ADR, PRD"
+                  value={tplBadge}
+                  onChange={(e) => setTplBadge(e.target.value.toUpperCase())}
+                />
+              </FormField>
             </div>
 
-            {/* Skills Vinculadas ao Template (Padrão ECC) */}
-            <div style={{ gridColumn: "1 / -1", marginTop: "4px" }}>
-              <label
-                style={{
-                  fontSize: "11px",
-                  fontWeight: 600,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "4px",
-                  marginBottom: "6px",
-                  color: "var(--color-primary, #1a73e8)",
-                }}
-              >
-                <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>
-                  auto_awesome
-                </span>
+            <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "12px" }}>
+              <FormField label="Descrição Curta (Finalidade do Template)">
+                <Input
+                  placeholder="Descreva quando e por que utilizar este modelo..."
+                  value={tplDesc}
+                  onChange={(e) => setTplDesc(e.target.value)}
+                />
+              </FormField>
+
+              <FormField label="Tags / Palavras-chave">
+                <Input
+                  placeholder="ex: backend, rest, auth (separados por vírgula)"
+                  value={tplTags}
+                  onChange={(e) => setTplTags(e.target.value)}
+                />
+              </FormField>
+            </div>
+
+            {/* Skills selection */}
+            <div>
+              <div style={{ fontSize: "11.5px", fontWeight: 700, color: "var(--color-outline)", marginBottom: "6px", display: "flex", alignItems: "center", gap: "6px" }}>
+                <Sparkles size={13} style={{ color: "var(--color-primary)" }} />
                 Skills Recomendadas / Vinculadas ao Template (Padrão ECC):
-              </label>
+              </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
                 {availableSkills.length === 0 ? (
-                  <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>Carregando catálogo de skills...</span>
+                  <span style={{ fontSize: "12px", color: "var(--color-outline)" }}>Carregando catálogo de skills...</span>
                 ) : (
                   availableSkills.map((skill) => {
                     const isSelected = tplSkills.includes(skill.id);
@@ -723,26 +547,16 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
                           gap: "5px",
                           padding: "4px 10px",
                           borderRadius: "14px",
-                          border: "1px solid",
-                          fontSize: "11px",
+                          border: isSelected ? "1px solid var(--color-primary)" : "1px solid var(--color-outline-variant)",
+                          fontSize: "11.5px",
                           fontWeight: 600,
                           cursor: "pointer",
-                          background: isSelected
-                            ? "var(--color-primary-container, #d2e3fc)"
-                            : "var(--color-surface-container-low, #f8f9fa)",
-                          color: isSelected
-                            ? "var(--color-on-primary-container, #041e49)"
-                            : "var(--text-muted, #64748b)",
-                          borderColor: isSelected
-                            ? "var(--color-primary, #1a73e8)"
-                            : "var(--color-outline-variant, #cbd5e1)",
+                          background: isSelected ? "var(--color-primary-container)" : "var(--color-surface-container-high)",
+                          color: isSelected ? "var(--color-primary)" : "var(--color-on-surface-variant)",
                           transition: "all 0.15s ease",
                         }}
-                        title={isSelected ? `Skill ${skill.id} vinculada. Clique para remover.` : `Vincular skill ${skill.id}`}
                       >
-                        <span className="material-symbols-outlined" style={{ fontSize: "13px" }}>
-                          {isSelected ? "check_circle" : "add_circle_outline"}
-                        </span>
+                        {isSelected ? <CheckCircle2 size={13} /> : <Plus size={13} />}
                         {skill.title || skill.name}
                       </button>
                     );
@@ -753,15 +567,8 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
           </div>
         )}
 
-        {/* Embedded Exact Same Rich Notion Document Editor with Tabs */}
-        <div
-          style={{
-            flex: 1,
-            overflow: "hidden",
-            display: "flex",
-            flexDirection: "column",
-          }}
-        >
+        {/* Embedded Notion Document Editor */}
+        <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
           <NotionEditor
             content={tplContent}
             onChange={handleContentChange}
@@ -776,9 +583,7 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
             customTitle={tplTitle}
             onCustomTitleChange={handleTitleChange}
             onCustomSave={handleSaveTemplate}
-            customSaveStatus={
-              isSaving ? "Salvando template..." : "Template Pronto"
-            }
+            customSaveStatus={isSaving ? "Salvando template..." : "Template Pronto"}
           />
         </div>
       </div>
@@ -788,419 +593,291 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
   // ═════════════════════════════════════════════════════════════════════════════
   // RENDER 2: MODO GRID DE TEMPLATES (PROJETO & COMUNIDADE)
   // ═════════════════════════════════════════════════════════════════════════════
+  const tabList = [
+    { id: "projeto", label: "Projeto", badge: templates.length, icon: <Folder size={14} /> },
+    { id: "comunidade", label: "Comunidade Global", badge: communityTemplates.length, icon: <Globe size={14} /> },
+  ];
+
   return (
-    <div
-      id="subview-templates"
-      className="dash-subview"
-      style={{
-        display: "block",
-        width: "100%",
-        height: "100%",
-        overflowY: "auto",
-      }}
-    >
-      <div className="templates-view-wrapper">
-        {/* ── Header ── */}
-        <div className="template-store-header">
-          <div className="templates-header" style={{ marginBottom: 0 }}>
-            <div>
-              <h2>Gerenciador de Templates</h2>
-              <p className="subtitle">
-                Central de modelos técnicos padronizados com Prompt de Copilot
-                integrado (.templates.json).
-              </p>
-            </div>
-            <div style={{ display: "flex", gap: "8px" }}>
-              <button
-                id="btn-refresh-templates"
-                className="btn btn-ghost btn-sm"
-                type="button"
-                onClick={() => {
-                  fetchTemplates();
-                  fetchCommunityTemplates();
-                }}
-              >
-                <span className="material-symbols-outlined icon-xs">
-                  refresh
-                </span>
-                Sincronizar
-              </button>
-              <button
-                id="btn-open-new-template"
-                className="btn btn-primary btn-sm"
-                type="button"
-                onClick={handleOpenCreate}
-              >
-                <span className="material-symbols-outlined icon-xs">add</span>
-                Novo Template
-              </button>
-            </div>
+    <div id="subview-templates" style={{ padding: "24px 32px", maxWidth: "1400px", margin: "0 auto", width: "100%", boxSizing: "border-box" }}>
+      {/* Header Row */}
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "20px", flexWrap: "wrap", gap: "16px" }}>
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <h1 style={{ margin: 0, fontSize: "22px", fontWeight: 700, color: "var(--color-on-surface)", letterSpacing: "-0.02em" }}>
+              Gerenciador de Templates
+            </h1>
+            <Badge variant="primary" size="md">
+              {templates.length} {templates.length === 1 ? 'modelo' : 'modelos'}
+            </Badge>
           </div>
+          <p style={{ margin: "6px 0 0 0", fontSize: "13.5px", color: "var(--color-on-surface-variant)" }}>
+            Central de modelos técnicos padronizados com Prompt de Copilot integrado (<code style={{ fontFamily: "var(--font-mono, monospace)", background: "var(--color-surface-container-high)", padding: "2px 6px", borderRadius: "4px" }}>.templates.json</code>).
+          </p>
+        </div>
 
-          {/* Tabs */}
-          <div className="template-store-tabs" role="tablist">
-            <button
-              className={`store-tab-btn ${activeTab === "projeto" ? "active" : ""}`}
-              id="tab-tpl-projeto"
-              type="button"
-              role="tab"
-              aria-selected={activeTab === "projeto"}
-              onClick={() => setActiveTab("projeto")}
-            >
-              📁 Projeto ({templates.length})
-            </button>
-            <button
-              className={`store-tab-btn ${activeTab === "comunidade" ? "active" : ""}`}
-              id="tab-tpl-comunidade"
-              type="button"
-              role="tab"
-              aria-selected={activeTab === "comunidade"}
-              onClick={() => setActiveTab("comunidade")}
-            >
-              🌐 Comunidade ({communityTemplates.length})
-            </button>
-          </div>
-
-          {/* Community info */}
-          {activeTab === "comunidade" && (
-            <div
-              style={{
-                padding: "8px 12px",
-                borderRadius: "8px",
-                background: "var(--color-secondary-container)",
-                display: "flex",
-                gap: "8px",
-                alignItems: "center",
-                margin: "0 0 8px",
-              }}
-            >
-              <span
-                className="material-symbols-outlined"
-                style={{ fontSize: "14px", color: "var(--color-secondary)" }}
-              >
-                info
-              </span>
-              <span
-                style={{
-                  fontSize: "12px",
-                  color: "var(--color-on-secondary-container)",
-                }}
-              >
-                Templates globais da comunidade. Importe-os para o{" "}
-                <code>.templates.json</code> do projeto para usá-los e
-                personalizá-los.
-              </span>
-            </div>
-          )}
-
-          {/* Filter Bar */}
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              flexWrap: "wrap",
-              gap: "10px",
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <Button
+            id="btn-refresh-templates"
+            variant="secondary"
+            size="md"
+            onClick={() => {
+              fetchTemplates();
+              fetchCommunityTemplates();
             }}
+            icon={<RefreshCw size={15} />}
           >
-            <div className="store-filter-bar" id="store-category-filters">
-              <button
-                className={`store-filter-chip ${activeCategory === "all" ? "active" : ""}`}
-                type="button"
-                onClick={() => setActiveCategory("all")}
-              >
-                Todos
-              </button>
-              {allCategories.map((c) => (
-                <button
-                  key={c}
-                  className={`store-filter-chip ${activeCategory === c ? "active" : ""}`}
-                  type="button"
-                  onClick={() => setActiveCategory(c!)}
-                >
-                  {c}
-                </button>
-              ))}
-            </div>
-            <div style={{ minWidth: "220px", flex: 1, maxWidth: "320px" }}>
-              <input
-                type="text"
-                id="tpl-search-input"
-                placeholder="Buscar template..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                style={{
-                  fontSize: "12px",
-                  padding: "5px 12px",
-                  width: "100%",
-                  border: "1px solid var(--border)",
-                  borderRadius: "16px",
-                }}
-              />
-            </div>
+            Sincronizar
+          </Button>
+
+          <Button
+            id="btn-open-new-template"
+            variant="primary"
+            size="md"
+            onClick={handleOpenCreate}
+            icon={<Plus size={16} />}
+          >
+            Novo Template
+          </Button>
+        </div>
+      </div>
+
+      {/* Tabs & Search & Category Bar */}
+      <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginBottom: "24px" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "12px" }}>
+          <Tabs
+            tabs={tabList}
+            activeTab={activeTab}
+            onChange={(tab) => setActiveTab(tab as any)}
+            variant="pills"
+          />
+
+          <div style={{ width: "320px" }}>
+            <SearchInput
+              id="tpl-search-input"
+              placeholder="Buscar template por título, tags..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onClear={() => setSearchQuery("")}
+            />
           </div>
         </div>
 
-        {/* ── Grid ── */}
-        <div id="templates-grid-container" className="templates-cards-grid">
-          {loading ? (
-            <div className="loading-state">Carregando templates...</div>
-          ) : filteredTemplates.length === 0 ? (
-            <div
-              style={{
-                gridColumn: "1 / -1",
-                textAlign: "center",
-                padding: "40px",
-                color: "var(--text-muted)",
-              }}
-            >
-              {activeTab === "projeto" ? (
-                <>
-                  <span
-                    className="material-symbols-outlined"
-                    style={{
-                      fontSize: "40px",
-                      display: "block",
-                      marginBottom: "8px",
-                      opacity: 0.4,
-                    }}
-                  >
-                    description
-                  </span>
-                  Nenhum template no projeto ainda.{" "}
-                  <button
-                    type="button"
-                    className="btn btn-primary btn-sm"
-                    style={{ display: "inline-flex", marginLeft: "8px" }}
-                    onClick={handleOpenCreate}
-                  >
-                    Criar primeiro template
-                  </button>
-                </>
-              ) : (
-                "Nenhum template encontrado na comunidade."
-              )}
-            </div>
-          ) : (
-            filteredTemplates.map((tpl) => {
-              const fb = importFeedback[tpl.id];
-              const alreadyImported =
-                activeTab === "comunidade" &&
-                templates.some((t) => t.id === tpl.id);
-              return (
-                <div
-                  key={tpl.id}
-                  className="template-card"
-                  style={{ display: "flex", flexDirection: "column" }}
-                >
-                  <div className="template-card-header">
-                    <span
-                      className="badge badge-primary-subtle"
-                      style={{ fontSize: "10px" }}
-                    >
-                      {tpl.category || "Geral"}
-                    </span>
-                    {tpl.badge && (
-                      <span
-                        className="badge badge-success-subtle"
-                        style={{ fontSize: "10px" }}
-                      >
-                        {tpl.badge}
-                      </span>
-                    )}
-                    {tpl.source === "community" && (
-                      <span
-                        className="badge"
-                        style={{
-                          fontSize: "10px",
-                          background: "var(--color-tertiary-container)",
-                          color: "var(--color-tertiary)",
-                        }}
-                      >
-                        Comunidade
-                      </span>
-                    )}
-                  </div>
-                  <h3 className="template-card-title">{tpl.title}</h3>
-                  <p className="template-card-desc" style={{ flex: 1 }}>
+        {activeTab === "comunidade" && (
+          <div
+            style={{
+              padding: "10px 14px",
+              borderRadius: "var(--radius-md, 8px)",
+              background: "var(--color-surface-container-high)",
+              border: "1px solid var(--color-outline-variant)",
+              display: "flex",
+              gap: "8px",
+              alignItems: "center",
+              fontSize: "12.5px",
+              color: "var(--color-on-surface-variant)",
+            }}
+          >
+            <Info size={16} style={{ color: "var(--color-primary)", flexShrink: 0 }} />
+            <span>
+              Templates globais da comunidade. Importe-os para o <code>.templates.json</code> do projeto para usá-los e personalizá-los livremente.
+            </span>
+          </div>
+        )}
+
+        {/* Categories Chips */}
+        <FilterChips
+          items={[
+            { id: "all", label: `Todos (${activeList.length})` },
+            ...allCategories.map((c) => ({ id: c!, label: c! })),
+          ]}
+          activeId={activeCategory}
+          onChange={(cat) => setActiveCategory(cat)}
+          size="sm"
+        />
+      </div>
+
+      {/* Cards Grid */}
+      {loading ? (
+        <div style={{ padding: "60px 0", display: "flex", justifyContent: "center" }}>
+          <Spinner size="lg" message="Carregando templates..." />
+        </div>
+      ) : filteredTemplates.length === 0 ? (
+        <EmptyState
+          icon={<Layers size={48} />}
+          title={activeTab === "projeto" ? "Nenhum template no projeto" : "Nenhum template na comunidade"}
+          description={
+            searchQuery
+              ? `Nenhum resultado encontrado para "${searchQuery}".`
+              : activeTab === "projeto"
+              ? "Crie modelos estruturados de RFCs, ADRs e especificações técnicas."
+              : "Explore e importe modelos da comunidade global."
+          }
+          actionLabel={activeTab === "projeto" ? "Criar Primeiro Template" : undefined}
+          onAction={activeTab === "projeto" ? handleOpenCreate : undefined}
+        />
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "16px" }}>
+          {filteredTemplates.map((tpl) => {
+            const fb = importFeedback[tpl.id];
+            const alreadyImported =
+              activeTab === "comunidade" &&
+              templates.some((t) => t.id === tpl.id);
+
+            return (
+              <Card key={tpl.id} style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+                <CardHeader
+                  title={tpl.title}
+                  subtitle={tpl.templateName || tpl.id}
+                  action={
+                    <div style={{ display: "flex", gap: "4px" }}>
+                      <Badge variant="primary" size="sm">
+                        {tpl.category || "Geral"}
+                      </Badge>
+                      {tpl.badge && (
+                        <Badge variant="success" size="sm">
+                          {tpl.badge}
+                        </Badge>
+                      )}
+                      {tpl.source === "community" && (
+                        <Badge variant="purple" size="sm">
+                          Comunidade
+                        </Badge>
+                      )}
+                    </div>
+                  }
+                />
+
+                <CardContent style={{ flex: 1, display: "flex", flexDirection: "column", gap: "10px" }}>
+                  <p style={{ margin: 0, fontSize: "12.5px", color: "var(--color-on-surface-variant)", lineHeight: 1.5, flex: 1 }}>
                     {tpl.description ||
                       (tpl.prompt
-                        ? `Prompt: ${tpl.prompt.slice(0, 80)}...`
-                        : "Sem descrição.")}
+                        ? `Prompt: ${tpl.prompt.slice(0, 90)}...`
+                        : "Sem descrição adicional.")}
                   </p>
+
                   {(tpl.tags || []).length > 0 && (
-                    <div
-                      style={{
-                        display: "flex",
-                        gap: "4px",
-                        flexWrap: "wrap",
-                        marginBottom: "8px",
-                      }}
-                    >
-                      {(tpl.tags || []).slice(0, 3).map((tag) => (
+                    <div style={{ display: "flex", gap: "4px", flexWrap: "wrap" }}>
+                      {(tpl.tags || []).slice(0, 4).map((tag) => (
                         <span
                           key={tag}
                           style={{
-                            fontSize: "10px",
-                            padding: "1px 6px",
+                            fontSize: "10.5px",
+                            padding: "2px 6px",
                             borderRadius: "4px",
-                            background:
-                              "var(--color-surface-container-highest)",
-                            color: "var(--color-on-surface-variant)",
+                            background: "var(--color-surface-container-high)",
+                            color: "var(--color-outline)",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "3px",
                           }}
                         >
+                          <Tag size={10} />
                           {tag}
                         </span>
                       ))}
                     </div>
                   )}
+
                   {(tpl.skills || []).length > 0 && (
-                    <div
-                      style={{
-                        display: "flex",
-                        gap: "4px",
-                        flexWrap: "wrap",
-                        marginBottom: "8px",
-                      }}
-                    >
+                    <div style={{ display: "flex", gap: "4px", flexWrap: "wrap" }}>
                       {(tpl.skills || []).map((skillId: string) => (
                         <span
                           key={skillId}
                           style={{
-                            fontSize: "10px",
+                            fontSize: "10.5px",
                             padding: "2px 6px",
                             borderRadius: "4px",
-                            background: "var(--color-primary-container, #d2e3fc)",
-                            color: "var(--color-on-primary-container, #041e49)",
+                            background: "var(--color-primary-container)",
+                            color: "var(--color-primary)",
                             display: "inline-flex",
                             alignItems: "center",
                             gap: "3px",
-                            border: "1px solid var(--color-primary, #1a73e8)",
+                            fontWeight: 600,
                           }}
-                          title={`Skill vinculada: ${skillId}`}
                         >
-                          <span
-                            className="material-symbols-outlined"
-                            style={{ fontSize: "11px", color: "var(--color-primary, #1a73e8)" }}
-                          >
-                            auto_awesome
-                          </span>
+                          <Sparkles size={10} />
                           {skillId}
                         </span>
                       ))}
                     </div>
                   )}
+
                   {fb && (
-                    <p
-                      style={{
-                        fontSize: "11px",
-                        color: fb.ok
-                          ? "var(--color-primary)"
-                          : "var(--color-error)",
-                        margin: "0 0 6px",
-                      }}
-                    >
+                    <div style={{ fontSize: "11.5px", color: fb.ok ? "var(--color-success)" : "var(--color-error)", fontWeight: 600 }}>
                       {fb.ok ? "✓" : "✗"} {fb.msg}
-                    </p>
+                    </div>
                   )}
-                  <div
-                    className="template-card-footer"
-                    style={{
-                      display: "flex",
-                      gap: "6px",
-                      alignItems: "center",
-                    }}
-                  >
-                    {activeTab === "projeto" ? (
-                      <>
-                        <button
-                          className="btn btn-primary btn-sm"
-                          type="button"
-                          style={{
-                            flex: 1,
-                            display: "inline-flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            gap: "4px",
-                          }}
-                          onClick={() => handleOpenEdit(tpl)}
-                        >
-                          <span className="material-symbols-outlined icon-xs">
-                            edit_note
-                          </span>
-                          Editar Template
-                        </button>
-                        <button
-                          id={`btn-delete-tpl-${tpl.id}`}
-                          className="btn btn-ghost btn-sm"
-                          type="button"
-                          title="Remover template do projeto"
-                          style={{ color: "var(--color-error)" }}
-                          onClick={() => handleDelete(tpl, false)}
-                        >
-                          <span className="material-symbols-outlined icon-xs">
-                            delete
-                          </span>
-                        </button>
-                      </>
-                    ) : alreadyImported ? (
-                      <div
-                        style={{ display: "flex", gap: "6px", width: "100%" }}
+                </CardContent>
+
+                <CardFooter style={{ borderTop: "1px solid var(--color-outline-variant)", display: "flex", gap: "8px", alignItems: "center" }}>
+                  {activeTab === "projeto" ? (
+                    <>
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        fullWidth
+                        onClick={() => handleOpenEdit(tpl)}
+                        icon={<Edit3 size={14} />}
                       >
-                        <span
-                          className="btn btn-secondary btn-sm"
-                          style={{
-                            flex: 1,
-                            display: "inline-flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            cursor: "default",
-                            opacity: 0.9,
-                            fontSize: "11px",
-                          }}
-                        >
-                          ✓ Importado no Projeto
-                        </span>
-                        <button
-                          id={`btn-unimport-community-${tpl.id}`}
-                          className="btn btn-ghost btn-sm"
-                          type="button"
-                          title="Remover este template do projeto local"
-                          style={{
-                            color: "var(--color-warning, #eab308)",
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "3px",
-                          }}
-                          onClick={() => handleDelete(tpl, false)}
-                        >
-                          <span className="material-symbols-outlined icon-xs">
-                            remove_circle_outline
-                          </span>
-                          Remover do Projeto
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        id={`btn-import-community-${tpl.id}`}
-                        className="btn btn-primary btn-sm"
-                        type="button"
-                        style={{ width: "100%" }}
-                        disabled={importingId === tpl.id}
-                        onClick={() => handleImport(tpl)}
+                        Editar Template
+                      </Button>
+                      <IconButton
+                        id={`btn-delete-tpl-${tpl.id}`}
+                        variant="ghost"
+                        size="sm"
+                        tooltip="Remover template"
+                        onClick={() => handleDelete(tpl, false)}
+                        icon={<Trash2 size={15} style={{ color: "var(--color-error)" }} />}
+                      />
+                    </>
+                  ) : alreadyImported ? (
+                    <div style={{ display: "flex", gap: "6px", width: "100%", alignItems: "center" }}>
+                      <span
+                        style={{
+                          flex: 1,
+                          fontSize: "12px",
+                          color: "var(--color-success)",
+                          background: "var(--color-surface-container-high)",
+                          padding: "6px 10px",
+                          borderRadius: "var(--radius-md, 6px)",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: "4px",
+                          fontWeight: 600,
+                        }}
                       >
-                        {importingId === tpl.id
-                          ? "Importando..."
-                          : "Importar para o Projeto"}
-                      </button>
-                    )}
-                  </div>
-                </div>
-              );
-            })
-          )}
+                        <Check size={14} /> Importado no Projeto
+                      </span>
+                      <Button
+                        id={`btn-unimport-community-${tpl.id}`}
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDelete(tpl, false)}
+                        icon={<MinusCircle size={14} style={{ color: "var(--color-warning)" }} />}
+                      >
+                        Remover
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button
+                      id={`btn-import-community-${tpl.id}`}
+                      variant="primary"
+                      size="sm"
+                      fullWidth
+                      disabled={importingId === tpl.id}
+                      onClick={() => handleImport(tpl)}
+                      icon={<Download size={14} />}
+                    >
+                      {importingId === tpl.id ? "Importando..." : "Importar para o Projeto"}
+                    </Button>
+                  )}
+                </CardFooter>
+              </Card>
+            );
+          })}
         </div>
-      </div>
+      )}
     </div>
   );
 };

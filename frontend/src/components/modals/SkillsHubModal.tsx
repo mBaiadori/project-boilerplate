@@ -3,7 +3,6 @@ import {
   Sparkles, 
   Download, 
   Trash2, 
-  Search, 
   ShieldCheck, 
   FileCode2, 
   Terminal, 
@@ -11,12 +10,12 @@ import {
   CheckCircle2, 
   Layers, 
   BookOpen, 
-  X,
   ExternalLink,
   Wrench
 } from 'lucide-react';
 import { API } from '../../services/api';
 import type { SkillItem } from '../../types';
+import { Modal, Tabs, SearchInput, Button, Badge, AlertBanner, Spinner } from '../ui';
 
 interface SkillsHubModalProps {
   isOpen: boolean;
@@ -39,6 +38,7 @@ export const SkillsHubModal: React.FC<SkillsHubModalProps> = ({
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedSkill, setSelectedSkill] = useState<SkillItem | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [actionType, setActionType] = useState<'info' | 'success' | 'error'>('info');
 
   useEffect(() => {
     if (isOpen) {
@@ -69,23 +69,28 @@ export const SkillsHubModal: React.FC<SkillsHubModalProps> = ({
 
   const handleInstall = async (skill: SkillItem) => {
     try {
+      setActionType('info');
       setActionMessage(`Instalando '${skill.title || skill.name}'...`);
       const res = await API.installSkill(skill.id, activeRepo);
       if (res.ok) {
+        setActionType('success');
         setActionMessage(`Skill '${skill.title || skill.name}' instalada com sucesso!`);
         await loadData();
         setTimeout(() => setActionMessage(null), 3000);
       }
     } catch (err: any) {
+      setActionType('error');
       setActionMessage(`Erro: ${err.message}`);
     }
   };
 
   const handleUninstall = async (skillId: string) => {
     try {
+      setActionType('info');
       setActionMessage('Desinstalando skill...');
       const res = await API.uninstallSkill(skillId, activeRepo);
       if (res.ok) {
+        setActionType('success');
         setActionMessage('Skill desinstalada.');
         await loadData();
         if (selectedSkill?.id === skillId) {
@@ -94,6 +99,7 @@ export const SkillsHubModal: React.FC<SkillsHubModalProps> = ({
         setTimeout(() => setActionMessage(null), 3000);
       }
     } catch (err: any) {
+      setActionType('error');
       setActionMessage(`Erro: ${err.message}`);
     }
   };
@@ -118,106 +124,92 @@ export const SkillsHubModal: React.FC<SkillsHubModalProps> = ({
   const getCategoryIcon = (category: string) => {
     switch (category) {
       case 'governance':
-        return <ShieldCheck className="w-4 h-4 text-emerald-400" />;
+        return <ShieldCheck size={16} style={{ color: 'var(--color-success)' }} />;
       case 'architecture':
-        return <FileCode2 className="w-4 h-4 text-blue-400" />;
+        return <FileCode2 size={16} style={{ color: 'var(--color-primary)' }} />;
       case 'quality':
-        return <Sparkles className="w-4 h-4 text-amber-400" />;
+        return <Sparkles size={16} style={{ color: 'var(--color-warning)' }} />;
       case 'engineering':
-        return <Terminal className="w-4 h-4 text-purple-400" />;
+        return <Terminal size={16} style={{ color: '#a855f7' }} />;
       case 'memory':
-        return <Brain className="w-4 h-4 text-pink-400" />;
+        return <Brain size={16} style={{ color: '#ec4899' }} />;
       default:
-        return <Layers className="w-4 h-4 text-slate-400" />;
+        return <Layers size={16} style={{ color: 'var(--color-outline)' }} />;
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fade-in">
-      <div className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl w-full max-w-5xl h-[85vh] flex flex-col overflow-hidden">
-        
-        {/* Modal Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-950/60">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-gradient-to-tr from-indigo-500 to-purple-500 rounded-lg text-white shadow-lg">
-              <Sparkles className="w-5 h-5" />
-            </div>
-            <div>
-              <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                Hub de Skills do Agente
-                <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                  Padrão ECC
-                </span>
-              </h2>
-              <p className="text-xs text-slate-400">
-                Instale habilidades, regras e ferramentas autônomas no projeto <span className="text-slate-200 font-mono">projects/{activeRepo || 'local'}</span>
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
+  const tabList = [
+    { id: 'hub', label: 'Catálogo Global', badge: hubSkills.length, icon: <Sparkles size={14} /> },
+    { id: 'installed', label: 'Instaladas no Projeto', badge: installedSkills.length, icon: <CheckCircle2 size={14} /> },
+  ];
 
-        {/* Action Alert Banner */}
-        {actionMessage && (
-          <div className="bg-indigo-900/40 border-b border-indigo-500/30 px-6 py-2 text-xs text-indigo-200 flex items-center gap-2">
-            <Sparkles className="w-4 h-4 animate-spin text-indigo-400" />
-            {actionMessage}
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Hub de Skills do Agente"
+      subtitle={`Instale habilidades e ferramentas autônomas no projeto ${activeRepo || 'local'}`}
+      icon={<Sparkles size={18} />}
+      size="xl"
+      footer={
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: 'var(--color-on-surface-variant)' }}>
+            <span>Origem ECC:</span>
+            <a
+              href="https://github.com/mBaiadori/ECC"
+              target="_blank"
+              rel="noreferrer"
+              style={{ color: 'var(--color-primary)', display: 'inline-flex', alignItems: 'center', gap: '4px', textDecoration: 'none', fontWeight: 600 }}
+            >
+              mBaiadori/ECC <ExternalLink size={12} />
+            </a>
           </div>
+          <Button variant="secondary" size="sm" onClick={onClose}>
+            Fechar
+          </Button>
+        </div>
+      }
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', height: '62vh' }}>
+        {actionMessage && (
+          <AlertBanner
+            variant={actionType}
+            title={actionMessage}
+            onClose={() => setActionMessage(null)}
+          />
         )}
 
-        {/* Modal Body: Split View (List + Details) */}
-        <div className="flex-1 flex overflow-hidden">
-          
-          {/* Left Panel: Search, Filter and Skill Cards */}
-          <div className="w-7/12 border-r border-slate-800 flex flex-col p-4 bg-slate-900/40">
-            
-            {/* Tabs */}
-            <div className="flex items-center gap-2 mb-4 bg-slate-950/50 p-1 rounded-lg border border-slate-800">
-              <button
-                onClick={() => setActiveTab('hub')}
-                className={`flex-1 py-1.5 px-3 rounded-md text-xs font-medium transition flex items-center justify-center gap-2 ${
-                  activeTab === 'hub'
-                    ? 'bg-indigo-600 text-white shadow'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                Catálogo Global ({hubSkills.length})
-              </button>
-              <button
-                onClick={() => setActiveTab('installed')}
-                className={`flex-1 py-1.5 px-3 rounded-md text-xs font-medium transition flex items-center justify-center gap-2 ${
-                  activeTab === 'installed'
-                    ? 'bg-indigo-600 text-white shadow'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                Instaladas no Projeto ({installedSkills.length})
-              </button>
-            </div>
+        <div style={{ display: 'flex', gap: '16px', flex: 1, minHeight: 0 }}>
+          {/* Left Panel: Search, Filter, Cards */}
+          <div style={{ width: '58%', display: 'flex', flexDirection: 'column', gap: '12px', minHeight: 0 }}>
+            <Tabs
+              tabs={tabList}
+              activeTab={activeTab}
+              onChange={(tab) => setActiveTab(tab as any)}
+              variant="pills"
+            />
 
-            {/* Search & Category Filter */}
-            <div className="flex gap-2 mb-3">
-              <div className="relative flex-1">
-                <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-500" />
-                <input
-                  type="text"
-                  placeholder="Pesquisar skills por nome, tags..."
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <div style={{ flex: 1 }}>
+                <SearchInput
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-9 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                  placeholder="Pesquisar skills por nome ou tags..."
+                  onClear={() => setSearchQuery('')}
                 />
               </div>
               <select
                 value={selectedCategory}
                 onChange={(e) => setSelectedCategory(e.target.value)}
-                className="bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-indigo-500"
+                style={{
+                  background: 'var(--color-surface-container-high)',
+                  border: '1px solid var(--color-outline-variant)',
+                  borderRadius: 'var(--radius-md, 8px)',
+                  padding: '6px 10px',
+                  fontSize: '12.5px',
+                  color: 'var(--color-on-surface)',
+                  outline: 'none',
+                }}
               >
                 <option value="all">Todas Categorias</option>
                 <option value="governance">Governança</option>
@@ -229,11 +221,13 @@ export const SkillsHubModal: React.FC<SkillsHubModalProps> = ({
             </div>
 
             {/* Skills Scroll List */}
-            <div className="flex-1 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+            <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px', paddingRight: '4px' }}>
               {loading ? (
-                <div className="py-12 text-center text-xs text-slate-500">Carregando catálogo de skills...</div>
+                <div style={{ padding: '40px 0', display: 'flex', justifyContent: 'center' }}>
+                  <Spinner size="md" message="Carregando catálogo de skills..." />
+                </div>
               ) : filteredSkills.length === 0 ? (
-                <div className="py-12 text-center text-xs text-slate-500">
+                <div style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--color-outline)', fontSize: '13px' }}>
                   {activeTab === 'installed'
                     ? 'Nenhuma skill instalada neste projeto ainda. Explore o Catálogo Global!'
                     : 'Nenhuma skill encontrada para o filtro.'}
@@ -247,40 +241,56 @@ export const SkillsHubModal: React.FC<SkillsHubModalProps> = ({
                     <div
                       key={skill.id}
                       onClick={() => setSelectedSkill(skill)}
-                      className={`p-3 rounded-lg border transition cursor-pointer text-left ${
-                        isSelected
-                          ? 'bg-indigo-950/40 border-indigo-500 shadow-md ring-1 ring-indigo-500'
-                          : 'bg-slate-950/40 border-slate-800 hover:border-slate-700'
-                      }`}
+                      style={{
+                        padding: '10px 12px',
+                        borderRadius: 'var(--radius-md, 8px)',
+                        border: isSelected ? '1px solid var(--color-primary)' : '1px solid var(--color-outline-variant)',
+                        background: isSelected ? 'var(--color-primary-container)' : 'var(--color-surface-container)',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease',
+                      }}
                     >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex items-center gap-2">
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                           {getCategoryIcon(skill.category)}
-                          <h4 className="text-xs font-semibold text-white">
+                          <strong style={{ fontSize: '13px', color: 'var(--color-on-surface)' }}>
                             {skill.title || skill.name}
-                          </h4>
+                          </strong>
                           {installed && (
-                            <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                              Instalada
-                            </span>
+                            <Badge variant="success" size="sm">Instalada</Badge>
                           )}
                         </div>
-                        <span className="text-[10px] text-slate-500 font-mono">v{skill.version}</span>
+                        <span style={{ fontSize: '11px', color: 'var(--color-outline)', fontFamily: 'var(--font-mono, monospace)' }}>
+                          v{skill.version}
+                        </span>
                       </div>
 
-                      <p className="text-[11px] text-slate-400 mt-1 line-clamp-2">
+                      <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: 'var(--color-on-surface-variant)', lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
                         {skill.description}
                       </p>
 
-                      <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px', flexWrap: 'wrap' }}>
                         {skill.tools && skill.tools.slice(0, 3).map((tool) => (
-                          <span key={tool} className="text-[9px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 flex items-center gap-1">
-                            <Wrench className="w-2.5 h-2.5 text-indigo-400" />
+                          <span
+                            key={tool}
+                            style={{
+                              fontSize: '10px',
+                              padding: '2px 6px',
+                              borderRadius: '4px',
+                              background: 'var(--color-surface-container-high)',
+                              color: 'var(--color-on-surface-variant)',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              border: '1px solid var(--color-outline-variant)',
+                            }}
+                          >
+                            <Wrench size={10} style={{ color: 'var(--color-primary)' }} />
                             {tool}
                           </span>
                         ))}
                         {skill.tools && skill.tools.length > 3 && (
-                          <span className="text-[9px] text-slate-500">+{skill.tools.length - 3}</span>
+                          <span style={{ fontSize: '10px', color: 'var(--color-outline)' }}>+{skill.tools.length - 3}</span>
                         )}
                       </div>
                     </div>
@@ -290,78 +300,123 @@ export const SkillsHubModal: React.FC<SkillsHubModalProps> = ({
             </div>
           </div>
 
-          {/* Right Panel: Skill Deep View & Actions */}
-          <div className="w-5/12 flex flex-col p-5 bg-slate-950/80 overflow-y-auto">
+          {/* Right Panel: Skill Details & Action */}
+          <div
+            style={{
+              width: '42%',
+              background: 'var(--color-surface-container-low)',
+              border: '1px solid var(--color-outline-variant)',
+              borderRadius: 'var(--radius-lg, 12px)',
+              padding: '14px',
+              overflowY: 'auto',
+              display: 'flex',
+              flexDirection: 'column',
+              minHeight: 0,
+            }}
+          >
             {selectedSkill ? (
-              <div className="space-y-4">
-                <div className="flex items-start justify-between">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '10px' }}>
                   <div>
-                    <div className="flex items-center gap-2">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                       {getCategoryIcon(selectedSkill.category)}
-                      <span className="text-[10px] uppercase tracking-wider text-indigo-400 font-semibold">
+                      <span style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-primary)', fontWeight: 700 }}>
                         {selectedSkill.category}
                       </span>
                     </div>
-                    <h3 className="text-base font-bold text-white mt-1">
+                    <h3 style={{ margin: '4px 0 0 0', fontSize: '15px', fontWeight: 700, color: 'var(--color-on-surface)' }}>
                       {selectedSkill.title || selectedSkill.name}
                     </h3>
-                    <div className="text-xs text-slate-400 font-mono mt-0.5">
+                    <div style={{ fontSize: '11px', color: 'var(--color-outline)', fontFamily: 'var(--font-mono, monospace)', marginTop: '2px' }}>
                       id: {selectedSkill.id} • v{selectedSkill.version}
                     </div>
                   </div>
 
                   {isInstalled(selectedSkill.id) ? (
-                    <button
+                    <Button
+                      variant="danger"
+                      size="sm"
                       onClick={() => handleUninstall(selectedSkill.id)}
-                      className="px-3 py-1.5 bg-red-950/50 hover:bg-red-900 border border-red-800 text-red-300 rounded-lg text-xs font-medium transition flex items-center gap-1.5"
+                      icon={<Trash2 size={13} />}
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
                       Desinstalar
-                    </button>
+                    </Button>
                   ) : (
-                    <button
+                    <Button
+                      variant="primary"
+                      size="sm"
                       onClick={() => handleInstall(selectedSkill)}
-                      className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-medium transition flex items-center gap-1.5 shadow-lg shadow-indigo-600/30"
+                      icon={<Download size={13} />}
                     >
-                      <Download className="w-3.5 h-3.5" />
-                      Instalar no Projeto
-                    </button>
+                      Instalar
+                    </Button>
                   )}
                 </div>
 
-                <p className="text-xs text-slate-300 bg-slate-900 p-3 rounded-lg border border-slate-800">
+                <div
+                  style={{
+                    fontSize: '12.5px',
+                    color: 'var(--color-on-surface-variant)',
+                    background: 'var(--color-surface-container)',
+                    padding: '10px 12px',
+                    borderRadius: 'var(--radius-md, 8px)',
+                    border: '1px solid var(--color-outline-variant)',
+                    lineHeight: 1.45,
+                  }}
+                >
                   {selectedSkill.description}
-                </p>
+                </div>
 
-                {/* Ferramentas permitidas */}
+                {/* Native Tools */}
                 <div>
-                  <h5 className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-                    <Wrench className="w-3.5 h-3.5 text-indigo-400" />
+                  <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--color-outline)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Wrench size={12} style={{ color: 'var(--color-primary)' }} />
                     Ferramentas Nativas Vinculadas
-                  </h5>
-                  <div className="flex flex-wrap gap-1.5">
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
                     {selectedSkill.tools && selectedSkill.tools.length > 0 ? (
                       selectedSkill.tools.map((tool) => (
-                        <span key={tool} className="text-xs px-2 py-1 rounded bg-slate-900 border border-slate-800 text-indigo-300 font-mono">
+                        <span
+                          key={tool}
+                          style={{
+                            fontSize: '11px',
+                            padding: '3px 8px',
+                            borderRadius: '4px',
+                            background: 'var(--color-surface-container-high)',
+                            border: '1px solid var(--color-outline-variant)',
+                            color: 'var(--color-on-surface)',
+                            fontFamily: 'var(--font-mono, monospace)',
+                          }}
+                        >
                           {tool}
                         </span>
                       ))
                     ) : (
-                      <span className="text-xs text-slate-500">Nenhuma ferramenta especial requerida.</span>
+                      <span style={{ fontSize: '11.5px', color: 'var(--color-outline)' }}>Nenhuma ferramenta especial requerida.</span>
                     )}
                   </div>
                 </div>
 
-                {/* Arquétipos / Templates sugeridos */}
+                {/* Suggested Templates */}
                 {selectedSkill.suggested_templates && selectedSkill.suggested_templates.length > 0 && (
                   <div>
-                    <h5 className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-                      <BookOpen className="w-3.5 h-3.5 text-emerald-400" />
+                    <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--color-outline)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <BookOpen size={12} style={{ color: 'var(--color-success)' }} />
                       Templates Recomendados
-                    </h5>
-                    <div className="flex flex-wrap gap-1.5">
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
                       {selectedSkill.suggested_templates.map((tpl) => (
-                        <span key={tpl} className="text-xs px-2 py-1 rounded bg-emerald-950/40 border border-emerald-800/40 text-emerald-300">
+                        <span
+                          key={tpl}
+                          style={{
+                            fontSize: '11px',
+                            padding: '3px 8px',
+                            borderRadius: '4px',
+                            background: 'var(--color-surface-container-high)',
+                            border: '1px solid var(--color-outline-variant)',
+                            color: 'var(--color-success)',
+                          }}
+                        >
                           {tpl}
                         </span>
                       ))}
@@ -369,67 +424,59 @@ export const SkillsHubModal: React.FC<SkillsHubModalProps> = ({
                   </div>
                 )}
 
-                {/* Conteúdo do SKILL.md */}
+                {/* SKILL.md Preview */}
                 {selectedSkill.content && (
                   <div>
-                    <h5 className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
+                    <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--color-outline)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '6px' }}>
                       Instruções do Agente (SKILL.md)
-                    </h5>
-                    <pre className="text-[11px] text-slate-300 bg-slate-900 p-3 rounded-lg border border-slate-800 overflow-x-auto max-h-56 whitespace-pre-wrap font-mono">
+                    </div>
+                    <pre
+                      style={{
+                        fontSize: '11px',
+                        color: 'var(--color-on-surface-variant)',
+                        background: 'var(--color-surface-container-lowest)',
+                        padding: '10px',
+                        borderRadius: 'var(--radius-md, 8px)',
+                        border: '1px solid var(--color-outline-variant)',
+                        overflowX: 'auto',
+                        maxHeight: '180px',
+                        whiteSpace: 'pre-wrap',
+                        fontFamily: 'var(--font-mono, monospace)',
+                        margin: 0,
+                      }}
+                    >
                       {selectedSkill.content}
                     </pre>
                   </div>
                 )}
 
-                {/* Ação rápida para selecionar skill no chat */}
                 {onSkillSelect && isInstalled(selectedSkill.id) && (
-                  <button
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    fullWidth
                     onClick={() => {
                       onSkillSelect(selectedSkill);
                       onClose();
                     }}
-                    className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold transition flex items-center justify-center gap-2 shadow"
+                    icon={<Sparkles size={14} />}
                   >
-                    <Sparkles className="w-4 h-4" />
                     Ativar esta Skill no Copilot Agora
-                  </button>
+                  </Button>
                 )}
               </div>
             ) : (
-              <div className="h-full flex flex-col items-center justify-center text-center text-slate-500 p-6">
-                <Sparkles className="w-10 h-10 text-slate-700 mb-3" />
-                <h4 className="text-sm font-semibold text-slate-400">Selecione uma Skill</h4>
-                <p className="text-xs text-slate-600 mt-1 max-w-xs">
-                  Clique em qualquer habilidade da lista ao lado para ver detalhes, ferramentas associadas e instalá-la no repositório ativo.
+              <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', color: 'var(--color-outline)', padding: '20px' }}>
+                <Sparkles size={36} style={{ color: 'var(--color-outline)', opacity: 0.5, marginBottom: '12px' }} />
+                <strong style={{ fontSize: '13px', color: 'var(--color-on-surface-variant)' }}>Selecione uma Skill</strong>
+                <p style={{ fontSize: '12px', marginTop: '4px', maxWidth: '240px' }}>
+                  Clique em qualquer habilidade da lista para ver detalhes, ferramentas associadas e instalá-la.
                 </p>
               </div>
             )}
           </div>
-
         </div>
-
-        {/* Modal Footer */}
-        <div className="px-6 py-3 border-t border-slate-800 bg-slate-950 flex items-center justify-between text-xs text-slate-500">
-          <div className="flex items-center gap-2">
-            <span>Repositório de Origem ECC:</span>
-            <a
-              href="https://github.com/mBaiadori/ECC"
-              target="_blank"
-              rel="noreferrer"
-              className="text-indigo-400 hover:underline flex items-center gap-1"
-            >
-              mBaiadori/ECC <ExternalLink className="w-3 h-3" />
-            </a>
-          </div>
-          <button
-            onClick={onClose}
-            className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg transition"
-          >
-            Fechar
-          </button>
-        </div>
-
       </div>
-    </div>
+    </Modal>
   );
 };

@@ -2,6 +2,7 @@
 /* CSS Architecture Import (Preserves 100% of Design Tokens & Aesthetics)     */
 /* ========================================================================= */
 @import './styles/design-tokens.css';
+@import './styles/ui-primitives.css';
 @import './styles/main.css';
 @import './styles/auth.css';
 @import './styles/repos.css';

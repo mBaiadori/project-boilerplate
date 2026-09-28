@@ -1,5 +1,16 @@
 import React, { useState } from 'react';
 import { API } from '../../services/api';
+import { Button, IconButton, Modal, FormField, Textarea } from '../ui';
+import { 
+  Copy, 
+  FileText, 
+  Download, 
+  FolderOpen, 
+  Upload, 
+  RefreshCw, 
+  Check, 
+  UploadCloud 
+} from 'lucide-react';
 
 interface DocActionBarProps {
   filePath: string;
@@ -12,7 +23,7 @@ export const DocActionBar: React.FC<DocActionBarProps> = ({
   filePath,
   content,
   onImportContent,
-  onReload
+  onReload,
 }) => {
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [importText, setImportText] = useState('');
@@ -97,76 +108,75 @@ export const DocActionBar: React.FC<DocActionBarProps> = ({
           padding: '6px 16px',
           borderBottom: '1px solid var(--color-outline-variant)',
           background: 'var(--color-surface-container-low)',
-          fontSize: '12px'
+          fontSize: '12px',
         }}
       >
         {/* Left: Actions */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <button
-            type="button"
-            className="btn btn-ghost btn-xs"
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={handleCopyPath}
             title="Copiar Caminho Relativo"
-            style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+            icon={<Copy size={13} />}
           >
-            <span className="material-symbols-outlined icon-xs">content_copy</span>
             Caminho
-          </button>
-          <button
-            type="button"
-            className="btn btn-ghost btn-xs"
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={handleCopyFullDoc}
             title="Copiar Todo o Conteúdo Markdown"
-            style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+            icon={<FileText size={13} />}
           >
-            <span className="material-symbols-outlined icon-xs">file_copy</span>
             Copiar Tudo
-          </button>
-          <button
-            type="button"
-            className="btn btn-ghost btn-xs"
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={handleExportMarkdown}
             title="Exportar como Arquivo .md"
-            style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+            icon={<Download size={13} />}
           >
-            <span className="material-symbols-outlined icon-xs">download</span>
             Exportar
-          </button>
-          <button
-            type="button"
-            className="btn btn-ghost btn-xs"
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={handleOpenInOS}
-            title="Abrir no gerenciador de arquivos do PC (Finder / Explorer)"
-            style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+            title="Abrir no gerenciador de arquivos do PC"
+            icon={<FolderOpen size={13} />}
           >
-            <span className="material-symbols-outlined icon-xs">folder_open</span>
             Abrir no PC
-          </button>
-          <button
-            type="button"
-            className="btn btn-ghost btn-xs"
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => setIsImportModalOpen(true)}
             title="Importar Markdown Externo"
-            style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+            icon={<Upload size={13} />}
           >
-            <span className="material-symbols-outlined icon-xs">upload_file</span>
             Importar
-          </button>
-          <button
-            type="button"
-            className="btn btn-ghost btn-xs"
+          </Button>
+
+          <IconButton
+            variant="ghost"
+            size="sm"
             onClick={onReload}
-            title="Recarregar do Disco"
-          >
-            <span className="material-symbols-outlined icon-xs">refresh</span>
-          </button>
+            tooltip="Recarregar do Disco"
+            icon={<RefreshCw size={14} />}
+          />
         </div>
 
         {/* Right: Notification & Counters */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: 'var(--color-outline)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--color-outline)' }}>
           {copiedNotification && (
-            <span style={{ color: 'var(--color-success)', fontWeight: 600 }}>
-              ✓ {copiedNotification}
+            <span style={{ color: 'var(--color-success)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+              <Check size={14} /> {copiedNotification}
             </span>
           )}
           <span>{wordCount} palavras</span>
@@ -176,59 +186,68 @@ export const DocActionBar: React.FC<DocActionBarProps> = ({
       </div>
 
       {/* Import Modal */}
-      {isImportModalOpen && (
-        <div className="modal-backdrop" style={{ display: 'flex' }}>
-          <div className="modal-box" style={{ maxWidth: '550px' }}>
-            <div className="modal-header">
-              <h3>Importar Documento Markdown</h3>
-              <button className="btn-close" onClick={() => setIsImportModalOpen(false)}>
-                <span className="material-symbols-outlined icon-sm">close</span>
-              </button>
-            </div>
+      <Modal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        title="Importar Documento Markdown"
+        icon={<UploadCloud size={18} />}
+        size="md"
+        footer={
+          <>
+            <Button variant="secondary" size="sm" onClick={() => setIsImportModalOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={handleConfirmPasteImport}
+              disabled={!importText.trim()}
+              icon={<Check size={14} />}
+            >
+              Substituir Documento
+            </Button>
+          </>
+        }
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <FormField
+            label="Opção 1: Selecionar arquivo do computador (.md)"
+            helperText="Selecione um arquivo .md, .txt ou .markdown para carregar o conteúdo."
+          >
+            <input
+              type="file"
+              accept=".md,.txt,.markdown"
+              onChange={handleFileUpload}
+              style={{
+                fontSize: '12.5px',
+                color: 'var(--color-on-surface)',
+                padding: '6px 0',
+              }}
+            />
+          </FormField>
 
-            <div className="modal-body" style={{ gap: '14px' }}>
-              <div>
-                <label style={{ fontSize: '12px', fontWeight: 600, display: 'block', marginBottom: '6px' }}>
-                  Opção 1: Selecionar arquivo do computador (.md)
-                </label>
-                <input
-                  type="file"
-                  accept=".md,.txt,.markdown"
-                  onChange={handleFileUpload}
-                  className="form-input"
-                />
-              </div>
-
-              <div className="divider"><span>OU</span></div>
-
-              <div>
-                <label style={{ fontSize: '12px', fontWeight: 600, display: 'block', marginBottom: '6px' }}>
-                  Opção 2: Colar Markdown diretamente
-                </label>
-                <textarea
-                  rows={6}
-                  className="form-input"
-                  value={importText}
-                  onChange={e => setImportText(e.target.value)}
-                  placeholder="# Cole o conteúdo Markdown aqui..."
-                  style={{ fontFamily: 'var(--font-mono)', fontSize: '12px' }}
-                />
-              </div>
-            </div>
-
-            <div className="modal-footer">
-              <button className="btn btn-secondary btn-sm" onClick={() => setIsImportModalOpen(false)}>Cancelar</button>
-              <button
-                className="btn btn-primary btn-sm"
-                onClick={handleConfirmPasteImport}
-                disabled={!importText.trim()}
-              >
-                Substituir Documento
-              </button>
-            </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{ flex: 1, height: '1px', background: 'var(--color-outline-variant)' }} />
+            <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-outline)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              OU
+            </span>
+            <div style={{ flex: 1, height: '1px', background: 'var(--color-outline-variant)' }} />
           </div>
+
+          <FormField
+            label="Opção 2: Colar Markdown diretamente"
+            helperText="Cole o código markdown bruto que substituirá o documento ativo."
+          >
+            <Textarea
+              rows={6}
+              value={importText}
+              onChange={(e) => setImportText(e.target.value)}
+              placeholder="# Cole o conteúdo Markdown aqui..."
+              style={{ fontFamily: 'var(--font-mono, monospace)', fontSize: '12.5px' }}
+            />
+          </FormField>
         </div>
-      )}
+      </Modal>
     </>
   );
 };

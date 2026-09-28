@@ -1,7 +1,24 @@
-import React, { useState, useEffect } from 'react';
-import { useWorkspace } from '../../context/WorkspaceContext';
-import { API } from '../../services/api';
-import { VisualMarkdownDiff } from '../editor/VisualMarkdownDiff';
+import React, { useState, useEffect } from "react";
+import { useWorkspace } from "../../context/WorkspaceContext";
+import { API } from "../../services/api";
+import { VisualMarkdownDiff } from "../editor/VisualMarkdownDiff";
+import {
+  Modal,
+  Button,
+  IconButton,
+  Badge,
+  FormField,
+  Input,
+  Textarea,
+} from "../ui";
+import {
+  Sparkles,
+  FileText,
+  ChevronDown,
+  ChevronRight,
+  Trash2,
+  Send,
+} from "lucide-react";
 
 interface DiffModalProps {
   isOpen: boolean;
@@ -9,29 +26,49 @@ interface DiffModalProps {
   onPROpened?: () => void;
 }
 
-export const DiffModal: React.FC<DiffModalProps> = ({ isOpen, onClose, onPROpened }) => {
-  const { pendingChanges, guardrailStatus, discardChanges, refreshPendingChanges, activeRepo } = useWorkspace();
-  const [prTitle, setPrTitle] = useState('');
-  const [prDesc, setPrDesc] = useState('');
+export const DiffModal: React.FC<DiffModalProps> = ({
+  isOpen,
+  onClose,
+  onPROpened,
+}) => {
+  const {
+    pendingChanges,
+    guardrailStatus,
+    discardChanges,
+    refreshPendingChanges,
+    activeRepo,
+  } = useWorkspace();
+  const [prTitle, setPrTitle] = useState("");
+  const [prDesc, setPrDesc] = useState("");
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [expandedDiffs, setExpandedDiffs] = useState<Record<string, boolean>>({});
-  const [diffViewMode, setDiffViewMode] = useState<'visual' | 'raw'>('visual');
+  const [expandedDiffs, setExpandedDiffs] = useState<Record<string, boolean>>(
+    {},
+  );
+  const [diffViewMode, setDiffViewMode] = useState<"visual" | "raw">("visual");
 
   useEffect(() => {
     if (isOpen) {
-      setPrTitle(`Proposta de Evolução Documental (${pendingChanges.length} arquivos)`);
-      setPrDesc('');
+      setPrTitle(
+        `Proposta de Evolução Documental (${pendingChanges.length} arquivos)`,
+      );
+      setPrDesc("");
     }
   }, [isOpen, pendingChanges.length]);
 
   if (!isOpen) return null;
 
-  const totalAdditions = pendingChanges.reduce((acc, c) => acc + (c.additions || 0), 0);
-  const totalDeletions = pendingChanges.reduce((acc, c) => acc + (c.deletions || 0), 0);
+  const totalAdditions = pendingChanges.reduce(
+    (acc, c) => acc + (c.additions || 0),
+    0,
+  );
+  const totalDeletions = pendingChanges.reduce(
+    (acc, c) => acc + (c.deletions || 0),
+    0,
+  );
 
   const toggleExpand = (path: string) => {
-    setExpandedDiffs(prev => ({ ...prev, [path]: !prev[path] }));
+    setExpandedDiffs((prev) => ({ ...prev, [path]: !prev[path] }));
   };
 
   const handleGenerateSummaryAI = async () => {
@@ -43,7 +80,7 @@ export const DiffModal: React.FC<DiffModalProps> = ({ isOpen, onClose, onPROpene
         if (res.data.description) setPrDesc(res.data.description);
       }
     } catch (err) {
-      console.error('[DiffModal] Erro ao gerar resumo:', err);
+      console.error("[DiffModal] Erro ao gerar resumo:", err);
     } finally {
       setIsGeneratingSummary(false);
     }
@@ -53,21 +90,29 @@ export const DiffModal: React.FC<DiffModalProps> = ({ isOpen, onClose, onPROpene
     if (!prTitle.trim()) return;
     setIsSubmitting(true);
     try {
-      const res = await API.createUnifiedPR({ title: prTitle, description: prDesc, repo: activeRepo?.name });
+      const res = await API.createUnifiedPR({
+        title: prTitle,
+        description: prDesc,
+        repo: activeRepo?.name,
+      });
       if (res.ok) {
         await refreshPendingChanges();
         if (onPROpened) onPROpened();
         onClose();
       }
     } catch (err) {
-      console.error('[DiffModal] Erro ao criar proposta:', err);
+      console.error("[DiffModal] Erro ao criar proposta:", err);
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleDiscardAll = async () => {
-    if (window.confirm('Tem certeza que deseja descartar todas as alterações pendentes no workspace?')) {
+    if (
+      window.confirm(
+        "Tem certeza que deseja descartar todas as alterações pendentes no workspace?",
+      )
+    ) {
       await discardChanges();
       onClose();
     }
@@ -81,231 +126,343 @@ export const DiffModal: React.FC<DiffModalProps> = ({ isOpen, onClose, onPROpene
   };
 
   return (
-    <div id="workspace-diff-modal" className="modal-backdrop" style={{ display: 'flex' }}>
-      <div className="modal-box" style={{ maxWidth: '920px', maxHeight: '92vh', display: 'flex', flexDirection: 'column' }}>
-        <div className="modal-header">
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <h3>Central de Revisão de Alterações</h3>
-              <span className={`badge ${guardrailStatus === 'CLEAN' ? 'badge-success' : 'badge-warning'}`}>
-                {guardrailStatus === 'CLEAN' ? 'Conforme' : guardrailStatus}
-              </span>
-            </div>
-            <span className="subtitle">Revise visualmente o que mudou antes de submeter a proposta para aprovação oficial</span>
-          </div>
-          <button className="btn-close" aria-label="Fechar" onClick={onClose}>
-            <span className="material-symbols-outlined icon-sm">close</span>
-          </button>
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      size="xl"
+      title={
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span>Central de Revisão de Alterações</span>
+          <Badge
+            variant={guardrailStatus === "CLEAN" ? "success" : "warning"}
+            size="sm"
+          >
+            {guardrailStatus === "CLEAN" ? "Conforme" : guardrailStatus}
+          </Badge>
         </div>
-
-        <div className="modal-body" style={{ overflowY: 'auto', flex: 1, gap: '16px' }}>
-          {/* Stats Bar & View Mode Toggle */}
-          <div style={{ display: 'flex', gap: '12px', alignItems: 'center', justifyContent: 'space-between', background: 'var(--color-surface-container, #f8fafc)', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border-color, #e2e8f0)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span className="material-symbols-outlined" style={{ fontSize: '18px', color: 'var(--color-primary, #2563eb)' }}>description</span>
-              <strong>{pendingChanges.length} documento(s) com alterações</strong>
-              <div style={{ display: 'flex', gap: '8px', fontSize: '12.5px', marginLeft: '8px' }}>
-                <span style={{ color: '#16a34a', fontWeight: 600 }}>+{totalAdditions} palavras/linhas</span>
-                <span style={{ color: '#dc2626', fontWeight: 600 }}>-{totalDeletions} excluídas</span>
-              </div>
-            </div>
-
-            {/* Toggle Visual vs Raw */}
-            <div style={{ display: 'inline-flex', background: '#e2e8f0', padding: '2px', borderRadius: '6px' }}>
-              <button
-                type="button"
-                onClick={() => setDiffViewMode('visual')}
-                style={{
-                  padding: '3px 8px',
-                  border: 'none',
-                  borderRadius: '4px',
-                  fontSize: '11.5px',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  background: diffViewMode === 'visual' ? '#ffffff' : 'transparent',
-                  color: diffViewMode === 'visual' ? 'var(--primary, #2563eb)' : '#64748b'
-                }}
-              >
-                Visual Formatado (Doc)
-              </button>
-              <button
-                type="button"
-                onClick={() => setDiffViewMode('raw')}
-                style={{
-                  padding: '3px 8px',
-                  border: 'none',
-                  borderRadius: '4px',
-                  fontSize: '11.5px',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  background: diffViewMode === 'raw' ? '#ffffff' : 'transparent',
-                  color: diffViewMode === 'raw' ? 'var(--primary, #2563eb)' : '#64748b'
-                }}
-              >
-                Patch Técnico (Código)
-              </button>
-            </div>
-          </div>
-
-          {/* Diffs List */}
-          <div className="diff-files-container" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {pendingChanges.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '32px', color: 'var(--color-outline, #64748b)' }}>
-                Nenhuma alteração pendente no workspace.
-              </div>
-            ) : (
-              pendingChanges.map(change => {
-                const isExpanded = expandedDiffs[change.path] !== false; // Default expanded
-                return (
-                  <div
-                    key={change.path}
-                    style={{
-                      border: '1px solid var(--color-outline-variant, #e2e8f0)',
-                      borderRadius: '8px',
-                      overflow: 'hidden',
-                      background: 'var(--color-surface, #ffffff)'
-                    }}
-                  >
-                    <div
-                      onClick={() => toggleExpand(change.path)}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        padding: '8px 12px',
-                        background: 'var(--color-surface-container-low, #f8fafc)',
-                        cursor: 'pointer',
-                        userSelect: 'none'
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span className="material-symbols-outlined" style={{ fontSize: '16px', color: 'var(--color-outline)' }}>
-                          {isExpanded ? 'expand_more' : 'chevron_right'}
-                        </span>
-                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '13px', fontWeight: 600 }}>
-                          {change.path}
-                        </span>
-                        <span className="badge badge-primary-subtle" style={{ fontSize: '11px' }}>
-                          {change.type === 'ADDED' ? 'NOVO' : change.type === 'MODIFIED' ? 'ALTERADO' : change.type === 'DELETED' ? 'REMOVIDO' : 'ALTERADO'}
-                        </span>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <button
-                          className="btn btn-ghost btn-xs"
-                          title="Descartar este arquivo"
-                          onClick={(e) => handleDiscardFile(change.path, e)}
-                          style={{ color: 'var(--color-error, #dc2626)' }}
-                        >
-                          <span className="material-symbols-outlined icon-xs">delete</span>
-                        </button>
-                      </div>
-                    </div>
-
-                    {isExpanded && (
-                      <div style={{ borderTop: '1px solid var(--border-color, #e2e8f0)' }}>
-                        {diffViewMode === 'visual' ? (
-                          <div style={{ maxHeight: '380px', overflowY: 'auto' }}>
-                            <VisualMarkdownDiff
-                              oldContent={change.old_content || ''}
-                              newContent={change.new_content || ''}
-                              fileName={change.path}
-                            />
-                          </div>
-                        ) : (
-                          <pre
-                            style={{
-                              margin: 0,
-                              padding: '12px',
-                              fontSize: '12px',
-                              fontFamily: 'var(--font-mono)',
-                              background: '#0d1117',
-                              color: '#e6edf3',
-                              overflowX: 'auto',
-                              maxHeight: '300px',
-                              lineHeight: '1.5'
-                            }}
-                          >
-                            {change.diff_text || change.diff || 'Sem patch de código'}
-                          </pre>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                );
-              })
-            )}
-          </div>
-
-          {/* PR Metadata Form */}
-          <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <label htmlFor="unified-pr-title-input" style={{ fontWeight: 600, fontSize: '13px' }}>
-                Título da Proposta de Evolução:
-              </label>
-              <button
-                type="button"
-                className="btn btn-ghost btn-xs"
-                onClick={handleGenerateSummaryAI}
-                disabled={isGeneratingSummary || pendingChanges.length === 0}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11px' }}
-                title="Preencher título e descrição automaticamente a partir dos arquivos alterados"
-              >
-                <span className="material-symbols-outlined icon-xs">auto_fix_high</span>
-                {isGeneratingSummary ? 'Gerando...' : 'Resumo Automático'}
-              </button>
-            </div>
-            <input
-              id="unified-pr-title-input"
-              type="text"
-              className="form-input"
-              value={prTitle}
-              onChange={e => setPrTitle(e.target.value)}
-              placeholder="Descreva o objetivo desta proposta de evolução..."
-            />
-
-            <label htmlFor="unified-pr-desc-input" style={{ fontWeight: 600, fontSize: '13px', marginTop: '4px' }}>
-              Descrição & Justificativa:
-            </label>
-            <textarea
-              id="unified-pr-desc-input"
-              rows={3}
-              className="form-input"
-              value={prDesc}
-              onChange={e => setPrDesc(e.target.value)}
-              placeholder="Detalhes adicionais, contexto ou instruções para os revisores..."
-              style={{ resize: 'vertical' }}
-            />
-          </div>
-        </div>
-
-        <div className="modal-footer" style={{ display: 'flex', justifyContent: 'space-between' }}>
-          <button
-            className="btn btn-ghost btn-sm"
-            style={{ color: 'var(--color-error, #dc2626)' }}
+      }
+      subtitle="Revise visualmente o que mudou antes de submeter a proposta para aprovação oficial"
+      footer={
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            width: "100%",
+            alignItems: "center",
+          }}
+        >
+          <Button
+            variant="ghost"
+            size="sm"
+            style={{ color: "var(--md-sys-color-error, #d93025)" }}
             onClick={handleDiscardAll}
             disabled={pendingChanges.length === 0}
           >
             Descartar Todas
-          </button>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button className="btn btn-secondary btn-sm" onClick={onClose}>Cancelar</button>
-            <button
-              className="btn btn-primary btn-sm"
+          </Button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <Button variant="secondary" size="sm" onClick={onClose}>
+              Cancelar
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              leftIcon={<Send size={14} />}
               onClick={handleCreatePR}
-              disabled={isSubmitting || pendingChanges.length === 0 || !prTitle.trim()}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+              isLoading={isSubmitting}
+              disabled={pendingChanges.length === 0 || !prTitle.trim()}
             >
-              <span
-                className="material-symbols-outlined icon-xs"
-                style={isSubmitting ? { animation: 'spin 1s linear infinite' } : {}}
-              >
-                {isSubmitting ? 'progress_activity' : 'send'}
+              Enviar Proposta para Aprovação
+            </Button>
+          </div>
+        </div>
+      }
+    >
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        {/* Barra de Estatísticas & Alternador de Modo de Visualização */}
+        <div
+          style={{
+            display: "flex",
+            gap: 12,
+            alignItems: "center",
+            justifyContent: "space-between",
+            background: "var(--md-sys-color-surface-container-low, #f8f9fa)",
+            padding: "10px 14px",
+            borderRadius: 8,
+            border: "1px solid var(--md-sys-color-outline-variant, #dadce0)",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <FileText
+              size={18}
+              style={{ color: "var(--md-sys-color-primary, #1a73e8)" }}
+            />
+            <strong style={{ fontSize: "13.5px" }}>
+              {pendingChanges.length} documento(s) com alterações
+            </strong>
+            <div
+              style={{
+                display: "flex",
+                gap: 8,
+                fontSize: "12.5px",
+                marginLeft: 8,
+              }}
+            >
+              <span style={{ color: "#137333", fontWeight: 600 }}>
+                +{totalAdditions} adições
               </span>
-              {isSubmitting ? 'Submetendo Proposta...' : 'Enviar Proposta para Aprovação'}
+              <span style={{ color: "#c5221f", fontWeight: 600 }}>
+                -{totalDeletions} exclusões
+              </span>
+            </div>
+          </div>
+
+          {/* Toggle Visual vs Raw */}
+          <div
+            style={{
+              display: "inline-flex",
+              background:
+                "var(--md-sys-color-surface-container-highest, #e8eaed)",
+              padding: 2,
+              borderRadius: 6,
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => setDiffViewMode("visual")}
+              style={{
+                padding: "3px 10px",
+                border: "none",
+                borderRadius: 4,
+                fontSize: "12px",
+                fontWeight: 600,
+                cursor: "pointer",
+                background:
+                  diffViewMode === "visual"
+                    ? "var(--md-sys-color-surface, #ffffff)"
+                    : "transparent",
+                color:
+                  diffViewMode === "visual"
+                    ? "var(--md-sys-color-primary, #1a73e8)"
+                    : "var(--md-sys-color-on-surface-variant, #5f6368)",
+                boxShadow:
+                  diffViewMode === "visual"
+                    ? "0 1px 2px rgba(0,0,0,0.1)"
+                    : "none",
+              }}
+            >
+              Visual Formatado
+            </button>
+            <button
+              type="button"
+              onClick={() => setDiffViewMode("raw")}
+              style={{
+                padding: "3px 10px",
+                border: "none",
+                borderRadius: 4,
+                fontSize: "12px",
+                fontWeight: 600,
+                cursor: "pointer",
+                background:
+                  diffViewMode === "raw"
+                    ? "var(--md-sys-color-surface, #ffffff)"
+                    : "transparent",
+                color:
+                  diffViewMode === "raw"
+                    ? "var(--md-sys-color-primary, #1a73e8)"
+                    : "var(--md-sys-color-on-surface-variant, #5f6368)",
+                boxShadow:
+                  diffViewMode === "raw"
+                    ? "0 1px 2px rgba(0,0,0,0.1)"
+                    : "none",
+              }}
+            >
+              Patch Técnico
             </button>
           </div>
         </div>
+
+        {/* Lista de Diffs */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {pendingChanges.length === 0 ? (
+            <div
+              style={{
+                textAlign: "center",
+                padding: 32,
+                color: "var(--md-sys-color-on-surface-variant, #5f6368)",
+              }}
+            >
+              Nenhuma alteração pendente no workspace.
+            </div>
+          ) : (
+            pendingChanges.map((change) => {
+              const isExpanded = expandedDiffs[change.path] !== false;
+              return (
+                <div
+                  key={change.path}
+                  style={{
+                    border:
+                      "1px solid var(--md-sys-color-outline-variant, #dadce0)",
+                    borderRadius: 8,
+                    overflow: "hidden",
+                    background: "var(--md-sys-color-surface, #ffffff)",
+                  }}
+                >
+                  <div
+                    onClick={() => toggleExpand(change.path)}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "8px 12px",
+                      background:
+                        "var(--md-sys-color-surface-container-low, #f8f9fa)",
+                      cursor: "pointer",
+                      userSelect: "none",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                      }}
+                    >
+                      {isExpanded ? (
+                        <ChevronDown size={16} />
+                      ) : (
+                        <ChevronRight size={16} />
+                      )}
+                      <span
+                        style={{
+                          fontFamily:
+                            "var(--md-sys-typescale-font-code, monospace)",
+                          fontSize: "13px",
+                          fontWeight: 600,
+                        }}
+                      >
+                        {change.path}
+                      </span>
+                      <Badge
+                        variant={
+                          change.type === "ADDED"
+                            ? "success"
+                            : change.type === "DELETED"
+                              ? "danger"
+                              : "primary"
+                        }
+                        size="sm"
+                      >
+                        {change.type === "ADDED"
+                          ? "NOVO"
+                          : change.type === "DELETED"
+                            ? "REMOVIDO"
+                            : "ALTERADO"}
+                      </Badge>
+                    </div>
+                    <IconButton
+                      size="sm"
+                      tooltip="Descartar este arquivo"
+                      onClick={(e) => handleDiscardFile(change.path, e)}
+                    >
+                      <Trash2
+                        size={14}
+                        style={{ color: "var(--md-sys-color-error, #d93025)" }}
+                      />
+                    </IconButton>
+                  </div>
+
+                  {isExpanded && (
+                    <div
+                      style={{
+                        borderTop:
+                          "1px solid var(--md-sys-color-outline-variant, #dadce0)",
+                      }}
+                    >
+                      {diffViewMode === "visual" ? (
+                        <div style={{ maxHeight: 380, overflowY: "auto" }}>
+                          <VisualMarkdownDiff
+                            oldContent={change.old_content || ""}
+                            newContent={change.new_content || ""}
+                            fileName={change.path}
+                          />
+                        </div>
+                      ) : (
+                        <pre
+                          style={{
+                            margin: 0,
+                            padding: 12,
+                            fontSize: "12px",
+                            fontFamily:
+                              "var(--md-sys-typescale-font-code, monospace)",
+                            background: "#0f172a",
+                            color: "#f8fafc",
+                            overflowX: "auto",
+                            maxHeight: 300,
+                            lineHeight: "1.5",
+                          }}
+                        >
+                          {change.diff_text ||
+                            change.diff ||
+                            "Sem patch de código"}
+                        </pre>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* Metadados da Proposta */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <FormField
+            label="Título da Proposta de Evolução:"
+            required
+            helperText={
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "flex-end",
+                  marginTop: 2,
+                }}
+              >
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  leftIcon={<Sparkles size={13} />}
+                  onClick={handleGenerateSummaryAI}
+                  isLoading={isGeneratingSummary}
+                  disabled={
+                    isGeneratingSummary || pendingChanges.length === 0
+                  }
+                >
+                  Resumo Automático por IA
+                </Button>
+              </div>
+            }
+          >
+            <Input
+              id="unified-pr-title-input"
+              value={prTitle}
+              onChange={(e) => setPrTitle(e.target.value)}
+              placeholder="Descreva o objetivo desta proposta..."
+            />
+          </FormField>
+
+          <FormField label="Descrição & Justificativa:">
+            <Textarea
+              id="unified-pr-desc-input"
+              rows={3}
+              value={prDesc}
+              onChange={(e) => setPrDesc(e.target.value)}
+              placeholder="Detalhes adicionais, contexto ou instruções para os revisores..."
+            />
+          </FormField>
+        </div>
       </div>
-    </div>
+    </Modal>
   );
 };

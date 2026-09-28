@@ -1,5 +1,7 @@
 import React from "react";
 import type { DocumentMetadata } from "../../services/frontmatter";
+import { Badge, Input } from "../ui";
+import { Tag } from "lucide-react";
 
 interface FrontmatterHeaderProps {
   metadata: DocumentMetadata;
@@ -26,13 +28,15 @@ export const FrontmatterHeader: React.FC<FrontmatterHeaderProps> = ({
     });
   };
 
+  const categoryLabel = metadata.categories || metadata.category || "";
+
   return (
     <div
       className="frontmatter-header-box"
       style={{
         background: "var(--color-surface-container-low)",
         border: "1px solid var(--color-outline-variant)",
-        borderRadius: "8px",
+        borderRadius: "var(--radius-md, 8px)",
         padding: "12px 16px",
         marginBottom: "20px",
         display: "flex",
@@ -51,42 +55,49 @@ export const FrontmatterHeader: React.FC<FrontmatterHeaderProps> = ({
           style={{
             fontSize: "11px",
             textTransform: "uppercase",
-            letterSpacing: "0.5px",
+            letterSpacing: "0.05em",
             color: "var(--color-outline)",
             fontWeight: 700,
+            display: "flex",
+            alignItems: "center",
+            gap: "5px",
           }}
         >
+          <Tag size={12} />
           Metadados Estruturados (Frontmatter)
         </span>
-        <span
-          className="badge badge-primary-subtle"
-          style={{ fontSize: "11px" }}
-        >
-          {metadata.categories || metadata.category || ""}
-        </span>
+
+        {categoryLabel && (
+          <Badge variant="primary" size="sm">
+            {categoryLabel}
+          </Badge>
+        )}
       </div>
 
       <div
         style={{
           display: "flex",
           flexWrap: "wrap",
-          gap: "10px",
+          gap: "12px",
           alignItems: "center",
         }}
       >
         {/* Status */}
-        <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-          <span style={{ fontSize: "12px", color: "var(--color-outline)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+          <span style={{ fontSize: "12px", color: "var(--color-outline)", fontWeight: 600 }}>
             Status:
           </span>
           <select
-            className="form-select"
             value={metadata.status || "draft"}
             onChange={(e) => handleFieldChange("status", e.target.value)}
             style={{
               fontSize: "12px",
-              padding: "3px 8px",
-              borderRadius: "4px",
+              padding: "4px 8px",
+              borderRadius: "var(--radius-md, 6px)",
+              border: "1px solid var(--color-outline-variant)",
+              background: "var(--color-surface-container)",
+              color: "var(--color-on-surface)",
+              outline: "none",
             }}
           >
             {statusOptions.map((opt) => (
@@ -98,18 +109,18 @@ export const FrontmatterHeader: React.FC<FrontmatterHeaderProps> = ({
         </div>
 
         {/* Categoria */}
-        <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-          <span style={{ fontSize: "12px", color: "var(--color-outline)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+          <span style={{ fontSize: "12px", color: "var(--color-outline)", fontWeight: 600 }}>
             Categoria:
           </span>
-          <input
-            type="text"
-            className="form-input"
-            value={metadata.categories || metadata.category || ""}
-            onChange={(e) => handleFieldChange("categories", e.target.value)}
-            style={{ fontSize: "12px", width: "110px", padding: "3px 6px" }}
-            placeholder="geral..."
-          />
+          <div style={{ width: "130px" }}>
+            <Input
+              value={categoryLabel}
+              onChange={(e) => handleFieldChange("categories", e.target.value)}
+              placeholder="geral..."
+              style={{ fontSize: "12px", padding: "4px 8px" }}
+            />
+          </div>
         </div>
       </div>
     </div>

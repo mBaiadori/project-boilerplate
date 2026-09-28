@@ -9,6 +9,40 @@ import { useWorkspace } from "../../context/WorkspaceContext";
 import { useAI } from "../../context/AIContext";
 import { API } from "../../services/api";
 import type { SkillItem } from "../../types";
+import {
+  Button,
+  Badge,
+  Tabs,
+  SearchInput,
+  AlertBanner,
+  Card,
+  CardHeader,
+  CardContent,
+  CardFooter,
+  Modal,
+  EmptyState,
+  Spinner,
+  FilterChips,
+} from "../../components/ui";
+import {
+  Sparkles,
+  ShieldCheck,
+  Layers,
+  Terminal,
+  Brain,
+  Download,
+  Trash2,
+  Play,
+  RefreshCw,
+  FileCode2,
+  Wrench,
+  BookOpen,
+  Folder,
+  Settings,
+  Globe,
+  CheckCircle2,
+  Eye,
+} from "lucide-react";
 
 export type ScopeFilter = "installed" | "system" | "community";
 
@@ -129,685 +163,384 @@ export const SkillsSubView: React.FC = () => {
     return matchesCat && matchesSearch;
   });
 
-  const getCategoryIcon = (category: string) => {
+  const getCategoryIcon = (category?: string) => {
     switch (category?.toLowerCase()) {
       case "governance":
-        return "verified_user";
+        return <ShieldCheck size={16} style={{ color: "var(--color-success)" }} />;
       case "architecture":
-        return "account_tree";
+        return <FileCode2 size={16} style={{ color: "var(--color-primary)" }} />;
       case "quality":
-        return "auto_awesome";
+        return <Sparkles size={16} style={{ color: "var(--color-warning)" }} />;
       case "engineering":
-        return "terminal";
+        return <Terminal size={16} style={{ color: "#a855f7" }} />;
       case "memory":
-        return "psychology";
+        return <Brain size={16} style={{ color: "#ec4899" }} />;
       default:
-        return "extension";
+        return <Layers size={16} style={{ color: "var(--color-outline)" }} />;
     }
   };
 
+  const tabList = [
+    { id: "installed", label: "Instaladas no Projeto", badge: installedSkills.length, icon: <Folder size={14} /> },
+    { id: "system", label: "Sistema (Oficiais)", badge: systemSkills.length, icon: <Settings size={14} /> },
+    { id: "community", label: "Comunidade", badge: communitySkills.length, icon: <Globe size={14} /> },
+  ];
+
   return (
-    <div
-      id="subview-skills"
-      className="dash-subview"
-      style={{
-        display: "block",
-        width: "100%",
-        height: "100%",
-        overflowY: "auto",
-        background: "var(--color-surface)",
-      }}
-    >
-      <div className="templates-view-wrapper" style={{ padding: "24px 32px", maxWidth: "1400px", margin: "0 auto" }}>
-        
-        {/* ── 1. Page Header ── */}
-        <div className="template-store-header" style={{ marginBottom: "20px" }}>
-          <div className="templates-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "16px" }}>
-            <div>
-              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                <h2 style={{ fontSize: "22px", fontWeight: 700, margin: 0, color: "var(--color-on-surface, var(--text-main))" }}>
-                  Central de Skills do Agente
-                </h2>
-                <span
-                  style={{
-                    fontSize: "11px",
-                    fontWeight: 600,
-                    padding: "2px 8px",
-                    borderRadius: "12px",
-                    background: "var(--color-primary-container, rgba(99, 102, 241, 0.12))",
-                    color: "var(--color-primary, #6366f1)",
-                    border: "1px solid var(--color-outline-variant, rgba(99, 102, 241, 0.25))",
-                  }}
-                >
-                  Sistema & Comunidade
-                </span>
-              </div>
-              <p className="subtitle" style={{ fontSize: "13px", color: "var(--text-muted)", marginTop: "4px", marginBottom: 0 }}>
-                Habilidades organizadas em 3 escopos: Nativo do Sistema, Catálogo da Comunidade e Customizadas do Projeto ({activeRepo ? `projects/${activeRepo.name}` : "Workspace"}).
-              </p>
-            </div>
-
-            <div style={{ display: "flex", gap: "8px" }}>
-              <button
-                id="btn-refresh-skills"
-                className="btn btn-ghost btn-sm"
-                type="button"
-                onClick={loadSkills}
-                style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
-              >
-                <span className="material-symbols-outlined icon-xs">refresh</span>
-                Sincronizar
-              </button>
-            </div>
+    <div id="subview-skills" style={{ padding: "24px 32px", maxWidth: "1400px", margin: "0 auto", width: "100%", boxSizing: "border-box" }}>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "20px", flexWrap: "wrap", gap: "16px" }}>
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <h1 style={{ margin: 0, fontSize: "22px", fontWeight: 700, color: "var(--color-on-surface)", letterSpacing: "-0.02em" }}>
+              Harness & Skills do Agente
+            </h1>
+            <Badge variant="purple" size="md">
+              Padrão ECC
+            </Badge>
           </div>
+          <p style={{ margin: "6px 0 0 0", fontSize: "13.5px", color: "var(--color-on-surface-variant)" }}>
+            Habilidades operacionais, guardrails de governança e ferramentas injetadas no contexto do Copilot e agentes autônomos.
+          </p>
+        </div>
 
-          {/* Feedback Alert */}
-          {actionFeedback && (
-            <div
-              style={{
-                padding: "10px 14px",
-                borderRadius: "8px",
-                marginBottom: "16px",
-                fontSize: "12px",
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-                background: actionFeedback.ok
-                  ? "var(--color-primary-container, rgba(99, 102, 241, 0.12))"
-                  : "var(--color-error-container, rgba(239, 68, 68, 0.12))",
-                color: actionFeedback.ok
-                  ? "var(--color-on-primary-container, #4338ca)"
-                  : "var(--color-on-error-container, #b91c1c)",
-                border: "1px solid var(--color-outline-variant, rgba(0,0,0,0.1))",
-              }}
-            >
-              <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>
-                {actionFeedback.ok ? "check_circle" : "error"}
-              </span>
-              {actionFeedback.msg}
-            </div>
-          )}
-
-          {/* ── 2. Filtros de Escopo (3 Filtros: Instaladas, Sistema, Comunidade) ── */}
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              flexWrap: "wrap",
-              gap: "12px",
-              marginTop: "16px",
-            }}
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <Button
+            id="btn-refresh-skills"
+            variant="secondary"
+            size="md"
+            onClick={loadSkills}
+            icon={<RefreshCw size={15} />}
           >
-            <div style={{ display: "flex", gap: "6px" }}>
-              <button
-                className={`store-filter-chip ${scopeFilter === "installed" ? "active" : ""}`}
-                id="filter-skills-installed"
-                type="button"
-                onClick={() => setScopeFilter("installed")}
-              >
-                📁 Instaladas ({installedSkills.length})
-              </button>
+            Atualizar Catálogo
+          </Button>
+        </div>
+      </div>
 
-              <button
-                className={`store-filter-chip ${scopeFilter === "system" ? "active" : ""}`}
-                id="filter-skills-system"
-                type="button"
-                onClick={() => setScopeFilter("system")}
-              >
-                ⚙️ Sistema ({systemSkills.length})
-              </button>
+      {/* Feedback Banner */}
+      {actionFeedback && (
+        <div style={{ marginBottom: "16px" }}>
+          <AlertBanner
+            variant={actionFeedback.ok ? "success" : "error"}
+            title={actionFeedback.msg}
+            onClose={() => setActionFeedback(null)}
+          />
+        </div>
+      )}
 
-              <button
-                className={`store-filter-chip ${scopeFilter === "community" ? "active" : ""}`}
-                id="filter-skills-community"
-                type="button"
-                onClick={() => setScopeFilter("community")}
-              >
-                🌐 Comunidade ({communitySkills.length})
-              </button>
-            </div>
+      {/* Controls: Tabs & Search */}
+      <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginBottom: "24px" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "12px" }}>
+          <Tabs
+            tabs={tabList}
+            activeTab={scopeFilter}
+            onChange={(tab) => setScopeFilter(tab as any)}
+            variant="pills"
+          />
 
-            <div style={{ minWidth: "240px", flex: 1, maxWidth: "340px" }}>
-              <div style={{ position: "relative" }}>
-                <span
-                  className="material-symbols-outlined"
-                  style={{
-                    position: "absolute",
-                    left: "10px",
-                    top: "50%",
-                    transform: "translateY(-50%)",
-                    fontSize: "16px",
-                    color: "var(--text-muted)",
-                  }}
-                >
-                  search
-                </span>
-                <input
-                  type="text"
-                  id="skills-search-input"
-                  placeholder="Buscar skills por título, tags ou ferramentas..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  style={{
-                    fontSize: "12px",
-                    padding: "7px 12px 7px 32px",
-                    width: "100%",
-                    border: "1px solid var(--color-outline-variant, var(--border))",
-                    borderRadius: "20px",
-                    background: "var(--color-surface-container-low, var(--bg-surface))",
-                    color: "var(--color-on-surface, var(--text-main))",
-                  }}
-                />
-              </div>
-            </div>
-          </div>
-
-          <div
-            className="store-filter-bar"
-            id="skills-category-filters"
-            style={{ display: "flex", flexWrap: "wrap", gap: "4px", marginTop: "10px" }}
-          >
-            {CATEGORY_CHIPS.map((chip) => (
-              <button
-                key={chip.id}
-                className={`store-filter-chip ${selectedCategory === chip.id ? "active" : ""}`}
-                type="button"
-                onClick={() => setSelectedCategory(chip.id)}
-                style={{ fontSize: "11px", padding: "3px 10px" }}
-              >
-                {chip.label}
-              </button>
-            ))}
+          <div style={{ width: "320px" }}>
+            <SearchInput
+              id="skills-search-input"
+              placeholder="Buscar skills por título, tags ou ferramentas..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onClear={() => setSearchQuery("")}
+            />
           </div>
         </div>
 
-        {/* ── 4. Main Content: Skills Grid ── */}
-        <div className="templates-cards-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "16px" }}>
-          {loading ? (
-            <div className="loading-state" style={{ gridColumn: "1 / -1", textAlign: "center", padding: "40px", color: "var(--text-muted)" }}>
-              Carregando catálogo de skills...
-            </div>
-          ) : filteredSkills.length === 0 ? (
-            <div
-              style={{
-                gridColumn: "1 / -1",
-                textAlign: "center",
-                padding: "48px 24px",
-                background: "var(--color-surface-container-lowest, rgba(0,0,0,0.02))",
-                borderRadius: "12px",
-                border: "1px dashed var(--color-outline-variant, var(--border))",
-              }}
-            >
-              <span
-                className="material-symbols-outlined"
-                style={{ fontSize: "44px", color: "var(--text-muted)", opacity: 0.5, marginBottom: "8px", display: "block" }}
+        {/* Categories Chips */}
+        <FilterChips
+          items={CATEGORY_CHIPS}
+          activeId={selectedCategory}
+          onChange={(cat) => setSelectedCategory(cat)}
+          size="sm"
+        />
+      </div>
+
+      {/* Skills Grid */}
+      {loading ? (
+        <div style={{ padding: "60px 0", display: "flex", justifyContent: "center" }}>
+          <Spinner size="lg" message="Carregando catálogo de skills..." />
+        </div>
+      ) : filteredSkills.length === 0 ? (
+        <EmptyState
+          icon={<Sparkles size={48} />}
+          title={
+            scopeFilter === "installed"
+              ? "Nenhuma skill instalada neste projeto"
+              : "Nenhuma skill encontrada"
+          }
+          description={
+            scopeFilter === "installed"
+              ? "Explore as abas 'Sistema' ou 'Comunidade' para habilitar guardrails de governança, validação de termos e diagramação viva."
+              : "Tente mudar os termos de busca ou o filtro de categoria acima."
+          }
+        />
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "16px" }}>
+          {filteredSkills.map((skill) => {
+            const installed = isInstalled(skill.id);
+            const isActiveInCopilot = activeSkillId === skill.id;
+            const isSystem = skill.source === "system";
+            const isProject = skill.source === "project";
+
+            return (
+              <Card
+                key={skill.id}
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  height: "100%",
+                  border: isActiveInCopilot
+                    ? "2px solid var(--color-primary)"
+                    : "1px solid var(--color-outline-variant)",
+                }}
               >
-                extension_off
-              </span>
-              <h4 style={{ fontSize: "15px", fontWeight: 600, color: "var(--text-main)", margin: "0 0 6px 0" }}>
-                {scopeFilter === "installed"
-                  ? "Nenhuma skill instalada neste projeto"
-                  : scopeFilter === "system"
-                    ? "Nenhuma skill do sistema encontrada"
-                    : "Nenhuma skill da comunidade encontrada"}
-              </h4>
-              <p style={{ fontSize: "12px", color: "var(--text-muted)", maxWidth: "420px", margin: "0 auto 16px auto" }}>
-                {scopeFilter === "installed"
-                  ? "Explore as abas 'Sistema' ou 'Comunidade' para habilitar guardrails de governança, validação de termos e diagramação viva."
-                  : "Tente mudar os termos de busca ou o filtro de categoria acima."}
-              </p>
-            </div>
-          ) : (
-            filteredSkills.map((skill) => {
-              const installed = isInstalled(skill.id);
-              const isActiveInCopilot = activeSkillId === skill.id;
-              const isSystem = skill.source === "system";
-              const isProject = skill.source === "project";
-
-              return (
-                <div
-                  key={skill.id}
-                  className="template-card"
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    background: "var(--color-surface-container-low, var(--bg-surface))",
-                    border: isActiveInCopilot
-                      ? "1px solid var(--color-primary, #6366f1)"
-                      : "1px solid var(--color-outline-variant, var(--border))",
-                    borderRadius: "12px",
-                    padding: "16px",
-                    boxShadow: isActiveInCopilot
-                      ? "0 0 0 1px var(--color-primary, #6366f1), 0 2px 8px rgba(99, 102, 241, 0.15)"
-                      : "none",
-                    position: "relative",
-                  }}
-                >
-                  {/* Top Badges */}
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
-                      <span
-                        className="material-symbols-outlined"
-                        style={{
-                          fontSize: "18px",
-                          color: "var(--color-primary, #6366f1)",
-                        }}
-                      >
-                        {getCategoryIcon(skill.category)}
-                      </span>
-                      <span
-                        className="badge badge-primary-subtle"
-                        style={{ fontSize: "10.5px", textTransform: "capitalize" }}
-                      >
+                <CardHeader
+                  title={skill.title || skill.name}
+                  subtitle={`v${skill.version} • ${skill.id}`}
+                  action={
+                    <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
+                      <Badge variant="primary" size="sm">
                         {skill.category || "Geral"}
-                      </span>
-
+                      </Badge>
                       {isSystem ? (
-                        <span style={{ fontSize: "10px", fontWeight: 600, padding: "2px 6px", borderRadius: "4px", background: "rgba(26, 115, 232, 0.12)", color: "#1a73e8" }}>
-                          Sistema
-                        </span>
+                        <Badge variant="info" size="sm">Sistema</Badge>
                       ) : isProject ? (
-                        <span style={{ fontSize: "10px", fontWeight: 600, padding: "2px 6px", borderRadius: "4px", background: "rgba(16, 185, 129, 0.12)", color: "#10b981" }}>
-                          Projeto
-                        </span>
+                        <Badge variant="success" size="sm">Projeto</Badge>
                       ) : (
-                        <span style={{ fontSize: "10px", fontWeight: 600, padding: "2px 6px", borderRadius: "4px", background: "rgba(147, 51, 234, 0.12)", color: "#9333ea" }}>
-                          Comunidade
-                        </span>
+                        <Badge variant="purple" size="sm">Comunidade</Badge>
                       )}
-                    </div>
-
-                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                       {installed && (
-                        <span
-                          style={{
-                            fontSize: "10px",
-                            fontWeight: 600,
-                            padding: "2px 6px",
-                            borderRadius: "4px",
-                            background: "rgba(16, 185, 129, 0.12)",
-                            color: "#10b981",
-                            border: "1px solid rgba(16, 185, 129, 0.25)",
-                          }}
-                        >
-                          Instalada
-                        </span>
+                        <Badge variant="success" size="sm" dot>Ativa</Badge>
                       )}
-                      <span style={{ fontSize: "10.5px", color: "var(--text-muted)", fontFamily: "monospace" }}>
-                        v{skill.version}
-                      </span>
                     </div>
-                  </div>
+                  }
+                />
 
-                  {/* Title & Description */}
-                  <h3
-                    style={{
-                      fontSize: "15px",
-                      fontWeight: 600,
-                      color: "var(--color-on-surface, var(--text-main))",
-                      margin: "0 0 6px 0",
-                    }}
-                  >
-                    {skill.title || skill.name}
-                  </h3>
-
-                  <p
-                    style={{
-                      fontSize: "12px",
-                      color: "var(--text-muted)",
-                      lineHeight: "1.4",
-                      flex: 1,
-                      margin: "0 0 8px 0",
-                      display: "-webkit-box",
-                      WebkitLineClamp: 3,
-                      WebkitBoxOrient: "vertical",
-                      overflow: "hidden",
-                    }}
-                  >
+                <CardContent style={{ flex: 1, display: "flex", flexDirection: "column", gap: "10px" }}>
+                  <p style={{ margin: 0, fontSize: "12.5px", color: "var(--color-on-surface-variant)", lineHeight: 1.5, flex: 1 }}>
                     {skill.description}
                   </p>
 
-                  {/* Discrete attribution footer for community items */}
-                  {!isSystem && !isProject && (
-                    <div style={{ fontSize: "10px", color: "var(--text-muted)", marginBottom: "10px", opacity: 0.8, display: "flex", alignItems: "center", gap: "4px" }}>
-                      <span className="material-symbols-outlined" style={{ fontSize: "12px" }}>info</span>
-                      <span>Licença MIT • Catálogo da Comunidade</span>
-                    </div>
-                  )}
-
-                  {/* Tools list */}
+                  {/* Tools */}
                   {skill.tools && skill.tools.length > 0 && (
-                    <div style={{ marginBottom: "12px" }}>
-                      <div style={{ fontSize: "10.5px", fontWeight: 600, color: "var(--text-muted)", marginBottom: "4px", display: "flex", alignItems: "center", gap: "4px" }}>
-                        <span className="material-symbols-outlined" style={{ fontSize: "13px" }}>
-                          build
-                        </span>
-                        Ferramentas Nativas:
-                      </div>
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
-                        {skill.tools.slice(0, 3).map((tool) => (
-                          <span
-                            key={tool}
-                            style={{
-                              fontSize: "10px",
-                              fontFamily: "monospace",
-                              padding: "2px 6px",
-                              borderRadius: "4px",
-                              background: "var(--color-surface-container-highest, rgba(0,0,0,0.05))",
-                              color: "var(--color-on-surface-variant, var(--text-main))",
-                              border: "1px solid var(--color-outline-variant, var(--border))",
-                            }}
-                          >
-                            {tool}
-                          </span>
-                        ))}
-                        {skill.tools.length > 3 && (
-                          <span style={{ fontSize: "10px", color: "var(--text-muted)", alignSelf: "center" }}>
-                            +{skill.tools.length - 3}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Card Actions Footer */}
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      paddingTop: "12px",
-                      borderTop: "1px solid var(--color-outline-variant, var(--border))",
-                      gap: "6px",
-                    }}
-                  >
-                    <button
-                      type="button"
-                      className="btn btn-ghost btn-sm"
-                      onClick={() => setSelectedSkill(skill)}
-                      style={{ fontSize: "11px", padding: "4px 8px" }}
-                      title="Ver detalhes e instruções da skill"
-                    >
-                      <span className="material-symbols-outlined icon-xs">visibility</span>
-                      Detalhes
-                    </button>
-
-                    <div style={{ display: "flex", gap: "6px" }}>
-                      {installed ? (
-                        <>
-                          <button
-                            type="button"
-                            className={`btn btn-sm ${isActiveInCopilot ? "btn-primary" : "btn-secondary"}`}
-                            onClick={() => {
-                              setActiveSkillId(skill.id);
-                              setActionFeedback({ ok: true, msg: `Skill '${skill.title || skill.name}' ativada no Copilot!` });
-                              setTimeout(() => setActionFeedback(null), 3000);
-                            }}
-                            style={{ fontSize: "11px", padding: "4px 10px" }}
-                            title="Ativar esta skill no chat do Copilot"
-                          >
-                            <span className="material-symbols-outlined icon-xs">
-                              {isActiveInCopilot ? "check" : "play_arrow"}
-                            </span>
-                            {isActiveInCopilot ? "Ativa no Copilot" : "Usar no Chat"}
-                          </button>
-
-                          <button
-                            type="button"
-                            className="btn btn-ghost btn-sm"
-                            onClick={() => handleUninstall(skill.id)}
-                            style={{
-                              fontSize: "11px",
-                              padding: "4px 6px",
-                              color: "var(--color-error, #ef4444)",
-                            }}
-                            title="Desinstalar do projeto"
-                          >
-                            <span className="material-symbols-outlined icon-xs">delete</span>
-                          </button>
-                        </>
-                      ) : (
-                        <button
-                          type="button"
-                          className="btn btn-primary btn-sm"
-                          onClick={() => handleInstall(skill)}
-                          style={{ fontSize: "11px", padding: "4px 10px" }}
-                        >
-                          <span className="material-symbols-outlined icon-xs">download</span>
-                          Instalar
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })
-          )}
-        </div>
-
-        {/* ── 5. Skill Detail Drawer / Modal (Fully Themed) ── */}
-        {selectedSkill && (
-          <div
-            style={{
-              position: "fixed",
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              background: "rgba(0, 0, 0, 0.5)",
-              backdropFilter: "blur(4px)",
-              zIndex: 1000,
-              display: "flex",
-              justifyContent: "flex-end",
-            }}
-            onClick={() => setSelectedSkill(null)}
-          >
-            <div
-              style={{
-                width: "100%",
-                maxWidth: "580px",
-                height: "100%",
-                background: "var(--color-surface, #ffffff)",
-                color: "var(--color-on-surface, var(--text-main))",
-                boxShadow: "-4px 0 24px rgba(0, 0, 0, 0.15)",
-                display: "flex",
-                flexDirection: "column",
-                overflow: "hidden",
-              }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* Drawer Header */}
-              <div
-                style={{
-                  padding: "16px 20px",
-                  borderBottom: "1px solid var(--color-outline-variant, var(--border))",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  background: "var(--color-surface-container-low, var(--bg-surface))",
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                  <span className="material-symbols-outlined" style={{ color: "var(--color-primary, #6366f1)" }}>
-                    {getCategoryIcon(selectedSkill.category)}
-                  </span>
-                  <div>
-                    <h3 style={{ fontSize: "16px", fontWeight: 700, margin: 0 }}>
-                      {selectedSkill.title || selectedSkill.name}
-                    </h3>
-                    <span style={{ fontSize: "11px", color: "var(--text-muted)", fontFamily: "monospace" }}>
-                      id: {selectedSkill.id} • v{selectedSkill.version}
-                    </span>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  className="btn btn-ghost btn-sm"
-                  onClick={() => setSelectedSkill(null)}
-                  style={{ padding: "4px" }}
-                >
-                  <span className="material-symbols-outlined">close</span>
-                </button>
-              </div>
-
-              {/* Drawer Content */}
-              <div style={{ flex: 1, overflowY: "auto", padding: "20px" }}>
-                {/* Description */}
-                <div style={{ marginBottom: "20px" }}>
-                  <h4 style={{ fontSize: "12px", fontWeight: 700, textTransform: "uppercase", color: "var(--text-muted)", marginBottom: "6px" }}>
-                    Descrição
-                  </h4>
-                  <p style={{ fontSize: "13px", lineHeight: "1.5", color: "var(--text-main)", margin: 0 }}>
-                    {selectedSkill.description}
-                  </p>
-                </div>
-
-                {/* Tools */}
-                <div style={{ marginBottom: "20px" }}>
-                  <h4 style={{ fontSize: "12px", fontWeight: 700, textTransform: "uppercase", color: "var(--text-muted)", marginBottom: "8px", display: "flex", alignItems: "center", gap: "6px" }}>
-                    <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>
-                      build
-                    </span>
-                    Ferramentas Autônomas Vinculadas
-                  </h4>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
-                    {selectedSkill.tools && selectedSkill.tools.length > 0 ? (
-                      selectedSkill.tools.map((t) => (
+                    <div style={{ display: "flex", gap: "4px", flexWrap: "wrap" }}>
+                      {skill.tools.slice(0, 3).map((tool) => (
                         <span
-                          key={t}
+                          key={tool}
                           style={{
-                            fontSize: "11px",
-                            fontFamily: "monospace",
-                            padding: "4px 8px",
-                            borderRadius: "6px",
-                            background: "var(--color-surface-container-highest, rgba(0,0,0,0.05))",
-                            color: "var(--color-primary, #6366f1)",
-                            border: "1px solid var(--color-outline-variant, var(--border))",
+                            fontSize: "10.5px",
+                            padding: "2px 6px",
+                            borderRadius: "4px",
+                            background: "var(--color-surface-container-high)",
+                            color: "var(--color-on-surface-variant)",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "3px",
+                            border: "1px solid var(--color-outline-variant)",
                           }}
                         >
-                          {t}
-                        </span>
-                      ))
-                    ) : (
-                      <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>Nenhuma ferramenta especial necessária.</span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Templates Recomendados */}
-                {selectedSkill.suggested_templates && selectedSkill.suggested_templates.length > 0 && (
-                  <div style={{ marginBottom: "20px" }}>
-                    <h4 style={{ fontSize: "12px", fontWeight: 700, textTransform: "uppercase", color: "var(--text-muted)", marginBottom: "8px", display: "flex", alignItems: "center", gap: "6px" }}>
-                      <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>
-                        auto_stories
-                      </span>
-                      Templates Recomendados
-                    </h4>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
-                      {selectedSkill.suggested_templates.map((tpl) => (
-                        <span
-                          key={tpl}
-                          style={{
-                            fontSize: "11px",
-                            padding: "4px 8px",
-                            borderRadius: "6px",
-                            background: "rgba(16, 185, 129, 0.1)",
-                            color: "#10b981",
-                            border: "1px solid rgba(16, 185, 129, 0.2)",
-                          }}
-                        >
-                          {tpl}
+                          <Wrench size={10} style={{ color: "var(--color-primary)" }} />
+                          {tool}
                         </span>
                       ))}
+                      {skill.tools.length > 3 && (
+                        <span style={{ fontSize: "10px", color: "var(--color-outline)" }}>
+                          +{skill.tools.length - 3}
+                        </span>
+                      )}
                     </div>
-                  </div>
-                )}
+                  )}
+                </CardContent>
 
-                {/* Instructions / SKILL.md */}
-                {selectedSkill.content && (
-                  <div style={{ marginBottom: "20px" }}>
-                    <h4 style={{ fontSize: "12px", fontWeight: 700, textTransform: "uppercase", color: "var(--text-muted)", marginBottom: "8px" }}>
-                      Instruções do Agente (SKILL.md)
-                    </h4>
-                    <pre
+                <CardFooter style={{ borderTop: "1px solid var(--color-outline-variant)", display: "flex", gap: "8px", alignItems: "center" }}>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setSelectedSkill(skill)}
+                    icon={<Eye size={14} />}
+                  >
+                    Detalhes
+                  </Button>
+
+                  {installed ? (
+                    <Button
+                      variant={isActiveInCopilot ? "primary" : "secondary"}
+                      size="sm"
+                      fullWidth
+                      onClick={() => {
+                        setActiveSkillId(skill.id);
+                        setActionFeedback({ ok: true, msg: `Skill '${skill.title || skill.name}' ativada no Copilot!` });
+                        setTimeout(() => setActionFeedback(null), 3000);
+                      }}
+                      icon={isActiveInCopilot ? <CheckCircle2 size={14} /> : <Play size={14} />}
+                    >
+                      {isActiveInCopilot ? "Ativa no Copilot" : "Ativar no Copilot"}
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      fullWidth
+                      onClick={() => handleInstall(skill)}
+                      icon={<Download size={14} />}
+                    >
+                      Instalar no Projeto
+                    </Button>
+                  )}
+                </CardFooter>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Modal: Detalhes da Skill */}
+      {selectedSkill && (
+        <Modal
+          isOpen={!!selectedSkill}
+          onClose={() => setSelectedSkill(null)}
+          title={selectedSkill.title || selectedSkill.name}
+          subtitle={`id: ${selectedSkill.id} • v${selectedSkill.version} • categoria: ${selectedSkill.category}`}
+          icon={getCategoryIcon(selectedSkill.category)}
+          size="lg"
+          footer={
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
+              {isInstalled(selectedSkill.id) ? (
+                <>
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    onClick={() => handleUninstall(selectedSkill.id)}
+                    icon={<Trash2 size={14} />}
+                  >
+                    Desinstalar do Projeto
+                  </Button>
+
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => {
+                      setActiveSkillId(selectedSkill.id);
+                      setSelectedSkill(null);
+                      setActionFeedback({ ok: true, msg: `Skill '${selectedSkill.title || selectedSkill.name}' ativada!` });
+                      setTimeout(() => setActionFeedback(null), 3000);
+                    }}
+                    icon={<Play size={14} />}
+                  >
+                    Ativar no Copilot Agora
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button variant="secondary" size="sm" onClick={() => setSelectedSkill(null)}>
+                    Fechar
+                  </Button>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => {
+                      handleInstall(selectedSkill);
+                      setSelectedSkill(null);
+                    }}
+                    icon={<Download size={14} />}
+                  >
+                    Instalar no Projeto
+                  </Button>
+                </>
+              )}
+            </div>
+          }
+        >
+          <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+            {/* Description */}
+            <div>
+              <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", color: "var(--color-outline)", marginBottom: "4px" }}>
+                Descrição
+              </div>
+              <p style={{ margin: 0, fontSize: "13px", color: "var(--color-on-surface)", lineHeight: 1.5 }}>
+                {selectedSkill.description}
+              </p>
+            </div>
+
+            {/* Tools */}
+            <div>
+              <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", color: "var(--color-outline)", marginBottom: "6px", display: "flex", alignItems: "center", gap: "6px" }}>
+                <Wrench size={13} style={{ color: "var(--color-primary)" }} />
+                Ferramentas Autônomas Vinculadas
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                {selectedSkill.tools && selectedSkill.tools.length > 0 ? (
+                  selectedSkill.tools.map((t) => (
+                    <span
+                      key={t}
                       style={{
                         fontSize: "11.5px",
-                        lineHeight: "1.45",
                         fontFamily: "var(--font-mono, monospace)",
-                        padding: "14px",
-                        borderRadius: "8px",
-                        background: "var(--color-surface-container-lowest, rgba(0,0,0,0.03))",
-                        border: "1px solid var(--color-outline-variant, var(--border))",
-                        color: "var(--color-on-surface, var(--text-main))",
-                        whiteSpace: "pre-wrap",
-                        overflowX: "auto",
-                        maxHeight: "260px",
+                        padding: "3px 8px",
+                        borderRadius: "4px",
+                        background: "var(--color-surface-container-high)",
+                        color: "var(--color-primary)",
+                        border: "1px solid var(--color-outline-variant)",
                       }}
                     >
-                      {selectedSkill.content}
-                    </pre>
-                  </div>
-                )}
-              </div>
-
-              {/* Drawer Footer Actions */}
-              <div
-                style={{
-                  padding: "14px 20px",
-                  borderTop: "1px solid var(--color-outline-variant, var(--border))",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  background: "var(--color-surface-container-low, var(--bg-surface))",
-                }}
-              >
-                {isInstalled(selectedSkill.id) ? (
-                  <>
-                    <button
-                      type="button"
-                      className="btn btn-ghost btn-sm"
-                      onClick={() => handleUninstall(selectedSkill.id)}
-                      style={{ color: "var(--color-error, #ef4444)" }}
-                    >
-                      <span className="material-symbols-outlined icon-xs">delete</span>
-                      Desinstalar do Projeto
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-primary btn-sm"
-                      onClick={() => {
-                        setActiveSkillId(selectedSkill.id);
-                        setSelectedSkill(null);
-                        setActionFeedback({ ok: true, msg: `Skill '${selectedSkill.title || selectedSkill.name}' ativada!` });
-                      }}
-                    >
-                      <span className="material-symbols-outlined icon-xs">play_arrow</span>
-                      Ativar no Copilot Agora
-                    </button>
-                  </>
+                      {t}
+                    </span>
+                  ))
                 ) : (
-                  <>
-                    <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>Origem: Catálogo Global</span>
-                    <button
-                      type="button"
-                      className="btn btn-primary btn-sm"
-                      onClick={() => {
-                        handleInstall(selectedSkill);
-                        setSelectedSkill(null);
-                      }}
-                    >
-                      <span className="material-symbols-outlined icon-xs">download</span>
-                      Instalar no Projeto
-                    </button>
-                  </>
+                  <span style={{ fontSize: "12px", color: "var(--color-outline)" }}>Nenhuma ferramenta especial necessária.</span>
                 )}
               </div>
             </div>
-          </div>
-        )}
 
-      </div>
+            {/* Suggested Templates */}
+            {selectedSkill.suggested_templates && selectedSkill.suggested_templates.length > 0 && (
+              <div>
+                <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", color: "var(--color-outline)", marginBottom: "6px", display: "flex", alignItems: "center", gap: "6px" }}>
+                  <BookOpen size={13} style={{ color: "var(--color-success)" }} />
+                  Templates Recomendados
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                  {selectedSkill.suggested_templates.map((tpl) => (
+                    <Badge key={tpl} variant="success" size="sm">
+                      {tpl}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Instructions / SKILL.md */}
+            {selectedSkill.content && (
+              <div>
+                <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", color: "var(--color-outline)", marginBottom: "6px" }}>
+                  Instruções do Agente (SKILL.md)
+                </div>
+                <pre
+                  style={{
+                    fontSize: "11.5px",
+                    lineHeight: "1.45",
+                    fontFamily: "var(--font-mono, monospace)",
+                    padding: "12px",
+                    borderRadius: "var(--radius-md, 8px)",
+                    background: "var(--color-surface-container-lowest)",
+                    border: "1px solid var(--color-outline-variant)",
+                    color: "var(--color-on-surface)",
+                    whiteSpace: "pre-wrap",
+                    overflowX: "auto",
+                    maxHeight: "240px",
+                    margin: 0,
+                  }}
+                >
+                  {selectedSkill.content}
+                </pre>
+              </div>
+            )}
+          </div>
+        </Modal>
+      )}
     </div>
   );
 };
