@@ -32,6 +32,19 @@ export interface CopilotStoreState {
   isRawMode: boolean;
   isSkillsModalOpen: boolean;
 
+  // Connected Providers & Approvals
+  activeProviderId: string;
+  setActiveProviderId: (id: string) => void;
+  pendingApproval: { prompt: string; sessionId: string; providerId?: string } | null;
+  setPendingApproval: (approval: { prompt: string; sessionId: string; providerId?: string } | null) => void;
+
+  // Live Progress & Stream Logs
+  thinkingStep: string;
+  setThinkingStep: (step: string) => void;
+  thinkingLogs: string[];
+  addThinkingLog: (log: string) => void;
+  clearThinkingLogs: () => void;
+
   // Prompt toggles & states
   templatePrompt: string | null;
   templateTitle: string | null;
@@ -79,6 +92,17 @@ export const useCopilotStore = create<CopilotStoreState>((set) => ({
   activeSkillId: 'living-docs-governance', // Default skill
   isRawMode: false,
   isSkillsModalOpen: false,
+
+  activeProviderId: 'antigravity',
+  setActiveProviderId: (activeProviderId) => set({ activeProviderId }),
+  pendingApproval: null,
+  setPendingApproval: (pendingApproval) => set({ pendingApproval }),
+
+  thinkingStep: 'Iniciando raciocínio...',
+  setThinkingStep: (thinkingStep) => set({ thinkingStep }),
+  thinkingLogs: [],
+  addThinkingLog: (log) => set((state) => ({ thinkingLogs: [...state.thinkingLogs.slice(-20), log] })),
+  clearThinkingLogs: () => set({ thinkingLogs: [] }),
 
   templatePrompt: null,
   templateTitle: null,

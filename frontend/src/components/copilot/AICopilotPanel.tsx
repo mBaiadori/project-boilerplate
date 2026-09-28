@@ -4,6 +4,8 @@ import { useAI } from "../../context/AIContext";
 import { useWorkspace } from "../../context/WorkspaceContext";
 import { SkillsHubModal } from "../modals/SkillsHubModal";
 import { ContextSelectorModal } from "./ContextSelectorModal";
+import { AgentApprovalCard } from "./AgentApprovalCard";
+import { useCopilotStore } from "../../stores/copilotStore";
 import { API } from "../../services/api";
 import type { TreeNode } from "../../types";
 
@@ -30,6 +32,7 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
     messages,
     isThinking,
     sendMessage,
+    stopGeneration,
     templatePrompt,
     templateTitle,
     isTemplatePromptEnabled,
@@ -45,6 +48,11 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
     closeSkillsModal,
     isRawMode,
     setIsRawMode,
+    activeProviderId,
+    setActiveProviderId,
+    pendingApproval,
+    approveAction,
+    rejectAction,
     aiSettings,
     openSettingsModal,
     quickSetModel,
@@ -67,6 +75,29 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
   const [isSkillsDropdownOpen, setIsSkillsDropdownOpen] = useState(false);
   const [availableSkills, setAvailableSkills] = useState<any[]>([]);
   const skillsDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Live Thinking Step & Timer
+  const thinkingStep = useCopilotStore((s) => s.thinkingStep);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
+  useEffect(() => {
+    let interval: any;
+    if (isThinking) {
+      setElapsedSeconds(0);
+      interval = setInterval(() => {
+        setElapsedSeconds((prev) => prev + 1);
+      }, 1000);
+    } else {
+      setElapsedSeconds(0);
+    }
+    return () => clearInterval(interval);
+  }, [isThinking]);
+
+  const formatElapsed = (sec: number) => {
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  };
 
   // Context Selector Modal state
   const [isContextModalOpen, setIsContextModalOpen] = useState(false);
@@ -939,6 +970,41 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
             </span>
             {isRawMode ? "RAW" : "Harness"}
           </button>
+
+          {/* Provider Selector Pill */}
+          {!isRawMode && (
+            <button
+              type="button"
+              onClick={() => setActiveProviderId(activeProviderId === 'antigravity' ? 'direct-api' : 'antigravity')}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "5px",
+                padding: "3px 8px",
+                borderRadius: "12px",
+                fontSize: "10.5px",
+                fontWeight: 600,
+                cursor: "pointer",
+                border: "1px solid",
+                background: activeProviderId === 'antigravity' ? "rgba(34, 197, 94, 0.15)" : "var(--color-surface-container, #f1f3f4)",
+                color: activeProviderId === 'antigravity' ? "#16a34a" : "var(--text-muted, #64748b)",
+                borderColor: activeProviderId === 'antigravity' ? "#22c55e" : "var(--color-outline-variant, #cbd5e1)",
+                transition: "all 0.15s ease",
+              }}
+              title={activeProviderId === 'antigravity' ? "Agente Antigravity Conectado (Acesso Local à Máquina)" : "Direct API (Modo Livre sem ferramentas de terminal)"}
+            >
+              <span
+                style={{
+                  display: "inline-block",
+                  width: "6px",
+                  height: "6px",
+                  borderRadius: "50%",
+                  backgroundColor: activeProviderId === 'antigravity' ? "#22c55e" : "#94a3b8",
+                }}
+              />
+              {activeProviderId === 'antigravity' ? "Antigravity (Local)" : "Direct API"}
+            </button>
+          )}
 
           {/* Skill Activator / Deactivator / Selector */}
           {!isRawMode && (
@@ -1984,22 +2050,60 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
           </div>
         ))}
 
+        {/* Interactive Pending Approval Card */}
+        {pendingApproval && (
+          <AgentApprovalCard
+            prompt={pendingApproval.prompt}
+            sessionId={pendingApproval.sessionId}
+            providerName={activeProviderId === 'antigravity' ? 'Google Antigravity Agent' : 'Agent'}
+            onApprove={approveAction}
+            onReject={rejectAction}
+          />
+        )}
+
         {isThinking && (
-          <div className="chat-bubble ai thinking">
-            <div className="chat-bubble-sender">
-              <span className="material-symbols-outlined icon-xs">
-                smart_toy
+          <div className="chat-bubble ai thinking" style={{ borderLeft: "3px solid #3b82f6", background: "var(--color-surface-container, #1e293b)" }}>
+            <div className="chat-bubble-sender" style={{ display: "flex", alignItems: "center", width: "100%" }}>
+              <span className="material-symbols-outlined icon-xs" style={{ animation: "spin 2s linear infinite", color: "#60a5fa" }}>
+                sync
               </span>
-              <strong>Agent</strong>
+              <strong style={{ color: "#60a5fa" }}>{activeProviderId === 'antigravity' ? 'Antigravity Agent' : 'Agent'}</strong>
+              <span style={{ fontSize: "11px", color: "var(--text-muted)", marginLeft: "auto", fontFamily: "monospace" }}>
+                ⏱️ {formatElapsed(elapsedSeconds)}
+              </span>
             </div>
             <div
               className="ai-reply-content"
-              style={{ display: "flex", alignItems: "center", gap: "8px" }}
+              style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", width: "100%", marginTop: "6px" }}
             >
-              <span className="dot pulse"></span>
-              <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>
-                Raciocinando na especificação...
-              </span>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <span className="dot pulse" style={{ backgroundColor: "#3b82f6" }}></span>
+                <span style={{ fontSize: "12.5px", color: "var(--color-on-surface, #f1f5f9)", fontWeight: 500 }}>
+                  {thinkingStep || 'Processando requisição...'}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={stopGeneration}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "4px",
+                  padding: "3px 8px",
+                  borderRadius: "6px",
+                  backgroundColor: "rgba(239, 68, 68, 0.15)",
+                  color: "#f87171",
+                  border: "1px solid rgba(239, 68, 68, 0.3)",
+                  cursor: "pointer",
+                  fontSize: "11px",
+                  fontWeight: 600,
+                  marginLeft: "auto",
+                }}
+                title="Interromper execução do agente"
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: "13px" }}>stop</span>
+                Interromper
+              </button>
             </div>
           </div>
         )}
@@ -2106,20 +2210,42 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
           </button>
 
           <div className="ai-input-actions-right">
-            <span className="ai-input-hint">Enter ↵</span>
-            <button
-              className="ai-send-icon-btn"
-              type="submit"
-              disabled={!inputText.trim() || isThinking}
-              title="Enviar mensagem (Enter)"
-            >
-              <span
-                className="material-symbols-outlined"
-                style={{ fontSize: "18px" }}
+            {!isThinking && <span className="ai-input-hint">Enter ↵</span>}
+            {isThinking ? (
+              <button
+                className="ai-send-icon-btn"
+                type="button"
+                onClick={stopGeneration}
+                style={{
+                  backgroundColor: "#ef4444",
+                  color: "#ffffff",
+                  cursor: "pointer",
+                  borderColor: "#dc2626",
+                }}
+                title="Parar execução atual"
               >
-                arrow_upward
-              </span>
-            </button>
+                <span
+                  className="material-symbols-outlined"
+                  style={{ fontSize: "18px" }}
+                >
+                  stop
+                </span>
+              </button>
+            ) : (
+              <button
+                className="ai-send-icon-btn"
+                type="submit"
+                disabled={!inputText.trim()}
+                title="Enviar mensagem (Enter)"
+              >
+                <span
+                  className="material-symbols-outlined"
+                  style={{ fontSize: "18px" }}
+                >
+                  arrow_upward
+                </span>
+              </button>
+            )}
           </div>
         </div>
       </form>

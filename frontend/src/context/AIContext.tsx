@@ -21,6 +21,7 @@ interface AIContextType {
   saveSettings: (payload: { active_provider: string; active_model: string; api_keys?: Record<string, string>; custom_endpoint?: string }) => Promise<boolean>;
   quickSetModel: (provider: string, model: string) => Promise<boolean>;
   sendMessage: (prompt: string, contextBadges?: string[]) => Promise<void>;
+  stopGeneration: () => Promise<void>;
   clearMessages: () => void;
   newChatSession: () => string;
   restoreSession: (sessionId: string) => Promise<boolean>;
@@ -34,6 +35,14 @@ interface AIContextType {
   addReferencedDoc: (path: string) => void;
   removeReferencedDoc: (path: string) => void;
   setIsGlobalScope: (isGlobal: boolean) => void;
+
+  // Connected Providers & Approvals
+  activeProviderId: string;
+  setActiveProviderId: (id: string) => void;
+  pendingApproval: { prompt: string; sessionId: string; providerId?: string } | null;
+  setPendingApproval: (approval: { prompt: string; sessionId: string; providerId?: string } | null) => void;
+  approveAction: (sessionId: string, customInput?: string) => Promise<void>;
+  rejectAction: (sessionId: string) => Promise<void>;
 
   // Skills & RAW Mode
   activeSkillId: string | null;
@@ -359,8 +368,27 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       skill_id: isRawMode ? undefined : (activeSkillId || undefined),
     };
 
-    useCopilotStore.getState().addMessage(userMessage);
+    const store = useCopilotStore.getState();
+    store.addMessage(userMessage);
+    store.clearThinkingLogs();
+    store.setThinkingStep(activeProviderId === 'antigravity' ? 'Iniciando Antigravity Agent...' : 'Preparando requisição...');
     setIsThinking(true);
+
+    const stepTimer1 = setTimeout(() => {
+      useCopilotStore.getState().setThinkingStep(activeProviderId === 'antigravity' ? 'Conectando ao Antigravity Agent local...' : 'Enviando prompt ao modelo...');
+    }, 2000);
+
+    const stepTimer2 = setTimeout(() => {
+      useCopilotStore.getState().setThinkingStep('Explorando workspace e lendo arquivos...');
+    }, 6000);
+
+    const stepTimer3 = setTimeout(() => {
+      useCopilotStore.getState().setThinkingStep('Executando operações e estruturando dados...');
+    }, 14000);
+
+    const stepTimer4 = setTimeout(() => {
+      useCopilotStore.getState().setThinkingStep('Validando schema e finalizando resposta...');
+    }, 26000);
 
     try {
       const historyPayload = useCopilotStore.getState().messages.map((m) => ({
@@ -397,6 +425,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
         assistant_prompt: assistantPrompt,
         raw_mode: isRawMode,
         skill_id: isRawMode ? undefined : (activeSkillId || undefined),
+        provider_id: isRawMode ? 'direct-api' : (activeProviderId || 'direct-api'),
       });
 
       if (res.ok && res.data) {
@@ -444,6 +473,10 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       };
       useCopilotStore.getState().addMessage(errorMessage);
     } finally {
+      clearTimeout(stepTimer1);
+      clearTimeout(stepTimer2);
+      clearTimeout(stepTimer3);
+      clearTimeout(stepTimer4);
       setIsThinking(false);
     }
   };
@@ -459,6 +492,54 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       clearMessages();
     } catch (err) {
       console.error('[AIContext] Erro ao resetar memória:', err);
+    }
+  };
+
+  const activeProviderId = useCopilotStore((s) => s.activeProviderId);
+  const setActiveProviderId = useCopilotStore((s) => s.setActiveProviderId);
+  const pendingApproval = useCopilotStore((s) => s.pendingApproval);
+  const setPendingApproval = useCopilotStore((s) => s.setPendingApproval);
+
+  const approveAction = async (sessionId: string, customInput?: string) => {
+    try {
+      await API.sendSessionApproval({
+        session_id: sessionId,
+        approved: true,
+        custom_input: customInput,
+        provider_id: activeProviderId,
+      });
+      setPendingApproval(null);
+    } catch (err) {
+      console.error('[AIContext] Erro ao aprovar ação:', err);
+    }
+  };
+
+  const rejectAction = async (sessionId: string) => {
+    try {
+      await API.sendSessionApproval({
+        session_id: sessionId,
+        approved: false,
+        provider_id: activeProviderId,
+      });
+      setPendingApproval(null);
+    } catch (err) {
+      console.error('[AIContext] Erro ao rejeitar ação:', err);
+    }
+  };
+
+  const stopGeneration = async () => {
+    try {
+      setIsThinking(false);
+      await API.stopSession({ session_id: currentSessionId, provider_id: activeProviderId });
+      const cancelMessage: ChatMessage = {
+        id: `msg-cancel-${Date.now()}`,
+        sender: 'system',
+        content: '⏹️ Execução interrompida pelo usuário.',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      };
+      useCopilotStore.getState().addMessage(cancelMessage);
+    } catch (err) {
+      console.error('[AIContext] Erro ao parar geração:', err);
     }
   };
 
@@ -483,10 +564,18 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
         saveSettings,
         quickSetModel,
         sendMessage,
+        stopGeneration,
         clearMessages,
         newChatSession,
         restoreSession,
         resetMemory,
+
+        activeProviderId,
+        setActiveProviderId,
+        pendingApproval,
+        setPendingApproval,
+        approveAction,
+        rejectAction,
 
         currentSessionId,
         referencedDocs,

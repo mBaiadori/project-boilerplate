@@ -65,8 +65,6 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
     updateFileMetadata,
   } = useWorkspace();
   const [editorTab, setEditorTab] = useState<"document" | "prompt">("document");
-  const [isGeneratingPromptAI, setIsGeneratingPromptAI] = useState(false);
-  const [promptAIFeedback, setPromptAIFeedback] = useState("");
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [importText, setImportText] = useState("");
   const [titleValue, setTitleValue] = useState<string>("");
@@ -178,27 +176,6 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
     }
   };
 
-  const handleInsertPlaceholder = (token: string) => {
-    if (engineRef.current) {
-      const current = engineRef.current.getMarkdown();
-      const addition = `\n- **Placeholder:** \`${token}\` — orientar o preenchimento detalhado deste campo.`;
-      const updated = current
-        ? `${current.trim()}${addition}`
-        : addition.trim();
-      isInternalChangeRef.current = true;
-      engineRef.current.setMarkdown(updated);
-      if (editorTabRef.current === "prompt") {
-        if (onPromptChangeRef.current) onPromptChangeRef.current(updated);
-        else updateFileMetadataRef.current({ prompt: updated });
-        effectivePromptRef.current = updated;
-      }
-      setEditorToast({
-        text: `Tag ${token} adicionada ao prompt!`,
-        type: "info",
-      });
-      setTimeout(() => setEditorToast(null), 2500);
-    }
-  };
 
   // Auto-resize title textarea to fit content organically like a heading
   useEffect(() => {

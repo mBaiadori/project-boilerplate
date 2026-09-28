@@ -31,11 +31,13 @@ export interface AppConfig {
     model: string;
     api_key: string;
     custom_endpoint: string;
+    default_provider?: string;
   };
   settings: {
     auto_pr_on_save: boolean;
     template_creator_prompt: string;
     global_system_prompt: string;
+    antigravity_cli_path?: string;
   };
   workspace_changes: Record<string, WorkspaceChange[]>;
   templates?: any[];

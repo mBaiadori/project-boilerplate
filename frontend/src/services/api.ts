@@ -286,11 +286,35 @@ export const API = {
     repo?: string;
     skill_id?: string;
     allowed_tools?: string[];
+    provider_id?: string;
   }): Promise<ApiResponse<{ reply: string; diff?: any; actions?: any[]; tool_calls?: ToolCallRecord[]; steps_count?: number; provider?: string; model?: string }>> {
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async getAIProviders(): Promise<ApiResponse<{ providers: Array<{ id: string; name: string; description: string; mode: string; isAvailable: boolean; isAuthenticated: boolean; statusMessage?: string }> }>> {
+    const res = await fetch('/api/ai/providers');
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async sendSessionApproval(payload: { session_id: string; approved: boolean; custom_input?: string; provider_id?: string }): Promise<ApiResponse<any>> {
+    const res = await fetch('/api/ai/session/approval', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async stopSession(payload: { session_id: string; provider_id?: string }): Promise<ApiResponse<any>> {
+    const res = await fetch('/api/ai/session/stop', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
     });
     return { ok: res.ok, data: await res.json() };
   },

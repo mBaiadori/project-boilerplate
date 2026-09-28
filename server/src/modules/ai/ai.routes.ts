@@ -3,8 +3,60 @@ import { aiService } from './ai.service.js';
 import { loadConfig } from '../../config/storage.js';
 import { toolRegistry } from './tools/ToolRegistry.js';
 import { skillsService } from '../skills/skills.service.js';
+import { providerManager } from './providers/ProviderManager.js';
+import { contextPointerService } from './context/ContextPointerService.js';
+import { ProviderId, ProviderStreamEvent } from './providers/provider.types.js';
 
 export async function aiRoutes(fastify: FastifyInstance) {
+  /**
+   * Lista todos os provedores disponíveis e seus status (Direct API, Antigravity, etc.)
+   */
+  fastify.get('/api/ai/providers', async (_request, reply) => {
+    const providers = await providerManager.listProviders();
+    return reply.send({ providers });
+  });
+
+  /**
+   * Envia uma resposta de aprovação interativa (y/n) para a sessão do agente
+   */
+  fastify.post('/api/ai/session/approval', async (request, reply) => {
+    const body = request.body as {
+      session_id?: string;
+      provider_id?: ProviderId;
+      approved: boolean;
+      custom_input?: string;
+    };
+
+    if (!body.session_id) {
+      return reply.status(400).send({ error: 'session_id é obrigatório' });
+    }
+
+    const provider = providerManager.getProvider(body.provider_id || 'antigravity');
+    try {
+      await provider.sendApproval(body.session_id, body.approved, body.custom_input);
+      return reply.send({ success: true, session_id: body.session_id });
+    } catch (err: any) {
+      return reply.status(500).send({ error: err?.message || 'Falha ao enviar aprovação' });
+    }
+  });
+
+  /**
+   * Interrompe uma sessão de agente em andamento
+   */
+  fastify.post('/api/ai/session/stop', async (request, reply) => {
+    const body = request.body as { session_id?: string; provider_id?: ProviderId };
+    if (!body.session_id) {
+      return reply.status(400).send({ error: 'session_id é obrigatório' });
+    }
+
+    const provider = providerManager.getProvider(body.provider_id);
+    await provider.stopSession(body.session_id);
+    return reply.send({ success: true, session_id: body.session_id });
+  });
+
+  /**
+   * Endpoint de Chat Unificado (Suporta Modo Direto e Modo Conectado / Antigravity)
+   */
   fastify.post('/api/chat', async (request, reply) => {
     const body = request.body as {
       prompt?: string;
@@ -17,6 +69,7 @@ export async function aiRoutes(fastify: FastifyInstance) {
       repo?: string;
       allowed_tools?: string[];
       skill_id?: string;
+      provider_id?: ProviderId;
     };
 
     const cfg = loadConfig();
@@ -25,12 +78,57 @@ export async function aiRoutes(fastify: FastifyInstance) {
     const filePath = body.path || 'index.md';
     const prompt = (body.prompt || '').trim();
     const isRawMode = Boolean(body.raw_mode);
+    const providerId = body.provider_id || (body.raw_mode ? 'direct-api' : cfg.ai_settings?.default_provider || 'direct-api');
 
     if (!prompt) {
       return reply.status(400).send({ error: 'Prompt não pode ser vazio.' });
     }
 
-    // Resolve skill ativa se solicitada e não estiver em RAW mode
+    // Se for provedor conectado (ex: Antigravity)
+    if (providerId !== 'direct-api') {
+      const provider = providerManager.getProvider(providerId);
+      const contextPointers = contextPointerService.buildContextPointers({
+        repoName,
+        activeFilePath: filePath,
+        skillId: body.skill_id,
+      });
+
+      const briefing = aiService.getBriefing(repoName, filePath);
+      const streamEvents: ProviderStreamEvent[] = [];
+
+      try {
+        const result = await provider.sendMessage(
+          sessionId,
+          prompt,
+          (event) => {
+            streamEvents.push(event);
+          },
+          {
+            history: (body.history || []).map((h) => ({ role: h.role, content: h.text || h.content || '' })),
+            briefing,
+            contextPointers,
+          }
+        );
+
+        const currentAuthor = cfg.user?.name || cfg.user?.login || 'Developer';
+        aiService.appendChatEvent(repoName, filePath, sessionId, 'user', prompt, { model: provider.name, author: currentAuthor });
+        aiService.appendChatEvent(repoName, filePath, sessionId, 'model', result.reply, { model: provider.name, author: 'Antigravity' });
+
+        return reply.send({
+          reply: result.reply,
+          provider: provider.id,
+          model: provider.name,
+          session_id: sessionId,
+          repo: repoName,
+          tool_calls: result.toolCalls || [],
+          steps_count: 1,
+        });
+      } catch (err: any) {
+        return reply.status(500).send({ error: err?.message || 'Erro ao comunicar com o agente conectado.' });
+      }
+    }
+
+    // Modo Direto (Direct API - Gemini / OpenAI / Anthropic)
     let resolvedSkillPrompt = '';
     let skillTools: string[] = [];
 
@@ -42,10 +140,6 @@ export async function aiRoutes(fastify: FastifyInstance) {
       }
     }
 
-    // Definição das ferramentas permitidas:
-    // 1. Em Modo RAW -> Nenhuma ferramenta
-    // 2. Em Modo Harness com Skill com tools específicas -> Tools da skill + body.allowed_tools
-    // 3. Em Modo Harness Geral (ou Skill sem restrição) -> Todas as ferramentas registradas e disponíveis no projeto
     let resolvedAllowedTools: string[] | undefined = undefined;
 
     if (!isRawMode) {
@@ -90,6 +184,67 @@ export async function aiRoutes(fastify: FastifyInstance) {
       tool_calls: result.tool_calls || [],
       steps_count: result.steps_count || 1,
     });
+  });
+
+  /**
+   * Endpoint de Streaming SSE em tempo real
+   */
+  fastify.post('/api/chat/stream', async (request, reply) => {
+    const body = request.body as {
+      prompt?: string;
+      session_id?: string;
+      repo?: string;
+      path?: string;
+      provider_id?: ProviderId;
+      skill_id?: string;
+    };
+
+    const cfg = loadConfig();
+    const repoName = body.repo || cfg.active_repo?.name || 'local';
+    const sessionId = body.session_id || `${Date.now()}`;
+    const filePath = body.path || 'index.md';
+    const prompt = (body.prompt || '').trim();
+    const providerId = body.provider_id || 'direct-api';
+
+    if (!prompt) {
+      return reply.status(400).send({ error: 'Prompt não pode ser vazio.' });
+    }
+
+    reply.raw.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
+      'Access-Control-Allow-Origin': '*',
+    });
+
+    const sendEvent = (event: ProviderStreamEvent) => {
+      reply.raw.write(`data: ${JSON.stringify(event)}\n\n`);
+    };
+
+    const provider = providerManager.getProvider(providerId);
+    const contextPointers = contextPointerService.buildContextPointers({
+      repoName,
+      activeFilePath: filePath,
+      skillId: body.skill_id,
+    });
+    const briefing = aiService.getBriefing(repoName, filePath);
+
+    try {
+      await provider.sendMessage(sessionId, prompt, sendEvent, {
+        briefing,
+        contextPointers,
+      });
+    } catch (err: any) {
+      sendEvent({
+        type: 'error',
+        provider: provider.id,
+        sessionId,
+        data: err?.message || String(err),
+        timestamp: Date.now(),
+      });
+    } finally {
+      reply.raw.end();
+    }
   });
 
   fastify.get('/api/ai/tools', async (_request, reply) => {
