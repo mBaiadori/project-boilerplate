@@ -1,17 +1,20 @@
-import React, { useState, useRef, useEffect, useCallback } from "react";
-import { FileText, Plus, FolderTree } from "lucide-react";
-import { parseFrontmatter, serializeFrontmatter } from "../../services/frontmatter";
+import { FileText, FolderTree, Plus } from "lucide-react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useWorkspace } from "../../context/WorkspaceContext";
+import { API } from "../../services/api";
+import {
+  parseFrontmatter,
+  serializeFrontmatter,
+} from "../../services/frontmatter";
+import type { DocumentMetadataItem, GitCommitInfo } from "../../types";
+import { InsertLinkModal } from "../modals/InsertLinkModal";
+import { DocConnectivityBar } from "./DocConnectivityBar";
+import { DocumentHistoryDrawer } from "./DocumentHistoryDrawer";
 import {
   NotionEditorEngine,
   type FragmentStatusInfo,
 } from "./notion-editor-engine";
-import { API } from "../../services/api";
-import { useWorkspace } from "../../context/WorkspaceContext";
 import { VisualMarkdownDiff } from "./VisualMarkdownDiff";
-import { DocumentHistoryDrawer } from "./DocumentHistoryDrawer";
-import { DocConnectivityBar } from "./DocConnectivityBar";
-import { InsertLinkModal } from "../modals/InsertLinkModal";
-import type { GitCommitInfo, DocumentMetadataItem } from "../../types";
 
 interface NotionEditorProps {
   content: string;
@@ -40,7 +43,7 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
   filePath,
   onNavigateFile,
   onReload = () => {},
-  onOpenDiffModal,
+  onOpenDiffModal: _onOpenDiffModal,
   onToggleCopilot: _onToggleCopilot,
   onOpenScaffoldWizard,
   onSendSelectionToCopilot,
@@ -120,9 +123,7 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
   const parsed = parseFrontmatter(content || "");
   const docBody = parsed.body || content || "";
   const effectivePrompt =
-    promptContent !== undefined
-      ? promptContent
-      : fileMetadata?.prompt || "";
+    promptContent !== undefined ? promptContent : fileMetadata?.prompt || "";
 
   const editorTabRef = useRef(editorTab);
   editorTabRef.current = editorTab;
@@ -169,7 +170,8 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
 
     setEditorTab(newTab);
     editorTabRef.current = newTab;
-    const targetText = newTab === "document" ? docBodyRef.current : effectivePromptRef.current;
+    const targetText =
+      newTab === "document" ? docBodyRef.current : effectivePromptRef.current;
     if (engineRef.current) {
       isInternalChangeRef.current = true;
       engineRef.current.setMarkdown(targetText);
@@ -180,7 +182,9 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
     if (engineRef.current) {
       const current = engineRef.current.getMarkdown();
       const addition = `\n- **Placeholder:** \`${token}\` — orientar o preenchimento detalhado deste campo.`;
-      const updated = current ? `${current.trim()}${addition}` : addition.trim();
+      const updated = current
+        ? `${current.trim()}${addition}`
+        : addition.trim();
       isInternalChangeRef.current = true;
       engineRef.current.setMarkdown(updated);
       if (editorTabRef.current === "prompt") {
@@ -188,7 +192,10 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
         else updateFileMetadataRef.current({ prompt: updated });
         effectivePromptRef.current = updated;
       }
-      setEditorToast({ text: `Tag ${token} adicionada ao prompt!`, type: "info" });
+      setEditorToast({
+        text: `Tag ${token} adicionada ao prompt!`,
+        type: "info",
+      });
       setTimeout(() => setEditorToast(null), 2500);
     }
   };
@@ -197,7 +204,8 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
     setIsGeneratingPromptAI(true);
     setPromptAIFeedback("");
     try {
-      const targetDocTitle = titleValue || fileMetadata?.title || filePath || "Documento";
+      const targetDocTitle =
+        titleValue || fileMetadata?.title || filePath || "Documento";
       const res = await API.askAI({
         prompt: `Você é o Arquiteto de Software Líder. Escreva instruções ricas (system prompt) em Markdown para o Copilot auxiliar no desenvolvimento e refinamento do ${isTemplateMode ? "Template" : "Documento"}: "${targetDocTitle}".
 Inclua:
@@ -209,7 +217,8 @@ Mantenha um tom técnico, rigoroso e direto.`,
       });
 
       if (res.ok && res.data) {
-        const raw = res.data.response || res.data.reply || res.data.content || "";
+        const raw =
+          res.data.response || res.data.reply || res.data.content || "";
         if (raw && engineRef.current) {
           isInternalChangeRef.current = true;
           engineRef.current.setMarkdown(raw);
@@ -284,7 +293,13 @@ Mantenha um tom técnico, rigoroso e direto.`,
         ? fileMetadata.title
         : docMetadata?.title || "";
     setTitleValue(metaTitle);
-  }, [fileMetadata?.title, docMetadata?.title, filePath, isTemplateMode, customTitle]);
+  }, [
+    fileMetadata?.title,
+    docMetadata?.title,
+    filePath,
+    isTemplateMode,
+    customTitle,
+  ]);
 
   const handleTitleChange = (newVal: string) => {
     setTitleValue(newVal);
@@ -405,7 +420,11 @@ Mantenha um tom técnico, rigoroso e direto.`,
     engine.setMarkdown(initialText);
 
     const hash = window.location.hash;
-    if (hash && (hash.includes(":~:text=") || hash.startsWith("#")) && initialText.trim()) {
+    if (
+      hash &&
+      (hash.includes(":~:text=") || hash.startsWith("#")) &&
+      initialText.trim()
+    ) {
       setTimeout(() => {
         engine.scrollToFragment(hash);
       }, 250);
@@ -427,7 +446,11 @@ Mantenha um tom técnico, rigoroso e direto.`,
       engineRef.current.clearFragmentHighlights();
 
       const hash = window.location.hash;
-      if (hash && (hash.includes(":~:text=") || hash.startsWith("#")) && targetText.trim()) {
+      if (
+        hash &&
+        (hash.includes(":~:text=") || hash.startsWith("#")) &&
+        targetText.trim()
+      ) {
         setTimeout(() => {
           engineRef.current?.scrollToFragment(hash);
         }, 150);
@@ -586,7 +609,9 @@ Mantenha um tom técnico, rigoroso e direto.`,
   };
 
   const currentContent = editorTab === "document" ? docBody : effectivePrompt;
-  const wordCount = currentContent.trim() ? currentContent.trim().split(/\s+/).length : 0;
+  const wordCount = currentContent.trim()
+    ? currentContent.trim().split(/\s+/).length
+    : 0;
   const lineCount = currentContent ? currentContent.split(/\r?\n/).length : 0;
   const originalBody =
     parseFrontmatter(originalContent || "").body || originalContent || "";
@@ -798,9 +823,7 @@ Mantenha um tom técnico, rigoroso e direto.`,
                     ? "var(--color-primary, #2563eb)"
                     : "var(--color-outline, #64748b)",
                 boxShadow:
-                  editorTab === "prompt"
-                    ? "0 1px 3px rgba(0,0,0,0.1)"
-                    : "none",
+                  editorTab === "prompt" ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
                 transition: "all 0.15s ease",
               }}
             >
@@ -914,7 +937,7 @@ Mantenha um tom técnico, rigoroso e direto.`,
               title="Linha do Tempo de Versões & Evolução deste documento"
               onClick={() => setIsHistoryDrawerOpen(!isHistoryDrawerOpen)}
             >
-              <span className="material-symbols-outlined icon-xs">history_edu</span>
+              <span className="material-symbols-outlined icon-xs">history</span>
             </button>
 
             {/* Botão Sincronizar / Salvar no Disco */}
@@ -977,33 +1000,6 @@ Mantenha um tom técnico, rigoroso e direto.`,
                     <polyline points="7 3 7 8 15 8"></polyline>
                   </svg>
                 )}
-              </button>
-            )}
-
-            {/* Botão Central de Diffs & PR */}
-            {onOpenDiffModal && (
-              <button
-                id="btn-review-diff-direct"
-                className="btn-icon-action"
-                type="button"
-                title="Revisar alterações e propor PR Oficial"
-                onClick={onOpenDiffModal}
-              >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <circle cx="18" cy="18" r="3"></circle>
-                  <circle cx="6" cy="6" r="3"></circle>
-                  <path d="M13 6h3a2 2 0 0 1 2 2v7"></path>
-                  <line x1="6" y1="9" x2="6" y2="21"></line>
-                </svg>
               </button>
             )}
           </div>
@@ -1210,7 +1206,9 @@ Mantenha um tom técnico, rigoroso e direto.`,
                       <span className="material-symbols-outlined icon-xs">
                         {isGeneratingPromptAI ? "sync" : "auto_awesome"}
                       </span>
-                      {isGeneratingPromptAI ? "Gerando..." : "Gerar / Otimizar com IA"}
+                      {isGeneratingPromptAI
+                        ? "Gerando..."
+                        : "Gerar / Otimizar com IA"}
                     </button>
                   </div>
 
@@ -1260,7 +1258,8 @@ Mantenha um tom técnico, rigoroso e direto.`,
                         style={{
                           padding: "2px 6px",
                           borderRadius: "4px",
-                          border: "1px solid var(--color-outline-variant, #cbd5e1)",
+                          border:
+                            "1px solid var(--color-outline-variant, #cbd5e1)",
                           background: "var(--color-surface, #ffffff)",
                           fontSize: "10px",
                           fontWeight: 600,
@@ -1312,9 +1311,10 @@ Mantenha um tom técnico, rigoroso e direto.`,
                           if (e.key === "Enter") {
                             e.preventDefault();
                             if (canvasRef.current) {
-                              const firstBlock = canvasRef.current.querySelector(
-                                '[contenteditable="true"]',
-                              ) as HTMLElement;
+                              const firstBlock =
+                                canvasRef.current.querySelector(
+                                  '[contenteditable="true"]',
+                                ) as HTMLElement;
                               if (firstBlock) firstBlock.focus();
                             }
                           }
@@ -1366,7 +1366,9 @@ Mantenha um tom técnico, rigoroso e direto.`,
                   >
                     bookmark
                   </span>
-                  <span style={{ color: "#10b981" }}>{customSaveStatus || "Editor de Template"}</span>
+                  <span style={{ color: "#10b981" }}>
+                    {customSaveStatus || "Editor de Template"}
+                  </span>
                 </>
               ) : saveStatus === "Salvando..." ? (
                 <>

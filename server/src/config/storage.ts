@@ -175,6 +175,17 @@ export function loadConfig(): AppConfig {
     };
   }
 
+  // Purge any hidden files from stored workspace changes
+  if (cfg.workspace_changes && typeof cfg.workspace_changes === "object") {
+    for (const [rName, list] of Object.entries(cfg.workspace_changes)) {
+      if (Array.isArray(list)) {
+        cfg.workspace_changes[rName] = list.filter(
+          (c: any) => c?.path && !isPathHidden(c.path)
+        );
+      }
+    }
+  }
+
   cfg.templates = canonical;
   const master = loadProjectsMasterConfig();
   if (!cfg.workflows || cfg.workflows.length === 0) {

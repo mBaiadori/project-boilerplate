@@ -9,8 +9,12 @@ import {
   createAndCheckoutBranch,
   executeGitCommand,
   getGitLog,
+  getGitStatus,
+  getGitDiff,
 } from '../../utils/git.js';
 import { computeDiff } from '../../utils/diff.js';
+import { isPathHidden, loadHiddenFiles } from '../../utils/hidden-files.js';
+import { aiService } from '../ai/ai.service.js';
 
 export class PRsService {
   private getRepoDir(repoName?: string): string {
@@ -168,29 +172,211 @@ export class PRsService {
     return '';
   }
 
-  generatePRSummary(repoNameQuery?: string) {
+  async generatePRSummary(repoNameQuery?: string) {
     const cfg = loadConfig();
     const repoName = repoNameQuery || cfg.active_repo?.name || 'local';
-    const changes = cfg.workspace_changes?.[repoName] || [];
+    const repoDir = this.getRepoDir(repoName);
+    const hiddenList = loadHiddenFiles(repoDir);
 
-    if (changes.length === 0) {
+    // 1. Gather files from workspace_changes
+    const wsChanges = (cfg.workspace_changes?.[repoName] || []).filter(
+      (c) => !isPathHidden(c.path, hiddenList),
+    );
+
+    // 2. Gather files from git status (covers untracked and working tree changes)
+    const gitStatus = await getGitStatus(repoDir);
+    const gitFiles = (gitStatus.files || []).filter(
+      (f) => !isPathHidden(f.path, hiddenList),
+    );
+
+    const allPathsSet = new Set<string>([
+      ...wsChanges.map((c) => c.path),
+      ...gitFiles.map((f) => f.path),
+    ]);
+
+    const changedPaths = Array.from(allPathsSet);
+
+    if (changedPaths.length === 0) {
       return {
-        title: 'Atualização de Especificações',
-        body: 'Nenhuma alteração pendente detectada.',
+        success: true,
+        title: 'docs: atualização de especificações',
+        description: 'Nenhuma alteração pendente detectada no repositório.',
+        body: 'Nenhuma alteração pendente detectada no repositório.',
         type: 'docs',
         layer: 'Geral',
       };
     }
 
-    const modifiedPaths = changes.map((c) => c.path).join(', ');
-    const title = `docs: atualização de especificações (${changes.length} arquivos)`;
-    const body = `## Resumo das Alterações de Governança\n\nEste Pull Request registra alterações na base de conhecimento e especificações:\n\n` +
-      changes.map((c) => `- **${c.type}**: \`${c.path}\``).join('\n') +
-      `\n\n### Arquivos Modificados:\n${modifiedPaths}\n\n*Gerado automaticamente pelo Context OS Spec-Driven SDLC.*`;
+    // 3. Extract diff snippets for the modified files
+    const diffSnippets: string[] = [];
+    for (const p of changedPaths.slice(0, 10)) {
+      const wsChange = wsChanges.find((c) => c.path === p);
+      if (wsChange && (wsChange.old_content || wsChange.new_content)) {
+        const diffData = computeDiff(wsChange.old_content || '', wsChange.new_content || '', p);
+        if (diffData.diff_text) {
+          diffSnippets.push(`--- ${p} (${wsChange.type}) ---\n${diffData.diff_text.slice(0, 1000)}`);
+          continue;
+        }
+      }
+
+      const fileDiff = await getGitDiff(repoDir, p);
+      if (fileDiff?.diff) {
+        diffSnippets.push(`--- ${p} ---\n${fileDiff.diff.slice(0, 1000)}`);
+      } else {
+        diffSnippets.push(`--- ${p} (adicionado/modificado) ---`);
+      }
+    }
+
+    const combinedDiff = diffSnippets.join('\n\n').slice(0, 4000);
+
+    // 4. If AI provider is configured, try calling LLM
+    if (cfg.ai_settings && (cfg.ai_settings.api_key || cfg.ai_settings.provider === 'ollama' || cfg.ai_settings.custom_endpoint)) {
+      try {
+        const aiPrompt = `Você é um Engenheiro de Software Sênior especialista em Governança Documental e Arquitetura de Software.
+Analise o resumo das seguintes alterações de arquivos e diffs no repositório "${repoName}":
+
+ARQUIVOS MODIFICADOS (${changedPaths.length}):
+${changedPaths.map((p) => `- ${p}`).join('\n')}
+
+DIFFS E CONTEÚDOS:
+${combinedDiff || 'Arquivos adicionados ou atualizados no repositório.'}
+
+Sua tarefa:
+Gere um título e uma descrição em Markdown para o Pull Request (Proposta de Evolução).
+
+Retorne APENAS um JSON válido no formato:
+{
+  "title": "<Título conciso em Conventional Commits, ex: docs(automovel): adicionar especificações canônicas de veículos, motor e combustíveis>",
+  "description": "<Resumo claro com seções em Markdown detalhando: Visão Geral, Principais Mudanças e Impacto na Governança>"
+}`;
+
+        const aiResult = await aiService.callLLM(
+          cfg.ai_settings,
+          aiPrompt,
+          '',
+          'git-diff',
+          [],
+          'Você é o assistente gerador de resumos de Pull Requests do Context OS. Responda apenas com o JSON requerido.',
+          repoName,
+        );
+
+        if (aiResult?.reply) {
+          let cleanJson = aiResult.reply.trim();
+          if (cleanJson.includes('```json')) {
+            cleanJson = cleanJson.replace(/^```json\s*/i, '').replace(/```\s*$/, '').trim();
+          } else if (cleanJson.includes('```')) {
+            cleanJson = cleanJson.replace(/^```\s*/, '').replace(/```\s*$/, '').trim();
+          }
+
+          try {
+            const parsed = JSON.parse(cleanJson);
+            if (parsed.title && (parsed.description || parsed.body)) {
+              const desc = parsed.description || parsed.body;
+              return {
+                success: true,
+                title: parsed.title,
+                description: desc,
+                body: desc,
+                type: 'docs',
+                layer: 'Especificações',
+              };
+            }
+          } catch {
+            if (cleanJson.length > 20) {
+              const firstLine = cleanJson.split('\n')[0].replace(/^[#*\s-]+/, '').trim();
+              const autoTitle = firstLine.length < 80 ? firstLine : `docs: atualização de ${changedPaths.length} documento(s)`;
+              return {
+                success: true,
+                title: autoTitle,
+                description: cleanJson,
+                body: cleanJson,
+                type: 'docs',
+                layer: 'Especificações',
+              };
+            }
+          }
+        }
+      } catch (aiErr) {
+        console.warn('[PRsService] Falha ao gerar resumo com LLM, usando fallback heurístico:', aiErr);
+      }
+    }
+
+    // 5. Intelligent Deterministic Heuristic Fallback (Zero-Config, Instant, No API Key Required)
+    const fileDetails: Array<{ path: string; name: string; title: string; action: string; module: string }> = [];
+
+    for (const p of changedPaths) {
+      const fullPath = path.join(repoDir, p);
+      let docTitle = path.basename(p, path.extname(p));
+      let action = 'Modificado';
+
+      const gitItem = gitFiles.find((f) => f.path === p);
+      const wsItem = wsChanges.find((c) => c.path === p);
+
+      if (gitItem?.status === '??' || wsItem?.type === 'ADDED') {
+        action = 'Novo Documento';
+      } else if (gitItem?.status === 'D' || wsItem?.type === 'DELETED') {
+        action = 'Removido';
+      }
+
+      if (fs.existsSync(fullPath) && !fs.statSync(fullPath).isDirectory()) {
+        try {
+          const content = fs.readFileSync(fullPath, 'utf-8');
+          // Match YAML frontmatter title or # Heading 1
+          const frontmatterMatch = content.match(/^---\s*[\r\n]+([\s\S]*?)[\r\n]+---/);
+          if (frontmatterMatch) {
+            const titleMatch = frontmatterMatch[1].match(/^title:\s*["']?([^"'\r\n]+)["']?/m);
+            if (titleMatch && titleMatch[1].trim()) {
+              docTitle = titleMatch[1].trim();
+            }
+          }
+          if (docTitle === path.basename(p, path.extname(p))) {
+            const h1Match = content.match(/^#\s+([^\r\n]+)/m);
+            if (h1Match && h1Match[1].trim()) {
+              docTitle = h1Match[1].replace(/^[📄🏛️📌✨🔧📋\s]+/, '').trim();
+            }
+          }
+        } catch {}
+      }
+
+      const parts = p.split('/');
+      const moduleName = parts.length > 1 ? parts[0] : 'raiz';
+
+      fileDetails.push({
+        path: p,
+        name: path.basename(p),
+        title: docTitle,
+        action,
+        module: moduleName,
+      });
+    }
+
+    const allNew = fileDetails.every((f) => f.action === 'Novo Documento');
+    const allDeleted = fileDetails.every((f) => f.action === 'Removido');
+    const commitPrefix = allNew ? 'feat' : allDeleted ? 'refactor' : 'docs';
+
+    const uniqueModules = Array.from(new Set(fileDetails.map((f) => f.module).filter((m) => m !== 'raiz')));
+    const moduleScope = uniqueModules.length === 1 ? `(${uniqueModules[0]})` : uniqueModules.length > 1 ? `(${uniqueModules.slice(0, 2).join('-')})` : '';
+
+    const titleAction = allNew ? 'adicionar' : allDeleted ? 'remover' : 'atualizar';
+    const namesList = fileDetails.slice(0, 4).map((f) => f.name.replace(/\.md$/i, '')).join(', ');
+    const autoTitle = `${commitPrefix}${moduleScope}: ${titleAction} especificações de ${namesList}${fileDetails.length > 4 ? ` e mais ${fileDetails.length - 4} arquivos` : ''}`;
+
+    const autoDescription = `## 📋 Visão Geral da Proposta\n\n` +
+      `Esta proposta de evolução reúne alterações em **${fileDetails.length} documento(s)** no repositório \`${repoName}\`.\n\n` +
+      `### 📂 Documentos Impactados:\n\n` +
+      `| Documento | Módulo / Domínio | Ação | Título Canônico |\n` +
+      `| :--- | :--- | :--- | :--- |\n` +
+      fileDetails.map((f) => `| \`${f.path}\` | \`${f.module}\` | **${f.action}** | ${f.title} |`).join('\n') +
+      `\n\n### 🎯 Objetivos de Governança:\n` +
+      `- Manter a documentação viva e canônica sincronizada com a arquitetura.\n` +
+      `- Rastrear as evoluções através do fluxo formal de revisão e Pull Request.\n\n` +
+      `*Gerado automaticamente pelo motor de governança do Context OS.*`;
 
     return {
-      title,
-      body,
+      success: true,
+      title: autoTitle,
+      description: autoDescription,
+      body: autoDescription,
       type: 'docs',
       layer: 'Especificações',
     };
@@ -208,15 +394,26 @@ export class PRsService {
     const cfg = loadConfig();
     const activeRepo = cfg.active_repo;
     const repoName = payload.repo || activeRepo?.name || 'local';
-    const rawChanges = cfg.workspace_changes?.[repoName] || [];
+    const repoDir = this.getRepoDir(repoName);
+    const hiddenList = loadHiddenFiles(repoDir);
+    const gitStatus = await getGitStatus(repoDir);
+    const gitFiles = (gitStatus.files || []).filter(
+      (f) => !isPathHidden(f.path, hiddenList),
+    );
+    const rawChanges = (cfg.workspace_changes?.[repoName] || []).filter(
+      (c) => !isPathHidden(c.path, hiddenList),
+    );
 
-    if (rawChanges.length === 0) {
+    const allChangedPaths = Array.from(
+      new Set([...rawChanges.map((c) => c.path), ...gitFiles.map((f) => f.path)])
+    );
+
+    if (allChangedPaths.length === 0) {
       throw new Error('Não há alterações pendentes para criar um PR.');
     }
 
     if (!cfg.prs) cfg.prs = [];
 
-    const repoDir = this.getRepoDir(repoName);
     const remoteUrl = activeRepo?.html_url;
     await ensureGitRepo(repoDir, cfg.user, remoteUrl, cfg.token);
 
@@ -263,16 +460,31 @@ export class PRsService {
       }
     }
 
-    const detailedChanges = rawChanges.map((c) => {
-      const diffData = computeDiff(c.old_content || '', c.new_content || '', c.path);
+    const detailedChanges = allChangedPaths.map((p) => {
+      const wsChange = rawChanges.find((c) => c.path === p);
+      if (wsChange) {
+        const diffData = computeDiff(wsChange.old_content || '', wsChange.new_content || '', wsChange.path);
+        return {
+          path: wsChange.path,
+          type: wsChange.type,
+          additions: diffData.additions,
+          deletions: diffData.deletions,
+          diff_text: diffData.diff_text,
+          old_content: wsChange.old_content,
+          new_content: wsChange.new_content,
+        };
+      }
+      const gitItem = gitFiles.find((f) => f.path === p);
+      const isNew = gitItem?.status === '??' || gitItem?.status === 'A';
+      const isDeleted = gitItem?.status === 'D';
       return {
-        path: c.path,
-        type: c.type,
-        additions: diffData.additions,
-        deletions: diffData.deletions,
-        diff_text: diffData.diff_text,
-        old_content: c.old_content,
-        new_content: c.new_content,
+        path: p,
+        type: isNew ? 'ADDED' : isDeleted ? 'DELETED' : 'MODIFIED',
+        additions: 1,
+        deletions: 0,
+        diff_text: '',
+        old_content: '',
+        new_content: '',
       };
     });
 

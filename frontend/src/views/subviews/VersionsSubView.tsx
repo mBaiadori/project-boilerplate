@@ -25,7 +25,6 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
     refreshPendingChanges,
     refreshWhatsNew,
     markWhatsNewAsSeen,
-    commitGit,
     syncGit,
     discardChanges,
     loadFile,
@@ -69,8 +68,11 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
 
   const [whatsNewFilter, setWhatsNewFilter] =
     useState<WhatsNewFilterType>("all");
-  const [commitMsg, setCommitMsg] = useState("");
-  const [isCommitting, setIsCommitting] = useState(false);
+  const [prTitle, setPrTitle] = useState("");
+  const [prDescription, setPrDescription] = useState("");
+  const [isCreatingPR, setIsCreatingPR] = useState(false);
+  const [isGeneratingAI, setIsGeneratingAI] = useState(false);
+  const [createdPRUrl, setCreatedPRUrl] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [feedback, setFeedback] = useState<{
     type: "success" | "error";
@@ -96,13 +98,66 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
     Record<string, boolean>
   >({});
 
-  const changedFiles = useMemo(() => {
-    return (gitStatus?.files || []).filter(
-      (f) => f?.path && !isPathHidden(f.path),
+  // Reset local state when active repo changes so repos are strictly isolated
+  useEffect(() => {
+    setExpandedDraftFiles({});
+    setExpandedWhatsNewFiles({});
+    setDraftDiffs({});
+    setWhatsNewDiffs({});
+    setPrTitle("");
+    setPrDescription("");
+    setCreatedPRUrl(null);
+    setFeedback(null);
+  }, [activeRepo?.name]);
+
+  const filteredPendingChanges = useMemo(() => {
+    return (pendingChanges || []).filter(
+      (c) => c?.path && !isPathHidden(c.path),
     );
-  }, [gitStatus?.files]);
+  }, [pendingChanges]);
+
+  const allDraftFiles = useMemo(() => {
+    const map = new Map<
+      string,
+      { path: string; status?: string; type?: string }
+    >();
+
+    // 1. Files from gitStatus (tracked modified, untracked ??, etc.)
+    for (const f of gitStatus?.files || []) {
+      if (f?.path && !isPathHidden(f.path)) {
+        const cleanPath = f.path.replace(/^\/+/, "");
+        map.set(cleanPath, {
+          path: cleanPath,
+          status: f.status,
+          type:
+            f.status === "??" || f.status === "A"
+              ? "ADDED"
+              : f.status === "D"
+                ? "DELETED"
+                : "MODIFIED",
+        });
+      }
+    }
+
+    // 2. Files from in-memory / workspace changes
+    for (const c of filteredPendingChanges || []) {
+      if (c?.path && !isPathHidden(c.path)) {
+        const cleanPath = c.path.replace(/^\/+/, "");
+        const existing = map.get(cleanPath);
+        map.set(cleanPath, {
+          path: cleanPath,
+          status: existing?.status || (c.type === "ADDED" ? "??" : "M"),
+          type: c.type || existing?.type || "MODIFIED",
+        });
+      }
+    }
+
+    return Array.from(map.values());
+  }, [gitStatus?.files, filteredPendingChanges]);
+
+  const changedFiles = allDraftFiles;
   const currentBranch = gitStatus?.branch || "main";
-  const isClean = gitStatus?.isClean ?? changedFiles.length === 0;
+  const isClean = allDraftFiles.length === 0;
 
   // Load status and fresh data on mount
   useEffect(() => {
@@ -227,35 +282,79 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
     }
   };
 
-  const handleCommit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!commitMsg.trim()) return;
-
-    setIsCommitting(true);
+  const handleGenerateSummaryAI = async () => {
+    setIsGeneratingAI(true);
     setFeedback(null);
     try {
-      const res = await commitGit(commitMsg.trim());
-      if (res?.success) {
+      const res = await API.generatePRSummaryAI(activeRepo?.name);
+      if (res.ok && res.data) {
+        if (res.data.title) setPrTitle(res.data.title);
+        if (res.data.description) setPrDescription(res.data.description);
         setFeedback({
           type: "success",
-          message: `Novo marco oficial registrado com sucesso (${res.commitHash ? res.commitHash.slice(0, 7) : "versão atual"})!`,
+          message:
+            "Resumo gerado com sucesso a partir das alterações do repositório!",
         });
-        setCommitMsg("");
+      } else {
+        setFeedback({
+          type: "error",
+          message:
+            "Não foi possível gerar o resumo. Verifique se há alterações pendentes.",
+        });
+      }
+    } catch (err: any) {
+      console.error("[VersionsSubView] Erro ao gerar resumo automático:", err);
+      setFeedback({
+        type: "error",
+        message: err.message || "Erro ao gerar resumo automático.",
+      });
+    } finally {
+      setIsGeneratingAI(false);
+    }
+  };
+
+  const handleCreateProposal = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const title = prTitle.trim();
+    if (!title) return;
+
+    setIsCreatingPR(true);
+    setFeedback(null);
+    setCreatedPRUrl(null);
+    try {
+      const res = await API.createUnifiedPR({
+        title,
+        description: prDescription.trim(),
+        repo: activeRepo?.name,
+      });
+
+      if (res?.ok) {
+        const prNumber =
+          res.data?.pr?.github_number || res.data?.pr?.id || res.data?.id;
+        const prUrl = res.data?.pr?.html_url || res.data?.html_url;
+        setCreatedPRUrl(prUrl || null);
+        setFeedback({
+          type: "success",
+          message: `Proposta de Evolução #${prNumber || ""} criada com sucesso via Pull Request!`,
+        });
+        setPrTitle("");
+        setPrDescription("");
         if (refreshPendingChanges) await refreshPendingChanges();
         if (refreshGitStatus) await refreshGitStatus();
       } else {
         setFeedback({
           type: "error",
-          message: res?.message || "Falha ao registrar novo marco de versão.",
+          message:
+            res?.data?.error || "Falha ao criar proposta de evolução / PR.",
         });
       }
     } catch (err: any) {
       setFeedback({
         type: "error",
-        message: err.message || "Erro inesperado ao registrar marco de versão.",
+        message: err.message || "Erro ao conectar e abrir Pull Request.",
       });
     } finally {
-      setIsCommitting(false);
+      setIsCreatingPR(false);
     }
   };
 
@@ -291,7 +390,7 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
   const getDraftDiffInfo = (filePath: string) => {
     if (!filePath) return { diffText: "", additions: 0, deletions: 0 };
     const cleanPath = filePath.replace(/^\/+/, "");
-    const wsChange = (pendingChanges || []).find(
+    const wsChange = (filteredPendingChanges || []).find(
       (c) => c?.path === filePath || c?.path?.replace(/^\/+/, "") === cleanPath,
     );
     const diffText =
@@ -1622,11 +1721,11 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
                       color: "#0f172a",
                     }}
                   >
-                    Meus Documentos em Edição Local ({changedFiles.length})
+                    Meus Documentos em Edição Local ({allDraftFiles.length})
                   </span>
                 </div>
 
-                {changedFiles.length === 0 ? (
+                {allDraftFiles.length === 0 ? (
                   <div
                     style={{
                       padding: "40px",
@@ -1651,7 +1750,7 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
                   </div>
                 ) : (
                   <div style={{ display: "flex", flexDirection: "column" }}>
-                    {changedFiles.map((file, idx) => {
+                    {allDraftFiles.map((file, idx) => {
                       if (!file?.path) return null;
                       const isExpanded = !!expandedDraftFiles[file.path];
                       const { diffText, additions, deletions } =
@@ -1885,9 +1984,9 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
                 )}
               </div>
 
-              {/* Version Milestone Form */}
+              {/* Version Milestone Proposal Form (Pull Request) */}
               <form
-                onSubmit={handleCommit}
+                onSubmit={handleCreateProposal}
                 style={{
                   border: "1px solid #e2e8f0",
                   borderRadius: "10px",
@@ -1896,33 +1995,103 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
                   boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
                 }}
               >
-                <h3
+                <div
                   style={{
-                    margin: "0 0 12px 0",
-                    fontSize: "15px",
-                    fontWeight: 600,
                     display: "flex",
                     alignItems: "center",
-                    gap: "8px",
-                    color: "#0f172a",
+                    justifyContent: "space-between",
+                    marginBottom: "8px",
                   }}
                 >
-                  <span
-                    className="material-symbols-outlined"
-                    style={{ fontSize: "20px", color: "#1a73e8" }}
+                  <h3
+                    style={{
+                      margin: 0,
+                      fontSize: "15px",
+                      fontWeight: 600,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      color: "#0f172a",
+                    }}
                   >
-                    bookmark_add
-                  </span>
-                  Publicar Marco de Versão Oficial na Trilha{" "}
-                  <code>{currentBranch}</code>
-                </h3>
-                <div style={{ marginBottom: "14px" }}>
+                    <span
+                      className="material-symbols-outlined"
+                      style={{ fontSize: "20px", color: "#1a73e8" }}
+                    >
+                      alt_route
+                    </span>
+                    Propor Atualização de Versão (Abrir Pull Request)
+                  </h3>
+
+                  <button
+                    type="button"
+                    onClick={handleGenerateSummaryAI}
+                    disabled={isGeneratingAI || isClean}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      padding: "5px 12px",
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      borderRadius: "6px",
+                      background: "linear-gradient(135deg, #eef2ff, #ede9fe)",
+                      color: "#4f46e5",
+                      border: "1px solid #c7d2fe",
+                      cursor:
+                        isGeneratingAI || isClean ? "not-allowed" : "pointer",
+                      opacity: isClean ? 0.6 : 1,
+                      transition: "all 0.15s ease",
+                    }}
+                    title="Preencher título e descrição automaticamente a partir dos arquivos alterados"
+                  >
+                    <span
+                      className="material-symbols-outlined"
+                      style={{
+                        fontSize: "15px",
+                        animation: isGeneratingAI
+                          ? "spin 1s linear infinite"
+                          : "none",
+                      }}
+                    >
+                      {isGeneratingAI ? "progress_activity" : "auto_fix_high"}
+                    </span>
+                    {isGeneratingAI
+                      ? "Gerando resumo..."
+                      : "Gerar Resumo Automático"}
+                  </button>
+                </div>
+
+                <p
+                  style={{
+                    fontSize: "12.5px",
+                    color: "#64748b",
+                    margin: "0 0 14px 0",
+                  }}
+                >
+                  Ao salvar, uma branch de evolução será criada a partir de{" "}
+                  <code>{currentBranch}</code> e uma Proposta (PR) será aberta
+                  para revisão da equipe, protegendo a trilha principal.
+                </p>
+
+                <div style={{ marginBottom: "12px" }}>
+                  <label
+                    style={{
+                      display: "block",
+                      fontSize: "12.5px",
+                      fontWeight: 600,
+                      color: "#334155",
+                      marginBottom: "4px",
+                    }}
+                  >
+                    Título da Proposta *
+                  </label>
                   <input
                     type="text"
-                    placeholder="Descreva as atualizações realizadas (ex: Revisão dos termos de governança e adição de especificações)..."
-                    value={commitMsg}
-                    onChange={(e) => setCommitMsg(e.target.value)}
-                    disabled={isCommitting || isClean}
+                    placeholder="Ex: docs: atualização de especificações e termos de governança"
+                    value={prTitle}
+                    onChange={(e) => setPrTitle(e.target.value)}
+                    disabled={isCreatingPR || isClean}
                     style={{
                       width: "100%",
                       padding: "10px 14px",
@@ -1935,6 +2104,64 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
                     }}
                   />
                 </div>
+
+                <div style={{ marginBottom: "16px" }}>
+                  <label
+                    style={{
+                      display: "block",
+                      fontSize: "12.5px",
+                      fontWeight: 600,
+                      color: "#334155",
+                      marginBottom: "4px",
+                    }}
+                  >
+                    Descrição & Justificativa (Opcional)
+                  </label>
+                  <textarea
+                    rows={3}
+                    placeholder="Detalhe os motivos das alterações, impactos e itens adicionados..."
+                    value={prDescription}
+                    onChange={(e) => setPrDescription(e.target.value)}
+                    disabled={isCreatingPR || isClean}
+                    style={{
+                      width: "100%",
+                      padding: "10px 14px",
+                      fontSize: "13px",
+                      border: "1px solid #cbd5e1",
+                      borderRadius: "6px",
+                      background: "#ffffff",
+                      color: "#1e293b",
+                      outline: "none",
+                      resize: "vertical",
+                    }}
+                  />
+                </div>
+
+                {createdPRUrl && (
+                  <div
+                    style={{
+                      marginBottom: "14px",
+                      padding: "10px 14px",
+                      borderRadius: "6px",
+                      background: "#f0fdf4",
+                      border: "1px solid #bbf7d0",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: "13px",
+                        color: "#166534",
+                        fontWeight: 500,
+                      }}
+                    >
+                      🎉 Proposta criada com sucesso!
+                    </span>
+                  </div>
+                )}
+
                 <div
                   style={{
                     display: "flex",
@@ -1944,43 +2171,47 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
                 >
                   <button
                     type="submit"
-                    disabled={isCommitting || isClean || !commitMsg.trim()}
+                    disabled={isCreatingPR || isClean || !prTitle.trim()}
                     style={{
                       display: "inline-flex",
                       alignItems: "center",
                       gap: "8px",
-                      padding: "8px 18px",
+                      padding: "9px 20px",
                       fontWeight: 600,
+                      fontSize: "13.5px",
                       borderRadius: "8px",
                       background:
-                        isCommitting || isClean || !commitMsg.trim()
+                        isCreatingPR || isClean || !prTitle.trim()
                           ? "#e2e8f0"
                           : "#1a73e8",
                       color:
-                        isCommitting || isClean || !commitMsg.trim()
+                        isCreatingPR || isClean || !prTitle.trim()
                           ? "#94a3b8"
                           : "#ffffff",
                       border: "none",
                       cursor:
-                        isCommitting || isClean || !commitMsg.trim()
-                          ? "default"
+                        isCreatingPR || isClean || !prTitle.trim()
+                          ? "not-allowed"
                           : "pointer",
+                      boxShadow:
+                        isCreatingPR || isClean || !prTitle.trim()
+                          ? "none"
+                          : "0 2px 6px rgba(26, 115, 232, 0.25)",
+                      transition: "all 0.16s ease",
                     }}
                   >
                     <span
                       className="material-symbols-outlined"
                       style={{
                         fontSize: "18px",
-                        animation: isCommitting
+                        animation: isCreatingPR
                           ? "spin 1s linear infinite"
                           : "none",
                       }}
                     >
-                      {isCommitting ? "progress_activity" : "check"}
+                      {isCreatingPR ? "progress_activity" : "call_split"}
                     </span>
-                    {isCommitting
-                      ? "Salvando marco..."
-                      : "Salvar e Publicar Versão Oficial"}
+                    {isCreatingPR ? "Criando Proposta..." : "Propor Alteração"}
                   </button>
                 </div>
               </form>

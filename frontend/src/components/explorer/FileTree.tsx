@@ -1167,7 +1167,11 @@ export const FileTree: React.FC<FileTreeProps> = ({
     if (gitStatus?.files && Array.isArray(gitStatus.files)) {
       for (let i = 0; i < gitStatus.files.length; i++) {
         const f = gitStatus.files[i];
-        map.set(f.path, f);
+        if (f?.path) {
+          const clean = f.path.replace(/^\/+/, "");
+          map.set(clean, f);
+          map.set(`/${clean}`, f);
+        }
       }
     }
     return map;
@@ -1178,7 +1182,11 @@ export const FileTree: React.FC<FileTreeProps> = ({
     if (pendingChanges && Array.isArray(pendingChanges)) {
       for (let i = 0; i < pendingChanges.length; i++) {
         const c = pendingChanges[i];
-        map.set(c.path, c);
+        if (c?.path) {
+          const clean = c.path.replace(/^\/+/, "");
+          map.set(clean, c);
+          map.set(`/${clean}`, c);
+        }
       }
     }
     return map;
@@ -1528,8 +1536,9 @@ export const FileTree: React.FC<FileTreeProps> = ({
 
     const badgeClass = node.badge ? node.badge.toLowerCase() : "t1";
 
-    const gitFile = gitStatusMap.get(node.path);
-    const pendingChange = pendingChangesMap.get(node.path);
+    const cleanNodePath = node.path ? node.path.replace(/^\/+/, "") : "";
+    const gitFile = gitStatusMap.get(cleanNodePath) || gitStatusMap.get(node.path);
+    const pendingChange = pendingChangesMap.get(cleanNodePath) || pendingChangesMap.get(node.path);
     const gitStatusCode = gitFile
       ? gitFile.status === "??"
         ? "U"

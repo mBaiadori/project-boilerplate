@@ -123,6 +123,51 @@ export async function isGitRepo(repoDir: string): Promise<boolean> {
   return fs.existsSync(gitDir);
 }
 
+export function ensureGitIgnore(repoDir: string): void {
+  const gitignorePath = path.join(repoDir, ".gitignore");
+  const requiredPatterns = [
+    ".DS_Store",
+    "node_modules/",
+    "*.log",
+    ".env",
+    ".hidden_files.json",
+    ".docs.metadata.json",
+    ".dictionary.json",
+    ".templates.json",
+    ".templates.metadata.json",
+    ".project.config.json",
+    ".spec-memory/",
+    ".skills/",
+    ".agents/",
+    ".tools/",
+  ];
+
+  let currentContent = "";
+  if (fs.existsSync(gitignorePath)) {
+    try {
+      currentContent = fs.readFileSync(gitignorePath, "utf-8");
+    } catch {
+      currentContent = "";
+    }
+  }
+
+  const existingLines = new Set(
+    currentContent.split("\n").map((l) => l.trim()).filter(Boolean)
+  );
+
+  const missing = requiredPatterns.filter((p) => !existingLines.has(p));
+  if (missing.length > 0) {
+    const appended = currentContent
+      ? `${currentContent.trimEnd()}\n\n# Context OS Internal Metadata\n${missing.join("\n")}\n`
+      : `# Context OS Internal Metadata\n${requiredPatterns.join("\n")}\n`;
+    try {
+      fs.writeFileSync(gitignorePath, appended, "utf-8");
+    } catch (e) {
+      console.warn(`[Git] Falha ao atualizar .gitignore em ${repoDir}:`, e);
+    }
+  }
+}
+
 export async function ensureGitRepo(
   repoDir: string,
   user?: { name?: string; login?: string; email?: string } | null,
@@ -166,7 +211,7 @@ export async function ensureGitRepo(
       }
     }
 
-    // Ensure remote origin and pull/sync latest files
+    // Ensure remote origin without destructive resets or auto-pulls
     if (await isGitRepo(repoDir)) {
       const remoteCheck = await executeGitCommand(
         "git remote get-url origin",
@@ -183,57 +228,6 @@ export async function ensureGitRepo(
           repoDir,
         );
       }
-
-      try {
-        await executeGitCommand("git fetch origin", repoDir);
-        const branchRes = await executeGitCommand(
-          "git rev-parse --abbrev-ref HEAD",
-          repoDir,
-        );
-        let currentBranch = branchRes.stdout || "main";
-        if (currentBranch === "HEAD") {
-          currentBranch = "main";
-        }
-
-        const pullRes = await executeGitCommand(
-          `git pull origin ${currentBranch} --ff-only`,
-          repoDir,
-        );
-        if (!pullRes.success) {
-          // If pull fails due to divergent histories (e.g. dummy local commit), sync to remote branch
-          const checkRemote = await executeGitCommand(
-            `git rev-parse --verify origin/${currentBranch}`,
-            repoDir,
-          );
-          if (checkRemote.success) {
-            await executeGitCommand(
-              `git reset --hard origin/${currentBranch}`,
-              repoDir,
-            );
-            await executeGitCommand(
-              `git branch -u origin/${currentBranch} ${currentBranch}`,
-              repoDir,
-            );
-          } else {
-            // Check if origin has master
-            const checkMaster = await executeGitCommand(
-              "git rev-parse --verify origin/master",
-              repoDir,
-            );
-            if (checkMaster.success) {
-              await executeGitCommand(
-                "git checkout -B master origin/master",
-                repoDir,
-              );
-            }
-          }
-        }
-      } catch (syncErr) {
-        console.warn(
-          `[Git] Aviso de sincronização remota para ${repoDir}:`,
-          syncErr,
-        );
-      }
     }
   } else {
     // Local-only repository
@@ -248,16 +242,14 @@ export async function ensureGitRepo(
         await executeGitCommand("git branch -M main", repoDir);
       }
 
-      const gitignorePath = path.join(repoDir, ".gitignore");
-      if (!fs.existsSync(gitignorePath)) {
-        const defaultGitignore = `.DS_Store\nnode_modules/\n*.log\n.env\n`;
-        fs.writeFileSync(gitignorePath, defaultGitignore, "utf-8");
-      }
+      ensureGitIgnore(repoDir);
 
       await executeGitCommand("git add .", repoDir);
       await executeGitCommand('git commit -m "chore: initial commit"', repoDir);
     }
   }
+
+  ensureGitIgnore(repoDir);
 
   // Configure author
   if (user?.name || user?.login) {
@@ -286,6 +278,8 @@ export async function getGitStatus(repoDir: string): Promise<GitStatusResult> {
     };
   }
 
+  ensureGitIgnore(repoDir);
+
   // Current branch
   const branchRes = await executeGitCommand(
     "git rev-parse --abbrev-ref HEAD",
@@ -302,9 +296,9 @@ export async function getGitStatus(repoDir: string): Promise<GitStatusResult> {
     ? remoteRes.stdout.replace(/x-access-token:[^@]+@/, "")
     : undefined;
 
-  // Status porcelain
+  // Status porcelain with all untracked files expanded individually
   const statusRes = await executeGitCommand(
-    "git status --porcelain -b",
+    "git status --porcelain=v1 -b -uall",
     repoDir,
   );
   const lines = statusRes.stdout.split("\n").filter(Boolean);
@@ -669,13 +663,25 @@ export async function getWhatsNewSummary(
     }
   }
 
-  // 1. Get Commits in Range
-  const format = "%H|%h|%an|%ad|%s";
-  let logCmd = `git log -n 20 --date=short --pretty=format:"${format}" HEAD`;
-  if (isValidLastSeen && range) {
-    logCmd = `git log -n 30 --date=short --pretty=format:"${format}" ${range}`;
+  // If no lastSeenHash was provided (first time opening the repo),
+  // baseline is established at current HEAD with 0 unread novidades
+  if (!lastSeenHash || !isValidLastSeen) {
+    return {
+      ...emptyResult,
+      hasNewUpdates: false,
+      latestHash: currentHead,
+      lastSeenHash: currentHead,
+      totalNewCommits: 0,
+      commits: [],
+      files: [],
+      proposals: [],
+      summaryMessage: "Repositório sincronizado. Nenhuma nova atualização recente encontrada.",
+    };
   }
 
+  // 1. Get Commits in Range (only what was pulled/merged after lastSeenHash)
+  const format = "%H|%h|%an|%ad|%s";
+  const logCmd = `git log -n 50 --date=short --pretty=format:"${format}" ${range}`;
   const logRes = await executeGitCommand(logCmd, repoDir);
   const commits: WhatsNewItem[] = [];
   const proposals: WhatsNewProposal[] = [];

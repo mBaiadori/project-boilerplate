@@ -16,7 +16,7 @@ export async function prsRoutes(fastify: FastifyInstance) {
 
   fastify.post('/api/workspace/generate-pr-summary', async (request, reply) => {
     const body = request.body as { repo?: string } | undefined;
-    return reply.send(prsService.generatePRSummary(body?.repo));
+    return reply.send(await prsService.generatePRSummary(body?.repo));
   });
 
   fastify.post('/api/workspace/create-pr', async (request, reply) => {

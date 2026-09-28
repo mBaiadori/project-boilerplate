@@ -63,19 +63,49 @@
 .dash-title-wrap {
   display: flex;
   flex-direction: column;
+  justify-content: center;
 }
 
 .dash-title-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
 }
 
 .dash-title-row h1 {
-  font-size: 14.5px;
+  font-size: 17px;
   font-weight: 700;
   color: var(--text-heading);
   margin: 0;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+
+.dash-repo-github-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  color: var(--text-muted, #64748b);
+  background: transparent;
+  border: 1px solid transparent;
+  transition: all 0.16s ease;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.dash-repo-github-icon-btn:hover {
+  color: var(--text-heading, #0f172a);
+  background: var(--bg-hover, rgba(0, 0, 0, 0.05));
+  border-color: var(--border-color, #e2e8f0);
+  transform: translateY(-1px);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.dash-repo-github-icon-btn:active {
+  transform: translateY(0);
 }
 
 .dash-meta {

@@ -10,7 +10,7 @@ interface DiffModalProps {
 }
 
 export const DiffModal: React.FC<DiffModalProps> = ({ isOpen, onClose, onPROpened }) => {
-  const { pendingChanges, guardrailStatus, discardChanges, refreshPendingChanges } = useWorkspace();
+  const { pendingChanges, guardrailStatus, discardChanges, refreshPendingChanges, activeRepo } = useWorkspace();
   const [prTitle, setPrTitle] = useState('');
   const [prDesc, setPrDesc] = useState('');
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
@@ -37,13 +37,13 @@ export const DiffModal: React.FC<DiffModalProps> = ({ isOpen, onClose, onPROpene
   const handleGenerateSummaryAI = async () => {
     setIsGeneratingSummary(true);
     try {
-      const res = await API.generatePRSummaryAI();
+      const res = await API.generatePRSummaryAI(activeRepo?.name);
       if (res.ok && res.data) {
         if (res.data.title) setPrTitle(res.data.title);
         if (res.data.description) setPrDesc(res.data.description);
       }
     } catch (err) {
-      console.error('[DiffModal] Erro ao gerar resumo com IA:', err);
+      console.error('[DiffModal] Erro ao gerar resumo:', err);
     } finally {
       setIsGeneratingSummary(false);
     }
@@ -53,7 +53,7 @@ export const DiffModal: React.FC<DiffModalProps> = ({ isOpen, onClose, onPROpene
     if (!prTitle.trim()) return;
     setIsSubmitting(true);
     try {
-      const res = await API.createUnifiedPR({ title: prTitle, description: prDesc });
+      const res = await API.createUnifiedPR({ title: prTitle, description: prDesc, repo: activeRepo?.name });
       if (res.ok) {
         await refreshPendingChanges();
         if (onPROpened) onPROpened();
@@ -248,9 +248,10 @@ export const DiffModal: React.FC<DiffModalProps> = ({ isOpen, onClose, onPROpene
                 onClick={handleGenerateSummaryAI}
                 disabled={isGeneratingSummary || pendingChanges.length === 0}
                 style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11px' }}
+                title="Preencher título e descrição automaticamente a partir dos arquivos alterados"
               >
-                <span className="material-symbols-outlined icon-xs">auto_awesome</span>
-                {isGeneratingSummary ? 'Gerando...' : 'Resumir com IA'}
+                <span className="material-symbols-outlined icon-xs">auto_fix_high</span>
+                {isGeneratingSummary ? 'Gerando...' : 'Resumo Automático'}
               </button>
             </div>
             <input
