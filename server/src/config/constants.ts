@@ -5,19 +5,55 @@ import { fileURLToPath } from "node:url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Root path of the project (2 levels up from server/src/config)
-export const BASE_DIR = path.resolve(__dirname, "../../../");
+// Root path of the project (2 levels up from server/src/config or desktop app resources)
+export const USER_DATA_DIR = process.env.CONTEXT_OS_USER_DATA || '';
+export const RESOURCES_DIR = process.env.CONTEXT_OS_RESOURCES || (process as any).resourcesPath || '';
+
+// Localiza a raiz do projeto de forma dinâmica e resiliente
+function findProjectRoot(): string {
+  let curr = __dirname;
+  for (let i = 0; i < 5; i++) {
+    if (fs.existsSync(path.join(curr, 'frontend')) || fs.existsSync(path.join(curr, 'server'))) {
+      return curr;
+    }
+    const parent = path.dirname(curr);
+    if (parent === curr) break;
+    curr = parent;
+  }
+  return path.resolve(process.cwd());
+}
+
+export const PROJECT_ROOT = findProjectRoot();
+
+export const BASE_DIR = USER_DATA_DIR && fs.existsSync(USER_DATA_DIR)
+  ? USER_DATA_DIR
+  : PROJECT_ROOT;
+
 export const PROJECTS_DIR = path.join(BASE_DIR, "projects");
 export const CONFIG_PATH = path.join(BASE_DIR, "config.json");
 export const PROJECTS_CONFIG_PATH = path.join(
   PROJECTS_DIR,
   "project.config.json",
 );
-export const FRONTEND_DIR = path.join(BASE_DIR, "frontend");
-export const UI_DIST_DIR = path.join(FRONTEND_DIR, "dist");
+
+// Resolução inteligente do Frontend estático (Prioriza resourcesPath do Electron se empacotado)
+export function resolveUiDistDir(): string {
+  if (RESOURCES_DIR) {
+    const packagedUi = path.join(RESOURCES_DIR, "ui");
+    if (fs.existsSync(packagedUi)) return packagedUi;
+  }
+  const distInRoot = path.join(PROJECT_ROOT, "frontend", "dist");
+  if (fs.existsSync(distInRoot)) return distInRoot;
+  const rawFrontend = path.join(PROJECT_ROOT, "frontend");
+  if (fs.existsSync(rawFrontend)) return rawFrontend;
+  return path.join(PROJECT_ROOT, "ui");
+}
+
+export const FRONTEND_DIR = path.join(PROJECT_ROOT, "frontend");
+export const UI_DIST_DIR = resolveUiDistDir();
 export const UI_DIR = UI_DIST_DIR;
-export const TEMPLATES_DIR = path.join(BASE_DIR, "templates");
-export const DOCS_DIR = path.join(BASE_DIR, "docs");
+export const TEMPLATES_DIR = path.join(PROJECT_ROOT, "templates");
+export const DOCS_DIR = path.join(PROJECT_ROOT, "docs");
 
 export const DEFAULT_TEMPLATE_CREATOR_PROMPT = `Você é o Especialista em Criação e Curadoria de Templates Técnicos e de Produto pars.`;
 export const DEFAULT_GLOBAL_SYSTEM_PROMPT = `Você é um Assistente Especialista em Documentação Técnica, Engenharia de Software e Colaboração de Equipes.

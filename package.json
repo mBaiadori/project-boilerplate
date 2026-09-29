@@ -9,6 +9,12 @@
     "build:server": "npm --prefix server run build",
     "build:frontend": "npm --prefix frontend run build",
     "build": "npm run build:server && npm run build:frontend",
-    "start": "npm --prefix server start"
+    "start": "npm --prefix server start",
+    "desktop:dev": "npm --prefix desktop run dev",
+    "desktop:build": "npm --prefix desktop run build:ts",
+    "desktop:package:mac": "npm run build && npm --prefix desktop run build:ts && npm --prefix desktop run compile:bytecode && npm --prefix desktop run package:mac",
+    "desktop:package:win": "npm run build && npm --prefix desktop run build:ts && npm --prefix desktop run compile:bytecode && npm --prefix desktop run package:win",
+    "desktop:package:linux": "npm run build && npm --prefix desktop run build:ts && npm --prefix desktop run compile:bytecode && npm --prefix desktop run package:linux",
+    "desktop:package:all": "npm run build && npm --prefix desktop run build:ts && npm --prefix desktop run compile:bytecode && npm --prefix desktop run package:all"
   }
 }

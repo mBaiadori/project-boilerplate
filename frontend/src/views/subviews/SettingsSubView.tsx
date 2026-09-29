@@ -42,7 +42,9 @@ import {
   Terminal,
   Zap,
   Sparkles,
+  Copy,
 } from "lucide-react";
+import { FirstRunWizard } from "../../components/onboarding/FirstRunWizard";
 import type { TaxonomyItem, DocumentMetadataItem } from "../../types";
 
 export const ALL_28_COLORS = RAINBOW_28_HUES.flatMap((h) => h.colors);
@@ -190,6 +192,23 @@ export const SettingsSubView: React.FC = () => {
   // Status feedback
   const [saveStatus, setSaveStatus] = useState<string | null>(null);
   const [isSavingAll, setIsSavingAll] = useState<boolean>(false);
+  const [showOnboardingModal, setShowOnboardingModal] = useState<boolean>(false);
+  const [diagnosticsFeedback, setDiagnosticsFeedback] = useState<string | null>(null);
+
+  const handleCopyDiagnostics = async () => {
+    try {
+      const res = await API.getDiagnostics();
+      if (res.ok && res.data) {
+        const json = JSON.stringify(res.data, null, 2);
+        await navigator.clipboard.writeText(json);
+        setDiagnosticsFeedback("Diagnóstico sanitizado copiado para a área de transferência!");
+        setTimeout(() => setDiagnosticsFeedback(null), 4000);
+      }
+    } catch {
+      setDiagnosticsFeedback("Falha ao coletar diagnóstico do sistema.");
+      setTimeout(() => setDiagnosticsFeedback(null), 4000);
+    }
+  };
 
   const fetchModelsForProvider = useCallback(
     async (provId: string, customKey?: string, customEp?: string) => {
@@ -869,16 +888,36 @@ export const SettingsSubView: React.FC = () => {
           </Badge>
         }
         actions={
-          <Button
-            id="btn-save-top-all-settings"
-            variant="primary"
-            size="sm"
-            leftIcon={<Save size={13} />}
-            onClick={handleSaveAllSettings}
-            disabled={isSavingAll}
-          >
-            {isSavingAll ? "Salvando..." : "Salvar"}
-          </Button>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <Button
+              id="btn-reopen-onboarding"
+              variant="subtle"
+              size="sm"
+              leftIcon={<Sparkles size={13} />}
+              onClick={() => setShowOnboardingModal(true)}
+            >
+              Assistente / Tour
+            </Button>
+            <Button
+              id="btn-copy-diagnostics"
+              variant="subtle"
+              size="sm"
+              leftIcon={<Copy size={13} />}
+              onClick={handleCopyDiagnostics}
+            >
+              Diagnóstico Suporte
+            </Button>
+            <Button
+              id="btn-save-top-all-settings"
+              variant="primary"
+              size="sm"
+              leftIcon={<Save size={13} />}
+              onClick={handleSaveAllSettings}
+              disabled={isSavingAll}
+            >
+              {isSavingAll ? "Salvando..." : "Salvar"}
+            </Button>
+          </div>
         }
       />
 
@@ -899,6 +938,14 @@ export const SettingsSubView: React.FC = () => {
               type={saveStatus.includes("Erro") ? "error" : "success"}
               title={saveStatus}
               onClose={() => setSaveStatus(null)}
+            />
+          )}
+
+          {diagnosticsFeedback && (
+            <AlertBanner
+              type={diagnosticsFeedback.includes("Falha") ? "error" : "success"}
+              title={diagnosticsFeedback}
+              onClose={() => setDiagnosticsFeedback(null)}
             />
           )}
 
@@ -1545,6 +1592,16 @@ export const SettingsSubView: React.FC = () => {
           </span>
         </div>
       </Modal>
+
+      <FirstRunWizard
+        isOpen={showOnboardingModal}
+        onCancel={() => setShowOnboardingModal(false)}
+        onComplete={async (repoName) => {
+          setShowOnboardingModal(false);
+          await loadProjectConfig();
+          navigate(`/repo/${encodeURIComponent(repoName)}/editor`);
+        }}
+      />
     </PageContainer>
   );
 };

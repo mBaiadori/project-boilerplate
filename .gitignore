@@ -14,6 +14,22 @@ old_ui
 old_templates
 docs
 ECC-main
+
+# =============================================================================
+# BUILD ARTIFACTS, DESKTOP RELEASES & DISTRIBUTIONS
+# =============================================================================
+dist/
+*/dist/
+build/
+release/
+*/release/
+*.jsc
+*.bundle.cjs
+loader.cjs
+.env
+.env.local
+.env.*.local
+
 # =============================================================================
 # PYTHON & RUNTIME
 # =============================================================================
@@ -25,9 +41,7 @@ __pycache__/
 env/
 venv/
 ENV/
-build/
 develop-eggs/
-dist/
 downloads/
 eggs/
 .eggs/

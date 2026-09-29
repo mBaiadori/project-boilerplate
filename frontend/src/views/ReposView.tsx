@@ -32,7 +32,9 @@ import {
   ShieldCheck,
   Building2,
   ArrowRight,
+  Sparkles,
 } from "lucide-react";
+import { FirstRunWizard } from "../components/onboarding/FirstRunWizard";
 
 interface ReposViewProps {
   onSelectRepo?: (repo: Repo) => void;
@@ -46,6 +48,18 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
   const [selectedOrg, setSelectedOrg] = useState("all");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [openingRepoName, setOpeningRepoName] = useState<string | null>(null);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+
+  // Check if onboarding is needed
+  React.useEffect(() => {
+    API.getOnboardingStatus()
+      .then((status) => {
+        if (status?.needed) {
+          setShowOnboarding(true);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // Create Repo State
   const [isCreatingRepo, setIsCreatingRepo] = useState(false);
@@ -184,6 +198,15 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
           </div>
 
           <div className="nav-actions" style={{ display: "flex", gap: "8px" }}>
+            <Button
+              id="btn-open-onboarding"
+              variant="subtle"
+              size="sm"
+              leftIcon={<Sparkles size={15} />}
+              onClick={() => setShowOnboarding(true)}
+            >
+              Assistente / Onboarding
+            </Button>
             <Button
               id="btn-open-create-repo"
               variant={isCreatingRepo ? "secondary" : "primary"}
@@ -568,6 +591,16 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
           </div>
         </main>
       </div>
+
+      <FirstRunWizard
+        isOpen={showOnboarding}
+        onCancel={() => setShowOnboarding(false)}
+        onComplete={async (repoName) => {
+          setShowOnboarding(false);
+          await loadRepos();
+          navigate(`/repo/${encodeURIComponent(repoName)}/editor`);
+        }}
+      />
     </div>
   );
 };
