@@ -506,11 +506,30 @@ export const API = {
     return { ok: res.ok, data: await res.json() };
   },
 
-  async approvePR(id: number | string): Promise<ApiResponse<any>> {
+  async approvePR(
+    id: number | string,
+    options?: { approver?: string; role?: string; comment?: string }
+  ): Promise<ApiResponse<any>> {
     const res = await fetch('/api/prs/approve', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id })
+      body: JSON.stringify({ id, ...(options || {}) })
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async editPRFile(payload: {
+    id: number | string;
+    filePath: string;
+    content: string;
+    commitMessage?: string;
+    author?: string;
+    repo?: string;
+  }): Promise<ApiResponse<any>> {
+    const res = await fetch('/api/prs/edit-file', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
     });
     return { ok: res.ok, data: await res.json() };
   },

@@ -29,9 +29,18 @@ export async function prsRoutes(fastify: FastifyInstance) {
   });
 
   fastify.post('/api/prs/approve', async (request, reply) => {
-    const body = request.body as { id?: number | string; approver?: string };
+    const body = request.body as { id?: number | string; approver?: string; role?: string; comment?: string };
     try {
-      const result = prsService.approvePR(body.id || '', body.approver);
+      const result = await prsService.approvePR(body.id || '', body);
+      return reply.send(result);
+    } catch (err: any) {
+      return reply.status(400).send({ error: err.message });
+    }
+  });
+
+  fastify.post('/api/prs/edit-file', async (request, reply) => {
+    try {
+      const result = await prsService.editPRFile(request.body as any);
       return reply.send(result);
     } catch (err: any) {
       return reply.status(400).send({ error: err.message });

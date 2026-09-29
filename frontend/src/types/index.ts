@@ -108,6 +108,15 @@ export interface ProjectMetadataOptions {
   badges?: (BadgeOption | string)[];
 }
 
+export interface PRApproval {
+  user: string;
+  role?: string;
+  timestamp: string;
+  commit_hash?: string;
+  status: 'APPROVED' | 'CHANGES_REQUESTED';
+  comment?: string;
+}
+
 export interface PR {
   id: number | string;
   repo_name?: string;
@@ -131,7 +140,8 @@ export interface PR {
   target_branch?: string;
   author: string;
   status: 'OPEN' | 'MERGED' | 'CLOSED' | 'open' | 'merged' | 'closed' | string;
-  approvals: string[];
+  approvals: (string | PRApproval)[];
+  min_approvals?: number;
   created_at: string;
   merged_at?: string;
   closed_at?: string;

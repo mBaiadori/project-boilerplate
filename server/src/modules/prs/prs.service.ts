@@ -17,11 +17,38 @@ import { computeDiff } from '../../utils/diff.js';
 import { isPathHidden, loadHiddenFiles, isSystemPath, getSystemFileFriendlyName } from '../../utils/hidden-files.js';
 import { aiService } from '../ai/ai.service.js';
 
+export interface PRApprovalAudit {
+  user: string;
+  role?: string;
+  timestamp: string;
+  commit_hash?: string;
+  status: 'APPROVED' | 'CHANGES_REQUESTED';
+  comment?: string;
+}
+
 export class PRsService {
   private getRepoDir(repoName?: string): string {
     const cfg = loadConfig();
     const activeRepoName = repoName || cfg.active_repo?.name || 'local';
     return path.join(PROJECTS_DIR, activeRepoName);
+  }
+
+  private getGovernanceRules(repoName: string): { min_approvals: number } {
+    const repoDir = this.getRepoDir(repoName);
+    const projectConfigPath = path.join(repoDir, '.project.config.json');
+    if (fs.existsSync(projectConfigPath)) {
+      try {
+        const parsed = JSON.parse(fs.readFileSync(projectConfigPath, 'utf-8'));
+        if (parsed.governance_rules?.min_approvals_default !== undefined) {
+          const num = Number(parsed.governance_rules.min_approvals_default);
+          if (!isNaN(num) && num >= 1) {
+            return { min_approvals: num };
+          }
+        }
+      } catch {}
+    }
+    const cfg = loadConfig();
+    return { min_approvals: cfg.governance?.min_approvals || 1 };
   }
 
   async getPRs(targetRepoQuery?: string) {
@@ -153,14 +180,21 @@ export class PRsService {
     }
 
     // Combine: open PRs first, then merged PRs and commit revisions
-    const combinedList = [...repoPRs, ...commitRevisions];
+    const govRules = this.getGovernanceRules(repoName);
+    const combinedList = [...repoPRs, ...commitRevisions].map((p: any) => ({
+      ...p,
+      min_approvals: p.min_approvals || govRules.min_approvals,
+    }));
 
     return {
       repo: activeRepo,
       repo_name: repoName,
       prs: combinedList,
       count: combinedList.length,
-      governance: cfg.governance || { min_approvals: 1, reviewers: [] },
+      governance: {
+        min_approvals: govRules.min_approvals,
+        reviewers: cfg.governance?.reviewers || [],
+      },
     };
   }
 
@@ -541,7 +575,10 @@ Retorne APENAS um JSON válido no formato:
     };
   }
 
-  async approvePR(prId: number | string, approverName?: string) {
+  async approvePR(
+    prId: number | string,
+    payloadOrApprover?: string | { approver?: string; role?: string; comment?: string }
+  ) {
     const cfg = loadConfig();
     const prs = cfg.prs || [];
     const target = prs.find((p: any) => String(p.id) === String(prId));
@@ -550,41 +587,111 @@ Retorne APENAS um JSON válido no formato:
       throw new Error(`PR #${prId} não encontrado.`);
     }
 
-    const minApprovals = cfg.governance?.min_approvals || 1;
+    if (target.status === 'MERGED') {
+      throw new Error(`PR #${prId} já está aprovado e mesclado.`);
+    }
+
+    if (target.status === 'CLOSED') {
+      throw new Error(`PR #${prId} está fechado e não pode ser aprovado.`);
+    }
+
+    const repoName = target.repo_name || cfg.active_repo?.name || 'local';
+    const repoDir = this.getRepoDir(repoName);
+    const govRules = this.getGovernanceRules(repoName);
+    const minApprovals = target.min_approvals || govRules.min_approvals || 1;
+
+    let approverName: string | undefined;
+    let approverRole: string | undefined;
+    let approverComment: string | undefined;
+
+    if (typeof payloadOrApprover === 'string') {
+      approverName = payloadOrApprover;
+    } else if (payloadOrApprover && typeof payloadOrApprover === 'object') {
+      approverName = payloadOrApprover.approver;
+      approverRole = payloadOrApprover.role;
+      approverComment = payloadOrApprover.comment;
+    }
+
     const userLogin = cfg.user?.login;
-    const approver = approverName || (userLogin ? `@${userLogin}` : 'Tech Lead (@tech-leads)');
+    let approver = approverName || (userLogin ? `@${userLogin}` : '@tech-lead');
+    if (!approver.startsWith('@')) {
+      approver = `@${approver}`;
+    }
+
+    // Anti-Self-Approval check
+    const authorHandle = (target.author || '').trim();
+    const cleanAuthor = authorHandle.replace(/^@/, '').toLowerCase();
+    const cleanApprover = approver.replace(/^@/, '').toLowerCase();
+
+    if (cleanAuthor && cleanAuthor === cleanApprover) {
+      throw new Error(`O autor da proposta (${target.author}) não pode aprovar o seu próprio Pull Request.`);
+    }
+
+    // Get current HEAD commit hash of the PR branch for immutable audit trail
+    let currentCommitHash = '';
+    if (target.branch) {
+      try {
+        const revRes = await executeGitCommand(`git rev-parse "${target.branch}"`, repoDir);
+        if (revRes.success && revRes.stdout) {
+          currentCommitHash = revRes.stdout.trim();
+        }
+      } catch {}
+    }
+    if (!currentCommitHash) {
+      currentCommitHash = target.commit_hash || '';
+    }
 
     if (!Array.isArray(target.approvals)) {
       target.approvals = [];
     }
 
-    if (!target.approvals.includes(approver)) {
-      target.approvals.push(approver);
-    }
+    // Create structured audit record
+    const auditRecord: PRApprovalAudit = {
+      user: approver,
+      role: approverRole || 'Tech Lead / Revisor',
+      timestamp: new Date().toISOString(),
+      commit_hash: currentCommitHash,
+      status: 'APPROVED',
+      comment: approverComment || '',
+    };
 
-    if (target.approvals.length >= minApprovals) {
-      await this.executeMerge(target);
-      target.status = 'MERGED';
-      target.merged_at = new Date().toISOString();
-      saveConfig(cfg);
+    // Replace if this user previously approved, otherwise append
+    const existingIdx = target.approvals.findIndex((app: any) => {
+      const u = typeof app === 'string' ? app : app.user;
+      return u?.toLowerCase() === approver.toLowerCase();
+    });
 
-      return {
-        success: true,
-        auto_merged: true,
-        pr: target,
-        message: `🎉 Quórum de aprovação atingido (${target.approvals.length}/${minApprovals})! O PR #${prId} foi aprovado e mesclado automaticamente na branch main.`,
-      };
+    if (existingIdx >= 0) {
+      target.approvals[existingIdx] = auditRecord;
     } else {
-      target.status = 'OPEN';
-      saveConfig(cfg);
-
-      return {
-        success: true,
-        auto_merged: false,
-        pr: target,
-        message: `✓ Aprovação registrada por ${approver} (${target.approvals.length}/${minApprovals}). Aguardando quórum para auto-merge.`,
-      };
+      target.approvals.push(auditRecord);
     }
+
+    // Calculate unique valid approvals (excluding author)
+    const validApprovers = new Set<string>();
+    for (const app of target.approvals) {
+      const u = typeof app === 'string' ? app : app.user;
+      const cleanU = (u || '').replace(/^@/, '').toLowerCase();
+      if (cleanU && cleanU !== cleanAuthor) {
+        validApprovers.add(cleanU);
+      }
+    }
+    const validCount = validApprovers.size;
+    const quorumReached = validCount >= minApprovals;
+
+    target.status = 'OPEN';
+    saveConfig(cfg);
+
+    return {
+      success: true,
+      quorum_reached: quorumReached,
+      approvals_count: validCount,
+      min_approvals: minApprovals,
+      pr: target,
+      message: quorumReached
+        ? `🎉 Quórum de aprovação atingido (${validCount}/${minApprovals}) com o voto de ${approver}! O merge está liberado para publicação.`
+        : `✓ Aprovação registrada por ${approver} (${validCount}/${minApprovals}). Aguardando quórum para liberação do merge.`,
+    };
   }
 
   async mergePR(prId: number | string) {
@@ -596,6 +703,38 @@ Retorne APENAS um JSON válido no formato:
       throw new Error(`PR #${prId} não encontrado.`);
     }
 
+    if (target.status === 'MERGED') {
+      throw new Error(`PR #${prId} já foi mesclado anteriormente.`);
+    }
+
+    if (target.status === 'CLOSED') {
+      throw new Error(`PR #${prId} está arquivado/fechado e não pode ser mesclado.`);
+    }
+
+    const repoName = target.repo_name || cfg.active_repo?.name || 'local';
+    const govRules = this.getGovernanceRules(repoName);
+    const minApprovals = target.min_approvals || govRules.min_approvals || 1;
+
+    // Strict Quorum validation before merge
+    const authorHandle = (target.author || '').trim();
+    const cleanAuthor = authorHandle.replace(/^@/, '').toLowerCase();
+
+    const approvalsList = Array.isArray(target.approvals) ? target.approvals : [];
+    const validApprovers = new Set<string>();
+    for (const app of approvalsList) {
+      const u = typeof app === 'string' ? app : app.user;
+      const cleanU = (u || '').replace(/^@/, '').toLowerCase();
+      if (cleanU && cleanU !== cleanAuthor) {
+        validApprovers.add(cleanU);
+      }
+    }
+
+    if (validApprovers.size < minApprovals) {
+      throw new Error(
+        `Quórum de aprovação não atingido. São necessárias pelo menos ${minApprovals} aprovações de revisores independentes antes de realizar o merge (atual: ${validApprovers.size}).`
+      );
+    }
+
     await this.executeMerge(target);
     target.status = 'MERGED';
     target.merged_at = new Date().toISOString();
@@ -604,7 +743,97 @@ Retorne APENAS um JSON válido no formato:
     return {
       success: true,
       pr: target,
-      message: `PR #${prId} mesclado com sucesso na branch main!`,
+      message: `PR #${prId} aprovado com quórum (${validApprovers.size}/${minApprovals}) e mesclado com sucesso na versão oficial!`,
+    };
+  }
+
+  async editPRFile(payload: {
+    id: number | string;
+    filePath: string;
+    content: string;
+    commitMessage?: string;
+    author?: string;
+    repo?: string;
+  }) {
+    const cfg = loadConfig();
+    const prs = cfg.prs || [];
+    const target = prs.find((p: any) => String(p.id) === String(payload.id));
+
+    if (!target) {
+      throw new Error(`PR #${payload.id} não encontrado.`);
+    }
+
+    if (target.status === 'MERGED' || target.status === 'CLOSED') {
+      throw new Error(`Não é possível editar arquivos de um PR finalizado ou arquivado.`);
+    }
+
+    const repoName = target.repo_name || payload.repo || cfg.active_repo?.name || 'local';
+    const repoDir = this.getRepoDir(repoName);
+    const branchName = target.branch;
+
+    if (!branchName) {
+      throw new Error(`Branch associada ao PR #${payload.id} não foi encontrada.`);
+    }
+
+    // Checkout the PR branch
+    await executeGitCommand(`git checkout "${branchName}"`, repoDir);
+
+    // Ensure directory exists and write file
+    const fullFilePath = path.join(repoDir, payload.filePath);
+    fs.mkdirSync(path.dirname(fullFilePath), { recursive: true });
+    fs.writeFileSync(fullFilePath, payload.content, 'utf-8');
+
+    // Commit changes on PR branch
+    await executeGitCommand(`git add "${payload.filePath}"`, repoDir);
+    const editor = payload.author || cfg.user?.login ? `@${cfg.user?.login}` : 'Colaborador';
+    const commitMsg = payload.commitMessage || `docs: edições colaborativas em ${payload.filePath} por ${editor}`;
+    await executeGitCommand(`git commit -m "${commitMsg.replace(/"/g, '\\"')}"`, repoDir);
+
+    // Push to GitHub remote if authenticated
+    const activeRepo = cfg.active_repo;
+    if (cfg.authenticated && cfg.token && activeRepo?.full_name && !activeRepo?.is_local) {
+      try {
+        await executeGitCommand(`git push origin "${branchName}"`, repoDir);
+      } catch (pushErr) {
+        console.warn(`[PRsService] Aviso ao sincronizar edição no GitHub:`, pushErr);
+      }
+    }
+
+    // INVARIÂNCIA DE GOVERNANÇA: Invalida / reseta aprovações anteriores após novas edições
+    const prevApprovalsCount = (target.approvals || []).length;
+    target.approvals = [];
+    target.rejection_reason = undefined;
+
+    // Refresh file list for PR
+    if (Array.isArray(target.files)) {
+      const fileIdx = target.files.findIndex((f: any) => f.path === payload.filePath);
+      const diffData = computeDiff('', payload.content, payload.filePath);
+      const fileObj = {
+        path: payload.filePath,
+        type: fileIdx >= 0 ? 'MODIFIED' : 'ADDED',
+        additions: diffData.additions,
+        deletions: diffData.deletions,
+        diff_text: diffData.diff_text,
+        new_content: payload.content,
+      };
+      if (fileIdx >= 0) {
+        target.files[fileIdx] = { ...target.files[fileIdx], ...fileObj };
+      } else {
+        target.files.push(fileObj);
+      }
+    }
+
+    saveConfig(cfg);
+
+    return {
+      success: true,
+      reset_approvals: prevApprovalsCount > 0,
+      pr: target,
+      message: `Documento "${payload.filePath}" atualizado com sucesso na branch '${branchName}'! ${
+        prevApprovalsCount > 0
+          ? 'As aprovações anteriores foram resetadas para revalidação pelos revisores.'
+          : ''
+      }`,
     };
   }
 
@@ -699,11 +928,27 @@ Retorne APENAS um JSON válido no formato:
     const repoDir = this.getRepoDir(repoName);
     const targetBranch = targetPR.target_branch || 'main';
 
+    // Format audit trailers for Git merge commit
+    const approvalsList = Array.isArray(targetPR.approvals) ? targetPR.approvals : [];
+    const auditLines = approvalsList.map((app: any) => {
+      if (typeof app === 'string') {
+        return `Approved-by: ${app}`;
+      }
+      const user = app.user || 'Unknown';
+      const role = app.role ? ` [${app.role}]` : '';
+      const hash = app.commit_hash ? ` (commit: ${app.commit_hash.slice(0, 7)})` : '';
+      const date = app.timestamp ? ` on ${app.timestamp.split('T')[0]}` : '';
+      return `Approved-by: ${user}${role}${hash}${date}`;
+    });
+
+    const trailers = auditLines.length > 0 ? `\n\n${auditLines.join('\n')}\nReviewed-in: Context OS Governance Platform` : '';
+    const commitMsg = `Merge PR #${targetPR.id}: ${targetPR.title}${trailers}`;
+
     try {
       // 1. Local Git Merge
       await executeGitCommand(`git checkout ${targetBranch}`, repoDir);
       if (targetPR.branch) {
-        await executeGitCommand(`git merge "${targetPR.branch}" --no-ff -m "Merge PR #${targetPR.id}: ${targetPR.title}"`, repoDir);
+        await executeGitCommand(`git merge "${targetPR.branch}" --no-ff -m "${commitMsg.replace(/"/g, '\\"')}"`, repoDir);
       }
 
       // 2. Remote GitHub Merge (if GitHub PR)
@@ -714,6 +959,7 @@ Retorne APENAS um JSON válido no formato:
           'PUT',
           {
             commit_title: `Merge PR #${targetPR.id}: ${targetPR.title}`,
+            commit_message: auditLines.join('\n'),
             merge_method: 'merge',
           }
         );

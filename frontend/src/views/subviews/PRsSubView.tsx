@@ -2,6 +2,8 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import type { PR } from "../../types";
 import { API } from "../../services/api";
 import { useWorkspace } from "../../context/WorkspaceContext";
+import { useAuth } from "../../context/AuthContext";
+import { useNavigate } from "react-router-dom";
 import { VisualMarkdownDiff } from "../../components/editor/VisualMarkdownDiff";
 import {
   Button,
@@ -57,7 +59,15 @@ const renderMarkdownDescription = (text: string) => {
 };
 
 export const PRsSubView: React.FC<PRsSubViewProps> = () => {
-  const { activeRepo, refreshGitStatus, refreshPendingChanges } = useWorkspace();
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const {
+    activeRepo,
+    refreshGitStatus,
+    refreshPendingChanges,
+    createOrSwitchBranch,
+    projectConfig,
+  } = useWorkspace();
   const repoName = activeRepo?.name || "local";
 
   const [prs, setPrs] = useState<PR[]>([]);
@@ -79,6 +89,11 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
     id: number | string;
     action: "approve" | "merge" | "reject" | "rollback";
   } | null>(null);
+
+  // Approval modal state
+  const [approvalModalPR, setApprovalModalPR] = useState<PR | null>(null);
+  const [approvalRole, setApprovalRole] = useState("Tech Lead");
+  const [approvalComment, setApprovalComment] = useState("");
 
   // Rollback modal state
   const [rollbackTarget, setRollbackTarget] = useState<PR | null>(null);
@@ -146,17 +161,31 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
     }
   };
 
-  const handleApprove = async (id: number | string) => {
+  const handleOpenApproveModal = (pr: PR) => {
+    setApprovalModalPR(pr);
+    setApprovalComment("");
+    setApprovalRole("Tech Lead");
+  };
+
+  const handleApproveSubmit = async () => {
+    if (!approvalModalPR) return;
+    const id = approvalModalPR.id;
     setActionLoading({ id, action: "approve" });
     setActionFeedback(null);
     try {
-      const res = await API.approvePR(id);
+      const res = await API.approvePR(id, {
+        approver: user?.login ? `@${user.login}` : undefined,
+        role: approvalRole,
+        comment: approvalComment,
+      });
       if (res.ok) {
         setActionFeedback({
           id,
-          message: res.data?.message || "Aprovação registrada com sucesso!",
+          message: res.data?.message || "Aprovação registrada com sucesso na trilha de auditoria!",
           type: "success",
         });
+        setApprovalModalPR(null);
+        setApprovalComment("");
         await loadPRs();
         refreshGitStatus?.();
         refreshPendingChanges?.();
@@ -176,6 +205,17 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
     } finally {
       setActionLoading(null);
     }
+  };
+
+  const handleEditDocumentInPR = async (pr: PR, filePath: string) => {
+    if (pr.branch) {
+      try {
+        await createOrSwitchBranch(pr.branch);
+      } catch (e) {
+        console.warn("[PRsSubView] Aviso ao alternar para branch do PR:", e);
+      }
+    }
+    navigate(`/repo/${encodeURIComponent(repoName)}/editor?file=${encodeURIComponent(filePath)}`);
   };
 
   const handleMerge = async (id: number | string) => {
@@ -433,7 +473,6 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
               const isClosed = statusLower === "closed";
               const isOpen = !isMerged && !isClosed;
               const isExpanded = !!expandedPRs[pr.id];
-              const approvals = Array.isArray(pr.approvals) ? pr.approvals : [];
               const prFiles = Array.isArray(pr.files) ? pr.files : [];
               const isDirectCommit = !!pr.is_direct_commit;
 
@@ -505,319 +544,582 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
                     </div>
                   )}
 
-                  {/* Approvals Section */}
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "10px",
-                      flexWrap: "wrap",
-                      fontSize: "13px",
-                      background: "var(--md-sys-color-surface-container-lowest, #f8f9fa)",
-                      padding: "10px 14px",
-                      borderRadius: "8px",
-                      border: "1px solid var(--md-sys-color-outline-variant, #e8eaed)",
-                    }}
-                  >
-                    <span
-                      style={{
-                        color: "var(--md-sys-color-on-surface, #0f172a)",
-                        fontWeight: 600,
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: "6px",
-                      }}
-                    >
-                      <span className="material-symbols-outlined" style={{ fontSize: "17px", color: "var(--md-sys-color-primary, #1a73e8)" }}>
-                        verified_user
-                      </span>
-                      Aprovações:
-                    </span>
+                  {/* Quorum & Approvals Section */}
+                  {(() => {
+                    const currentUserHandle = user?.login ? `@${user.login}` : "@tech-lead";
+                    const isAuthor = (pr.author || "").replace(/^@/, "").toLowerCase() === currentUserHandle.replace(/^@/, "").toLowerCase();
+                    const minApprovals = pr.min_approvals || (projectConfig?.governance_rules?.min_approvals_default ?? 1);
+                    const approvalsList = Array.isArray(pr.approvals) ? pr.approvals : [];
+                    const validApprovals = approvalsList.filter((app: any) => {
+                      const u = typeof app === "string" ? app : app.user;
+                      return (u || "").replace(/^@/, "").toLowerCase() !== (pr.author || "").replace(/^@/, "").toLowerCase();
+                    });
+                    const hasCurrentUserApproved = approvalsList.some((app: any) => {
+                      const u = typeof app === "string" ? app : app.user;
+                      return (u || "").replace(/^@/, "").toLowerCase() === currentUserHandle.replace(/^@/, "").toLowerCase();
+                    });
+                    const quorumMet = validApprovals.length >= minApprovals;
 
-                    {approvals.length > 0 ? (
-                      approvals.map((app, idx) => (
-                        <Badge key={idx} variant="success" size="sm">
-                          <span className="material-symbols-outlined" style={{ fontSize: "14px", marginRight: "3px" }}>
-                            check_circle
-                          </span>
-                          Aprovado por: <strong>{app}</strong>
-                        </Badge>
-                      ))
-                    ) : isMerged || isDirectCommit ? (
-                      <Badge variant="success" size="sm">
-                        <span className="material-symbols-outlined" style={{ fontSize: "14px", marginRight: "3px" }}>
-                          verified
-                        </span>
-                        Aprovado e publicado na versão oficial
-                      </Badge>
-                    ) : (
-                      <Badge variant="neutral" size="sm">
-                        <span className="material-symbols-outlined" style={{ fontSize: "14px", marginRight: "3px" }}>
-                          hourglass_top
-                        </span>
-                        Aguardando aprovação de revisor
-                      </Badge>
-                    )}
-                  </div>
-
-                  {/* Feedback Message */}
-                  {actionFeedback && actionFeedback.id === pr.id && (
-                    <div
-                      style={{
-                        padding: "10px 14px",
-                        borderRadius: "6px",
-                        fontSize: "13px",
-                        background: actionFeedback.type === "success" ? "var(--color-success-subtle, #f0fdf4)" : "var(--color-danger-subtle, #fef2f2)",
-                        color: actionFeedback.type === "success" ? "var(--color-success, #166534)" : "var(--color-danger, #991b1b)",
-                        border: `1px solid ${actionFeedback.type === "success" ? "var(--color-border-subtle, #bbf7d0)" : "var(--color-border-subtle, #fecaca)"}`,
-                      }}
-                    >
-                      {actionFeedback.message}
-                    </div>
-                  )}
-
-                  {/* Files & Diffs Accordion */}
-                  {prFiles.length > 0 && (
-                    <div style={{ borderTop: "1px solid var(--color-border-subtle, #e2e8f0)", paddingTop: "10px" }}>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => toggleExpand(pr.id, pr)}
-                        icon={
-                          <span className="material-symbols-outlined icon-xs">
-                            {isExpanded ? "expand_less" : "expand_more"}
-                          </span>
-                        }
-                      >
-                        {isExpanded ? "Ocultar alterações dos documentos" : `Visualizar ${prFiles.length} documento(s) alterados`}
-                      </Button>
-
-                      {isExpanded && (
-                        <div style={{ marginTop: "10px", display: "flex", flexDirection: "column", gap: "10px" }}>
-                          {prFiles.map((f: any, fIdx: number) => {
-                            const fileKey = `${pr.id}-${f.path || fIdx}`;
-                            const isVisual = prViewModes[fileKey] !== "raw";
-                            const fileDiff = f.diff_text || fileDiffsCache[fileKey] || "";
-                            const isLoadingDiff = loadingDiffs[fileKey];
-
-                            return (
-                              <Card key={fIdx} variant="flat" style={{ padding: 0, overflow: "hidden" }}>
-                                <div
-                                  style={{
-                                    padding: "8px 12px",
-                                    background: "var(--color-surface-subtle, #f8fafc)",
-                                    display: "flex",
-                                    justifyContent: "space-between",
-                                    alignItems: "center",
-                                    fontFamily: "var(--font-family-mono)",
-                                  }}
-                                >
-                                  <div className="ui-row ui-row--align-center ui-row--xs">
-                                    <span className="material-symbols-outlined icon-xs" style={{ color: "var(--md-sys-color-primary, #1a73e8)" }}>
-                                      description
-                                    </span>
-                                    <strong>{f.path}</strong>
-                                    {(f.additions > 0 || f.deletions > 0) && (
-                                      <>
-                                        <span style={{ color: "var(--color-success, #16a34a)", fontWeight: 600 }}>
-                                          +{f.additions || 0}
-                                        </span>
-                                        <span style={{ color: "var(--color-danger, #dc2626)", fontWeight: 600 }}>
-                                          -{f.deletions || 0}
-                                        </span>
-                                      </>
-                                    )}
-                                  </div>
-
-                                  <div className="ui-btn-group" style={{ background: "var(--color-border-subtle, #e2e8f0)", padding: "2px", borderRadius: "4px" }}>
-                                    <button
-                                      type="button"
-                                      onClick={() => setPrViewModes((prev) => ({ ...prev, [fileKey]: "visual" }))}
-                                      style={{
-                                        padding: "2px 8px",
-                                        border: "none",
-                                        borderRadius: "3px",
-                                        fontSize: "11px",
-                                        fontWeight: 600,
-                                        cursor: "pointer",
-                                        background: isVisual ? "var(--color-surface, #ffffff)" : "transparent",
-                                        color: isVisual ? "var(--color-primary, #2563eb)" : "var(--color-text-muted, #64748b)",
-                                      }}
-                                    >
-                                      Visualização Formatada
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => setPrViewModes((prev) => ({ ...prev, [fileKey]: "raw" }))}
-                                      style={{
-                                        padding: "2px 8px",
-                                        border: "none",
-                                        borderRadius: "3px",
-                                        fontSize: "11px",
-                                        fontWeight: 600,
-                                        cursor: "pointer",
-                                        background: !isVisual ? "var(--color-surface, #ffffff)" : "transparent",
-                                        color: !isVisual ? "var(--color-primary, #2563eb)" : "var(--color-text-muted, #64748b)",
-                                      }}
-                                    >
-                                      Código (Diff)
-                                    </button>
-                                  </div>
-                                </div>
-
-                                {isLoadingDiff ? (
-                                  <div style={{ padding: "14px", textAlign: "center", color: "var(--color-text-muted)" }}>
-                                    Carregando diferenças da versão...
-                                  </div>
-                                ) : isVisual && (f.old_content || f.new_content) ? (
-                                  <div style={{ maxHeight: "380px", overflowY: "auto" }}>
-                                    <VisualMarkdownDiff
-                                      oldContent={f.old_content || ""}
-                                      newContent={f.new_content || ""}
-                                      fileName={f.path}
-                                    />
-                                  </div>
-                                ) : (
-                                  fileDiff && (
-                                    <pre
-                                      style={{
-                                        margin: 0,
-                                        padding: "10px 12px",
-                                        fontSize: "11.5px",
-                                        background: "#0d1117",
-                                        color: "#f8fafc",
-                                        overflowX: "auto",
-                                        fontFamily: "var(--font-family-mono)",
-                                      }}
-                                    >
-                                      {fileDiff}
-                                    </pre>
-                                  )
-                                )}
-                              </Card>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Actions Footer */}
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      borderTop: "1px solid var(--md-sys-color-outline-variant, #dadce0)",
-                      paddingTop: "12px",
-                      marginTop: "2px",
-                      flexWrap: "wrap",
-                      gap: "10px",
-                    }}
-                  >
-                    <div>
-                      {pr.html_url ? (
-                        <a
-                          href={pr.html_url}
-                          target="_blank"
-                          rel="noreferrer"
+                    return (
+                      <>
+                        <div
                           style={{
-                            fontSize: "12.5px",
-                            fontWeight: 500,
-                            color: "var(--md-sys-color-primary, #1a73e8)",
-                            textDecoration: "none",
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "4px",
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: "10px",
+                            background: "var(--md-sys-color-surface-container-lowest, #f8f9fa)",
+                            padding: "12px 14px",
+                            borderRadius: "8px",
+                            border: "1px solid var(--md-sys-color-outline-variant, #e8eaed)",
                           }}
                         >
-                          Ver no GitHub
-                          <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>
-                            open_in_new
-                          </span>
-                        </a>
-                      ) : (
-                        <span className="ui-text-muted" style={{ fontSize: "12.5px" }}>
-                          Versão Canônica Registrada
-                        </span>
-                      )}
-                    </div>
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "8px" }}>
+                            <span
+                              style={{
+                                color: "var(--md-sys-color-on-surface, #0f172a)",
+                                fontWeight: 600,
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "6px",
+                                fontSize: "13px",
+                              }}
+                            >
+                              <span className="material-symbols-outlined" style={{ fontSize: "17px", color: "var(--md-sys-color-primary, #1a73e8)" }}>
+                                verified_user
+                              </span>
+                              Trilha de Auditoria & Aprovações:
+                            </span>
 
-                    <div className="ui-row ui-row--align-center ui-row--xs">
-                      {/* Rollback button on Merged/Published versions */}
-                      {(isMerged || isDirectCommit) && (
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => setRollbackTarget(pr)}
-                          disabled={actionLoading?.id === pr.id}
-                          icon={<span className="material-symbols-outlined icon-xs">history</span>}
-                          title="Restaurar o estado desta revisão como a versão ativa atual"
+                            {isOpen && (
+                              <Badge variant={quorumMet ? "success" : "warning"} size="sm">
+                                <span className="material-symbols-outlined" style={{ fontSize: "14px", marginRight: "3px" }}>
+                                  {quorumMet ? "verified" : "pending_actions"}
+                                </span>
+                                {quorumMet
+                                  ? `✓ Quórum Atingido (${validApprovals.length}/${minApprovals}) • Liberado para Publicação`
+                                  : `Quórum Pendente (${validApprovals.length}/${minApprovals} aprovações necessárias)`}
+                              </Badge>
+                            )}
+                          </div>
+
+                          <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                            {approvalsList.length > 0 ? (
+                              approvalsList.map((app: any, idx: number) => {
+                                const appUser = typeof app === "string" ? app : app.user;
+                                const appRole = typeof app === "object" ? app.role : null;
+                                const appHash = typeof app === "object" && app.commit_hash ? app.commit_hash.slice(0, 7) : null;
+                                const appDate = typeof app === "object" && app.timestamp ? formatPRDate(app.timestamp) : null;
+                                const appComment = typeof app === "object" ? app.comment : null;
+
+                                return (
+                                  <div
+                                    key={idx}
+                                    style={{
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: "6px",
+                                      padding: "4px 10px",
+                                      borderRadius: "6px",
+                                      background: "var(--color-success-subtle, #f0fdf4)",
+                                      border: "1px solid var(--color-border-subtle, #bbf7d0)",
+                                      color: "var(--color-success, #166534)",
+                                      fontSize: "12px",
+                                    }}
+                                    title={appComment ? `Comentário de Auditoria: "${appComment}"` : undefined}
+                                  >
+                                    <span className="material-symbols-outlined" style={{ fontSize: "15px", color: "var(--color-success, #16a34a)" }}>
+                                      check_circle
+                                    </span>
+                                    <strong>{appUser}</strong>
+                                    {appRole && <span style={{ opacity: 0.85, fontSize: "11px" }}>({appRole})</span>}
+                                    {appHash && (
+                                      <span style={{ fontFamily: "var(--font-family-mono)", fontSize: "10.5px", background: "rgba(0,0,0,0.06)", padding: "1px 4px", borderRadius: "3px" }}>
+                                        #{appHash}
+                                      </span>
+                                    )}
+                                    {appDate && <span style={{ opacity: 0.7, fontSize: "10.5px" }}>&bull; {appDate}</span>}
+                                  </div>
+                                );
+                              })
+                            ) : isMerged || isDirectCommit ? (
+                              <Badge variant="success" size="sm">
+                                <span className="material-symbols-outlined" style={{ fontSize: "14px", marginRight: "3px" }}>
+                                  verified
+                                </span>
+                                Aprovado e integrado na versão oficial
+                              </Badge>
+                            ) : (
+                              <Badge variant="neutral" size="sm">
+                                <span className="material-symbols-outlined" style={{ fontSize: "14px", marginRight: "3px" }}>
+                                  hourglass_top
+                                </span>
+                                Aguardando aprovação de revisores (0/{minApprovals})
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Feedback Message */}
+                        {actionFeedback && actionFeedback.id === pr.id && (
+                          <div
+                            style={{
+                              padding: "10px 14px",
+                              borderRadius: "6px",
+                              fontSize: "13px",
+                              background: actionFeedback.type === "success" ? "var(--color-success-subtle, #f0fdf4)" : "var(--color-danger-subtle, #fef2f2)",
+                              color: actionFeedback.type === "success" ? "var(--color-success, #166534)" : "var(--color-danger, #991b1b)",
+                              border: `1px solid ${actionFeedback.type === "success" ? "var(--color-border-subtle, #bbf7d0)" : "var(--color-border-subtle, #fecaca)"}`,
+                            }}
+                          >
+                            {actionFeedback.message}
+                          </div>
+                        )}
+
+                        {/* Files & Diffs Accordion */}
+                        {prFiles.length > 0 && (
+                          <div style={{ borderTop: "1px solid var(--color-border-subtle, #e2e8f0)", paddingTop: "10px" }}>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => toggleExpand(pr.id, pr)}
+                              icon={
+                                <span className="material-symbols-outlined icon-xs">
+                                  {isExpanded ? "expand_less" : "expand_more"}
+                                </span>
+                              }
+                            >
+                              {isExpanded ? "Ocultar alterações dos documentos" : `Visualizar ${prFiles.length} documento(s) alterados`}
+                            </Button>
+
+                            {isExpanded && (
+                              <div style={{ marginTop: "10px", display: "flex", flexDirection: "column", gap: "10px" }}>
+                                {prFiles.map((f: any, fIdx: number) => {
+                                  const fileKey = `${pr.id}-${f.path || fIdx}`;
+                                  const isVisual = prViewModes[fileKey] !== "raw";
+                                  const fileDiff = f.diff_text || fileDiffsCache[fileKey] || "";
+                                  const isLoadingDiff = loadingDiffs[fileKey];
+
+                                  return (
+                                    <Card key={fIdx} variant="flat" style={{ padding: 0, overflow: "hidden" }}>
+                                      <div
+                                        style={{
+                                          padding: "8px 12px",
+                                          background: "var(--color-surface-subtle, #f8fafc)",
+                                          display: "flex",
+                                          justifyContent: "space-between",
+                                          alignItems: "center",
+                                          fontFamily: "var(--font-family-mono)",
+                                          flexWrap: "wrap",
+                                          gap: "8px",
+                                        }}
+                                      >
+                                        <div className="ui-row ui-row--align-center ui-row--xs">
+                                          <span className="material-symbols-outlined icon-xs" style={{ color: "var(--md-sys-color-primary, #1a73e8)" }}>
+                                            description
+                                          </span>
+                                          <strong>{f.path}</strong>
+                                          {(f.additions > 0 || f.deletions > 0) && (
+                                            <>
+                                              <span style={{ color: "var(--color-success, #16a34a)", fontWeight: 600 }}>
+                                                +{f.additions || 0}
+                                              </span>
+                                              <span style={{ color: "var(--color-danger, #dc2626)", fontWeight: 600 }}>
+                                                -{f.deletions || 0}
+                                              </span>
+                                            </>
+                                          )}
+                                        </div>
+
+                                        <div className="ui-row ui-row--align-center ui-row--xs">
+                                          {isOpen && (
+                                            <button
+                                              type="button"
+                                              onClick={() => handleEditDocumentInPR(pr, f.path)}
+                                              title={`Abrir e editar "${f.path}" diretamente na branch deste PR (${pr.branch})`}
+                                              style={{
+                                                padding: "3px 8px",
+                                                borderRadius: "4px",
+                                                border: "1px solid var(--md-sys-color-primary, #1a73e8)",
+                                                background: "var(--md-sys-color-primary-container, #e8f0fe)",
+                                                color: "var(--md-sys-color-primary, #1a73e8)",
+                                                fontSize: "11px",
+                                                fontWeight: 600,
+                                                display: "inline-flex",
+                                                alignItems: "center",
+                                                gap: "4px",
+                                                cursor: "pointer",
+                                              }}
+                                            >
+                                              <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>
+                                                edit_note
+                                              </span>
+                                              Editar Documento
+                                            </button>
+                                          )}
+
+                                          <div className="ui-btn-group" style={{ background: "var(--color-border-subtle, #e2e8f0)", padding: "2px", borderRadius: "4px" }}>
+                                            <button
+                                              type="button"
+                                              onClick={() => setPrViewModes((prev) => ({ ...prev, [fileKey]: "visual" }))}
+                                              style={{
+                                                padding: "2px 8px",
+                                                border: "none",
+                                                borderRadius: "3px",
+                                                fontSize: "11px",
+                                                fontWeight: 600,
+                                                cursor: "pointer",
+                                                background: isVisual ? "var(--color-surface, #ffffff)" : "transparent",
+                                                color: isVisual ? "var(--color-primary, #2563eb)" : "var(--color-text-muted, #64748b)",
+                                              }}
+                                            >
+                                              Visualização Formatada
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => setPrViewModes((prev) => ({ ...prev, [fileKey]: "raw" }))}
+                                              style={{
+                                                padding: "2px 8px",
+                                                border: "none",
+                                                borderRadius: "3px",
+                                                fontSize: "11px",
+                                                fontWeight: 600,
+                                                cursor: "pointer",
+                                                background: !isVisual ? "var(--color-surface, #ffffff)" : "transparent",
+                                                color: !isVisual ? "var(--color-primary, #2563eb)" : "var(--color-text-muted, #64748b)",
+                                              }}
+                                            >
+                                              Código (Diff)
+                                            </button>
+                                          </div>
+                                        </div>
+                                      </div>
+
+                                      {isLoadingDiff ? (
+                                        <div style={{ padding: "14px", textAlign: "center", color: "var(--color-text-muted)" }}>
+                                          Carregando diferenças da versão...
+                                        </div>
+                                      ) : isVisual && (f.old_content || f.new_content) ? (
+                                        <div style={{ maxHeight: "380px", overflowY: "auto" }}>
+                                          <VisualMarkdownDiff
+                                            oldContent={f.old_content || ""}
+                                            newContent={f.new_content || ""}
+                                            fileName={f.path}
+                                          />
+                                        </div>
+                                      ) : (
+                                        fileDiff && (
+                                          <pre
+                                            style={{
+                                              margin: 0,
+                                              padding: "10px 12px",
+                                              fontSize: "11.5px",
+                                              background: "#0d1117",
+                                              color: "#f8fafc",
+                                              overflowX: "auto",
+                                              fontFamily: "var(--font-family-mono)",
+                                            }}
+                                          >
+                                            {fileDiff}
+                                          </pre>
+                                        )
+                                      )}
+                                    </Card>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Actions Footer */}
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            borderTop: "1px solid var(--md-sys-color-outline-variant, #dadce0)",
+                            paddingTop: "12px",
+                            marginTop: "2px",
+                            flexWrap: "wrap",
+                            gap: "10px",
+                          }}
                         >
-                          Restaurar esta Versão (Rollback)
-                        </Button>
-                      )}
-
-                      {/* Open PR actions */}
-                      {isOpen && (
-                        <>
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            style={{ color: "var(--color-danger, #ef4444)" }}
-                            onClick={() => handleReject(pr.id)}
-                            disabled={actionLoading?.id === pr.id}
-                            icon={
-                              <span className="material-symbols-outlined icon-xs">
-                                {actionLoading?.id === pr.id && actionLoading.action === "reject" ? "progress_activity" : "close"}
+                          <div>
+                            {pr.html_url ? (
+                              <a
+                                href={pr.html_url}
+                                target="_blank"
+                                rel="noreferrer"
+                                style={{
+                                  fontSize: "12.5px",
+                                  fontWeight: 500,
+                                  color: "var(--md-sys-color-primary, #1a73e8)",
+                                  textDecoration: "none",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "4px",
+                                }}
+                              >
+                                Ver no GitHub
+                                <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>
+                                  open_in_new
+                                </span>
+                              </a>
+                            ) : (
+                              <span className="ui-text-muted" style={{ fontSize: "12.5px" }}>
+                                Versão Canônica Registrada
                               </span>
-                            }
-                            title="Rejeitar e arquivar esta proposta"
-                          >
-                            {actionLoading?.id === pr.id && actionLoading.action === "reject" ? "Rejeitando..." : "Rejeitar"}
-                          </Button>
+                            )}
+                          </div>
 
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => handleApprove(pr.id)}
-                            disabled={actionLoading?.id === pr.id}
-                            icon={
-                              <span className="material-symbols-outlined icon-xs">
-                                {actionLoading?.id === pr.id && actionLoading.action === "approve" ? "progress_activity" : "thumb_up"}
-                              </span>
-                            }
-                            title="Registrar aprovação nesta revisão"
-                          >
-                            {actionLoading?.id === pr.id && actionLoading.action === "approve"
-                              ? "Aprovando..."
-                              : `Aprovar Revisão ${approvals.length > 0 ? `(${approvals.length})` : ""}`}
-                          </Button>
+                          <div className="ui-row ui-row--align-center ui-row--xs">
+                            {/* Rollback button on Merged/Published versions */}
+                            {(isMerged || isDirectCommit) && (
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => setRollbackTarget(pr)}
+                                disabled={actionLoading?.id === pr.id}
+                                icon={<span className="material-symbols-outlined icon-xs">history</span>}
+                                title="Restaurar o estado desta revisão como a versão ativa atual"
+                              >
+                                Restaurar esta Versão (Rollback)
+                              </Button>
+                            )}
 
-                          <Button
-                            variant="primary"
-                            size="sm"
-                            onClick={() => handleMerge(pr.id)}
-                            disabled={actionLoading?.id === pr.id}
-                            icon={
-                              <span className="material-symbols-outlined icon-xs">
-                                {actionLoading?.id === pr.id && actionLoading.action === "merge" ? "progress_activity" : "publish"}
-                              </span>
-                            }
-                            title="Publicar alterações e integrar na versão ativa"
-                          >
-                            {actionLoading?.id === pr.id && actionLoading.action === "merge" ? "Publicando..." : "Publicar Versão Oficial"}
-                          </Button>
-                        </>
-                      )}
-                    </div>
-                  </div>
+                            {/* Open PR actions */}
+                            {isOpen && (
+                              <>
+                                <Button
+                                  variant="secondary"
+                                  size="sm"
+                                  style={{ color: "var(--color-danger, #ef4444)" }}
+                                  onClick={() => handleReject(pr.id)}
+                                  disabled={actionLoading?.id === pr.id}
+                                  icon={
+                                    <span className="material-symbols-outlined icon-xs">
+                                      {actionLoading?.id === pr.id && actionLoading.action === "reject" ? "progress_activity" : "close"}
+                                    </span>
+                                  }
+                                  title="Rejeitar e arquivar esta proposta"
+                                >
+                                  {actionLoading?.id === pr.id && actionLoading.action === "reject" ? "Rejeitando..." : "Rejeitar"}
+                                </Button>
+
+                                <Button
+                                  variant="secondary"
+                                  size="sm"
+                                  onClick={() => handleOpenApproveModal(pr)}
+                                  disabled={actionLoading?.id === pr.id || isAuthor}
+                                  icon={
+                                    <span className="material-symbols-outlined icon-xs">
+                                      {actionLoading?.id === pr.id && actionLoading.action === "approve"
+                                        ? "progress_activity"
+                                        : hasCurrentUserApproved
+                                        ? "verified"
+                                        : "thumb_up"}
+                                    </span>
+                                  }
+                                  title={
+                                    isAuthor
+                                      ? "O autor da proposta não pode aprovar o seu próprio PR."
+                                      : hasCurrentUserApproved
+                                      ? "Você já registrou aprovação nesta proposta. Clique para atualizar seu comentário ou papel."
+                                      : "Registrar parecer e aprovação oficial nesta revisão"
+                                  }
+                                >
+                                  {actionLoading?.id === pr.id && actionLoading.action === "approve"
+                                    ? "Aprovando..."
+                                    : hasCurrentUserApproved
+                                    ? `✓ Aprovado por você (${validApprovals.length}/${minApprovals})`
+                                    : `Aprovar Revisão (${validApprovals.length}/${minApprovals})`}
+                                </Button>
+
+                                <Button
+                                  variant="primary"
+                                  size="sm"
+                                  onClick={() => handleMerge(pr.id)}
+                                  disabled={actionLoading?.id === pr.id || !quorumMet}
+                                  icon={
+                                    <span className="material-symbols-outlined icon-xs">
+                                      {actionLoading?.id === pr.id && actionLoading.action === "merge" ? "progress_activity" : "publish"}
+                                    </span>
+                                  }
+                                  title={
+                                    !quorumMet
+                                      ? `Quórum pendente: requer pelo menos ${minApprovals} aprovações válidas de revisores independentes antes de realizar o merge (atual: ${validApprovals.length}).`
+                                      : "Quórum atingido! Integrar e publicar alterações na versão oficial."
+                                  }
+                                >
+                                  {actionLoading?.id === pr.id && actionLoading.action === "merge"
+                                    ? "Publicando..."
+                                    : quorumMet
+                                    ? "Publicar Versão Oficial"
+                                    : `Publicar (${validApprovals.length}/${minApprovals})`}
+                                </Button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </>
+                    );
+                  })()}
                 </Card>
               );
             })
           )}
         </div>
       </PageBody>
+
+      {/* Approval Modal with Audit Metadata */}
+      {approvalModalPR && (
+        <div
+          className="modal-overlay"
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.5)",
+            backdropFilter: "blur(2px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 9999,
+          }}
+          onClick={() => !actionLoading && setApprovalModalPR(null)}
+        >
+          <div
+            className="modal-container"
+            style={{
+              background: "var(--color-surface, #ffffff)",
+              borderRadius: "12px",
+              padding: "24px",
+              width: "100%",
+              maxWidth: "520px",
+              boxShadow: "0 10px 25px rgba(0,0,0,0.2)",
+              border: "1px solid var(--color-border-subtle, #e2e8f0)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
+              <div
+                style={{
+                  width: "36px",
+                  height: "36px",
+                  borderRadius: "50%",
+                  background: "var(--color-success-subtle, #f0fdf4)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "var(--color-success, #16a34a)",
+                }}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: "20px" }}>
+                  verified_user
+                </span>
+              </div>
+              <div>
+                <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 600, color: "var(--color-text-primary, #0f172a)" }}>
+                  Aprovar Proposta de Revisão #{approvalModalPR.short_id || approvalModalPR.id}
+                </h3>
+                <p style={{ margin: 0, fontSize: "12px", color: "var(--color-text-muted, #64748b)" }}>
+                  {approvalModalPR.title} &bull; Autor: {approvalModalPR.author}
+                </p>
+              </div>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "14px", marginTop: "16px" }}>
+              <div>
+                <label style={{ display: "block", fontSize: "12.5px", fontWeight: 600, color: "var(--color-text-primary, #0f172a)", marginBottom: "6px" }}>
+                  Papel / Cargo do Revisor:
+                </label>
+                <select
+                  value={approvalRole}
+                  onChange={(e) => setApprovalRole(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "8px 12px",
+                    borderRadius: "6px",
+                    border: "1px solid var(--color-border-subtle, #cbd5e1)",
+                    fontSize: "13px",
+                    background: "var(--color-surface, #ffffff)",
+                    color: "var(--color-text-primary, #0f172a)",
+                  }}
+                >
+                  <option value="Tech Lead">Tech Lead</option>
+                  <option value="Arquiteto de Software">Arquiteto de Software</option>
+                  <option value="Engenheiro Revisor">Engenheiro Revisor</option>
+                  <option value="Product Owner / Domain Lead">Product Owner / Domain Lead</option>
+                  <option value="Security / Compliance Auditor">Security / Compliance Auditor</option>
+                </select>
+              </div>
+
+              <div>
+                <label style={{ display: "block", fontSize: "12.5px", fontWeight: 600, color: "var(--color-text-primary, #0f172a)", marginBottom: "6px" }}>
+                  Parecer / Comentário de Auditoria (Opcional):
+                </label>
+                <textarea
+                  rows={3}
+                  value={approvalComment}
+                  onChange={(e) => setApprovalComment(e.target.value)}
+                  placeholder="Ex: Revisado e aprovado em conformidade com as diretrizes e padrões de arquitetura."
+                  style={{
+                    width: "100%",
+                    padding: "8px 12px",
+                    borderRadius: "6px",
+                    border: "1px solid var(--color-border-subtle, #cbd5e1)",
+                    fontSize: "13px",
+                    resize: "vertical",
+                    fontFamily: "inherit",
+                    color: "var(--color-text-primary, #0f172a)",
+                    background: "var(--color-surface, #ffffff)",
+                  }}
+                />
+              </div>
+
+              <div
+                style={{
+                  padding: "10px 12px",
+                  borderRadius: "6px",
+                  background: "var(--md-sys-color-surface-container-lowest, #f8f9fa)",
+                  border: "1px solid var(--color-border-subtle, #e2e8f0)",
+                  fontSize: "12px",
+                  color: "var(--color-text-muted, #64748b)",
+                  lineHeight: "1.5",
+                }}
+              >
+                🔒 <strong>Registro Imutável:</strong> Sua aprovação será carimbada com o usuário <strong>{user?.login ? `@${user.login}` : "@tech-lead"}</strong>, data/hora e o hash da revisão atual para conformidade e rastreabilidade no Git.
+              </div>
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "20px" }}>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setApprovalModalPR(null)}
+                disabled={actionLoading?.id === approvalModalPR.id}
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleApproveSubmit}
+                disabled={actionLoading?.id === approvalModalPR.id}
+                icon={
+                  <span className="material-symbols-outlined icon-xs">
+                    {actionLoading?.id === approvalModalPR.id ? "progress_activity" : "verified"}
+                  </span>
+                }
+              >
+                {actionLoading?.id === approvalModalPR.id ? "Registrando Aprovação..." : "Confirmar Aprovação"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Rollback Confirmation Modal */}
       {rollbackTarget && (
