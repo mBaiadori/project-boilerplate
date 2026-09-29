@@ -9,79 +9,211 @@ export interface WikiPage {
   category: string;
   content: string;
   updated_at: string;
+  path?: string;
 }
 
+export const WIKI_CATEGORIES = [
+  'decisions',
+  '_rules',
+  'concepts',
+  'gotchas',
+  'handoffs',
+  'geral',
+] as const;
+
 export class WikiService {
-  private getWikiDir(repoName: string): string {
+  private getWikiRootDir(repoName: string): string {
     return path.join(PROJECTS_DIR, repoName || 'local', '.spec-memory', 'wiki');
   }
 
-  getWikiPages(): WikiPage[] {
+  private getCategoryDir(repoName: string, category: string): string {
+    const cleanCategory = (category || 'decisions').toLowerCase().trim();
+    return path.join(this.getWikiRootDir(repoName), cleanCategory);
+  }
+
+  private ensureMigration(repoName: string) {
+    const rootDir = this.getWikiRootDir(repoName);
+    if (!fs.existsSync(rootDir)) return;
+
+    try {
+      const items = fs.readdirSync(rootDir);
+      for (const item of items) {
+        const fullItemPath = path.join(rootDir, item);
+        const stat = fs.statSync(fullItemPath);
+        if (stat.isFile() && item.endsWith('.md')) {
+          // Arquivo solto na raiz -> migrar para 'decisions' ou 'geral'
+          const targetDir = path.join(rootDir, 'decisions');
+          fs.mkdirSync(targetDir, { recursive: true });
+          const targetFile = path.join(targetDir, item);
+          if (!fs.existsSync(targetFile)) {
+            fs.renameSync(fullItemPath, targetFile);
+          } else {
+            fs.unlinkSync(fullItemPath);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('[WikiService] Erro durante auto-migração de pastas:', err);
+    }
+  }
+
+  getWikiPages(repoNameInput?: string, categoryFilter?: string, searchQuery?: string): WikiPage[] {
     const cfg = loadConfig();
-    const repoName = cfg.active_repo?.name || 'local';
-    const wikiDir = this.getWikiDir(repoName);
+    const repoName = repoNameInput || cfg.active_repo?.name || 'local';
+    const wikiRootDir = this.getWikiRootDir(repoName);
+    this.ensureMigration(repoName);
+
     const pages: WikiPage[] = [];
+    if (!fs.existsSync(wikiRootDir)) {
+      return pages;
+    }
 
-    if (fs.existsSync(wikiDir)) {
-      const files = fs.readdirSync(wikiDir);
-      for (const f of files) {
-        if (f.endsWith('.md')) {
-          const fullPath = path.join(wikiDir, f);
-          try {
-            const content = fs.readFileSync(fullPath, 'utf-8');
-            const slug = f.replace('.md', '');
-            const titleMatch = content.match(/^#\s+(.*)$/m);
-            const title = titleMatch ? titleMatch[1] : slug;
-            const stat = fs.statSync(fullPath);
+    const scanCategoryDir = (dirPath: string, catName: string) => {
+      if (!fs.existsSync(dirPath)) return;
+      try {
+        const files = fs.readdirSync(dirPath);
+        for (const f of files) {
+          if (f.endsWith('.md')) {
+            const fullPath = path.join(dirPath, f);
+            try {
+              const content = fs.readFileSync(fullPath, 'utf-8');
+              const slug = f.replace('.md', '');
+              const titleMatch = content.match(/^#\s+(.*)$/m);
+              const title = titleMatch ? titleMatch[1].trim() : slug;
+              const stat = fs.statSync(fullPath);
 
-            pages.push({
-              slug,
-              title,
-              category: 'Geral',
-              content,
-              updated_at: stat.mtime.toISOString(),
-            });
-          } catch {}
+              pages.push({
+                slug,
+                title,
+                category: catName,
+                content,
+                updated_at: stat.mtime.toISOString(),
+                path: `${catName}/${slug}.md`,
+              });
+            } catch {}
+          }
+        }
+      } catch {}
+    };
+
+    if (categoryFilter && categoryFilter !== 'all') {
+      const targetDir = path.join(wikiRootDir, categoryFilter);
+      scanCategoryDir(targetDir, categoryFilter);
+    } else {
+      // Escanear todas as subpastas
+      const subEntries = fs.readdirSync(wikiRootDir);
+      for (const entry of subEntries) {
+        const fullEntryPath = path.join(wikiRootDir, entry);
+        if (fs.statSync(fullEntryPath).isDirectory()) {
+          scanCategoryDir(fullEntryPath, entry);
         }
       }
     }
 
-    return pages;
+    if (searchQuery && searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      return pages.filter(
+        (p) =>
+          p.title.toLowerCase().includes(q) ||
+          p.slug.toLowerCase().includes(q) ||
+          p.content.toLowerCase().includes(q)
+      );
+    }
+
+    // Ordenar por mais recentemente atualizado
+    return pages.sort(
+      (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+    );
   }
 
-  saveWikiPage(slug: string, title: string, content: string, category: string = 'Geral') {
+  getWikiPage(category: string, slug: string, repoNameInput?: string): WikiPage | null {
     const cfg = loadConfig();
-    const repoName = cfg.active_repo?.name || 'local';
-    const wikiDir = this.getWikiDir(repoName);
-    fs.mkdirSync(wikiDir, { recursive: true });
+    const repoName = repoNameInput || cfg.active_repo?.name || 'local';
+    const cleanCat = (category || 'decisions').toLowerCase().trim();
+    const cleanSlug = (slug || '').replace('.md', '').toLowerCase().trim();
 
-    const cleanSlug = (slug || title || 'page').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-    const fullPath = path.join(wikiDir, `${cleanSlug}.md`);
+    const fullPath = path.join(this.getCategoryDir(repoName, cleanCat), `${cleanSlug}.md`);
+    if (!fs.existsSync(fullPath)) {
+      // Fallback: tentar na raiz ou em outras categorias
+      const allPages = this.getWikiPages(repoName);
+      const found = allPages.find((p) => p.slug === cleanSlug);
+      return found || null;
+    }
 
-    const finalContent = content.startsWith('# ') ? content : `# ${title || cleanSlug}\n\n${content}`;
+    try {
+      const content = fs.readFileSync(fullPath, 'utf-8');
+      const titleMatch = content.match(/^#\s+(.*)$/m);
+      const title = titleMatch ? titleMatch[1].trim() : cleanSlug;
+      const stat = fs.statSync(fullPath);
+
+      return {
+        slug: cleanSlug,
+        title,
+        category: cleanCat,
+        content,
+        updated_at: stat.mtime.toISOString(),
+        path: `${cleanCat}/${cleanSlug}.md`,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  saveWikiPage(
+    category: string,
+    slug: string,
+    title: string,
+    content: string,
+    repoNameInput?: string
+  ) {
+    const cfg = loadConfig();
+    const repoName = repoNameInput || cfg.active_repo?.name || 'local';
+    const cleanCat = (category || 'decisions').toLowerCase().trim();
+    const catDir = this.getCategoryDir(repoName, cleanCat);
+    fs.mkdirSync(catDir, { recursive: true });
+
+    const rawSlug = slug || title || 'nota';
+    const cleanSlug = rawSlug
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]+/g, '-')
+      .replace(/(^-|-$)/g, '');
+
+    const fullPath = path.join(catDir, `${cleanSlug}.md`);
+    const finalTitle = title || cleanSlug;
+    const finalContent = content.startsWith('# ') ? content : `# ${finalTitle}\n\n${content}`;
+
     fs.writeFileSync(fullPath, finalContent, 'utf-8');
 
     return {
       success: true,
       page: {
         slug: cleanSlug,
-        title: title || cleanSlug,
-        category,
+        title: finalTitle,
+        category: cleanCat,
         content: finalContent,
         updated_at: new Date().toISOString(),
+        path: `${cleanCat}/${cleanSlug}.md`,
       },
     };
   }
 
-  deleteWikiPage(slug: string) {
+  deleteWikiPage(category: string, slug: string, repoNameInput?: string) {
     const cfg = loadConfig();
-    const repoName = cfg.active_repo?.name || 'local';
-    const wikiDir = this.getWikiDir(repoName);
-    const cleanSlug = (slug || '').replace('.md', '');
-    const fullPath = path.join(wikiDir, `${cleanSlug}.md`);
+    const repoName = repoNameInput || cfg.active_repo?.name || 'local';
+    const cleanCat = (category || 'decisions').toLowerCase().trim();
+    const cleanSlug = (slug || '').replace('.md', '').toLowerCase().trim();
 
+    const fullPath = path.join(this.getCategoryDir(repoName, cleanCat), `${cleanSlug}.md`);
     if (fs.existsSync(fullPath)) {
       fs.unlinkSync(fullPath);
+      return { success: true };
+    }
+
+    // Tentar deletar na raiz ou em outra categoria se existir
+    const rootPath = path.join(this.getWikiRootDir(repoName), `${cleanSlug}.md`);
+    if (fs.existsSync(rootPath)) {
+      fs.unlinkSync(rootPath);
+      return { success: true };
     }
 
     return { success: true };

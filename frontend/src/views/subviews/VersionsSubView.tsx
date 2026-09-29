@@ -589,8 +589,8 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
           {activeTab === "whats-new" && (
             <div className="ui-stack ui-stack--lg">
               {/* Top Summary Banner */}
-              <Card variant="elevated" className="ui-card--p-md">
-                <div className="ui-row ui-row--between ui-row--align-center" style={{ flexWrap: "wrap", gap: "16px" }}>
+              <Card variant="elevated" padding="lg">
+                <Row justify="between" align="center" style={{ width: "100%", flexWrap: "wrap", gap: "16px" }}>
                   <div className="ui-row ui-row--align-center ui-row--md">
                     <div
                       style={{
@@ -636,7 +636,7 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
                       Marcar tudo como visto
                     </Button>
                   </div>
-                </div>
+                </Row>
               </Card>
 
               {/* Filter Chips Bar */}
@@ -682,7 +682,7 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
 
               {/* Integrated Proposals Section */}
               {(whatsNewFilter === "all" || whatsNewFilter === "proposals") && whatsNewProposals.length > 0 && (
-                <Card variant="elevated" style={{ padding: 0 }}>
+                <Card variant="elevated" padding="none">
                   <div className="ui-card__header">
                     <div className="ui-row ui-row--align-center ui-row--xs">
                       <span className="material-symbols-outlined" style={{ fontSize: "20px", color: "#7c3aed" }}>
@@ -699,7 +699,7 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
                         key={idx}
                         className="ui-card ui-card--flat"
                         style={{
-                          padding: "12px 16px",
+                          padding: "14px 18px",
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "space-between",
@@ -729,7 +729,7 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
 
               {/* Changed Files Received from Team */}
               {whatsNewFilter !== "proposals" && (
-                <Card variant="elevated" style={{ padding: 0 }}>
+                <Card variant="elevated" padding="none">
                   {filteredWhatsNewFiles.length === 0 ? (
                     <div className="ui-empty-state" style={{ padding: "40px" }}>
                       <span className="material-symbols-outlined" style={{ fontSize: "32px", color: "var(--color-success, #16a34a)", display: "block", marginBottom: "8px" }}>
@@ -758,7 +758,7 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
                                 display: "flex",
                                 alignItems: "center",
                                 justifyContent: "space-between",
-                                padding: "12px 18px",
+                                padding: "14px 20px",
                                 cursor: "pointer",
                                 userSelect: "none",
                                 background: isExpanded ? "var(--color-primary-subtle, #f1f5f9)" : "transparent",
@@ -886,7 +886,7 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
 
               {/* Commits List */}
               {whatsNewCommits.length > 0 && (
-                <Card variant="elevated" className="ui-card--p-md">
+                <Card variant="elevated" padding="lg">
                   <h4
                     className="ui-card__title"
                     style={{ marginBottom: "14px" }}
@@ -942,7 +942,7 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
           {activeTab === "drafts" && (
             <div className="ui-stack ui-stack--lg">
               {/* Changed Files List */}
-              <Card variant="elevated" style={{ padding: 0 }}>
+              <Card variant="elevated" padding="none">
                 <div className="ui-card__header">
                   <strong style={{ fontSize: "14px", color: "var(--color-text-primary, #0f172a)" }}>
                     Meus Documentos em Edição Local ({allDraftFiles.length})
@@ -977,7 +977,7 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
                               display: "flex",
                               alignItems: "center",
                               justifyContent: "space-between",
-                              padding: "12px 18px",
+                              padding: "14px 20px",
                               cursor: "pointer",
                               userSelect: "none",
                               background: isExpanded ? "var(--color-primary-subtle, #f1f5f9)" : "transparent",
@@ -1202,7 +1202,7 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
           {activeTab === "system" && (
             <div className="ui-stack ui-stack--lg">
               {allSystemDraftFiles.length === 0 ? (
-                <Card variant="elevated" style={{ padding: "48px 24px", textAlign: "center" }}>
+                <Card variant="elevated" padding="xl" style={{ textAlign: "center" }}>
                   <span className="material-symbols-outlined" style={{ fontSize: "44px", color: "var(--color-success, #16a34a)", marginBottom: "12px" }}>
                     check_circle
                   </span>
@@ -1223,13 +1223,13 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
                       const isLoading = !!loadingSystemDiffs[f.path];
 
                       return (
-                        <Card key={f.path} variant="elevated" style={{ padding: 0 }}>
+                        <Card key={f.path} variant="elevated" padding="none">
                           <div
                             style={{
                               display: "flex",
                               alignItems: "center",
                               justifyContent: "space-between",
-                              padding: "12px 18px",
+                              padding: "14px 20px",
                               background: "var(--color-surface-subtle, #f8fafc)",
                               borderBottom: isExpanded ? "1px solid var(--color-border-subtle, #e2e8f0)" : "none",
                               flexWrap: "wrap",

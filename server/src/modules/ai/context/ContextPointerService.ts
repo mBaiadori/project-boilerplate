@@ -69,10 +69,15 @@ export class ContextPointerService {
       }
     }
 
-    // Memória / Handoff
+    // Memória, Wiki e Handoffs
     const memoryDir = path.join(projectRoot, '.spec-memory');
     if (fs.existsSync(memoryDir)) {
       pointers.push(`- Memória viva e histórico de decisões: ${memoryDir}`);
+      const wikiDir = path.join(memoryDir, 'wiki');
+      if (fs.existsSync(wikiDir)) {
+        pointers.push(`- Base de Conhecimento Wiki: ${wikiDir} (contém subpastas decisions/, _rules/, concepts/, gotchas/, handoffs/)`);
+        pointers.push(`*Dica de Agente: Use as ferramentas 'memory_wiki_search', 'memory_wiki_get' e 'memory_wiki_upsert' para consultar e atualizar a Wiki.*`);
+      }
     }
 
     return pointers;

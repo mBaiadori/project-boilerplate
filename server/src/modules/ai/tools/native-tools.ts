@@ -6,6 +6,7 @@ import { docsMetadataService } from "../../workspace/docs-metadata.service.js";
 import { dictionaryService } from "../../dictionary/dictionary.service.js";
 import { templatesService } from "../../templates/templates.service.js";
 import { customToolsService } from "../../skills/custom-tools.service.js";
+import { wikiService } from "../../wiki/wiki.service.js";
 
 function getSafeRepoPath(
   repoName: string,
@@ -506,6 +507,135 @@ export const nativeTools: AgentTool[] = [
         };
       } catch (err: any) {
         return { success: false, error: `Erro ao ler memória: ${err.message}` };
+      }
+    },
+  },
+
+  {
+    name: "memory_wiki_search",
+    description:
+      "Pesquisa por palavras-chave ou lista notas e decisões na Base de Conhecimento Wiki do projeto (.spec-memory/wiki/).",
+    parameters: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description: "Termo de busca ou palavra-chave para filtrar notas da Wiki (opcional).",
+        },
+        category: {
+          type: "string",
+          enum: ["all", "decisions", "_rules", "concepts", "gotchas", "handoffs", "geral"],
+          description: "Filtrar por categoria específica (decisions = ADRs, _rules = regras de governança, concepts = termos/domínio, gotchas = armadilhas/bugs, handoffs = marcos de sessão, all = todas).",
+        },
+      },
+    },
+    execute: async (args, context): Promise<ToolResult> => {
+      try {
+        const pages = wikiService.getWikiPages(context.repoName, args.category, args.query);
+        return {
+          success: true,
+          data: {
+            total: pages.length,
+            category: args.category || "all",
+            query: args.query || "",
+            entries: pages.map((p) => ({
+              slug: p.slug,
+              title: p.title,
+              category: p.category,
+              snippet: p.content.slice(0, 160).replace(/\n+/g, " ") + (p.content.length > 160 ? "..." : ""),
+              updated_at: p.updated_at,
+              path: p.path,
+            })),
+          },
+        };
+      } catch (err: any) {
+        return { success: false, error: `Erro ao buscar na Wiki: ${err.message}` };
+      }
+    },
+  },
+
+  {
+    name: "memory_wiki_get",
+    description:
+      "Recupera o conteúdo completo de uma nota específica da Wiki do projeto por categoria e slug.",
+    parameters: {
+      type: "object",
+      properties: {
+        category: {
+          type: "string",
+          description: 'Categoria da nota (ex: "decisions", "_rules", "concepts", "gotchas", "handoffs", "geral").',
+        },
+        slug: {
+          type: "string",
+          description: 'Slug identificador da nota (ex: "0001-autenticacao-stateless", "regra-lgpd-sanitizacao-logs").',
+        },
+      },
+      required: ["category", "slug"],
+    },
+    execute: async (args, context): Promise<ToolResult> => {
+      try {
+        const page = wikiService.getWikiPage(args.category, args.slug, context.repoName);
+        if (!page) {
+          return {
+            success: false,
+            error: `Nota '${args.slug}' não encontrada na categoria '${args.category}'.`,
+          };
+        }
+        return {
+          success: true,
+          data: page,
+        };
+      } catch (err: any) {
+        return { success: false, error: `Erro ao ler nota da Wiki: ${err.message}` };
+      }
+    },
+  },
+
+  {
+    name: "memory_wiki_upsert",
+    description:
+      "Cria ou atualiza uma nota de conhecimento na Wiki do projeto (.spec-memory/wiki/) nas categorias decisions, _rules, concepts, gotchas ou handoffs.",
+    parameters: {
+      type: "object",
+      properties: {
+        category: {
+          type: "string",
+          enum: ["decisions", "_rules", "concepts", "gotchas", "handoffs", "geral"],
+          description: "Categoria da nota (decisions, _rules, concepts, gotchas, handoffs, geral).",
+        },
+        title: {
+          type: "string",
+          description: "Título descritivo da nota (ex: 'ADR 0003: Validação de Payload com Zod').",
+        },
+        slug: {
+          type: "string",
+          description: "Slug identificador único do arquivo (ex: '0003-validacao-zod'). Se omitido, será gerado a partir do título.",
+        },
+        content: {
+          type: "string",
+          description: "Conteúdo completo da nota formatado em Markdown.",
+        },
+      },
+      required: ["category", "title", "content"],
+    },
+    execute: async (args, context): Promise<ToolResult> => {
+      try {
+        const result = wikiService.saveWikiPage(
+          args.category,
+          args.slug || args.title,
+          args.title,
+          args.content,
+          context.repoName
+        );
+        return {
+          success: true,
+          data: {
+            message: `Nota '${result.page.title}' salva com sucesso em '.spec-memory/wiki/${result.page.category}/${result.page.slug}.md'`,
+            page: result.page,
+          },
+        };
+      } catch (err: any) {
+        return { success: false, error: `Erro ao salvar nota na Wiki: ${err.message}` };
       }
     },
   },

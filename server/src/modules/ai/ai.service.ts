@@ -8,6 +8,7 @@ import { loadConfig } from '../../config/storage.js';
 import { toolRegistry } from './tools/ToolRegistry.js';
 import { ToolCallExecutionRecord } from './tools/tool.types.js';
 import { estimateTokens, calculateTokenCost } from './tokens.helper.js';
+import { wikiService } from '../wiki/wiki.service.js';
 
 export interface ChatMessage {
   role: 'user' | 'model' | 'assistant' | 'system';
@@ -781,6 +782,19 @@ export class AIService {
 
     const archiveHandoffFile = path.join(handoffsDir, `handoff-${sessionId}.md`);
     fs.writeFileSync(archiveHandoffFile, content, 'utf-8');
+
+    // Persistir automaticamente na Base Wiki sob a categoria 'handoffs'
+    try {
+      wikiService.saveWikiPage(
+        'handoffs',
+        `handoff-${sessionId}`,
+        `Handoff: ${filePath || 'Global'} (${nowStr})`,
+        content,
+        repoName
+      );
+    } catch (wikiErr) {
+      console.error('[AIService] Erro ao sincronizar handoff na Wiki:', wikiErr);
+    }
 
     return {
       success: true,

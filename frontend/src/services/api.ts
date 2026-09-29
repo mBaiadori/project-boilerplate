@@ -403,9 +403,10 @@ export const API = {
     return { ok: res.ok, data: await res.json() };
   },
 
-  async getMemoryWiki(params: { repo?: string; query?: string } = {}): Promise<ApiResponse<any>> {
+  async getMemoryWiki(params: { repo?: string; category?: string; query?: string } = {}): Promise<ApiResponse<any>> {
     const query = new URLSearchParams();
     if (params.repo) query.set('repo', params.repo);
+    if (params.category && params.category !== 'all') query.set('category', params.category);
     if (params.query) query.set('q', params.query);
     const res = await fetch(`/api/chat/memory/wiki?${query.toString()}`);
     return { ok: res.ok, data: await res.json() };

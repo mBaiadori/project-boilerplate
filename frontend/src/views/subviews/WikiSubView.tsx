@@ -136,7 +136,7 @@ export const WikiSubView: React.FC = () => {
         query: searchQuery,
       });
       if (res.ok && res.data) {
-        const rawEntries: WikiEntry[] = res.data.entries || [];
+        const rawEntries: WikiEntry[] = res.data.entries || res.data.wiki || [];
         setEntries(rawEntries);
         if (rawEntries.length > 0 && !activeEntry) {
           setActiveEntry(rawEntries[0]);
