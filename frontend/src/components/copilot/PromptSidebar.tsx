@@ -130,8 +130,8 @@ export const PromptSidebar: React.FC<PromptSidebarProps> = ({
               }}
             >
               {isTemplateEditorMode
-                ? "🛠️ Arquiteto & Template"
-                : "📄 Documento & Template"}{" "}
+                ? "Arquiteto & Template"
+                : "Documento & Template"}{" "}
               &bull;{" "}
               <span className="ai-copilot-prompt-agent-tag">{agentName}</span>
             </span>

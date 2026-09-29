@@ -47,6 +47,7 @@ export class DirectApiProvider implements IAgentProvider {
       history?: ProviderMessage[];
       briefing?: string;
       contextPointers?: string[];
+      content?: string;
     }
   ): Promise<{ reply: string; toolCalls?: any[] }> {
     const session = this.sessions.get(sessionId);
@@ -72,7 +73,7 @@ export class DirectApiProvider implements IAgentProvider {
       const result = await aiService.callLLM(
         aiSettings,
         message,
-        '',
+        options?.content || '',
         'index.md',
         (options?.history || []).map((h) => ({ role: h.role, text: h.content })),
         systemPrompt,
@@ -109,11 +110,31 @@ export class DirectApiProvider implements IAgentProvider {
         timestamp: Date.now(),
       });
 
+      if (result.usage) {
+        onEvent({
+          type: 'stream_telemetry',
+          provider: this.id,
+          sessionId,
+          data: {
+            usage: result.usage,
+            toolCalls: result.tool_calls,
+            model: result.model,
+            duration_ms: result.duration_ms,
+          },
+          timestamp: Date.now(),
+        });
+      }
+
       onEvent({
         type: 'done',
         provider: this.id,
         sessionId,
-        data: { reply: result.reply, model: result.model },
+        data: {
+          reply: result.reply,
+          model: result.model,
+          usage: result.usage,
+          duration_ms: result.duration_ms,
+        },
         timestamp: Date.now(),
       });
 

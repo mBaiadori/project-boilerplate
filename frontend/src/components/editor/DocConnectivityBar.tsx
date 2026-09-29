@@ -8,6 +8,46 @@ interface DocConnectivityBarProps {
   onNavigateFile: (path: string) => void;
 }
 
+const TAG_PALETTES: Record<string, { bg: string; color: string; border: string }> = {
+  rfc: { bg: 'rgba(99, 102, 241, 0.12)', color: '#4f46e5', border: 'rgba(99, 102, 241, 0.25)' },
+  prd: { bg: 'rgba(168, 85, 247, 0.12)', color: '#7e22ce', border: 'rgba(168, 85, 247, 0.25)' },
+  api: { bg: 'rgba(14, 165, 233, 0.12)', color: '#0284c7', border: 'rgba(14, 165, 233, 0.25)' },
+  backend: { bg: 'rgba(59, 130, 246, 0.12)', color: '#2563eb', border: 'rgba(59, 130, 246, 0.25)' },
+  frontend: { bg: 'rgba(236, 72, 153, 0.12)', color: '#db2777', border: 'rgba(236, 72, 153, 0.25)' },
+  infra: { bg: 'rgba(234, 88, 12, 0.12)', color: '#c2410c', border: 'rgba(234, 88, 12, 0.25)' },
+  sipoc: { bg: 'rgba(20, 184, 166, 0.12)', color: '#0f766e', border: 'rgba(20, 184, 166, 0.25)' },
+  processos: { bg: 'rgba(245, 158, 11, 0.12)', color: '#d97706', border: 'rgba(245, 158, 11, 0.25)' },
+  qualidade: { bg: 'rgba(16, 185, 129, 0.12)', color: '#059669', border: 'rgba(16, 185, 129, 0.25)' },
+  security: { bg: 'rgba(239, 68, 68, 0.12)', color: '#dc2626', border: 'rgba(239, 68, 68, 0.25)' },
+  database: { bg: 'rgba(139, 92, 246, 0.12)', color: '#6d28d9', border: 'rgba(139, 92, 246, 0.25)' },
+};
+
+function getTagStyle(tagName: string, customColor?: string) {
+  if (customColor && customColor !== '#3b82f6' && customColor !== '#6366f1') {
+    return {
+      background: `${customColor}15`,
+      color: customColor,
+      borderColor: `${customColor}35`,
+    };
+  }
+  const normalized = tagName.toLowerCase().trim();
+  if (TAG_PALETTES[normalized]) {
+    return {
+      background: TAG_PALETTES[normalized].bg,
+      color: TAG_PALETTES[normalized].color,
+      borderColor: TAG_PALETTES[normalized].border,
+    };
+  }
+  let hash = 0;
+  for (let i = 0; i < normalized.length; i++) hash = (hash << 5) - hash + normalized.charCodeAt(i);
+  const hue = Math.abs(hash) % 360;
+  return {
+    background: `hsla(${hue}, 70%, 50%, 0.1)`,
+    color: `hsl(${hue}, 75%, 38%)`,
+    borderColor: `hsla(${hue}, 70%, 50%, 0.25)`,
+  };
+}
+
 export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
   filePath,
   onNavigateFile,
@@ -74,8 +114,8 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
   const currentTags: string[] = Array.isArray(fileMetadata?.tags) ? fileMetadata.tags : [];
   const currentApprovers: string[] = Array.isArray(fileMetadata?.approvers) ? fileMetadata.approvers : [];
   const currentId = fileMetadata?.id || "";
+  const currentTemplateId = fileMetadata?.templateId || fileMetadata?.template || contextData?.templateId || contextData?.template || "";
   const currentUpdatedAt = fileMetadata?.updated_at || "";
-  const currentPrompt = fileMetadata?.prompt || "";
 
   // Opções do projeto
   const statusOptions = useMemo<StatusItem[]>(() => {
@@ -257,7 +297,7 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
               borderRadius: "5px",
               padding: "4px 8px",
             }}
-            title="Gerenciar e editar metadados do documento (.docs.metadata.json)"
+            title="Gerenciar propriedades do documento"
           >
             <span className="material-symbols-outlined icon-xs" style={{ color: "#2563eb", fontSize: "15px" }}>
               tune
@@ -282,7 +322,7 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
             </span>
           </button>
 
-          {/* Painel Flutuante de Metadados */}
+          {/* Painel Flutuante de Propriedades */}
           {showProperties && (
             <div
               id="doc-properties-popover"
@@ -293,10 +333,10 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
                 background: "var(--color-surface, #ffffff)",
                 border: "1px solid var(--color-outline-variant, #cbd5e1)",
                 borderRadius: "10px",
-                boxShadow: "0 12px 32px rgba(0,0,0,0.18)",
+                boxShadow: "0 12px 32px rgba(0,0,0,0.14)",
                 padding: "14px 16px",
-                minWidth: "340px",
-                maxWidth: "380px",
+                minWidth: "350px",
+                maxWidth: "390px",
                 zIndex: 110,
                 display: "flex",
                 flexDirection: "column",
@@ -305,42 +345,42 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
               }}
             >
               {/* Header do Popover */}
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #f1f5f9", paddingBottom: "8px" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--color-outline-variant, #f1f5f9)", paddingBottom: "8px" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                   <span className="material-symbols-outlined icon-xs" style={{ color: "var(--primary, #2563eb)" }}>
                     tune
                   </span>
                   <strong style={{ fontSize: "12.5px", color: "var(--color-on-surface, #0f172a)" }}>
-                    Metadados do Documento
+                    Propriedades
                   </strong>
                 </div>
-                <span style={{ fontSize: "10px", color: "#94a3b8" }}>.docs.metadata.json</span>
+                {currentTemplateId && (
+                  <span
+                    style={{
+                      fontSize: "10px",
+                      padding: "2px 6px",
+                      borderRadius: "4px",
+                      background: "rgba(37,99,235,0.08)",
+                      color: "#2563eb",
+                      fontWeight: 600,
+                    }}
+                    title="Template base do documento"
+                  >
+                    Template: {currentTemplateId}
+                  </span>
+                )}
               </div>
 
               {/* Título do Documento */}
               <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <span style={{ fontSize: "11px", fontWeight: 600, color: "#64748b" }}>Título Cadastrado:</span>
-                  <span
-                    style={{
-                      fontSize: "10px",
-                      padding: "1px 5px",
-                      borderRadius: "4px",
-                      background: currentTitle ? "rgba(16,185,129,0.1)" : "rgba(239,68,68,0.1)",
-                      color: currentTitle ? "#10b981" : "#ef4444",
-                      fontWeight: 600,
-                    }}
-                  >
-                    {currentTitle ? "Título Definido" : "Sem Título"}
-                  </span>
-                </div>
+                <span style={{ fontSize: "11px", fontWeight: 600, color: "var(--color-outline, #64748b)" }}>Título</span>
                 <input
                   type="text"
                   className="form-input"
-                  placeholder="Defina o título do documento..."
+                  placeholder="Título do documento..."
                   value={currentTitle}
                   onChange={(e) => updateFileMetadata({ title: e.target.value })}
-                  style={{ fontSize: "12px", padding: "6px 8px", borderRadius: "5px", border: "1px solid #cbd5e1" }}
+                  style={{ fontSize: "12px", padding: "6px 8px", borderRadius: "5px", border: "1px solid var(--color-outline-variant, #cbd5e1)" }}
                 />
               </div>
 
@@ -348,7 +388,7 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
                 {/* Status */}
                 <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                  <span style={{ fontSize: "11px", fontWeight: 600, color: "#64748b" }}>Status:</span>
+                  <span style={{ fontSize: "11px", fontWeight: 600, color: "var(--color-outline, #64748b)" }}>Status</span>
                   <select
                     className="form-select"
                     value={currentStatus}
@@ -357,9 +397,10 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
                       fontSize: "11.5px",
                       padding: "5px 8px",
                       borderRadius: "5px",
-                      border: "1px solid #cbd5e1",
+                      border: "1px solid var(--color-outline-variant, #cbd5e1)",
                       background: "#fff",
                       cursor: "pointer",
+                      fontWeight: 500,
                     }}
                   >
                     {statusOptions.map((opt) => (
@@ -372,7 +413,7 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
 
                 {/* Categoria */}
                 <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                  <span style={{ fontSize: "11px", fontWeight: 600, color: "#64748b" }}>Categoria:</span>
+                  <span style={{ fontSize: "11px", fontWeight: 600, color: "var(--color-outline, #64748b)" }}>Categoria</span>
                   <select
                     className="form-select"
                     value={currentCategories}
@@ -381,9 +422,10 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
                       fontSize: "11.5px",
                       padding: "5px 8px",
                       borderRadius: "5px",
-                      border: "1px solid #cbd5e1",
+                      border: "1px solid var(--color-outline-variant, #cbd5e1)",
                       background: "#fff",
                       cursor: "pointer",
+                      fontWeight: 500,
                     }}
                   >
                     <option value="">(Nenhuma)</option>
@@ -398,79 +440,103 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
 
               {/* Tags */}
               <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                <span style={{ fontSize: "11px", fontWeight: 600, color: "#64748b" }}>Tags de Taxonomia:</span>
+                <span style={{ fontSize: "11px", fontWeight: 600, color: "var(--color-outline, #64748b)" }}>Tags</span>
                 
-                {/* Chips de tags existentes */}
+                {/* Chips de tags ativas com cores */}
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", minHeight: "26px", alignItems: "center" }}>
                   {currentTags.length === 0 ? (
                     <span style={{ fontSize: "11px", color: "#94a3b8", fontStyle: "italic" }}>
-                      Nenhuma tag vinculada.
+                      Nenhuma tag atribuída.
                     </span>
                   ) : (
-                    currentTags.map((tag) => (
-                      <span
-                        key={tag}
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: "3px",
-                          fontSize: "10.5px",
-                          padding: "2px 7px",
-                          borderRadius: "12px",
-                          background: "rgba(37,99,235,0.08)",
-                          color: "#1d4ed8",
-                          fontWeight: 500,
-                        }}
-                      >
-                        #{tag}
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveTag(tag)}
+                    currentTags.map((tag) => {
+                      const tagOpt = availableTags.find((t) => t.name === tag);
+                      const style = getTagStyle(tag, tagOpt?.color);
+                      return (
+                        <span
+                          key={tag}
                           style={{
-                            background: "transparent",
-                            border: "none",
-                            cursor: "pointer",
-                            padding: 0,
                             display: "inline-flex",
                             alignItems: "center",
-                            color: "#94a3b8",
+                            gap: "4px",
+                            fontSize: "11px",
+                            padding: "2px 7px",
+                            borderRadius: "12px",
+                            background: style.background,
+                            color: style.color,
+                            border: `1px solid ${style.borderColor}`,
+                            fontWeight: 600,
                           }}
-                          title={`Remover tag ${tag}`}
                         >
-                          <span className="material-symbols-outlined" style={{ fontSize: "12px" }}>
-                            close
-                          </span>
-                        </button>
-                      </span>
-                    ))
+                          #{tag}
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveTag(tag)}
+                            style={{
+                              background: "transparent",
+                              border: "none",
+                              cursor: "pointer",
+                              padding: 0,
+                              display: "inline-flex",
+                              alignItems: "center",
+                              color: "inherit",
+                              opacity: 0.7,
+                            }}
+                            title={`Remover #${tag}`}
+                          >
+                            <span className="material-symbols-outlined" style={{ fontSize: "12px" }}>
+                              close
+                            </span>
+                          </button>
+                        </span>
+                      );
+                    })
                   )}
                 </div>
 
-                {/* Seletor rápido de tags sugeridas e input customizado */}
-                <div style={{ display: "flex", gap: "6px", alignItems: "center", marginTop: "2px" }}>
-                  <select
-                    className="form-select"
-                    value=""
-                    onChange={(e) => {
-                      if (e.target.value) handleAddTag(e.target.value);
-                    }}
-                    style={{ fontSize: "11px", padding: "4px 6px", borderRadius: "4px", flex: 1 }}
-                  >
-                    <option value="">+ Escolher tag do projeto...</option>
+                {/* Sugestões rápidas de tags do projeto (.project.json) */}
+                {availableTags.filter((t) => !currentTags.includes(t.name)).length > 0 && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", alignItems: "center", marginTop: "2px" }}>
+                    <span style={{ fontSize: "10px", color: "#94a3b8", marginRight: "2px" }}>Sugeridas:</span>
                     {availableTags
                       .filter((t) => !currentTags.includes(t.name))
-                      .map((t) => (
-                        <option key={t.name} value={t.name}>
-                          #{t.name}
-                        </option>
-                      ))}
-                  </select>
-                </div>
-                <div style={{ display: "flex", gap: "4px" }}>
+                      .slice(0, 7)
+                      .map((t) => {
+                        const style = getTagStyle(t.name, t.color);
+                        return (
+                          <button
+                            key={t.name}
+                            type="button"
+                            onClick={() => handleAddTag(t.name)}
+                            style={{
+                              border: `1px dashed ${style.borderColor}`,
+                              background: "transparent",
+                              color: style.color,
+                              borderRadius: "10px",
+                              fontSize: "10px",
+                              padding: "1px 6px",
+                              cursor: "pointer",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "2px",
+                              fontWeight: 500,
+                              transition: "all 0.15s",
+                            }}
+                            title={`Adicionar #${t.name}`}
+                          >
+                            +{t.name}
+                          </button>
+                        );
+                      })}
+                  </div>
+                )}
+
+                {/* Input para adicionar nova tag */}
+                <div style={{ display: "flex", gap: "4px", marginTop: "2px" }}>
                   <input
                     type="text"
                     className="form-input"
-                    placeholder="Nova tag customizada..."
+                    placeholder="Adicionar tag..."
                     value={newTagInput}
                     onChange={(e) => setNewTagInput(e.target.value)}
                     onKeyDown={(e) => {
@@ -479,7 +545,7 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
                         handleAddTag(newTagInput);
                       }
                     }}
-                    style={{ fontSize: "11px", padding: "4px 6px", borderRadius: "4px", flex: 1 }}
+                    style={{ fontSize: "11px", padding: "4px 7px", borderRadius: "4px", flex: 1 }}
                   />
                   <button
                     type="button"
@@ -494,11 +560,11 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
 
               {/* Aprovadores (Approvers) */}
               <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                <span style={{ fontSize: "11px", fontWeight: 600, color: "#64748b" }}>Aprovadores (Approvers):</span>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", minHeight: "24px", alignItems: "center" }}>
+                <span style={{ fontSize: "11px", fontWeight: 600, color: "var(--color-outline, #64748b)" }}>Aprovadores</span>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", minHeight: "22px", alignItems: "center" }}>
                   {currentApprovers.length === 0 ? (
                     <span style={{ fontSize: "11px", color: "#94a3b8", fontStyle: "italic" }}>
-                      Nenhum aprovador formal atribuído.
+                      Nenhum aprovador atribuído.
                     </span>
                   ) : (
                     currentApprovers.map((appr) => (
@@ -551,7 +617,7 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
                         handleAddApprover();
                       }
                     }}
-                    style={{ fontSize: "11px", padding: "4px 6px", borderRadius: "4px", flex: 1 }}
+                    style={{ fontSize: "11px", padding: "4px 7px", borderRadius: "4px", flex: 1 }}
                   />
                   <button
                     type="button"
@@ -564,57 +630,44 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
                 </div>
               </div>
 
-              {/* Prompt do Copilot (Contexto IA do Documento) */}
+              {/* Template ID */}
               <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                <span style={{ fontSize: "11px", fontWeight: 600, color: "var(--color-primary, #2563eb)" }}>
-                  Prompt do Copilot (Contexto IA):
-                </span>
-                <textarea
-                  rows={3}
-                  className="form-input"
-                  placeholder="Instrução do assistente IA para este documento..."
-                  value={currentPrompt}
-                  onChange={(e) => updateFileMetadata({ prompt: e.target.value })}
-                  style={{
-                    fontSize: "11px",
-                    padding: "6px 8px",
-                    borderRadius: "4px",
-                    border: "1px solid #cbd5e1",
-                    resize: "vertical",
-                    fontFamily: "monospace",
-                    background: "#f8fafc",
-                  }}
-                />
+                <span style={{ fontSize: "11px", fontWeight: 600, color: "var(--color-outline, #64748b)" }}>Template ID</span>
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="Identificador de template (ex: sipoc, rfc)..."
+                    value={currentTemplateId}
+                    onChange={(e) => updateFileMetadata({ templateId: e.target.value })}
+                    style={{ fontSize: "11px", padding: "4px 7px", borderRadius: "4px", flex: 1, fontFamily: "monospace" }}
+                  />
+                </div>
               </div>
 
-              {/* Informações do Sistema (Read-only) */}
+              {/* Informações do Sistema (Minimalista) */}
               <div
                 style={{
-                  background: "#f8fafc",
+                  background: "var(--color-surface-container-low, #f8fafc)",
                   borderRadius: "6px",
-                  padding: "8px 10px",
+                  padding: "7px 10px",
                   fontSize: "10.5px",
                   color: "#64748b",
                   display: "flex",
                   flexDirection: "column",
                   gap: "3px",
-                  border: "1px solid #f1f5f9",
+                  border: "1px solid var(--color-outline-variant, #f1f5f9)",
                 }}
               >
-                <div>
-                  <strong>ID: </strong>
-                  <code>{currentId || "gerado automaticamente"}</code>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span><strong>ID: </strong><code>{currentId || "auto"}</code></span>
+                  <span>{dependencies.length} deps &bull; {consumers.length} cons</span>
                 </div>
                 {currentUpdatedAt && (
                   <div>
-                    <strong>Última atualização: </strong>
-                    <span>{new Date(currentUpdatedAt).toLocaleString()}</span>
+                    <span><strong>Atualizado: </strong>{new Date(currentUpdatedAt).toLocaleDateString()}</span>
                   </div>
                 )}
-                <div>
-                  <strong>Conexões: </strong>
-                  <span>{dependencies.length} dependências, {consumers.length} consumidores</span>
-                </div>
               </div>
             </div>
           )}

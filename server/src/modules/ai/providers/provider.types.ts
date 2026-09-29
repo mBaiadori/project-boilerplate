@@ -15,6 +15,7 @@ export type StreamEventType =
   | 'approval_request'
   | 'status'
   | 'error'
+  | 'stream_telemetry'
   | 'done';
 
 export interface ProviderStreamEvent {
@@ -84,6 +85,7 @@ export interface IAgentProvider {
       history?: ProviderMessage[];
       briefing?: string;
       contextPointers?: string[];
+      content?: string;
     }
   ): Promise<{ reply: string; toolCalls?: any[] }>;
 

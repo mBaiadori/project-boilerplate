@@ -166,8 +166,21 @@ export class AntigravityAdapter implements IAgentProvider {
       let finalReply = '';
 
       try {
+        const cfg = loadConfig();
+        const effort = (cfg.settings as any)?.agent_effort || 'medium';
+        const model = (cfg.settings as any)?.agent_model;
+
+        const spawnArgs: string[] = ['--dangerously-skip-permissions'];
+        if (effort) {
+          spawnArgs.push('--effort', effort);
+        }
+        if (model) {
+          spawnArgs.push('--model', model);
+        }
+        spawnArgs.push('-p', formattedPrompt);
+
         // Dispara o processo diretamente sem shell intermediário para evitar falha de parse de strings
-        const child = spawn(cli.command, [...cli.argsPrefix, formattedPrompt], {
+        const child = spawn(cli.command, spawnArgs, {
           cwd: targetCwd,
           env: {
             ...process.env,

@@ -3,12 +3,17 @@
 // CRUD visual de templates + Edição rica com NotionEditor + Copilot Prompt Unificado
 // =============================================================================
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import type { TemplateItem, SkillItem } from "../../types";
 import { API } from "../../services/api";
 import { useTemplate, useTemplateStore } from "../../hooks/useTemplate";
 import { useAI } from "../../context/AIContext";
 import { NotionEditor } from "../../components/editor/NotionEditor";
+import { useWorkspace } from "../../context/WorkspaceContext";
+import {
+  SelectDropdown,
+  type SelectOption,
+} from "../../components/common/SelectDropdown";
 import {
   Button,
   IconButton,
@@ -41,8 +46,11 @@ import {
   Globe,
   Folder,
   Tag,
-  CheckCircle2,
   MinusCircle,
+  X,
+  Lock,
+  FileText,
+  Type,
 } from "lucide-react";
 
 interface TemplatesSubViewProps {
@@ -52,17 +60,76 @@ interface TemplatesSubViewProps {
 type Tab = "projeto" | "comunidade";
 type ViewMode = "grid" | "editor";
 
-const CATEGORY_SUGGESTIONS = [
-  "geral",
-  "engenharia",
-  "arquitetura",
-  "requisitos",
-  "api",
-  "produto",
-  "design",
+const DEFAULT_CATEGORY_OPTIONS: SelectOption[] = [
+  {
+    value: "geral",
+    label: "Geral",
+    description: "Diretrizes e documentação padrão",
+    icon: "folder",
+  },
+  {
+    value: "engenharia",
+    label: "Engenharia",
+    description: "Arquitetura de software e código",
+    icon: "terminal",
+  },
+  {
+    value: "arquitetura",
+    label: "Arquitetura",
+    description: "Decisões técnicas e ADRs",
+    icon: "account_tree",
+  },
+  {
+    value: "requisitos",
+    label: "Requisitos",
+    description: "Especificações funcionais e RFCs",
+    icon: "fact_check",
+  },
+  {
+    value: "api",
+    label: "API & Contratos",
+    description: "Endpoints, REST e GraphQL",
+    icon: "api",
+  },
+  {
+    value: "produto",
+    label: "Produto",
+    description: "PRDs, visão e roadmap",
+    icon: "inventory_2",
+  },
+  {
+    value: "design",
+    label: "Design & UX",
+    description: "Design system e interfaces",
+    icon: "palette",
+  },
+  {
+    value: "devops",
+    label: "DevOps",
+    description: "CI/CD, infraestrutura e cloud",
+    icon: "cloud_sync",
+  },
+  {
+    value: "seguranca",
+    label: "Segurança",
+    description: "Governança e conformidade",
+    icon: "security",
+  },
+];
+
+const DEFAULT_BADGE_PRESETS: Array<{ name: string; color?: string; description?: string }> = [
+  { name: "RFC", color: "#a855f7", description: "Request for Comments" },
+  { name: "ADR", color: "#3b82f6", description: "Architecture Decision Record" },
+  { name: "PRD", color: "#f97316", description: "Product Requirements Document" },
+  { name: "DOC", color: "#22c55e", description: "Documentação Técnica" },
+  { name: "API", color: "#06b6d4", description: "Especificação de API" },
+  { name: "SPEC", color: "#6366f1", description: "Especificação de Funcionalidade" },
+  { name: "GUIDE", color: "#ec4899", description: "Guia e Manual" },
+  { name: "TEST", color: "#eab308", description: "Plano de Testes" },
 ];
 
 export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
+  const { projectMetaOptions, projectConfig } = useWorkspace();
   const {
     templates,
     communityTemplates,
@@ -103,7 +170,8 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
   const [tplCategory, setTplCategory] = useState("");
   const [tplBadge, setTplBadge] = useState("");
   const [tplDesc, setTplDesc] = useState("");
-  const [tplTags, setTplTags] = useState("");
+  const [tplTags, setTplTags] = useState<string[]>([]);
+  const [tagInputValue, setTagInputValue] = useState("");
   const [tplContent, setTplContent] = useState("");
   const [tplPrompt, setTplPrompt] = useState("");
   const [tplSkills, setTplSkills] = useState<string[]>([]);
@@ -199,6 +267,89 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
     return matchesCat && matchesSearch;
   });
 
+  // Dynamic Badge Presets from .project.config.json or Defaults
+  const badgePresets = useMemo<
+    Array<{ name: string; color?: string; description?: string }>
+  >(() => {
+    const raw = projectMetaOptions?.badges || projectConfig?.badges;
+    if (Array.isArray(raw) && raw.length > 0) {
+      return raw
+        .map((b: any) =>
+          typeof b === "string"
+            ? { name: b.toUpperCase() }
+            : {
+                name: String(b.name || "").toUpperCase(),
+                color: b.color,
+                description: b.description,
+              },
+        )
+        .filter((b) => Boolean(b.name));
+    }
+    return DEFAULT_BADGE_PRESETS;
+  }, [projectMetaOptions?.badges, projectConfig?.badges]);
+
+  // Options for Category SelectDropdown from .project.config.json or Defaults
+  const categoryDropdownOptions: SelectOption[] = useMemo(() => {
+    const rawProjectCats =
+      projectMetaOptions?.categories || projectConfig?.categories;
+    let baseList: SelectOption[] = [];
+
+    if (Array.isArray(rawProjectCats) && rawProjectCats.length > 0) {
+      baseList = rawProjectCats.map((cat: any) => {
+        const name = typeof cat === "string" ? cat : cat.name;
+        const lower = String(name || "").toLowerCase();
+        const defaultMatch = DEFAULT_CATEGORY_OPTIONS.find(
+          (d) => d.value.toLowerCase() === lower,
+        );
+        return {
+          value: lower,
+          label: defaultMatch
+            ? defaultMatch.label
+            : name.charAt(0).toUpperCase() + name.slice(1),
+          description:
+            defaultMatch?.description || `Categoria do projeto (${name})`,
+          icon: defaultMatch?.icon || "folder",
+        };
+      });
+    } else {
+      baseList = [...DEFAULT_CATEGORY_OPTIONS];
+    }
+
+    if (
+      tplCategory &&
+      !baseList.some(
+        (o) => o.value.toLowerCase() === tplCategory.toLowerCase().trim(),
+      )
+    ) {
+      baseList.push({
+        value: tplCategory,
+        label: tplCategory.charAt(0).toUpperCase() + tplCategory.slice(1),
+        description: "Categoria personalizada",
+        icon: "label",
+      });
+    }
+    return baseList;
+  }, [projectMetaOptions?.categories, projectConfig?.categories, tplCategory]);
+
+  // Options for Skills SelectDropdown
+  const skillDropdownOptions: SelectOption[] = useMemo(() => {
+    return availableSkills.map((s) => {
+      const isSelected = tplSkills.includes(s.id);
+      return {
+        value: s.id,
+        label: s.title || s.name || s.id,
+        description: s.description
+          ? s.description.length > 75
+            ? `${s.description.slice(0, 75)}...`
+            : s.description
+          : `Skill padrão ECC (${s.id})`,
+        icon: "auto_awesome",
+        badge: isSelected ? "Vinculada" : undefined,
+        badgeType: isSelected ? "primary" : undefined,
+      };
+    });
+  }, [availableSkills, tplSkills]);
+
   const handleOpenCreate = () => {
     setIsEditMode(false);
     setTplId("");
@@ -207,7 +358,8 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
     setTplCategory("engenharia");
     setTplBadge("DOC");
     setTplDesc("");
-    setTplTags("");
+    setTplTags([]);
+    setTagInputValue("");
     setTplContent(
       "# Novo Documento Técnico\n\n## 1. Visão Geral\nDescreva aqui o propósito.",
     );
@@ -239,7 +391,8 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
     setTplCategory(tpl.category || "geral");
     setTplBadge(tpl.badge || "");
     setTplDesc(tpl.description || "");
-    setTplTags((tpl.tags || []).join(", "));
+    setTplTags(tpl.tags || []);
+    setTagInputValue("");
     setTplContent(tpl.content || "");
     setTplPrompt(tpl.prompt || "");
     setTplSkills(tpl.skills || []);
@@ -262,6 +415,41 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
     setViewMode("editor");
   };
 
+  const handleAddTag = (tag: string) => {
+    const clean = tag.trim().replace(/^#/, "");
+    if (clean && !tplTags.includes(clean)) {
+      const updated = [...tplTags, clean];
+      setTplTags(updated);
+      updateActiveEditingTemplate({ tags: updated });
+    }
+    setTagInputValue("");
+  };
+
+  const handleRemoveTag = (tagToRemove: string) => {
+    const updated = tplTags.filter((t) => t !== tagToRemove);
+    setTplTags(updated);
+    updateActiveEditingTemplate({ tags: updated });
+  };
+
+  const handleSkillSelect = (selectedId: string) => {
+    if (!selectedId) return;
+    if (!tplSkills.includes(selectedId)) {
+      const updated = [...tplSkills, selectedId];
+      setTplSkills(updated);
+      setActiveSkillId(selectedId);
+      updateActiveEditingTemplate({ skills: updated });
+    }
+  };
+
+  const handleRemoveSkill = (skillId: string) => {
+    const updated = tplSkills.filter((id) => id !== skillId);
+    setTplSkills(updated);
+    if (updated.length > 0) {
+      setActiveSkillId(updated[0]);
+    }
+    updateActiveEditingTemplate({ skills: updated });
+  };
+
   const handleSaveTemplate = async () => {
     if (!tplTitle.trim()) {
       setSaveError("O título do template é obrigatório.");
@@ -274,10 +462,7 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
       return;
     }
 
-    const tagsArray = tplTags
-      .split(",")
-      .map((t) => t.trim())
-      .filter(Boolean);
+    const tagsArray = tplTags.map((t) => t.trim()).filter(Boolean);
 
     const templateData: Partial<TemplateItem> = {
       id: finalId,
@@ -375,6 +560,15 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
   const handleTitleChange = (newTitle: string) => {
     setTplTitle(newTitle);
     updateActiveEditingTemplate({ title: newTitle });
+    if (!isEditMode && !tplId) {
+      const generatedSlug = newTitle
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-z0-9-_]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+      setTplId(generatedSlug);
+    }
   };
 
   // ═════════════════════════════════════════════════════════════════════════════
@@ -438,7 +632,27 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
               onClick={() => setShowConfigDrawer((v) => !v)}
               icon={<SlidersHorizontal size={14} />}
             >
-              {showConfigDrawer ? "Ocultar Metadados" : "Metadados & Skills"}
+              Propriedades
+              {tplSkills.length > 0 && (
+                <span
+                  style={{
+                    marginLeft: "6px",
+                    padding: "1px 6px",
+                    borderRadius: "10px",
+                    fontSize: "10.5px",
+                    fontWeight: 700,
+                    background: showConfigDrawer
+                      ? "rgba(255,255,255,0.25)"
+                      : "var(--color-primary-container)",
+                    color: showConfigDrawer
+                      ? "#ffffff"
+                      : "var(--color-primary)",
+                  }}
+                >
+                  {tplSkills.length}{" "}
+                  {tplSkills.length === 1 ? "skill" : "skills"}
+                </span>
+              )}
             </Button>
 
             <Button
@@ -475,38 +689,106 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
           />
         )}
 
-        {/* Metadados Dropdown Drawer */}
+        {/* Painel de Propriedades do Template */}
         {showConfigDrawer && (
           <div
+            id="template-properties-panel"
             style={{
               background: "var(--color-surface-container)",
               borderBottom: "1px solid var(--color-outline-variant)",
-              padding: "14px 20px",
+              padding: "16px 24px 20px 24px",
               display: "flex",
               flexDirection: "column",
-              gap: "12px",
+              gap: "14px",
               flexShrink: 0,
+              boxShadow: "0 4px 18px rgba(0, 0, 0, 0.08)",
             }}
           >
+            {/* Header do Painel */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                borderBottom: "1px solid var(--color-outline-variant)",
+                paddingBottom: "10px",
+              }}
+            >
+              <div
+                style={{ display: "flex", alignItems: "center", gap: "8px" }}
+              >
+                <SlidersHorizontal
+                  size={16}
+                  style={{ color: "var(--color-primary)" }}
+                />
+                <div>
+                  <span
+                    style={{
+                      fontSize: "13.5px",
+                      fontWeight: 700,
+                      color: "var(--color-on-surface)",
+                    }}
+                  >
+                    Propriedades do Template
+                  </span>
+                  <span
+                    style={{
+                      fontSize: "12px",
+                      color: "var(--color-on-surface-variant)",
+                      marginLeft: "8px",
+                    }}
+                  >
+                    Identificação, metadados de catálogo e skills recomendadas
+                  </span>
+                </div>
+              </div>
+
+              <IconButton
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowConfigDrawer(false)}
+                tooltip="Fechar propriedades"
+                icon={<X size={15} />}
+              />
+            </div>
+
+            {/* Linha 1: Título, Slug, Categoria e Badge */}
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "1.2fr 1fr 1fr 1.2fr",
-                gap: "12px",
+                gridTemplateColumns: "1.2fr 1fr 1.1fr 0.9fr",
+                gap: "14px",
+                alignItems: "flex-start",
               }}
             >
-              <FormField label="Título do Template" required>
+              {/* Título */}
+              <FormField
+                label="Título do Template"
+                required
+                helperText="Nome de exibição principal"
+              >
                 <Input
+                  id="tpl-prop-title"
                   placeholder="ex: Especificação de Microsserviço"
                   value={tplTitle}
-                  onChange={(e) => setTplTitle(e.target.value)}
+                  onChange={(e) => handleTitleChange(e.target.value)}
+                  startIcon={
+                    <Type size={14} style={{ color: "var(--color-outline)" }} />
+                  }
                 />
               </FormField>
 
+              {/* Slug / Arquivo */}
               <FormField
-                label={`Identificador / Slug ${!isEditMode ? "*" : ""}`}
+                label={`Slug / Arquivo ${!isEditMode ? "*" : ""}`}
+                helperText={
+                  isEditMode
+                    ? "Identificador fixo após criação"
+                    : `templates/${tplId || "slug"}.md`
+                }
               >
                 <Input
+                  id="tpl-prop-slug"
                   placeholder="ex: microservice-spec"
                   value={tplId}
                   disabled={isEditMode}
@@ -515,123 +797,405 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
                       e.target.value.toLowerCase().replace(/[^a-z0-9-_]/g, ""),
                     )
                   }
+                  startIcon={
+                    isEditMode ? (
+                      <Lock
+                        size={13}
+                        style={{ color: "var(--color-outline)" }}
+                      />
+                    ) : (
+                      <FileText
+                        size={13}
+                        style={{ color: "var(--color-outline)" }}
+                      />
+                    )
+                  }
+                  style={{
+                    fontFamily: "var(--font-mono, monospace)",
+                    fontSize: "12.5px",
+                  }}
                 />
               </FormField>
 
-              <FormField label="Categoria">
-                <Input
-                  list="tpl-cat-suggestions"
-                  placeholder="ex: engenharia"
+              {/* Categoria com SelectDropdown */}
+              <FormField label="Categoria" helperText="Agrupamento no catálogo">
+                <SelectDropdown
+                  id="tpl-prop-category"
                   value={tplCategory}
-                  onChange={(e) => setTplCategory(e.target.value)}
+                  options={categoryDropdownOptions}
+                  onChange={(val) => {
+                    setTplCategory(val);
+                    updateActiveEditingTemplate({ category: val });
+                  }}
+                  placeholder="Selecione uma categoria..."
+                  searchable={true}
+                  searchPlaceholder="Filtrar categorias..."
+                  variant="form"
+                  leadingIcon="folder"
                 />
-                <datalist id="tpl-cat-suggestions">
-                  {CATEGORY_SUGGESTIONS.map((c) => (
-                    <option key={c} value={c} />
-                  ))}
-                </datalist>
               </FormField>
 
-              <FormField label="Badge / Etiqueta Curta">
-                <Input
-                  placeholder="ex: RFC, ADR, PRD"
-                  value={tplBadge}
-                  onChange={(e) => setTplBadge(e.target.value.toUpperCase())}
-                />
+              {/* Badge com Presets */}
+              <FormField
+                label="Badge / Tipo"
+                helperText="Etiqueta curta de classificação"
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "6px",
+                  }}
+                >
+                  <Input
+                    id="tpl-prop-badge"
+                    placeholder="ex: RFC, ADR, PRD"
+                    value={tplBadge}
+                    maxLength={10}
+                    onChange={(e) => {
+                      const val = e.target.value.toUpperCase();
+                      setTplBadge(val);
+                      updateActiveEditingTemplate({ badge: val });
+                    }}
+                    style={{
+                      textTransform: "uppercase",
+                      fontWeight: 600,
+                      letterSpacing: "0.5px",
+                    }}
+                    rightIcon={
+                      tplBadge ? (
+                        <Badge
+                          size="sm"
+                          style={
+                            badgePresets.find((b) => b.name === tplBadge)?.color
+                              ? {
+                                  background: `${badgePresets.find((b) => b.name === tplBadge)?.color}25`,
+                                  color: badgePresets.find((b) => b.name === tplBadge)?.color,
+                                  borderColor: badgePresets.find((b) => b.name === tplBadge)?.color,
+                                }
+                              : undefined
+                          }
+                          variant="primary"
+                        >
+                          {tplBadge}
+                        </Badge>
+                      ) : undefined
+                    }
+                  />
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: "4px",
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    {badgePresets.map((preset) => {
+                      const isSelected = tplBadge === preset.name;
+                      const presetColor =
+                        preset.color || "var(--color-primary)";
+                      return (
+                        <button
+                          key={preset.name}
+                          type="button"
+                          onClick={() => {
+                            setTplBadge(preset.name);
+                            updateActiveEditingTemplate({ badge: preset.name });
+                          }}
+                          title={preset.description || preset.name}
+                          style={{
+                            fontSize: "10px",
+                            padding: "1px 6px",
+                            borderRadius: "4px",
+                            border: isSelected
+                              ? `1px solid ${presetColor}`
+                              : "1px solid var(--color-outline-variant)",
+                            background: isSelected
+                              ? preset.color
+                                ? `${preset.color}25`
+                                : "var(--color-primary-container)"
+                              : "var(--color-surface-container-high)",
+                            color: isSelected
+                              ? presetColor
+                              : "var(--color-on-surface-variant)",
+                            cursor: "pointer",
+                            fontWeight: 600,
+                            transition: "all 0.12s ease",
+                          }}
+                        >
+                          {preset.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               </FormField>
             </div>
 
+            {/* Linha 2: Descrição e Tags de Busca */}
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "2fr 1fr",
-                gap: "12px",
+                gridTemplateColumns: "1.4fr 1.2fr",
+                gap: "14px",
+                alignItems: "flex-start",
               }}
             >
-              <FormField label="Descrição Curta (Finalidade do Template)">
+              {/* Descrição */}
+              <FormField
+                label="Descrição da Finalidade"
+                helperText="Orientação sobre quando e por que adotar este documento"
+              >
                 <Input
-                  placeholder="Descreva quando e por que utilizar este modelo..."
+                  id="tpl-prop-desc"
+                  placeholder="ex: Modelo para especificação e contratos de microsserviços..."
                   value={tplDesc}
-                  onChange={(e) => setTplDesc(e.target.value)}
+                  onChange={(e) => {
+                    setTplDesc(e.target.value);
+                    updateActiveEditingTemplate({
+                      description: e.target.value,
+                    });
+                  }}
                 />
               </FormField>
 
-              <FormField label="Tags / Palavras-chave">
-                <Input
-                  placeholder="ex: backend, rest, auth (separados por vírgula)"
-                  value={tplTags}
-                  onChange={(e) => setTplTags(e.target.value)}
-                />
+              {/* Tags Interativas */}
+              <FormField
+                label="Tags de Busca & Indexação"
+                helperText="Pressione Enter ou vírgula para adicionar tags"
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    alignItems: "center",
+                    gap: "6px",
+                    padding: "6px 10px",
+                    background: "var(--color-surface-container-high)",
+                    border: "1px solid var(--color-outline-variant)",
+                    borderRadius: "var(--radius-md, 6px)",
+                    minHeight: "38px",
+                    boxSizing: "border-box",
+                  }}
+                >
+                  {tplTags.map((tag) => (
+                    <span
+                      key={tag}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "4px",
+                        fontSize: "11px",
+                        padding: "2px 7px",
+                        borderRadius: "4px",
+                        background: "var(--color-surface)",
+                        color: "var(--color-on-surface)",
+                        border: "1px solid var(--color-outline-variant)",
+                        fontWeight: 500,
+                      }}
+                    >
+                      <Tag
+                        size={10}
+                        style={{ color: "var(--color-primary)" }}
+                      />
+                      {tag}
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveTag(tag)}
+                        style={{
+                          background: "none",
+                          border: "none",
+                          cursor: "pointer",
+                          padding: 0,
+                          display: "inline-flex",
+                          alignItems: "center",
+                          color: "var(--color-outline)",
+                        }}
+                        title={`Remover tag ${tag}`}
+                      >
+                        <X size={11} />
+                      </button>
+                    </span>
+                  ))}
+
+                  <input
+                    id="tpl-new-tag-input"
+                    type="text"
+                    placeholder={
+                      tplTags.length === 0
+                        ? "Adicionar tag (ex: backend, rest)..."
+                        : "+ tag..."
+                    }
+                    value={tagInputValue}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val.includes(",")) {
+                        val.split(",").forEach((part) => handleAddTag(part));
+                      } else {
+                        setTagInputValue(val);
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === ",") {
+                        e.preventDefault();
+                        handleAddTag(tagInputValue);
+                      } else if (
+                        e.key === "Backspace" &&
+                        !tagInputValue &&
+                        tplTags.length > 0
+                      ) {
+                        handleRemoveTag(tplTags[tplTags.length - 1]);
+                      }
+                    }}
+                    onBlur={() => {
+                      if (tagInputValue.trim()) {
+                        handleAddTag(tagInputValue);
+                      }
+                    }}
+                    style={{
+                      border: "none",
+                      background: "transparent",
+                      outline: "none",
+                      fontSize: "12px",
+                      color: "var(--color-on-surface)",
+                      flex: 1,
+                      minWidth: "110px",
+                    }}
+                  />
+                </div>
               </FormField>
             </div>
 
-            {/* Skills selection */}
-            <div>
+            {/* Linha 3: Skills com SelectDropdown e visualização de chips */}
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "8px",
+                background: "var(--color-surface-container-low)",
+                padding: "12px 14px",
+                borderRadius: "var(--radius-md, 8px)",
+                border: "1px solid var(--color-outline-variant)",
+              }}
+            >
               <div
                 style={{
-                  fontSize: "11.5px",
-                  fontWeight: 700,
-                  color: "var(--color-outline)",
-                  marginBottom: "6px",
                   display: "flex",
                   alignItems: "center",
-                  gap: "6px",
+                  justifyContent: "space-between",
+                  flexWrap: "wrap",
+                  gap: "8px",
                 }}
               >
-                <Sparkles size={13} style={{ color: "var(--color-primary)" }} />
-                Skills Recomendadas / Vinculadas ao Template (Padrão ECC):
-              </div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
-                {availableSkills.length === 0 ? (
-                  <span
-                    style={{ fontSize: "12px", color: "var(--color-outline)" }}
+                <div>
+                  <div
+                    style={{
+                      fontSize: "12px",
+                      fontWeight: 700,
+                      color: "var(--color-on-surface)",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                    }}
                   >
-                    Carregando catálogo de skills...
+                    <Sparkles
+                      size={13}
+                      style={{ color: "var(--color-primary)" }}
+                    />
+                    Skills
+                  </div>
+                  <div
+                    style={{
+                      fontSize: "11.5px",
+                      color: "var(--color-on-surface-variant)",
+                      marginTop: "2px",
+                    }}
+                  >
+                    Vincule diretrizes técnicas para o Copilot carregar
+                    automaticamente durante a edição deste modelo.
+                  </div>
+                </div>
+
+                {/* Dropdown com busca para seleção de skills */}
+                <div style={{ minWidth: "280px", maxWidth: "420px", flex: 1 }}>
+                  <SelectDropdown
+                    id="tpl-skill-picker"
+                    value=""
+                    options={skillDropdownOptions}
+                    onChange={handleSkillSelect}
+                    placeholder="+ Vincular skill do catálogo..."
+                    searchable={true}
+                    searchPlaceholder="Buscar skill por nome ou descrição..."
+                    leadingIcon="psychology"
+                    variant="compact"
+                  />
+                </div>
+              </div>
+
+              {/* Lista de Skills Selecionadas */}
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: "6px",
+                  marginTop: "4px",
+                }}
+              >
+                {tplSkills.length === 0 ? (
+                  <span
+                    style={{
+                      fontSize: "11.5px",
+                      color: "var(--color-outline)",
+                      fontStyle: "italic",
+                      padding: "4px 2px",
+                    }}
+                  >
+                    Nenhuma skill vinculada. Escolha uma skill acima para
+                    conectar regras especializadas de IA.
                   </span>
                 ) : (
-                  availableSkills.map((skill) => {
-                    const isSelected = tplSkills.includes(skill.id);
+                  tplSkills.map((skillId) => {
+                    const skillInfo = availableSkills.find(
+                      (s) => s.id === skillId,
+                    );
+                    const skillLabel =
+                      skillInfo?.title || skillInfo?.name || skillId;
                     return (
-                      <button
-                        key={skill.id}
-                        type="button"
-                        onClick={() => {
-                          if (isSelected) {
-                            setTplSkills(
-                              tplSkills.filter((id) => id !== skill.id),
-                            );
-                          } else {
-                            setTplSkills([...tplSkills, skill.id]);
-                          }
-                        }}
+                      <span
+                        key={skillId}
                         style={{
                           display: "inline-flex",
                           alignItems: "center",
-                          gap: "5px",
+                          gap: "6px",
                           padding: "4px 10px",
                           borderRadius: "14px",
-                          border: isSelected
-                            ? "1px solid var(--color-primary)"
-                            : "1px solid var(--color-outline-variant)",
+                          background: "var(--color-primary-container)",
+                          color: "var(--color-primary)",
+                          border: "1px solid var(--color-primary)",
                           fontSize: "11.5px",
                           fontWeight: 600,
-                          cursor: "pointer",
-                          background: isSelected
-                            ? "var(--color-primary-container)"
-                            : "var(--color-surface-container-high)",
-                          color: isSelected
-                            ? "var(--color-primary)"
-                            : "var(--color-on-surface-variant)",
                           transition: "all 0.15s ease",
                         }}
                       >
-                        {isSelected ? (
-                          <CheckCircle2 size={13} />
-                        ) : (
-                          <Plus size={13} />
-                        )}
-                        {skill.title || skill.name}
-                      </button>
+                        <Sparkles size={12} />
+                        <span>{skillLabel}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveSkill(skillId)}
+                          style={{
+                            background: "transparent",
+                            border: "none",
+                            cursor: "pointer",
+                            padding: 0,
+                            display: "inline-flex",
+                            alignItems: "center",
+                            color: "var(--color-primary)",
+                            opacity: 0.85,
+                          }}
+                          title={`Desvincular ${skillLabel}`}
+                        >
+                          <X size={12} />
+                        </button>
+                      </span>
                     );
                   })
                 )}

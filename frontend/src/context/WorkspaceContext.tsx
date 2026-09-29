@@ -72,6 +72,7 @@ interface WorkspaceContextType {
   ) => Promise<boolean>;
   loadTree: (targetRepo?: string) => Promise<void>;
   loadFile: (filePath: string) => Promise<void>;
+  reloadActiveFile: (forceDisk?: boolean) => Promise<void>;
   setFileContent: (content: string) => void;
   setFileMetadata: (meta: Record<string, any>) => void;
   updateFileMetadata: (
@@ -441,6 +442,34 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
       }
     },
     [flushPendingSave],
+  );
+
+  const reloadActiveFile = useCallback(
+    async (forceDisk: boolean = true) => {
+      const currentFile = activeFileRef.current;
+      const currentRepo = activeRepoRef.current;
+      if (!currentFile || !currentRepo) return;
+
+      try {
+        if (forceDisk) {
+          DraftStore.clearDocDraft(currentRepo.name, currentFile);
+        }
+        const data = await API.getProjectFile(currentFile);
+        if (data && !(data as any).error) {
+          const content = data.content || "";
+          setFileContentState(content);
+          fileContentRef.current = content;
+          setOriginalContent(content);
+          originalContentRef.current = content;
+          setFileMetadataState(data.meta || {});
+          fileMetadataRef.current = data.meta || {};
+          setSaveStatus("Pronto");
+        }
+      } catch (err) {
+        console.warn("[WorkspaceContext] Erro ao recarregar arquivo ativo:", err);
+      }
+    },
+    [],
   );
 
   const setFileContent = useCallback(
@@ -829,11 +858,29 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
     let evtSource: EventSource | null = null;
     try {
       evtSource = new EventSource("/api/events");
-      evtSource.addEventListener("refresh", () => {
+      
+      const handleWorkspaceRefresh = () => {
         refreshPendingChanges();
         loadTree();
         refreshGitStatus();
         refreshWhatsNew();
+        if (activeFileRef.current) {
+          reloadActiveFile(true);
+        }
+      };
+
+      evtSource.addEventListener("refresh", handleWorkspaceRefresh);
+      evtSource.addEventListener("file_changed", (event: MessageEvent) => {
+        try {
+          const data = JSON.parse(event.data);
+          const changedPath = data?.file;
+          const currentFile = activeFileRef.current;
+          if (currentFile && changedPath && (changedPath.endsWith(currentFile) || currentFile.endsWith(changedPath))) {
+            reloadActiveFile(true);
+          }
+        } catch {}
+        refreshPendingChanges();
+        loadTree();
       });
     } catch (e) {
       console.warn("[WorkspaceContext] SSE não disponível:", e);
@@ -849,6 +896,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
     loadTree,
     refreshGitStatus,
     refreshWhatsNew,
+    reloadActiveFile,
   ]);
 
   return (
@@ -882,6 +930,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
         selectRepoByName,
         loadTree,
         loadFile,
+        reloadActiveFile,
         setFileContent,
         setFileMetadata: (meta: Record<string, any>) => {
           setFileMetadataState(meta);

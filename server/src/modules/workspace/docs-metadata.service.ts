@@ -22,8 +22,9 @@ export interface DocumentMetadataItem {
 
 export interface ProjectMetadataOptions {
   categories: Array<string | { name: string; color?: string }>;
-  statuses: Array<{ key: string; label: string; badge?: string }>;
+  statuses: Array<{ key?: string; name?: string; label: string; badge?: string; color?: string }>;
   tags: Array<string | { name: string; color?: string }>;
+  badges?: Array<string | { name: string; color?: string; description?: string }>;
 }
 
 export function generateDocId(filePath: string): string {
@@ -117,15 +118,25 @@ export class DocsMetadataService {
   getProjectMetadataOptions(repoName: string): ProjectMetadataOptions {
     const config = this.getProjectConfig(repoName);
     const defaultStatuses = [
-      { key: 'draft', label: 'Rascunho (DRAFT)', badge: 'badge-neutral' },
-      { key: 'proposed', label: 'Proposto (PROPOSED)', badge: 'badge-warning' },
-      { key: 'review', label: 'Em Revisão (REVIEW)', badge: 'badge-info' },
-      { key: 'approved', label: 'Aprovado (APPROVED)', badge: 'badge-success' },
-      { key: 'superseded', label: 'Substituído (SUPERSEDED)', badge: 'badge-secondary' },
-      { key: 'deprecated', label: 'Obsoleto (DEPRECATED)', badge: 'badge-danger' },
+      { key: 'draft', name: 'draft', label: 'Rascunho (DRAFT)', badge: 'badge-neutral', color: '#f97316' },
+      { key: 'proposed', name: 'proposed', label: 'Proposto (PROPOSED)', badge: 'badge-warning', color: '#eab308' },
+      { key: 'review', name: 'review', label: 'Em Revisão (REVIEW)', badge: 'badge-info', color: '#06b6d4' },
+      { key: 'approved', name: 'approved', label: 'Aprovado (APPROVED)', badge: 'badge-success', color: '#22c55e' },
+      { key: 'superseded', name: 'superseded', label: 'Substituído (SUPERSEDED)', badge: 'badge-secondary', color: '#a855f7' },
+      { key: 'deprecated', name: 'deprecated', label: 'Obsoleto (DEPRECATED)', badge: 'badge-danger', color: '#ef4444' },
     ];
     const defaultCategories = ['geral', 'arquitetura', 'engenharia', 'produto', 'segurança', 'infraestrutura', 'dados'];
     const defaultTags = ['backend', 'frontend', 'api', 'database', 'security', 'core', 'auth', 'mobile', 'spec'];
+    const defaultBadges = [
+      { name: 'RFC', color: '#a855f7', description: 'Request for Comments' },
+      { name: 'ADR', color: '#3b82f6', description: 'Architecture Decision Record' },
+      { name: 'PRD', color: '#f97316', description: 'Product Requirements Document' },
+      { name: 'DOC', color: '#22c55e', description: 'Documentação Técnica' },
+      { name: 'API', color: '#06b6d4', description: 'Especificação de API' },
+      { name: 'SPEC', color: '#6366f1', description: 'Especificação de Funcionalidade' },
+      { name: 'GUIDE', color: '#ec4899', description: 'Guia e Manual' },
+      { name: 'TEST', color: '#eab308', description: 'Plano de Testes' },
+    ];
 
     const statuses = Array.isArray(config.statuses) && config.statuses.length > 0
       ? config.statuses
@@ -139,7 +150,11 @@ export class DocsMetadataService {
       ? config.tags
       : defaultTags;
 
-    return { statuses, categories, tags };
+    const badges = Array.isArray(config.badges) && config.badges.length > 0
+      ? config.badges
+      : defaultBadges;
+
+    return { statuses, categories, tags, badges };
   }
 
   private metaCache = new Map<string, { data: DocumentMetadataItem[]; timestamp: number }>();

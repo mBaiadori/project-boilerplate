@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { AISettingsState, ChatMessage } from '../types';
+import type { AISettingsState, ChatMessage, RawTurnTelemetry } from '../types';
 
 export interface DynamicContext {
   filePath: string;
@@ -29,8 +29,22 @@ export interface CopilotStoreState {
 
   // Skills & RAW Mode
   activeSkillId: string | null;
+  activeSkillIds: string[];
+  templateSkills: string[];
   isRawMode: boolean;
   isSkillsModalOpen: boolean;
+
+  // Local RAG References & Search
+  ragReferences: Array<{ id: string; relativePath: string; sectionTitle: string; snippet: string; score?: number }>;
+  isRagModalOpen: boolean;
+  isAutoRagEnabled: boolean;
+
+  // Session RAW Telemetry & X-Ray Turns (keyed by sessionId)
+  sessionTelemetry: Record<string, RawTurnTelemetry[]>;
+  activeRawTurnIndex: number;
+  addSessionTelemetryTurn: (sessionId: string, turn: RawTurnTelemetry) => void;
+  setSessionTelemetry: (sessionId: string, turns: RawTurnTelemetry[]) => void;
+  setActiveRawTurnIndex: (idx: number) => void;
 
   // Connected Providers & Approvals
   activeProviderId: string;
@@ -65,13 +79,29 @@ export interface CopilotStoreState {
   setDynamicContext: (ctx: DynamicContext | null) => void;
 
   setActiveSkillId: (skillId: string | null) => void;
+  setActiveSkillIds: (ids: string[]) => void;
+  setTemplateSkills: (skills: string[]) => void;
+  toggleSkill: (skillId: string) => void;
+  addActiveSkill: (skillId: string) => void;
+  removeActiveSkill: (skillId: string) => void;
   setIsRawMode: (isRaw: boolean) => void;
   openSkillsModal: () => void;
   closeSkillsModal: () => void;
 
-  setTemplateContext: (data: { id: string | null; title: string | null; prompt: string | null }) => void;
+  // RAG Actions
+  addRagReference: (ref: { id: string; relativePath: string; sectionTitle: string; snippet: string; score?: number }) => void;
+  removeRagReference: (id: string) => void;
+  clearRagReferences: () => void;
+  openRagModal: () => void;
+  closeRagModal: () => void;
+  toggleAutoRag: () => void;
+
+  setTemplateContext: (data: { id: string | null; title: string | null; prompt: string | null; skills?: string[] }) => void;
   toggleTemplatePrompt: () => void;
   setIsTemplatePromptEnabled: (val: boolean) => void;
+
+  historyVersion: number;
+  incrementHistoryVersion: () => void;
 
   setDocPrompt: (prompt: string | null) => void;
   toggleDocPrompt: () => void;
@@ -89,9 +119,18 @@ export const useCopilotStore = create<CopilotStoreState>((set) => ({
   referencedDocs: [],
   isGlobalScope: false,
 
-  activeSkillId: 'living-docs-governance', // Default skill
+  activeSkillId: null, // No default skill - user chooses
+  activeSkillIds: [],
+  templateSkills: [],
   isRawMode: false,
   isSkillsModalOpen: false,
+
+  ragReferences: [],
+  isRagModalOpen: false,
+  isAutoRagEnabled: false,
+
+  sessionTelemetry: {},
+  activeRawTurnIndex: -1,
 
   activeProviderId: 'antigravity',
   setActiveProviderId: (activeProviderId) => set({ activeProviderId }),
@@ -112,18 +151,62 @@ export const useCopilotStore = create<CopilotStoreState>((set) => ({
   docPrompt: null,
   isDocPromptEnabled: true,
 
+  historyVersion: 0,
+  incrementHistoryVersion: () => set((state) => ({ historyVersion: state.historyVersion + 1 })),
+
   setCurrentSessionId: (currentSessionId) => {
     set({ currentSessionId });
   },
 
   newChatSession: () => {
     const newId = `sess-${Date.now()}`;
-    set({
+    set((state) => ({
       currentSessionId: newId,
       messages: [],
       isThinking: false,
-    });
+      activeRawTurnIndex: -1,
+      historyVersion: state.historyVersion + 1,
+      sessionTelemetry: {
+        ...state.sessionTelemetry,
+        [newId]: [],
+      },
+    }));
     return newId;
+  },
+
+  addSessionTelemetryTurn: (sessionId, turn) => {
+    set((state) => {
+      const existingTurns = state.sessionTelemetry[sessionId] || [];
+      const turnIndex = existingTurns.findIndex((t) => t.turn_id === turn.turn_id);
+      let nextTurns: RawTurnTelemetry[];
+      if (turnIndex >= 0) {
+        nextTurns = [...existingTurns];
+        nextTurns[turnIndex] = turn;
+      } else {
+        nextTurns = [...existingTurns, turn];
+      }
+      return {
+        sessionTelemetry: {
+          ...state.sessionTelemetry,
+          [sessionId]: nextTurns,
+        },
+        activeRawTurnIndex: nextTurns.length - 1,
+      };
+    });
+  },
+
+  setSessionTelemetry: (sessionId, turns) => {
+    set((state) => ({
+      sessionTelemetry: {
+        ...state.sessionTelemetry,
+        [sessionId]: turns,
+      },
+      activeRawTurnIndex: turns.length > 0 ? turns.length - 1 : -1,
+    }));
+  },
+
+  setActiveRawTurnIndex: (activeRawTurnIndex) => {
+    set({ activeRawTurnIndex });
   },
 
   setReferencedDocs: (referencedDocs) => {
@@ -192,7 +275,55 @@ export const useCopilotStore = create<CopilotStoreState>((set) => ({
   },
 
   setActiveSkillId: (activeSkillId) => {
-    set({ activeSkillId });
+    set({
+      activeSkillId,
+      activeSkillIds: activeSkillId ? [activeSkillId] : [],
+    });
+  },
+
+  setActiveSkillIds: (activeSkillIds) => {
+    set({
+      activeSkillIds,
+      activeSkillId: activeSkillIds[0] || null,
+    });
+  },
+
+  setTemplateSkills: (templateSkills) => {
+    set({ templateSkills });
+  },
+
+  toggleSkill: (skillId) => {
+    set((state) => {
+      const exists = state.activeSkillIds.includes(skillId);
+      const next = exists
+        ? state.activeSkillIds.filter((id) => id !== skillId)
+        : [...state.activeSkillIds, skillId];
+      return {
+        activeSkillIds: next,
+        activeSkillId: next[0] || null,
+      };
+    });
+  },
+
+  addActiveSkill: (skillId) => {
+    set((state) => {
+      if (state.activeSkillIds.includes(skillId)) return state;
+      const next = [...state.activeSkillIds, skillId];
+      return {
+        activeSkillIds: next,
+        activeSkillId: next[0] || null,
+      };
+    });
+  },
+
+  removeActiveSkill: (skillId) => {
+    set((state) => {
+      const next = state.activeSkillIds.filter((id) => id !== skillId);
+      return {
+        activeSkillIds: next,
+        activeSkillId: next[0] || null,
+      };
+    });
   },
 
   setIsRawMode: (isRawMode) => {
@@ -207,11 +338,41 @@ export const useCopilotStore = create<CopilotStoreState>((set) => ({
     set({ isSkillsModalOpen: false });
   },
 
-  setTemplateContext: ({ id, title, prompt }) => {
+  addRagReference: (ref) => {
+    set((state) => {
+      if (state.ragReferences.some((r) => r.id === ref.id)) return state;
+      return { ragReferences: [...state.ragReferences, ref] };
+    });
+  },
+
+  removeRagReference: (id) => {
+    set((state) => ({
+      ragReferences: state.ragReferences.filter((r) => r.id !== id),
+    }));
+  },
+
+  clearRagReferences: () => {
+    set({ ragReferences: [] });
+  },
+
+  openRagModal: () => {
+    set({ isRagModalOpen: true });
+  },
+
+  closeRagModal: () => {
+    set({ isRagModalOpen: false });
+  },
+
+  toggleAutoRag: () => {
+    set((state) => ({ isAutoRagEnabled: !state.isAutoRagEnabled }));
+  },
+
+  setTemplateContext: ({ id, title, prompt, skills }) => {
     set({
       templateId: id,
       templateTitle: title,
       templatePrompt: prompt,
+      ...(skills ? { templateSkills: skills } : {}),
       ...(prompt ? { isTemplatePromptEnabled: true } : {}),
     });
   },

@@ -5,6 +5,7 @@ import { useWorkspace } from "../../context/WorkspaceContext";
 import { SkillsHubModal } from "../modals/SkillsHubModal";
 import { ContextSelectorModal } from "./ContextSelectorModal";
 import { AgentApprovalCard } from "./AgentApprovalCard";
+import { RagSearchModal } from "./RagSearchModal";
 import { useCopilotStore } from "../../stores/copilotStore";
 import { API } from "../../services/api";
 import type { TreeNode } from "../../types";
@@ -16,7 +17,6 @@ interface AICopilotPanelProps {
   onOpenHistory?: () => void;
   onOpenRaw?: () => void;
   onApplyContent?: (content: string) => void;
-  onInsertAtCursor?: (text: string) => void;
 }
 
 export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
@@ -26,7 +26,6 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
   onOpenHistory = () => {},
   onOpenRaw = () => {},
   onApplyContent,
-  onInsertAtCursor,
 }) => {
   const {
     messages,
@@ -41,8 +40,12 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
     isDocPromptEnabled,
     toggleDocPrompt,
     isTemplateEditorMode,
-    activeSkillId,
+    activeSkillIds,
+    templateSkills,
     setActiveSkillId,
+    setActiveSkillIds,
+    toggleSkill,
+    removeActiveSkill,
     isSkillsModalOpen,
     openSkillsModal,
     closeSkillsModal,
@@ -80,6 +83,12 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
   const thinkingStep = useCopilotStore((s) => s.thinkingStep);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
+  // RAG Hooks
+  const ragReferences = useCopilotStore((s) => s.ragReferences);
+  const openRagModal = useCopilotStore((s) => s.openRagModal);
+  const removeRagReference = useCopilotStore((s) => s.removeRagReference);
+  const isAutoRagEnabled = useCopilotStore((s) => s.isAutoRagEnabled);
+
   useEffect(() => {
     let interval: any;
     if (isThinking) {
@@ -96,7 +105,7 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
   const formatElapsed = (sec: number) => {
     const m = Math.floor(sec / 60);
     const s = sec % 60;
-    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
   };
 
   // Context Selector Modal state
@@ -523,7 +532,7 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
     },
     {
       provider: "ollama",
-      providerName: "Ollama (Local)",
+      providerName: "Ollama",
       icon: "terminal",
       models: [
         { id: "llama3.3", name: "Llama 3.3 70B", badge: "Local" },
@@ -534,9 +543,12 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
     },
   ];
 
-  const activeSkillObj = availableSkills.find((s) => s.id === activeSkillId);
-  const activeSkillTitle =
-    activeSkillObj?.title || activeSkillObj?.name || activeSkillId;
+  const getSkillTitle = (id: string) => {
+    const s = availableSkills.find((item) => item.id === id);
+    return s?.title || s?.name || id;
+  };
+
+  const extraActiveSkills = activeSkillIds.filter((id) => !templateSkills.includes(id));
 
   return (
     <>
@@ -975,7 +987,13 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
           {!isRawMode && (
             <button
               type="button"
-              onClick={() => setActiveProviderId(activeProviderId === 'antigravity' ? 'direct-api' : 'antigravity')}
+              onClick={() =>
+                setActiveProviderId(
+                  activeProviderId === "antigravity"
+                    ? "direct-api"
+                    : "antigravity",
+                )
+              }
               style={{
                 display: "inline-flex",
                 alignItems: "center",
@@ -986,12 +1004,25 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
                 fontWeight: 600,
                 cursor: "pointer",
                 border: "1px solid",
-                background: activeProviderId === 'antigravity' ? "rgba(34, 197, 94, 0.15)" : "var(--color-surface-container, #f1f3f4)",
-                color: activeProviderId === 'antigravity' ? "#16a34a" : "var(--text-muted, #64748b)",
-                borderColor: activeProviderId === 'antigravity' ? "#22c55e" : "var(--color-outline-variant, #cbd5e1)",
+                background:
+                  activeProviderId === "antigravity"
+                    ? "rgba(34, 197, 94, 0.15)"
+                    : "var(--color-surface-container, #f1f3f4)",
+                color:
+                  activeProviderId === "antigravity"
+                    ? "#16a34a"
+                    : "var(--text-muted, #64748b)",
+                borderColor:
+                  activeProviderId === "antigravity"
+                    ? "#22c55e"
+                    : "var(--color-outline-variant, #cbd5e1)",
                 transition: "all 0.15s ease",
               }}
-              title={activeProviderId === 'antigravity' ? "Agente Antigravity Conectado (Acesso Local à Máquina)" : "Direct API (Modo Livre sem ferramentas de terminal)"}
+              title={
+                activeProviderId === "antigravity"
+                  ? "Agente Antigravity Conectado (Acesso Local à Máquina)"
+                  : "Direct API (Modo Livre sem ferramentas de terminal)"
+              }
             >
               <span
                 style={{
@@ -999,420 +1030,69 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
                   width: "6px",
                   height: "6px",
                   borderRadius: "50%",
-                  backgroundColor: activeProviderId === 'antigravity' ? "#22c55e" : "#94a3b8",
+                  backgroundColor:
+                    activeProviderId === "antigravity" ? "#22c55e" : "#94a3b8",
                 }}
               />
-              {activeProviderId === 'antigravity' ? "Antigravity (Local)" : "Direct API"}
+              {activeProviderId === "antigravity"
+                ? "Antigravity"
+                : "Direct API"}
             </button>
           )}
 
-          {/* Skill Activator / Deactivator / Selector */}
-          {!isRawMode && (
-            <div ref={skillsDropdownRef} style={{ position: "relative" }}>
-              {activeSkillId ? (
-                /* Skill is ACTIVE: Pill with Dropdown trigger and instant [X] Deactivate button */
-                <div
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    borderRadius: "12px",
-                    background: "var(--color-primary-container, #d2e3fc)",
-                    border: "1px solid var(--color-primary, #1a73e8)",
-                    overflow: "hidden",
-                  }}
-                >
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setIsSkillsDropdownOpen(!isSkillsDropdownOpen)
-                    }
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "4px",
-                      padding: "3px 6px 3px 8px",
-                      border: "none",
-                      background: "transparent",
-                      color: "var(--color-on-primary-container, #041e49)",
-                      fontSize: "10.5px",
-                      fontWeight: 600,
-                      cursor: "pointer",
-                    }}
-                    title="Skill ativa no Copilot. Clique para alternar ou gerenciar."
-                  >
-                    <span
-                      className="material-symbols-outlined"
-                      style={{
-                        fontSize: "13px",
-                        color: "var(--color-primary, #1a73e8)",
-                      }}
-                    >
-                      auto_awesome
-                    </span>
-                    <span
-                      style={{
-                        maxWidth: "120px",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {activeSkillTitle}
-                    </span>
-                    <span
-                      className="material-symbols-outlined"
-                      style={{ fontSize: "12px", opacity: 0.7 }}
-                    >
-                      expand_more
-                    </span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setActiveSkillId(null);
-                    }}
-                    title="Desativar esta Skill (Executar Copilot padrão sem Skill)"
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      padding: "2px 6px",
-                      border: "none",
-                      borderLeft: "1px solid rgba(26,115,232,0.3)",
-                      background: "rgba(255,255,255,0.4)",
-                      color: "var(--color-on-primary-container, #041e49)",
-                      cursor: "pointer",
-                      height: "100%",
-                      transition: "background 0.15s ease",
-                    }}
-                    onMouseEnter={(e) =>
-                      (e.currentTarget.style.background =
-                        "rgba(239,68,68,0.15)")
-                    }
-                    onMouseLeave={(e) =>
-                      (e.currentTarget.style.background =
-                        "rgba(255,255,255,0.4)")
-                    }
-                  >
-                    <span
-                      className="material-symbols-outlined"
-                      style={{ fontSize: "12px" }}
-                    >
-                      close
-                    </span>
-                  </button>
-                </div>
-              ) : (
-                /* Skills are DEACTIVATED: Neutral Pill to Activate */
-                <button
-                  type="button"
-                  onClick={() => setIsSkillsDropdownOpen(!isSkillsDropdownOpen)}
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "4px",
-                    padding: "3px 8px",
-                    borderRadius: "12px",
-                    fontSize: "10.5px",
-                    fontWeight: 500,
-                    cursor: "pointer",
-                    background: "var(--color-surface-container, #f1f5f9)",
-                    color: "var(--color-outline, #64748b)",
-                    border: "1px solid var(--color-outline-variant, #cbd5e1)",
-                    transition: "all 0.15s ease",
-                  }}
-                  title="Nenhuma Skill ativa no momento. Clique para ativar uma Skill especializada."
-                >
-                  <span
-                    className="material-symbols-outlined"
-                    style={{ fontSize: "13px", color: "#94a3b8" }}
-                  >
-                    do_not_disturb_on
-                  </span>
-                  <span>Skills: Desativadas</span>
-                  <span
-                    className="material-symbols-outlined"
-                    style={{ fontSize: "12px", opacity: 0.7 }}
-                  >
-                    expand_more
-                  </span>
-                </button>
-              )}
-
-              {/* Skills Popover Menu */}
-              {isSkillsDropdownOpen && (
-                <div
-                  style={{
-                    position: "absolute",
-                    top: "calc(100% + 6px)",
-                    left: 0,
-                    zIndex: 1100,
-                    width: "290px",
-                    background: "var(--color-surface, #ffffff)",
-                    border: "1px solid var(--color-outline-variant, #cbd5e1)",
-                    borderRadius: "10px",
-                    boxShadow: "0 10px 28px rgba(0, 0, 0, 0.18)",
-                    padding: "8px",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "6px",
-                    maxHeight: "360px",
-                    overflowY: "auto",
-                    animation: "fadeIn 0.12s ease-out",
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      padding: "3px 6px 6px 6px",
-                      borderBottom: "1px solid #f1f5f9",
-                      fontSize: "11px",
-                      fontWeight: 600,
-                      color: "#334155",
-                    }}
-                  >
-                    <span>Ativar / Desativar Skills</span>
-                    <span
-                      style={{
-                        fontSize: "9.5px",
-                        padding: "1px 5px",
-                        borderRadius: "4px",
-                        background: activeSkillId
-                          ? "rgba(16,185,129,0.12)"
-                          : "#f1f5f9",
-                        color: activeSkillId ? "#059669" : "#64748b",
-                        fontWeight: 700,
-                      }}
-                    >
-                      {activeSkillId ? "ATIVA" : "DESATIVADA"}
-                    </span>
-                  </div>
-
-                  {/* Option: Deactivate all skills */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setActiveSkillId(null);
-                      setIsSkillsDropdownOpen(false);
-                    }}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      padding: "6px 8px",
-                      borderRadius: "6px",
-                      border: !activeSkillId
-                        ? "1px solid #94a3b8"
-                        : "1px solid transparent",
-                      background: !activeSkillId ? "#f8fafc" : "transparent",
-                      color: !activeSkillId ? "#0f172a" : "#64748b",
-                      cursor: "pointer",
-                      fontSize: "11.5px",
-                      textAlign: "left",
-                      transition: "background 0.12s ease",
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "6px",
-                      }}
-                    >
-                      <span
-                        className="material-symbols-outlined"
-                        style={{
-                          fontSize: "14px",
-                          color: !activeSkillId ? "#2563eb" : "#94a3b8",
-                        }}
-                      >
-                        {!activeSkillId
-                          ? "radio_button_checked"
-                          : "radio_button_unchecked"}
-                      </span>
-                      <span style={{ fontWeight: !activeSkillId ? 600 : 400 }}>
-                        Desativar Skills (Copilot Padrão)
-                      </span>
-                    </div>
-                  </button>
-
-                  <div
-                    style={{
-                      fontSize: "10px",
-                      fontWeight: 700,
-                      color: "#94a3b8",
-                      textTransform: "uppercase",
-                      padding: "4px 6px 2px",
-                    }}
-                  >
-                    Skills Disponíveis
-                  </div>
-
-                  {/* List of Skills */}
-                  {availableSkills.map((skill) => {
-                    const isSelected = activeSkillId === skill.id;
-                    return (
-                      <button
-                        key={skill.id}
-                        type="button"
-                        onClick={() => {
-                          setActiveSkillId(skill.id);
-                          setIsSkillsDropdownOpen(false);
-                        }}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                          padding: "6px 8px",
-                          borderRadius: "6px",
-                          border: isSelected
-                            ? "1px solid var(--color-primary, #2563eb)"
-                            : "1px solid transparent",
-                          background: isSelected
-                            ? "var(--color-primary-container, #eff6ff)"
-                            : "transparent",
-                          color: isSelected
-                            ? "var(--color-primary, #1d4ed8)"
-                            : "var(--color-on-surface, #1e293b)",
-                          cursor: "pointer",
-                          fontSize: "11.5px",
-                          textAlign: "left",
-                          transition: "background 0.12s ease",
-                        }}
-                      >
-                        <div
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "6px",
-                            overflow: "hidden",
-                          }}
-                        >
-                          <span
-                            className="material-symbols-outlined"
-                            style={{
-                              fontSize: "14px",
-                              color: isSelected
-                                ? "var(--color-primary, #2563eb)"
-                                : "var(--text-muted, #94a3b8)",
-                              flexShrink: 0,
-                            }}
-                          >
-                            {isSelected
-                              ? "check_circle"
-                              : "radio_button_unchecked"}
-                          </span>
-                          <div
-                            style={{
-                              display: "flex",
-                              flexDirection: "column",
-                              overflow: "hidden",
-                            }}
-                          >
-                            <span
-                              style={{
-                                fontWeight: isSelected ? 600 : 500,
-                                overflow: "hidden",
-                                textOverflow: "ellipsis",
-                                whiteSpace: "nowrap",
-                              }}
-                            >
-                              {skill.title || skill.name || skill.id}
-                            </span>
-                            {skill.description && (
-                              <span
-                                style={{
-                                  fontSize: "10px",
-                                  color: "#64748b",
-                                  overflow: "hidden",
-                                  textOverflow: "ellipsis",
-                                  whiteSpace: "nowrap",
-                                }}
-                              >
-                                {skill.description}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </button>
-                    );
-                  })}
-
-                  <div
-                    style={{
-                      borderTop: "1px solid #e2e8f0",
-                      paddingTop: "6px",
-                    }}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsSkillsDropdownOpen(false);
-                        openSkillsModal();
-                      }}
-                      style={{
-                        width: "100%",
-                        display: "inline-flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        gap: "6px",
-                        padding: "6px 8px",
-                        borderRadius: "6px",
-                        background:
-                          "var(--color-surface-container-high, #f8fafc)",
-                        border:
-                          "1px solid var(--color-outline-variant, #cbd5e1)",
-                        color: "var(--color-primary, #2563eb)",
-                        fontSize: "11px",
-                        fontWeight: 600,
-                        cursor: "pointer",
-                      }}
-                    >
-                      <span
-                        className="material-symbols-outlined"
-                        style={{ fontSize: "14px" }}
-                      >
-                        hub
-                      </span>
-                      Explorar Hub de Skills...
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        <button
-          type="button"
-          onClick={onOpenPrompt}
-          style={{
-            background: "transparent",
-            border: "none",
-            color: "var(--color-primary, #1a73e8)",
-            cursor: "pointer",
-            fontSize: "11px",
-            display: "flex",
-            alignItems: "center",
-            gap: "3px",
-            fontWeight: 600,
-            padding: "2px 6px",
-            borderRadius: "4px",
-          }}
-          title="Ver e ajustar prompts do documento e template"
-        >
-          <span
-            className="material-symbols-outlined"
-            style={{ fontSize: "14px" }}
+          {/* RAG Search Button (Top Bar) */}
+          <button
+            type="button"
+            onClick={openRagModal}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "4px",
+              padding: "3px 8px",
+              borderRadius: "12px",
+              fontSize: "10.5px",
+              fontWeight: 600,
+              cursor: "pointer",
+              border: "1px solid",
+              background:
+                ragReferences.length > 0 || isAutoRagEnabled
+                  ? "rgba(37, 99, 235, 0.15)"
+                  : "var(--color-surface-container, #f1f3f4)",
+              color:
+                ragReferences.length > 0 || isAutoRagEnabled
+                  ? "#2563eb"
+                  : "var(--text-muted, #64748b)",
+              borderColor:
+                ragReferences.length > 0 || isAutoRagEnabled
+                  ? "#3b82f6"
+                  : "var(--color-outline-variant, #cbd5e1)",
+              transition: "all 0.15s ease",
+            }}
+            title="Buscar e anexar fragmentos de outros documentos do projeto (Mini-RAG Local)"
           >
-            tune
-          </span>
-          Prompts
-        </button>
+            <span
+              className="material-symbols-outlined"
+              style={{
+                fontSize: "14px",
+                color:
+                  ragReferences.length > 0 || isAutoRagEnabled
+                    ? "#2563eb"
+                    : "#64748b",
+              }}
+            >
+              manage_search
+            </span>
+            <span>
+              RAG
+              {ragReferences.length > 0
+                ? ` (${ragReferences.length})`
+                : isAutoRagEnabled
+                  ? " (Auto)"
+                  : ""}
+            </span>
+          </button>
+
+        </div>
       </div>
 
       {/* 2. Interactive Document References & Global Scope Bar */}
@@ -1642,6 +1322,692 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
         )}
       </div>
 
+      {/* 2.1 Fixed Context Controls Bar: Context Prompts & Context Skills */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          flexWrap: "wrap",
+          gap: "6px",
+          padding: "5px 12px",
+          background: "var(--color-surface-container-low, #f8fafc)",
+          borderBottom: "1px solid var(--color-outline-variant, #e2e8f0)",
+          position: "relative",
+          zIndex: 20,
+        }}
+      >
+        {/* Left: Context Prompts Section */}
+        <div style={{ display: "flex", alignItems: "center", gap: "5px", flexWrap: "wrap" }}>
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "3px",
+              fontSize: "10.5px",
+              fontWeight: 600,
+              color: "var(--color-on-surface-variant, #475569)",
+            }}
+          >
+            <span
+              className="material-symbols-outlined"
+              style={{ fontSize: "14px", color: "var(--color-primary, #2563eb)" }}
+            >
+              tune
+            </span>
+            <span>Prompts:</span>
+          </div>
+
+          {templatePrompt ? (
+            <button
+              type="button"
+              onClick={toggleTemplatePrompt}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "4px",
+                padding: "2px 8px",
+                borderRadius: "12px",
+                border: "1px solid",
+                fontSize: "10.5px",
+                fontWeight: 600,
+                cursor: "pointer",
+                background: isTemplatePromptEnabled
+                  ? "var(--color-primary-container, #eff6ff)"
+                  : "var(--color-surface-container, #f1f5f9)",
+                color: isTemplatePromptEnabled
+                  ? "var(--color-primary, #1d4ed8)"
+                  : "var(--text-muted, #64748b)",
+                borderColor: isTemplatePromptEnabled
+                  ? "var(--color-primary, #3b82f6)"
+                  : "var(--color-outline-variant, #cbd5e1)",
+                transition: "all 0.15s ease",
+                maxWidth: "160px",
+              }}
+              title={
+                isTemplatePromptEnabled
+                  ? `Prompt de Template Ativo: ${templateTitle || "Template"}. Clique para desativar.`
+                  : `Prompt de Template Desativado: ${templateTitle || "Template"}. Clique para ativar.`
+              }
+            >
+              <span
+                className="material-symbols-outlined"
+                style={{
+                  fontSize: "13px",
+                  color: isTemplatePromptEnabled ? "#10b981" : "#94a3b8",
+                  flexShrink: 0,
+                }}
+              >
+                {isTemplatePromptEnabled ? "check_circle" : "radio_button_unchecked"}
+              </span>
+              <span
+                style={{
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                Template: {templateTitle || "Ativo"}
+              </span>
+            </button>
+          ) : null}
+
+          {docPrompt ? (
+            <button
+              type="button"
+              onClick={toggleDocPrompt}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "4px",
+                padding: "2px 8px",
+                borderRadius: "12px",
+                border: "1px solid",
+                fontSize: "10.5px",
+                fontWeight: 600,
+                cursor: "pointer",
+                background: isDocPromptEnabled
+                  ? "var(--color-primary-container, #eff6ff)"
+                  : "var(--color-surface-container, #f1f5f9)",
+                color: isDocPromptEnabled
+                  ? "var(--color-primary, #1d4ed8)"
+                  : "var(--text-muted, #64748b)",
+                borderColor: isDocPromptEnabled
+                  ? "var(--color-primary, #3b82f6)"
+                  : "var(--color-outline-variant, #cbd5e1)",
+                transition: "all 0.15s ease",
+                maxWidth: "140px",
+              }}
+              title={
+                isDocPromptEnabled
+                  ? "Prompt do Documento Ativo. Clique para desativar."
+                  : "Prompt do Documento Desativado. Clique para ativar."
+              }
+            >
+              <span
+                className="material-symbols-outlined"
+                style={{
+                  fontSize: "13px",
+                  color: isDocPromptEnabled ? "#10b981" : "#94a3b8",
+                  flexShrink: 0,
+                }}
+              >
+                {isDocPromptEnabled ? "check_circle" : "radio_button_unchecked"}
+              </span>
+              <span
+                style={{
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                Doc Prompt
+              </span>
+            </button>
+          ) : null}
+
+          {!templatePrompt && !docPrompt && (
+            <span
+              style={{
+                fontSize: "10.5px",
+                color: "var(--text-muted, #94a3b8)",
+                fontStyle: "italic",
+              }}
+            >
+              Padrão
+            </span>
+          )}
+
+          <button
+            type="button"
+            onClick={onOpenPrompt}
+            style={{
+              background: "transparent",
+              border: "none",
+              color: "var(--color-primary, #2563eb)",
+              cursor: "pointer",
+              fontSize: "10.5px",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "2px",
+              fontWeight: 600,
+              padding: "1px 4px",
+              borderRadius: "4px",
+            }}
+            title="Ver e ajustar prompts do documento e template"
+          >
+            <span
+              className="material-symbols-outlined"
+              style={{ fontSize: "13px" }}
+            >
+              edit_note
+            </span>
+            Ajustar
+          </button>
+        </div>
+
+        {/* Right: Context Skills Section with Template Skills toggles, extra active skills & dropdown */}
+        <div
+          ref={skillsDropdownRef}
+          style={{
+            position: "relative",
+            display: "flex",
+            alignItems: "center",
+            gap: "5px",
+            flexWrap: "wrap",
+          }}
+        >
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "3px",
+              fontSize: "10.5px",
+              fontWeight: 600,
+              color: "var(--color-on-surface-variant, #475569)",
+            }}
+          >
+            <span
+              className="material-symbols-outlined"
+              style={{ fontSize: "14px", color: "var(--color-primary, #2563eb)" }}
+            >
+              auto_awesome
+            </span>
+            <span>Skills:</span>
+          </div>
+
+          {/* 1. Template Skills: rendered just like Template Prompts with 1-click toggle */}
+          {templateSkills.map((skillId) => {
+            const isSkillActive = activeSkillIds.includes(skillId);
+            const skillName = getSkillTitle(skillId);
+            return (
+              <button
+                key={`tpl-skill-${skillId}`}
+                type="button"
+                onClick={() => toggleSkill(skillId)}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "4px",
+                  padding: "2px 8px",
+                  borderRadius: "12px",
+                  border: "1px solid",
+                  fontSize: "10.5px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  background: isSkillActive
+                    ? "var(--color-primary-container, #eff6ff)"
+                    : "var(--color-surface-container, #f1f5f9)",
+                  color: isSkillActive
+                    ? "var(--color-primary, #1d4ed8)"
+                    : "var(--text-muted, #64748b)",
+                  borderColor: isSkillActive
+                    ? "var(--color-primary, #3b82f6)"
+                    : "var(--color-outline-variant, #cbd5e1)",
+                  transition: "all 0.15s ease",
+                  maxWidth: "150px",
+                }}
+                title={
+                  isSkillActive
+                    ? `Skill do Template Ativa: ${skillName}. Clique para desativar.`
+                    : `Skill do Template Desativada: ${skillName}. Clique para ativar.`
+                }
+              >
+                <span
+                  className="material-symbols-outlined"
+                  style={{
+                    fontSize: "13px",
+                    color: isSkillActive ? "#10b981" : "#94a3b8",
+                    flexShrink: 0,
+                  }}
+                >
+                  {isSkillActive ? "check_circle" : "radio_button_unchecked"}
+                </span>
+                <span
+                  style={{
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {skillName}
+                </span>
+              </button>
+            );
+          })}
+
+          {/* 2. Extra Active Skills (Added by user that are not in templateSkills) */}
+          {extraActiveSkills.map((skillId) => {
+            const skillName = getSkillTitle(skillId);
+            return (
+              <div
+                key={`extra-skill-${skillId}`}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  borderRadius: "12px",
+                  background: "var(--color-primary-container, #d2e3fc)",
+                  border: "1px solid var(--color-primary, #1a73e8)",
+                  overflow: "hidden",
+                }}
+              >
+                <span
+                  style={{
+                    padding: "2px 6px 2px 8px",
+                    fontSize: "10.5px",
+                    fontWeight: 600,
+                    color: "var(--color-on-primary-container, #041e49)",
+                    maxWidth: "120px",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                  title={`Skill extra ativa: ${skillName}`}
+                >
+                  {skillName}
+                </span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    removeActiveSkill(skillId);
+                  }}
+                  title={`Remover skill ${skillName}`}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: "2px 5px",
+                    border: "none",
+                    borderLeft: "1px solid rgba(26,115,232,0.3)",
+                    background: "rgba(255,255,255,0.4)",
+                    color: "var(--color-on-primary-container, #041e49)",
+                    cursor: "pointer",
+                    height: "100%",
+                  }}
+                  onMouseEnter={(e) =>
+                    (e.currentTarget.style.background = "rgba(239,68,68,0.15)")
+                  }
+                  onMouseLeave={(e) =>
+                    (e.currentTarget.style.background = "rgba(255,255,255,0.4)")
+                  }
+                >
+                  <span
+                    className="material-symbols-outlined"
+                    style={{ fontSize: "12px" }}
+                  >
+                    close
+                  </span>
+                </button>
+              </div>
+            );
+          })}
+
+          {/* 3. Add Skill Button / Trigger */}
+          <button
+            type="button"
+            onClick={() => setIsSkillsDropdownOpen(!isSkillsDropdownOpen)}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "2px",
+              padding: "2px 7px",
+              borderRadius: "12px",
+              fontSize: "10.5px",
+              fontWeight: 600,
+              cursor: "pointer",
+              background: "var(--color-surface-container, #f1f5f9)",
+              color: "var(--color-primary, #2563eb)",
+              border: "1px dashed var(--color-outline-variant, #cbd5e1)",
+              transition: "all 0.15s ease",
+            }}
+            title="Adicionar ou alternar outras skills para a conversa"
+          >
+            <span
+              className="material-symbols-outlined"
+              style={{ fontSize: "13px" }}
+            >
+              add
+            </span>
+            <span>Skill</span>
+            <span
+              className="material-symbols-outlined"
+              style={{ fontSize: "12px", opacity: 0.7 }}
+            >
+              expand_more
+            </span>
+          </button>
+
+          {/* 4. Skills Dropdown Menu */}
+          {isSkillsDropdownOpen && (
+            <div
+              style={{
+                position: "absolute",
+                top: "calc(100% + 6px)",
+                right: 0,
+                zIndex: 1100,
+                width: "290px",
+                background: "var(--color-surface, #ffffff)",
+                border: "1px solid var(--color-outline-variant, #cbd5e1)",
+                borderRadius: "10px",
+                boxShadow: "0 10px 28px rgba(0, 0, 0, 0.18)",
+                padding: "8px",
+                display: "flex",
+                flexDirection: "column",
+                gap: "6px",
+                maxHeight: "360px",
+                overflowY: "auto",
+                animation: "fadeIn 0.12s ease-out",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "3px 6px 6px 6px",
+                  borderBottom: "1px solid #f1f5f9",
+                  fontSize: "11px",
+                  fontWeight: 600,
+                  color: "#334155",
+                }}
+              >
+                <span>Skills de Contexto / Chat</span>
+                <span
+                  style={{
+                    fontSize: "9.5px",
+                    padding: "1px 5px",
+                    borderRadius: "4px",
+                    background: activeSkillIds.length > 0
+                      ? "rgba(16,185,129,0.12)"
+                      : "#f1f5f9",
+                    color: activeSkillIds.length > 0 ? "#059669" : "#64748b",
+                    fontWeight: 700,
+                  }}
+                >
+                  {activeSkillIds.length > 0 ? `${activeSkillIds.length} ATIVA(S)` : "DESATIVADAS"}
+                </span>
+              </div>
+
+              {/* Option: Deactivate all skills if any active */}
+              {activeSkillIds.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveSkillIds([]);
+                  }}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "5px 8px",
+                    borderRadius: "6px",
+                    border: "1px solid #fca5a5",
+                    background: "#fef2f2",
+                    color: "#dc2626",
+                    cursor: "pointer",
+                    fontSize: "11px",
+                    textAlign: "left",
+                    transition: "background 0.12s ease",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <span className="material-symbols-outlined" style={{ fontSize: "14px", color: "#dc2626" }}>
+                      block
+                    </span>
+                    <span style={{ fontWeight: 600 }}>Desativar Todas as Skills</span>
+                  </div>
+                </button>
+              )}
+
+              {/* Section: Template Skills if available */}
+              {templateSkills.length > 0 && (
+                <>
+                  <div
+                    style={{
+                      fontSize: "10px",
+                      fontWeight: 700,
+                      color: "#94a3b8",
+                      textTransform: "uppercase",
+                      padding: "4px 6px 2px",
+                    }}
+                  >
+                    Skills do Template
+                  </div>
+                  {templateSkills.map((skillId) => {
+                    const isSelected = activeSkillIds.includes(skillId);
+                    const skillName = getSkillTitle(skillId);
+                    return (
+                      <button
+                        key={`dropdown-tpl-skill-${skillId}`}
+                        type="button"
+                        onClick={() => toggleSkill(skillId)}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          padding: "6px 8px",
+                          borderRadius: "6px",
+                          border: isSelected
+                            ? "1px solid var(--color-primary, #2563eb)"
+                            : "1px solid transparent",
+                          background: isSelected
+                            ? "var(--color-primary-container, #eff6ff)"
+                            : "transparent",
+                          color: isSelected
+                            ? "var(--color-primary, #1d4ed8)"
+                            : "var(--color-on-surface, #1e293b)",
+                          cursor: "pointer",
+                          fontSize: "11.5px",
+                          textAlign: "left",
+                          transition: "background 0.12s ease",
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "6px",
+                            overflow: "hidden",
+                          }}
+                        >
+                          <span
+                            className="material-symbols-outlined"
+                            style={{
+                              fontSize: "14px",
+                              color: isSelected
+                                ? "var(--color-primary, #2563eb)"
+                                : "var(--text-muted, #94a3b8)",
+                              flexShrink: 0,
+                            }}
+                          >
+                            {isSelected ? "check_circle" : "radio_button_unchecked"}
+                          </span>
+                          <span style={{ fontWeight: isSelected ? 600 : 500 }}>
+                            {skillName}
+                          </span>
+                        </div>
+                        <span
+                          style={{
+                            fontSize: "9px",
+                            padding: "1px 4px",
+                            borderRadius: "4px",
+                            background: "rgba(37,99,235,0.08)",
+                            color: "#2563eb",
+                            fontWeight: 600,
+                          }}
+                        >
+                          Template
+                        </span>
+                      </button>
+                    );
+                  })}
+                </>
+              )}
+
+              <div
+                style={{
+                  fontSize: "10px",
+                  fontWeight: 700,
+                  color: "#94a3b8",
+                  textTransform: "uppercase",
+                  padding: "4px 6px 2px",
+                }}
+              >
+                Todas as Skills
+              </div>
+
+              {/* List of Available Skills */}
+              {availableSkills.map((skill) => {
+                const isSelected = activeSkillIds.includes(skill.id);
+                return (
+                  <button
+                    key={skill.id}
+                    type="button"
+                    onClick={() => toggleSkill(skill.id)}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "6px 8px",
+                      borderRadius: "6px",
+                      border: isSelected
+                        ? "1px solid var(--color-primary, #2563eb)"
+                        : "1px solid transparent",
+                      background: isSelected
+                        ? "var(--color-primary-container, #eff6ff)"
+                        : "transparent",
+                      color: isSelected
+                        ? "var(--color-primary, #1d4ed8)"
+                        : "var(--color-on-surface, #1e293b)",
+                      cursor: "pointer",
+                      fontSize: "11.5px",
+                      textAlign: "left",
+                      transition: "background 0.12s ease",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        overflow: "hidden",
+                      }}
+                    >
+                      <span
+                        className="material-symbols-outlined"
+                        style={{
+                          fontSize: "14px",
+                          color: isSelected
+                            ? "var(--color-primary, #2563eb)"
+                            : "var(--text-muted, #94a3b8)",
+                          flexShrink: 0,
+                        }}
+                      >
+                        {isSelected
+                          ? "check_circle"
+                          : "radio_button_unchecked"}
+                      </span>
+                      <div
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          overflow: "hidden",
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontWeight: isSelected ? 600 : 500,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {skill.title || skill.name || skill.id}
+                        </span>
+                        {skill.description && (
+                          <span
+                            style={{
+                              fontSize: "10px",
+                              color: "#64748b",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {skill.description}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+
+              <div
+                style={{
+                  borderTop: "1px solid #e2e8f0",
+                  paddingTop: "6px",
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsSkillsDropdownOpen(false);
+                    openSkillsModal();
+                  }}
+                  style={{
+                    width: "100%",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "6px",
+                    padding: "6px 8px",
+                    borderRadius: "6px",
+                    background:
+                      "var(--color-surface-container-high, #f8fafc)",
+                    border:
+                      "1px solid var(--color-outline-variant, #cbd5e1)",
+                    color: "var(--color-primary, #2563eb)",
+                    fontSize: "11px",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  <span
+                    className="material-symbols-outlined"
+                    style={{ fontSize: "14px" }}
+                  >
+                    hub
+                  </span>
+                  Explorar Hub de Skills...
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* 3. Scrollable Message History Stream with Robust Scroll Management */}
       <div
         ref={messagesContainerRef}
@@ -1649,183 +2015,8 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
         className="ai-messages-scroll ai-copilot-messages-container"
         style={{ position: "relative" }}
       >
-        {/* Interactive Prompt Context Controls Bar */}
-        {(templatePrompt || docPrompt) && !isTemplateEditorMode && (
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: "6px",
-              padding: "10px 12px",
-              marginBottom: "10px",
-              borderRadius: "10px",
-              background: "var(--color-surface-container)",
-              border: "1px solid var(--color-outline-variant)",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                marginBottom: "2px",
-              }}
-            >
-              <span
-                style={{
-                  fontSize: "11px",
-                  fontWeight: 600,
-                  color: "var(--color-on-surface-variant)",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "4px",
-                }}
-              >
-                <span
-                  className="material-symbols-outlined"
-                  style={{ fontSize: "14px", color: "var(--color-primary)" }}
-                >
-                  tune
-                </span>
-                Prompts em Contexto:
-              </span>
-              <span style={{ fontSize: "10px", color: "var(--text-muted)" }}>
-                Ative ou desative para perguntas gerais
-              </span>
-            </div>
-
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
-              {/* Template Prompt Toggle */}
-              {templatePrompt && (
-                <div
-                  style={{ display: "flex", alignItems: "center", gap: "4px" }}
-                >
-                  <button
-                    type="button"
-                    onClick={toggleTemplatePrompt}
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "5px",
-                      padding: "4px 10px",
-                      borderRadius: "14px",
-                      border: "1px solid",
-                      fontSize: "11px",
-                      fontWeight: 600,
-                      cursor: "pointer",
-                      background: isTemplatePromptEnabled
-                        ? "#10b981"
-                        : "var(--bg-hover, #f1f5f9)",
-                      color: isTemplatePromptEnabled
-                        ? "#ffffff"
-                        : "var(--text-muted, #64748b)",
-                      borderColor: isTemplatePromptEnabled
-                        ? "#059669"
-                        : "var(--border-color, #cbd5e1)",
-                      boxShadow: isTemplatePromptEnabled
-                        ? "0 1px 4px rgba(16, 185, 129, 0.35)"
-                        : "none",
-                      maxWidth: "200px",
-                      transition: "all 0.15s ease",
-                    }}
-                    title={
-                      isTemplatePromptEnabled
-                        ? `Template: ${templateTitle || "Template"} (Ativo no Copilot. Clique para desativar)`
-                        : `Template: ${templateTitle || "Template"} (Desativado. Clique para ativar)`
-                    }
-                  >
-                    <span
-                      className="material-symbols-outlined"
-                      style={{ fontSize: "14px", flexShrink: 0 }}
-                    >
-                      {isTemplatePromptEnabled
-                        ? "check_circle"
-                        : "radio_button_unchecked"}
-                    </span>
-                    <span
-                      style={{
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                        display: "inline-block",
-                      }}
-                    >
-                      Template: {templateTitle || "Template"}
-                    </span>
-                  </button>
-                </div>
-              )}
-
-              {/* Doc Prompt Toggle */}
-              {docPrompt && (
-                <div
-                  style={{ display: "flex", alignItems: "center", gap: "4px" }}
-                >
-                  <button
-                    type="button"
-                    onClick={toggleDocPrompt}
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "5px",
-                      padding: "4px 10px",
-                      borderRadius: "14px",
-                      border: "1px solid",
-                      fontSize: "11px",
-                      fontWeight: 600,
-                      cursor: "pointer",
-                      background: isDocPromptEnabled
-                        ? "#2563eb"
-                        : "var(--bg-hover, #f1f5f9)",
-                      color: isDocPromptEnabled
-                        ? "#ffffff"
-                        : "var(--text-muted, #64748b)",
-                      borderColor: isDocPromptEnabled
-                        ? "#1d4ed8"
-                        : "var(--border-color, #cbd5e1)",
-                      boxShadow: isDocPromptEnabled
-                        ? "0 1px 4px rgba(37, 99, 235, 0.35)"
-                        : "none",
-                      maxWidth: "180px",
-                      transition: "all 0.15s ease",
-                    }}
-                    title={
-                      isDocPromptEnabled
-                        ? "Prompt do Documento (Ativo no Copilot. Clique para desativar)"
-                        : "Prompt do Documento (Desativado. Clique para ativar)"
-                    }
-                  >
-                    <span
-                      className="material-symbols-outlined"
-                      style={{ fontSize: "14px", flexShrink: 0 }}
-                    >
-                      {isDocPromptEnabled
-                        ? "check_circle"
-                        : "radio_button_unchecked"}
-                    </span>
-                    <span
-                      style={{
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                        display: "inline-block",
-                      }}
-                    >
-                      Prompt do Doc
-                    </span>
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
         {/* Default Welcome Message */}
         <div className="chat-bubble ai">
-          <div className="chat-bubble-sender">
-            <span className="material-symbols-outlined icon-xs">smart_toy</span>
-            <strong>Agent</strong>
-          </div>
           <div className="ai-reply-content">
             <p style={{ margin: 0 }}>
               {isTemplateEditorMode
@@ -1843,16 +2034,6 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
             key={msg.id}
             className={`chat-bubble ${msg.sender === "user" ? "user" : "ai"}`}
           >
-            <div className="chat-bubble-sender">
-              <span className="material-symbols-outlined icon-xs">
-                {msg.sender === "user" ? "account_circle" : "smart_toy"}
-              </span>
-              <strong>{msg.sender === "user" ? "Você" : "Agent"}</strong>
-              {msg.timestamp && (
-                <span className="chat-bubble-time">{msg.timestamp}</span>
-              )}
-            </div>
-
             <div
               className={
                 msg.sender === "user"
@@ -2001,7 +2182,7 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
                   }}
                   onClick={() => handleApplyToDoc(msg.diff!.new_content)}
                 >
-                  ✅ Aceitar e Aplicar Alteração no Documento
+                  Aceitar e Aplicar Alteração no Documento
                 </button>
               </div>
             )}
@@ -2023,27 +2204,7 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
                   onClick={() => copyToClipboard(msg.content)}
                   title="Copiar resposta"
                 >
-                  📋 Copiar
-                </button>
-                {onInsertAtCursor && (
-                  <button
-                    className="btn btn-ghost btn-xs"
-                    type="button"
-                    style={{ fontSize: "11px", padding: "2px 6px" }}
-                    onClick={() => onInsertAtCursor(msg.content)}
-                    title="Inserir no cursor"
-                  >
-                    ✏️ Inserir
-                  </button>
-                )}
-                <button
-                  className="btn btn-ghost btn-xs"
-                  type="button"
-                  style={{ fontSize: "11px", padding: "2px 6px" }}
-                  onClick={() => handleApplyToDoc(msg.content)}
-                  title="Substituir documento pelo conteúdo"
-                >
-                  ⚡ Substituir
+                  Copiar
                 </button>
               </div>
             )}
@@ -2055,31 +2216,66 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
           <AgentApprovalCard
             prompt={pendingApproval.prompt}
             sessionId={pendingApproval.sessionId}
-            providerName={activeProviderId === 'antigravity' ? 'Google Antigravity Agent' : 'Agent'}
+            providerName={
+              activeProviderId === "antigravity"
+                ? "Google Antigravity Agent"
+                : "Agent"
+            }
             onApprove={approveAction}
             onReject={rejectAction}
           />
         )}
 
         {isThinking && (
-          <div className="chat-bubble ai thinking" style={{ borderLeft: "3px solid #3b82f6", background: "var(--color-surface-container, #1e293b)" }}>
-            <div className="chat-bubble-sender" style={{ display: "flex", alignItems: "center", width: "100%" }}>
-              <span className="material-symbols-outlined icon-xs" style={{ animation: "spin 2s linear infinite", color: "#60a5fa" }}>
-                sync
-              </span>
-              <strong style={{ color: "#60a5fa" }}>{activeProviderId === 'antigravity' ? 'Antigravity Agent' : 'Agent'}</strong>
-              <span style={{ fontSize: "11px", color: "var(--text-muted)", marginLeft: "auto", fontFamily: "monospace" }}>
-                ⏱️ {formatElapsed(elapsedSeconds)}
-              </span>
-            </div>
+          <div
+            className="chat-bubble ai thinking"
+            style={{
+              borderLeft: "3px solid #3b82f6",
+              background: "var(--color-surface-container, #1e293b)",
+              padding: "8px 12px",
+            }}
+          >
             <div
               className="ai-reply-content"
-              style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", width: "100%", marginTop: "6px" }}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "8px",
+                width: "100%",
+              }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <span className="dot pulse" style={{ backgroundColor: "#3b82f6" }}></span>
-                <span style={{ fontSize: "12.5px", color: "var(--color-on-surface, #f1f5f9)", fontWeight: 500 }}>
-                  {thinkingStep || 'Processando requisição...'}
+              <div
+                style={{ display: "flex", alignItems: "center", gap: "8px" }}
+              >
+                <span
+                  className="material-symbols-outlined icon-xs"
+                  style={{
+                    animation: "spin 2s linear infinite",
+                    color: "#60a5fa",
+                    fontSize: "15px",
+                  }}
+                >
+                  sync
+                </span>
+                <span
+                  style={{
+                    fontSize: "12px",
+                    color: "var(--color-on-surface, #f1f5f9)",
+                    fontWeight: 500,
+                  }}
+                >
+                  {thinkingStep || "Processando requisição..."}
+                </span>
+                <span
+                  style={{
+                    fontSize: "11px",
+                    color: "var(--text-muted, #94a3b8)",
+                    fontFamily: "monospace",
+                    marginLeft: "4px",
+                  }}
+                >
+                  ⏱️ {formatElapsed(elapsedSeconds)}
                 </span>
               </div>
               <button
@@ -2101,8 +2297,13 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
                 }}
                 title="Interromper execução do agente"
               >
-                <span className="material-symbols-outlined" style={{ fontSize: "13px" }}>stop</span>
-                Interromper
+                <span
+                  className="material-symbols-outlined"
+                  style={{ fontSize: "13px" }}
+                >
+                  stop_circle
+                </span>
+                Parar
               </button>
             </div>
           </div>
@@ -2175,6 +2376,80 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
       <form className="ai-copilot-input-container" onSubmit={handleSend}>
         {inspectorFlash && (
           <div className="ai-inspector-mini-toast">{inspectorFlash}</div>
+        )}
+
+        {/* Attached RAG Reference Chips */}
+        {ragReferences.length > 0 && (
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: "4px",
+              padding: "4px 8px",
+              marginBottom: "4px",
+              borderRadius: "8px",
+              background: "rgba(37, 99, 235, 0.06)",
+              border: "1px dashed rgba(37, 99, 235, 0.25)",
+              alignItems: "center",
+            }}
+          >
+            <span
+              style={{
+                fontSize: "10px",
+                fontWeight: 700,
+                color: "var(--color-primary, #2563eb)",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "2px",
+              }}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: "12px" }}>
+                attachment
+              </span>
+              RAG ({ragReferences.length}):
+            </span>
+            {ragReferences.map((ref) => (
+              <span
+                key={ref.id}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "4px",
+                  background: "#ffffff",
+                  border: "1px solid #bfdbfe",
+                  borderRadius: "6px",
+                  padding: "1px 6px",
+                  fontSize: "10.5px",
+                  color: "#1e40af",
+                  maxWidth: "200px",
+                }}
+                title={ref.snippet}
+              >
+                <span
+                  style={{
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {ref.relativePath}
+                </span>
+                <span
+                  className="material-symbols-outlined"
+                  onClick={() => removeRagReference(ref.id)}
+                  style={{
+                    fontSize: "12px",
+                    cursor: "pointer",
+                    color: "#ef4444",
+                    opacity: 0.8,
+                  }}
+                  title="Remover referência"
+                >
+                  close
+                </span>
+              </span>
+            ))}
+          </div>
         )}
 
         <textarea
@@ -2266,6 +2541,9 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
         isOpen={isContextModalOpen}
         onClose={() => setIsContextModalOpen(false)}
       />
+
+      {/* Local Workspace RAG Search Modal */}
+      <RagSearchModal />
     </>
   );
 };

@@ -287,13 +287,63 @@ export const API = {
     skill_id?: string;
     allowed_tools?: string[];
     provider_id?: string;
-  }): Promise<ApiResponse<{ reply: string; diff?: any; actions?: any[]; tool_calls?: ToolCallRecord[]; steps_count?: number; provider?: string; model?: string }>> {
+  }): Promise<ApiResponse<{ reply: string; diff?: any; actions?: any[]; tool_calls?: ToolCallRecord[]; steps_count?: number; provider?: string; model?: string; usage?: any; telemetry_turn?: any }>> {
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
     return { ok: res.ok, data: await res.json() };
+  },
+
+  async streamChatMessage(
+    payload: {
+      prompt: string;
+      content?: string;
+      path?: string;
+      history?: any[];
+      assistant_prompt?: string;
+      raw_mode?: boolean;
+      session_id?: string;
+      repo?: string;
+      skill_id?: string;
+      allowed_tools?: string[];
+      provider_id?: string;
+    },
+    onEvent: (event: any) => void
+  ): Promise<void> {
+    const res = await fetch('/api/chat/stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok || !res.body) {
+      throw new Error(`Falha no streaming: ${res.statusText}`);
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed.startsWith('data: ')) {
+          try {
+            const data = JSON.parse(trimmed.slice(6));
+            onEvent(data);
+          } catch {}
+        }
+      }
+    }
   },
 
   async getAIProviders(): Promise<ApiResponse<{ providers: Array<{ id: string; name: string; description: string; mode: string; isAvailable: boolean; isAuthenticated: boolean; statusMessage?: string }> }>> {

@@ -3,6 +3,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { IAgentProvider, ProviderCapabilities, ProviderId, ProviderMessage, ProviderMode, ProviderSessionConfig, ProviderStatus, ProviderStreamEvent } from './provider.types.js';
 import { PROJECTS_DIR } from '../../../config/constants.js';
+import { loadConfig } from '../../../config/storage.js';
 
 interface ActiveProcessSession {
   config: ProviderSessionConfig;
@@ -30,6 +31,12 @@ export class ClaudeCodeAdapter implements IAgentProvider {
   private activeSessions = new Map<string, ActiveProcessSession>();
 
   private resolveCliPath(): string | null {
+    const cfg = loadConfig();
+    const customPath = (cfg.settings as any)?.claude_cli_path || process.env.CLAUDE_CLI_PATH;
+    if (customPath && fs.existsSync(customPath)) {
+      return customPath;
+    }
+
     const possiblePaths = [
       path.join(process.env.HOME || '', '.local/bin/claude'),
       '/usr/local/bin/claude',

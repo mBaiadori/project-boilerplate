@@ -1,6 +1,6 @@
 import { FastifyReply } from 'fastify';
 import { watch, type FSWatcher } from 'chokidar';
-import { UI_DIR, UI_DIST_DIR } from '../../config/constants.js';
+import { UI_DIR, UI_DIST_DIR, PROJECTS_DIR } from '../../config/constants.js';
 
 type Client = {
   reply: FastifyReply;
@@ -38,18 +38,34 @@ class EventsService {
   }
 
   private initWatcher(): void {
-    const watchPaths = [UI_DIR, UI_DIST_DIR];
+    const watchPaths = [UI_DIR, UI_DIST_DIR, PROJECTS_DIR];
     try {
       this.watcher = watch(watchPaths, {
         ignoreInitial: true,
+        ignored: [
+          /(^|[\/\\])\.git/,
+          /node_modules/,
+        ],
         awaitWriteFinish: {
-          stabilityThreshold: 100,
+          stabilityThreshold: 150,
           pollInterval: 50,
         },
       });
 
-      this.watcher.on('all', (_event: string, filePath: string) => {
-        if (filePath.match(/\.(html|css|js|svg|png)$/)) {
+      this.watcher.on('all', (event: string, filePath: string) => {
+        if (filePath.startsWith(PROJECTS_DIR)) {
+          const relativePath = filePath.replace(PROJECTS_DIR, '').replace(/^[/\\]/, '');
+          this.broadcast('refresh', {
+            timestamp: Date.now(),
+            file: relativePath,
+            action: event,
+          });
+          this.broadcast('file_changed', {
+            timestamp: Date.now(),
+            file: relativePath,
+            action: event,
+          });
+        } else if (filePath.match(/\.(html|css|js|svg|png)$/)) {
           this.broadcast('reload', { timestamp: Date.now(), file: filePath });
         }
       });

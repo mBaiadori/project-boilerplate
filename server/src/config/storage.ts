@@ -38,6 +38,10 @@ export interface AppConfig {
     template_creator_prompt: string;
     global_system_prompt: string;
     antigravity_cli_path?: string;
+    claude_cli_path?: string;
+    agent_effort?: 'low' | 'medium' | 'high' | string;
+    agent_model?: string;
+    default_provider?: string;
   };
   workspace_changes: Record<string, WorkspaceChange[]>;
   templates?: any[];

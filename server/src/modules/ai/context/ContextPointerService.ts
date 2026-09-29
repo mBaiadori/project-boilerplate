@@ -6,6 +6,8 @@ export interface ContextPointerOptions {
   repoName: string;
   activeFilePath?: string;
   skillId?: string;
+  skillIds?: string[];
+  skillsMeta?: Array<{ id: string; title: string; path?: string; description?: string }>;
 }
 
 export class ContextPointerService {
@@ -13,7 +15,7 @@ export class ContextPointerService {
    * Constrói as diretrizes de contexto baseadas em ponteiros de arquivos e regras locais
    */
   buildContextPointers(options: ContextPointerOptions): string[] {
-    const { repoName, activeFilePath, skillId } = options;
+    const { repoName, activeFilePath, skillId, skillIds, skillsMeta } = options;
     const pointers: string[] = [];
 
     const projectRoot = path.join(PROJECTS_DIR, repoName || 'local');
@@ -40,16 +42,29 @@ export class ContextPointerService {
         ? activeFilePath 
         : path.join(projectRoot, activeFilePath);
       pointers.push(`- Arquivo atualmente em foco no editor: ${fullActivePath}`);
+      pointers.push(`- Nota de Edição: Se a solicitação pedir alteração neste documento, leia as seções necessárias e aplique a modificação diretamente no disco.`);
     }
 
-    // Pasta de Skills Locais do Projeto
-    const skillsDir = path.join(projectRoot, '.skills');
-    if (fs.existsSync(skillsDir)) {
-      pointers.push(`- Skills instaladas neste projeto: ${skillsDir}`);
-      if (skillId) {
-        const targetSkillPath = path.join(skillsDir, skillId, 'SKILL.md');
+    // Skills On-Demand
+    const effectiveSkillIds = Array.isArray(skillIds) && skillIds.length > 0 
+      ? skillIds 
+      : (skillId ? [skillId] : []);
+
+    if (skillsMeta && skillsMeta.length > 0) {
+      pointers.push(`\n[CATÁLOGO DE SKILLS SELECIONADAS (ON-DEMAND)]`);
+      for (const sm of skillsMeta) {
+        pointers.push(`- Skill '${sm.title || sm.id}': ${sm.path ? `Arquivo ${sm.path}` : `ID: ${sm.id}`} - ${sm.description || 'Diretrizes especializadas'}`);
+      }
+      pointers.push(`*Instrução: Se a sua tarefa exigir conhecimento das regras de uma Skill acima, use sua ferramenta 'view_file' para ler o arquivo correspondente.*`);
+    } else if (effectiveSkillIds.length > 0) {
+      const skillsDir = path.join(projectRoot, '.skills');
+      pointers.push(`\n[SKILLS ATIVAS]`);
+      for (const sId of effectiveSkillIds) {
+        const targetSkillPath = path.join(skillsDir, sId, 'SKILL.md');
         if (fs.existsSync(targetSkillPath)) {
-          pointers.push(`- Instrução da Skill Ativa: ${targetSkillPath}`);
+          pointers.push(`- Skill ${sId}: ${targetSkillPath}`);
+        } else {
+          pointers.push(`- Skill ${sId}`);
         }
       }
     }

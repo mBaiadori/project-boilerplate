@@ -1,5 +1,5 @@
 // =============================================================================
-// SUBVIEW: GERENCIADOR DE SKILLS DO AGENTE (PADRÃO ECC)
+// SUBVIEW: GERENCIADOR DE SKILLS DO AGENTE
 // Visualização e gestão completa de habilidades, ferramentas e regras para o Harness
 // Totalmente integrado ao Design System e Tokens de Tema da aplicação
 // =============================================================================
@@ -66,7 +66,10 @@ export const SkillsSubView: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [selectedSkill, setSelectedSkill] = useState<SkillItem | null>(null);
-  const [actionFeedback, setActionFeedback] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [actionFeedback, setActionFeedback] = useState<{
+    ok: boolean;
+    msg: string;
+  } | null>(null);
 
   useEffect(() => {
     loadSkills();
@@ -96,14 +99,23 @@ export const SkillsSubView: React.FC = () => {
 
   const handleInstall = async (skill: SkillItem) => {
     try {
-      setActionFeedback({ ok: true, msg: `Instalando '${skill.title || skill.name}' no projeto...` });
+      setActionFeedback({
+        ok: true,
+        msg: `Instalando '${skill.title || skill.name}' no projeto...`,
+      });
       const res = await API.installSkill(skill.id, activeRepo?.name);
       if (res.ok) {
-        setActionFeedback({ ok: true, msg: `Skill '${skill.title || skill.name}' instalada com sucesso!` });
+        setActionFeedback({
+          ok: true,
+          msg: `Skill '${skill.title || skill.name}' instalada com sucesso!`,
+        });
         await loadSkills();
         setTimeout(() => setActionFeedback(null), 3500);
       } else {
-        setActionFeedback({ ok: false, msg: (res.data as any)?.message || "Falha ao instalar skill." });
+        setActionFeedback({
+          ok: false,
+          msg: (res.data as any)?.message || "Falha ao instalar skill.",
+        });
       }
     } catch (err: any) {
       setActionFeedback({ ok: false, msg: err.message || "Erro de conexão." });
@@ -111,7 +123,9 @@ export const SkillsSubView: React.FC = () => {
   };
 
   const handleUninstall = async (skillId: string) => {
-    const ok = window.confirm("Deseja remover esta skill do projeto? (O catálogo global continuará disponível no Hub)");
+    const ok = window.confirm(
+      "Deseja remover esta skill do projeto? (O catálogo global continuará disponível no Hub)",
+    );
     if (!ok) return;
 
     try {
@@ -124,11 +138,14 @@ export const SkillsSubView: React.FC = () => {
           setSelectedSkill(null);
         }
         if (activeSkillId === skillId) {
-          setActiveSkillId("living-docs-governance");
+          setActiveSkillId(null);
         }
         setTimeout(() => setActionFeedback(null), 3500);
       } else {
-        setActionFeedback({ ok: false, msg: (res.data as any)?.message || "Falha ao desinstalar skill." });
+        setActionFeedback({
+          ok: false,
+          msg: (res.data as any)?.message || "Falha ao desinstalar skill.",
+        });
       }
     } catch (err: any) {
       setActionFeedback({ ok: false, msg: err.message || "Erro de conexão." });
@@ -150,7 +167,9 @@ export const SkillsSubView: React.FC = () => {
         : communitySkills;
 
   const filteredSkills = displayedList.filter((s) => {
-    const matchesCat = selectedCategory === "all" || s.category?.toLowerCase() === selectedCategory.toLowerCase();
+    const matchesCat =
+      selectedCategory === "all" ||
+      s.category?.toLowerCase() === selectedCategory.toLowerCase();
 
     const q = searchQuery.toLowerCase();
     const matchesSearch =
@@ -166,9 +185,13 @@ export const SkillsSubView: React.FC = () => {
   const getCategoryIcon = (category?: string) => {
     switch (category?.toLowerCase()) {
       case "governance":
-        return <ShieldCheck size={16} style={{ color: "var(--color-success)" }} />;
+        return (
+          <ShieldCheck size={16} style={{ color: "var(--color-success)" }} />
+        );
       case "architecture":
-        return <FileCode2 size={16} style={{ color: "var(--color-primary)" }} />;
+        return (
+          <FileCode2 size={16} style={{ color: "var(--color-primary)" }} />
+        );
       case "quality":
         return <Sparkles size={16} style={{ color: "var(--color-warning)" }} />;
       case "engineering":
@@ -181,26 +204,74 @@ export const SkillsSubView: React.FC = () => {
   };
 
   const tabList = [
-    { id: "installed", label: "Instaladas no Projeto", badge: installedSkills.length, icon: <Folder size={14} /> },
-    { id: "system", label: "Sistema (Oficiais)", badge: systemSkills.length, icon: <Settings size={14} /> },
-    { id: "community", label: "Comunidade", badge: communitySkills.length, icon: <Globe size={14} /> },
+    {
+      id: "installed",
+      label: "Instaladas no Projeto",
+      badge: installedSkills.length,
+      icon: <Folder size={14} />,
+    },
+    {
+      id: "system",
+      label: "Sistema (Oficiais)",
+      badge: systemSkills.length,
+      icon: <Settings size={14} />,
+    },
+    {
+      id: "community",
+      label: "Comunidade",
+      badge: communitySkills.length,
+      icon: <Globe size={14} />,
+    },
   ];
 
   return (
-    <div id="subview-skills" style={{ padding: "24px 32px", maxWidth: "1400px", margin: "0 auto", width: "100%", boxSizing: "border-box" }}>
+    <div
+      id="subview-skills"
+      style={{
+        padding: "24px 32px",
+        maxWidth: "1400px",
+        margin: "0 auto",
+        width: "100%",
+        boxSizing: "border-box",
+      }}
+    >
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "20px", flexWrap: "wrap", gap: "16px" }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          marginBottom: "20px",
+          flexWrap: "wrap",
+          gap: "16px",
+        }}
+      >
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <h1 style={{ margin: 0, fontSize: "22px", fontWeight: 700, color: "var(--color-on-surface)", letterSpacing: "-0.02em" }}>
+            <h1
+              style={{
+                margin: 0,
+                fontSize: "22px",
+                fontWeight: 700,
+                color: "var(--color-on-surface)",
+                letterSpacing: "-0.02em",
+              }}
+            >
               Harness & Skills do Agente
             </h1>
             <Badge variant="purple" size="md">
               Padrão ECC
             </Badge>
           </div>
-          <p style={{ margin: "6px 0 0 0", fontSize: "13.5px", color: "var(--color-on-surface-variant)" }}>
-            Habilidades operacionais, guardrails de governança e ferramentas injetadas no contexto do Copilot e agentes autônomos.
+          <p
+            style={{
+              margin: "6px 0 0 0",
+              fontSize: "13.5px",
+              color: "var(--color-on-surface-variant)",
+            }}
+          >
+            Habilidades operacionais, guardrails de governança e ferramentas
+            injetadas no contexto do Copilot e agentes autônomos.
           </p>
         </div>
 
@@ -229,8 +300,23 @@ export const SkillsSubView: React.FC = () => {
       )}
 
       {/* Controls: Tabs & Search */}
-      <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginBottom: "24px" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "12px" }}>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: "12px",
+          marginBottom: "24px",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: "12px",
+          }}
+        >
           <Tabs
             tabs={tabList}
             activeTab={scopeFilter}
@@ -260,7 +346,13 @@ export const SkillsSubView: React.FC = () => {
 
       {/* Skills Grid */}
       {loading ? (
-        <div style={{ padding: "60px 0", display: "flex", justifyContent: "center" }}>
+        <div
+          style={{
+            padding: "60px 0",
+            display: "flex",
+            justifyContent: "center",
+          }}
+        >
           <Spinner size="lg" message="Carregando catálogo de skills..." />
         </div>
       ) : filteredSkills.length === 0 ? (
@@ -278,7 +370,13 @@ export const SkillsSubView: React.FC = () => {
           }
         />
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "16px" }}>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
+            gap: "16px",
+          }}
+        >
           {filteredSkills.map((skill) => {
             const installed = isInstalled(skill.id);
             const isActiveInCopilot = activeSkillId === skill.id;
@@ -301,32 +399,63 @@ export const SkillsSubView: React.FC = () => {
                   title={skill.title || skill.name}
                   subtitle={`v${skill.version} • ${skill.id}`}
                   action={
-                    <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: "4px",
+                        alignItems: "center",
+                      }}
+                    >
                       <Badge variant="primary" size="sm">
                         {skill.category || "Geral"}
                       </Badge>
                       {isSystem ? (
-                        <Badge variant="info" size="sm">Sistema</Badge>
+                        <Badge variant="info" size="sm">
+                          Sistema
+                        </Badge>
                       ) : isProject ? (
-                        <Badge variant="success" size="sm">Projeto</Badge>
+                        <Badge variant="success" size="sm">
+                          Projeto
+                        </Badge>
                       ) : (
-                        <Badge variant="purple" size="sm">Comunidade</Badge>
+                        <Badge variant="purple" size="sm">
+                          Comunidade
+                        </Badge>
                       )}
                       {installed && (
-                        <Badge variant="success" size="sm" dot>Ativa</Badge>
+                        <Badge variant="success" size="sm" dot>
+                          Ativa
+                        </Badge>
                       )}
                     </div>
                   }
                 />
 
-                <CardContent style={{ flex: 1, display: "flex", flexDirection: "column", gap: "10px" }}>
-                  <p style={{ margin: 0, fontSize: "12.5px", color: "var(--color-on-surface-variant)", lineHeight: 1.5, flex: 1 }}>
+                <CardContent
+                  style={{
+                    flex: 1,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "10px",
+                  }}
+                >
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: "12.5px",
+                      color: "var(--color-on-surface-variant)",
+                      lineHeight: 1.5,
+                      flex: 1,
+                    }}
+                  >
                     {skill.description}
                   </p>
 
                   {/* Tools */}
                   {skill.tools && skill.tools.length > 0 && (
-                    <div style={{ display: "flex", gap: "4px", flexWrap: "wrap" }}>
+                    <div
+                      style={{ display: "flex", gap: "4px", flexWrap: "wrap" }}
+                    >
                       {skill.tools.slice(0, 3).map((tool) => (
                         <span
                           key={tool}
@@ -342,12 +471,20 @@ export const SkillsSubView: React.FC = () => {
                             border: "1px solid var(--color-outline-variant)",
                           }}
                         >
-                          <Wrench size={10} style={{ color: "var(--color-primary)" }} />
+                          <Wrench
+                            size={10}
+                            style={{ color: "var(--color-primary)" }}
+                          />
                           {tool}
                         </span>
                       ))}
                       {skill.tools.length > 3 && (
-                        <span style={{ fontSize: "10px", color: "var(--color-outline)" }}>
+                        <span
+                          style={{
+                            fontSize: "10px",
+                            color: "var(--color-outline)",
+                          }}
+                        >
                           +{skill.tools.length - 3}
                         </span>
                       )}
@@ -355,7 +492,14 @@ export const SkillsSubView: React.FC = () => {
                   )}
                 </CardContent>
 
-                <CardFooter style={{ borderTop: "1px solid var(--color-outline-variant)", display: "flex", gap: "8px", alignItems: "center" }}>
+                <CardFooter
+                  style={{
+                    borderTop: "1px solid var(--color-outline-variant)",
+                    display: "flex",
+                    gap: "8px",
+                    alignItems: "center",
+                  }}
+                >
                   <Button
                     variant="secondary"
                     size="sm"
@@ -372,12 +516,23 @@ export const SkillsSubView: React.FC = () => {
                       fullWidth
                       onClick={() => {
                         setActiveSkillId(skill.id);
-                        setActionFeedback({ ok: true, msg: `Skill '${skill.title || skill.name}' ativada no Copilot!` });
+                        setActionFeedback({
+                          ok: true,
+                          msg: `Skill '${skill.title || skill.name}' ativada no Copilot!`,
+                        });
                         setTimeout(() => setActionFeedback(null), 3000);
                       }}
-                      icon={isActiveInCopilot ? <CheckCircle2 size={14} /> : <Play size={14} />}
+                      icon={
+                        isActiveInCopilot ? (
+                          <CheckCircle2 size={14} />
+                        ) : (
+                          <Play size={14} />
+                        )
+                      }
                     >
-                      {isActiveInCopilot ? "Ativa no Copilot" : "Ativar no Copilot"}
+                      {isActiveInCopilot
+                        ? "Ativa no Copilot"
+                        : "Ativar no Copilot"}
                     </Button>
                   ) : (
                     <Button
@@ -407,7 +562,14 @@ export const SkillsSubView: React.FC = () => {
           icon={getCategoryIcon(selectedSkill.category)}
           size="lg"
           footer={
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                width: "100%",
+              }}
+            >
               {isInstalled(selectedSkill.id) ? (
                 <>
                   <Button
@@ -425,7 +587,10 @@ export const SkillsSubView: React.FC = () => {
                     onClick={() => {
                       setActiveSkillId(selectedSkill.id);
                       setSelectedSkill(null);
-                      setActionFeedback({ ok: true, msg: `Skill '${selectedSkill.title || selectedSkill.name}' ativada!` });
+                      setActionFeedback({
+                        ok: true,
+                        msg: `Skill '${selectedSkill.title || selectedSkill.name}' ativada!`,
+                      });
                       setTimeout(() => setActionFeedback(null), 3000);
                     }}
                     icon={<Play size={14} />}
@@ -435,7 +600,11 @@ export const SkillsSubView: React.FC = () => {
                 </>
               ) : (
                 <>
-                  <Button variant="secondary" size="sm" onClick={() => setSelectedSkill(null)}>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setSelectedSkill(null)}
+                  >
                     Fechar
                   </Button>
                   <Button
@@ -454,20 +623,48 @@ export const SkillsSubView: React.FC = () => {
             </div>
           }
         >
-          <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+          <div
+            style={{ display: "flex", flexDirection: "column", gap: "16px" }}
+          >
             {/* Description */}
             <div>
-              <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", color: "var(--color-outline)", marginBottom: "4px" }}>
+              <div
+                style={{
+                  fontSize: "11px",
+                  fontWeight: 700,
+                  textTransform: "uppercase",
+                  color: "var(--color-outline)",
+                  marginBottom: "4px",
+                }}
+              >
                 Descrição
               </div>
-              <p style={{ margin: 0, fontSize: "13px", color: "var(--color-on-surface)", lineHeight: 1.5 }}>
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: "13px",
+                  color: "var(--color-on-surface)",
+                  lineHeight: 1.5,
+                }}
+              >
                 {selectedSkill.description}
               </p>
             </div>
 
             {/* Tools */}
             <div>
-              <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", color: "var(--color-outline)", marginBottom: "6px", display: "flex", alignItems: "center", gap: "6px" }}>
+              <div
+                style={{
+                  fontSize: "11px",
+                  fontWeight: 700,
+                  textTransform: "uppercase",
+                  color: "var(--color-outline)",
+                  marginBottom: "6px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                }}
+              >
                 <Wrench size={13} style={{ color: "var(--color-primary)" }} />
                 Ferramentas Autônomas Vinculadas
               </div>
@@ -490,32 +687,61 @@ export const SkillsSubView: React.FC = () => {
                     </span>
                   ))
                 ) : (
-                  <span style={{ fontSize: "12px", color: "var(--color-outline)" }}>Nenhuma ferramenta especial necessária.</span>
+                  <span
+                    style={{ fontSize: "12px", color: "var(--color-outline)" }}
+                  >
+                    Nenhuma ferramenta especial necessária.
+                  </span>
                 )}
               </div>
             </div>
 
             {/* Suggested Templates */}
-            {selectedSkill.suggested_templates && selectedSkill.suggested_templates.length > 0 && (
-              <div>
-                <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", color: "var(--color-outline)", marginBottom: "6px", display: "flex", alignItems: "center", gap: "6px" }}>
-                  <BookOpen size={13} style={{ color: "var(--color-success)" }} />
-                  Templates Recomendados
+            {selectedSkill.suggested_templates &&
+              selectedSkill.suggested_templates.length > 0 && (
+                <div>
+                  <div
+                    style={{
+                      fontSize: "11px",
+                      fontWeight: 700,
+                      textTransform: "uppercase",
+                      color: "var(--color-outline)",
+                      marginBottom: "6px",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                    }}
+                  >
+                    <BookOpen
+                      size={13}
+                      style={{ color: "var(--color-success)" }}
+                    />
+                    Templates Recomendados
+                  </div>
+                  <div
+                    style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}
+                  >
+                    {selectedSkill.suggested_templates.map((tpl) => (
+                      <Badge key={tpl} variant="success" size="sm">
+                        {tpl}
+                      </Badge>
+                    ))}
+                  </div>
                 </div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
-                  {selectedSkill.suggested_templates.map((tpl) => (
-                    <Badge key={tpl} variant="success" size="sm">
-                      {tpl}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            )}
+              )}
 
             {/* Instructions / SKILL.md */}
             {selectedSkill.content && (
               <div>
-                <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", color: "var(--color-outline)", marginBottom: "6px" }}>
+                <div
+                  style={{
+                    fontSize: "11px",
+                    fontWeight: 700,
+                    textTransform: "uppercase",
+                    color: "var(--color-outline)",
+                    marginBottom: "6px",
+                  }}
+                >
                   Instruções do Agente (SKILL.md)
                 </div>
                 <pre

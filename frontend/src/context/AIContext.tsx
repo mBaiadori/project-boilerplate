@@ -1,9 +1,10 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import type { AISettingsState, ChatMessage } from '../types';
+import type { AISettingsState, ChatMessage, RawTurnTelemetry, RawTurnMetrics } from '../types';
 import { API } from '../services/api';
 import { useWorkspace } from './WorkspaceContext';
 import { useTemplateStore } from '../stores/templateStore';
 import { useCopilotStore, type DynamicContext } from '../stores/copilotStore';
+import { estimateTokens, calculateTokenCost } from '../utils/token-costs';
 
 export type { DynamicContext };
 
@@ -17,7 +18,19 @@ interface AIContextType {
   openSettingsModal: () => void;
   closeSettingsModal: () => void;
   loadAISettings: () => Promise<void>;
-  saveAISettings: (provider: string, model: string, apiKey?: string, customEndpoint?: string) => Promise<boolean>;
+  saveAISettings: (
+    provider: string,
+    model: string,
+    apiKey?: string,
+    customEndpoint?: string,
+    extraHarness?: {
+      default_provider?: string;
+      antigravity_cli_path?: string;
+      claude_cli_path?: string;
+      agent_effort?: 'low' | 'medium' | 'high';
+      agent_model?: string;
+    }
+  ) => Promise<boolean>;
   saveSettings: (payload: { active_provider: string; active_model: string; api_keys?: Record<string, string>; custom_endpoint?: string }) => Promise<boolean>;
   quickSetModel: (provider: string, model: string) => Promise<boolean>;
   sendMessage: (prompt: string, contextBadges?: string[]) => Promise<void>;
@@ -46,9 +59,15 @@ interface AIContextType {
 
   // Skills & RAW Mode
   activeSkillId: string | null;
+  activeSkillIds: string[];
+  templateSkills: string[];
   isRawMode: boolean;
   isSkillsModalOpen: boolean;
   setActiveSkillId: (id: string | null) => void;
+  setActiveSkillIds: (ids: string[]) => void;
+  toggleSkill: (id: string) => void;
+  addActiveSkill: (id: string) => void;
+  removeActiveSkill: (id: string) => void;
   setIsRawMode: (isRaw: boolean) => void;
   openSkillsModal: () => void;
   closeSkillsModal: () => void;
@@ -74,7 +93,18 @@ interface AIContextType {
 const AIContext = createContext<AIContextType | undefined>(undefined);
 
 export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { activeRepo, activeFile, fileContent, fileMetadata, projectConfig, tree } = useWorkspace();
+  const {
+    activeRepo,
+    activeFile,
+    fileContent,
+    fileMetadata,
+    projectConfig,
+    tree,
+    reloadActiveFile,
+    loadTree,
+    refreshPendingChanges,
+    refreshGitStatus,
+  } = useWorkspace();
   
   // Zustand Stores
   const activeEditingTemplate = useTemplateStore((s) => s.activeEditingTemplate);
@@ -104,9 +134,15 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
   const setIsGlobalScope = useCopilotStore((s) => s.setIsGlobalScope);
 
   const activeSkillId = useCopilotStore((s) => s.activeSkillId);
+  const activeSkillIds = useCopilotStore((s) => s.activeSkillIds);
   const isRawMode = useCopilotStore((s) => s.isRawMode);
   const isSkillsModalOpen = useCopilotStore((s) => s.isSkillsModalOpen);
   const setActiveSkillId = useCopilotStore((s) => s.setActiveSkillId);
+  const setActiveSkillIds = useCopilotStore((s) => s.setActiveSkillIds);
+  const setTemplateSkills = useCopilotStore((s) => s.setTemplateSkills);
+  const toggleSkill = useCopilotStore((s) => s.toggleSkill);
+  const addActiveSkill = useCopilotStore((s) => s.addActiveSkill);
+  const removeActiveSkill = useCopilotStore((s) => s.removeActiveSkill);
   const setIsRawMode = useCopilotStore((s) => s.setIsRawMode);
   const openSkillsModal = useCopilotStore((s) => s.openSkillsModal);
   const closeSkillsModal = useCopilotStore((s) => s.closeSkillsModal);
@@ -119,6 +155,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
   const [docTemplatePrompt, setDocTemplatePrompt] = useState<string | null>(null);
   const [docTemplateTitle, setDocTemplateTitle] = useState<string | null>(null);
   const [docTemplateId, setDocTemplateId] = useState<string | null>(null);
+  const [docTemplateSkills, setDocTemplateSkills] = useState<string[]>([]);
 
   const projectTemplatePrompt = projectConfig?.ai_template_prompt || 'Você é o Arquiteto Especialista em Criação e Padronização de Templates de Engenharia.\nAjude o usuário a definir uma estrutura lógica e rigorosa de seções (H1, H2, H3), criar placeholders dinâmicos {{CAMPO}} e redigir o system instruction do Copilot para este novo template.';
 
@@ -135,6 +172,10 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     ? (activeEditingTemplate.id || null)
     : docTemplateId;
 
+  const effectiveTemplateSkills = isTemplateEditorMode && activeEditingTemplate
+    ? (Array.isArray(activeEditingTemplate.skills) ? activeEditingTemplate.skills : [])
+    : docTemplateSkills;
+
   // Document Prompt State
   const docPrompt = fileMetadata?.prompt || null;
 
@@ -148,16 +189,31 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
         if (tpl) {
           setDocTemplatePrompt(tpl.prompt || tpl.systemPrompt || null);
           setDocTemplateTitle(tpl.title || tpl.templateName || tpl.id || null);
+          const tplSkills = Array.isArray(tpl.skills) ? tpl.skills : (Array.isArray(fileMetadata?.skills) ? fileMetadata.skills : []);
+          setDocTemplateSkills(tplSkills);
+          setTemplateSkills(tplSkills);
         } else {
           setDocTemplatePrompt(null);
           setDocTemplateTitle(null);
+          setDocTemplateSkills([]);
+          setTemplateSkills([]);
         }
       });
     } else {
       setDocTemplatePrompt(null);
       setDocTemplateTitle(null);
+      setDocTemplateSkills([]);
+      setTemplateSkills([]);
     }
-  }, [fileMetadata?.templateId, activeRepo?.name, resolveTemplate]);
+  }, [fileMetadata?.templateId, fileMetadata?.skills, activeRepo?.name, resolveTemplate, setTemplateSkills]);
+
+  // Sync template skills when in Template Editor mode
+  useEffect(() => {
+    if (isTemplateEditorMode && activeEditingTemplate) {
+      const skills = Array.isArray(activeEditingTemplate.skills) ? activeEditingTemplate.skills : [];
+      setTemplateSkills(skills);
+    }
+  }, [isTemplateEditorMode, activeEditingTemplate?.skills, setTemplateSkills]);
 
   // Keep activeFile referenced when not in global scope and no custom references set yet
   useEffect(() => {
@@ -181,13 +237,26 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     loadAISettings();
   }, [loadAISettings]);
 
-  const saveAISettings = async (provider: string, model: string, apiKey?: string, customEndpoint?: string): Promise<boolean> => {
+  const saveAISettings = async (
+    provider: string,
+    model: string,
+    apiKey?: string,
+    customEndpoint?: string,
+    extraHarness?: {
+      default_provider?: string;
+      antigravity_cli_path?: string;
+      claude_cli_path?: string;
+      agent_effort?: 'low' | 'medium' | 'high';
+      agent_model?: string;
+    }
+  ): Promise<boolean> => {
     try {
       const res = await API.saveAISettings({
         provider,
         model,
         api_key: apiKey,
-        custom_endpoint: customEndpoint
+        custom_endpoint: customEndpoint,
+        ...extraHarness,
       });
       if (res.ok) {
         await loadAISettings();
@@ -223,12 +292,94 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       const res = await API.getMemorySession({ repo: activeRepo?.name || 'local', session_id: sessionId });
       const sess = res.ok && res.data?.session ? res.data.session : null;
       if (sess && Array.isArray(sess.events)) {
-        const restoredMessages: ChatMessage[] = sess.events.map((ev: any, idx: number) => ({
-          id: `restored-${sessionId}-${idx}`,
-          sender: ev.role === 'model' || ev.role === 'assistant' ? 'assistant' : 'user',
-          content: ev.text || '',
-          timestamp: ev.timestamp ? new Date(ev.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : undefined,
-        }));
+        let telemetryTurns: RawTurnTelemetry[] = Array.isArray(sess.telemetry_turns) && sess.telemetry_turns.length > 0 ? sess.telemetry_turns : [];
+
+        if (telemetryTurns.length === 0) {
+          // Reconstrói a telemetria com histórico cumulativo turno a turno para sessões legadas
+          const reconstructed: RawTurnTelemetry[] = [];
+          for (let i = 0; i < sess.events.length; i++) {
+            const ev = sess.events[i];
+            const isAssistant = ev.role === 'model' || ev.role === 'assistant';
+            if (isAssistant) {
+              const turnIdx = Math.floor(i / 2) + 1;
+              const userEv = sess.events[i - 1];
+              const priorEvents = sess.events.slice(0, i - 1);
+              const histText = priorEvents.map((h: any) => `${h.role || h.sender}: ${h.text || h.content || ''}`).join('\n');
+              const activeModel = aiSettings?.active_model || 'gemini-2.5-flash';
+              const pTokens = estimateTokens((userEv?.text || userEv?.content || '') + (sess.path && sess.path !== 'Global' ? `\n${sess.path}` : '') + (histText ? `\n${histText}` : ''));
+              const cTokens = estimateTokens(ev.text || ev.content || '');
+              const cost = calculateTokenCost(activeModel, pTokens, cTokens);
+
+              reconstructed.push({
+                turn_id: `restored-turn-${sessionId}-${turnIdx}`,
+                turn_index: turnIdx,
+                session_id: sessionId,
+                timestamp: ev.timestamp || new Date().toISOString(),
+                duration_ms: 1000,
+                provider: 'direct-api',
+                model: activeModel,
+                raw_mode: false,
+                request: {
+                  prompt: userEv?.text || userEv?.content || '',
+                  system_prompt: '',
+                  context_files: sess.path && sess.path !== 'Global' ? [{ path: sess.path }] : [],
+                  history_messages: priorEvents,
+                  tools_schema: [],
+                  full_payload: { prompt: userEv?.text, path: sess.path },
+                },
+                response: {
+                  reply: ev.text || ev.content || '',
+                  tool_calls: [],
+                  finish_reason: 'stop',
+                  raw_response: ev,
+                },
+                metrics: {
+                  prompt_tokens: pTokens,
+                  completion_tokens: cTokens,
+                  total_tokens: pTokens + cTokens,
+                  is_estimated: true,
+                  cost_usd: cost.costUsd,
+                  pricing_formula: cost.formula,
+                  duration_ms: 1000,
+                },
+              });
+            }
+          }
+          if (reconstructed.length > 0) {
+            telemetryTurns = reconstructed;
+          }
+        }
+
+        if (telemetryTurns.length > 0) {
+          useCopilotStore.getState().setSessionTelemetry(sessionId, telemetryTurns);
+        }
+
+        const restoredMessages: ChatMessage[] = sess.events.map((ev: any, idx: number) => {
+          const isAssistant = ev.role === 'model' || ev.role === 'assistant';
+          let turnMetrics: RawTurnMetrics | undefined = undefined;
+          let rawTurnId: string | undefined = undefined;
+          let turnIdx: number | undefined = undefined;
+
+          if (isAssistant && telemetryTurns.length > 0) {
+            const roundNum = Math.floor(idx / 2);
+            const matchedTurn = telemetryTurns[roundNum] || telemetryTurns.find((t) => t.response?.reply === ev.text);
+            if (matchedTurn) {
+              turnMetrics = matchedTurn.metrics;
+              rawTurnId = matchedTurn.turn_id;
+              turnIdx = matchedTurn.turn_index;
+            }
+          }
+
+          return {
+            id: `restored-${sessionId}-${idx}`,
+            sender: isAssistant ? 'assistant' : 'user',
+            content: ev.text || '',
+            timestamp: ev.timestamp ? new Date(ev.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : undefined,
+            metrics: turnMetrics,
+            raw_turn_id: rawTurnId,
+            turn_index: turnIdx,
+          };
+        });
 
         useCopilotStore.getState().setMessages(restoredMessages);
         setCurrentSessionId(sessionId);
@@ -257,11 +408,11 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     if (inTemplateMode) {
       effectivePath = currentTemplate.templateName || currentTemplate.title || 'Novo Template';
       effectiveContent = currentTemplate.content || '';
-      effectiveBadges = ['🛠️ Modo Template'];
+      effectiveBadges = ['Modo Template'];
     } else if (isGlobalScope || referencedDocs.length === 0) {
       effectivePath = 'Global (Sem Documento)';
       effectiveContent = '';
-      effectiveBadges = ['🌐 Modo Global'];
+      effectiveBadges = ['Modo Global'];
     } else {
       // 1 ou múltiplas referências (podendo ser arquivos ou pastas inteiras)
       const pathDescriptions: string[] = [];
@@ -305,8 +456,8 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
         const folderName = refPath.split('/').pop() || refPath;
 
         if (isFolder) {
-          pathDescriptions.push(`📁 ${refPath}/ (${files.length} docs)`);
-          computedBadges.push(`📁 ${folderName}/ (${files.length})`);
+          pathDescriptions.push(`${refPath}/ (${files.length} docs)`);
+          computedBadges.push(`${folderName}/ (${files.length})`);
 
           const folderContents: string[] = [];
           for (const f of files) {
@@ -331,7 +482,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
           const f = files[0] || refPath;
           const fileName = f.split('/').pop() || f;
           pathDescriptions.push(f);
-          computedBadges.push(`📄 ${fileName}`);
+          computedBadges.push(fileName);
 
           if (!processedFiles.has(f)) {
             processedFiles.add(f);
@@ -413,9 +564,26 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
         }
       }
 
-      const assistantPrompt = promptInstructions.length > 0 ? promptInstructions.join('\n\n---\n\n') : undefined;
+      // Injeção de Fragmentos RAG Anexados pelo Usuário
+      const activeRagRefs = useCopilotStore.getState().ragReferences;
+      if (activeRagRefs.length > 0) {
+        const ragBlock = activeRagRefs
+          .map((r) => `[FRAGMENTO REFERENCIADO: ${r.relativePath} (${r.sectionTitle})]\n${r.snippet}`)
+          .join('\n\n');
+        promptInstructions.push(`### FRAGMENTOS DO PROJETO ANEXADOS (RAG):\n${ragBlock}`);
+      }
 
-      const res = await API.sendChatMessage({
+      const assistantPrompt = promptInstructions.length > 0 ? promptInstructions.join('\n\n---\n\n') : undefined;
+      const turnStartTime = Date.now();
+      const currentHistoryLength = useCopilotStore.getState().messages.length;
+      const turnIndex = Math.floor(currentHistoryLength / 2) + 1;
+      const turnId = `turn-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+
+      const activeSkillsList = useCopilotStore.getState().activeSkillIds;
+      const primarySkillId = activeSkillsList[0] || activeSkillId || undefined;
+      const isAutoRag = useCopilotStore.getState().isAutoRagEnabled;
+
+      const chatPayload = {
         prompt,
         content: effectiveContent,
         path: effectivePath,
@@ -424,44 +592,217 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
         repo: activeRepo?.name || 'local',
         assistant_prompt: assistantPrompt,
         raw_mode: isRawMode,
-        skill_id: isRawMode ? undefined : (activeSkillId || undefined),
+        skill_id: isRawMode ? undefined : primarySkillId,
+        skill_ids: isRawMode ? undefined : (activeSkillsList.length > 0 ? activeSkillsList : (primarySkillId ? [primarySkillId] : undefined)),
         provider_id: isRawMode ? 'direct-api' : (activeProviderId || 'direct-api'),
-      });
+        auto_rag: isAutoRag,
+      };
 
-      if (res.ok && res.data) {
-        // Verifica se houve proposta de diff nas tools executadas (ex: docs_propose_diff)
-        let proposedDiff = res.data.diff;
-        if (!proposedDiff && Array.isArray(res.data.tool_calls)) {
-          const diffTool = res.data.tool_calls.find((tc) => tc.tool === 'docs_propose_diff');
-          if (diffTool && diffTool.result?.data) {
-            proposedDiff = {
-              path: diffTool.result.data.file_path,
-              old_content: diffTool.result.data.original_content,
-              new_content: diffTool.result.data.proposed_content,
-              rationale: diffTool.result.data.rationale,
-            };
+      let accumulatedReply = '';
+      const assistantMsgId = `msg-ai-${Date.now()}`;
+      let createdAssistantMsg = false;
+      const streamEventsList: any[] = [];
+      let receivedTelemetry: any = null;
+      let receivedToolCalls: any[] = [];
+
+      try {
+        await API.streamChatMessage(chatPayload, (event) => {
+          streamEventsList.push(event);
+
+          if (event.type === 'token' && event.text) {
+            accumulatedReply += event.text;
+            if (!createdAssistantMsg) {
+              createdAssistantMsg = true;
+              useCopilotStore.getState().addMessage({
+                id: assistantMsgId,
+                sender: 'assistant',
+                content: accumulatedReply,
+                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                skill_id: isRawMode ? undefined : primarySkillId,
+                raw_turn_id: turnId,
+                turn_index: turnIndex,
+              });
+            } else {
+              useCopilotStore.getState().setMessages((prev) =>
+                prev.map((m) => (m.id === assistantMsgId ? { ...m, content: accumulatedReply } : m))
+              );
+            }
+          } else if (event.type === 'tool_result' && event.toolName) {
+            receivedToolCalls.push({
+              tool: event.toolName,
+              args: event.toolArgs,
+              result: event.data,
+              timestamp: new Date().toISOString(),
+            });
+          } else if (event.type === 'stream_telemetry' && event.data?.telemetry) {
+            receivedTelemetry = event.data.telemetry;
+          } else if (event.type === 'approval_request') {
+            useCopilotStore.getState().setPendingApproval({
+              prompt: event.approvalPrompt || 'Aprovação necessária para prosseguir',
+              sessionId: event.sessionId || currentSessionId,
+              providerId: event.provider,
+            });
           }
+        });
+
+        if (!createdAssistantMsg && accumulatedReply.trim()) {
+          useCopilotStore.getState().addMessage({
+            id: assistantMsgId,
+            sender: 'assistant',
+            content: accumulatedReply,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            skill_id: isRawMode ? undefined : primarySkillId,
+            raw_turn_id: turnId,
+            turn_index: turnIndex,
+          });
         }
 
-        const assistantMessage: ChatMessage = {
-          id: `msg-ai-${Date.now()}`,
-          sender: 'assistant',
-          content: res.data.reply || 'Operação concluída com sucesso.',
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          diff: proposedDiff,
-          tool_calls: res.data.tool_calls,
-          steps_count: res.data.steps_count,
-          skill_id: isRawMode ? undefined : (activeSkillId || undefined),
+        const durationMs = Date.now() - turnStartTime;
+        const activeModelName = aiSettings?.active_model || 'gemini-2.5-flash';
+        const historyText = historyPayload.map((h) => `${h.sender}: ${h.text}`).join('\n');
+        const calculatedPromptTokens = estimateTokens(prompt + (effectiveContent ? `\n${effectiveContent}` : '') + (assistantPrompt ? `\n${assistantPrompt}` : '') + (historyText ? `\n${historyText}` : ''));
+        const promptTokens = (receivedTelemetry as RawTurnTelemetry | null)?.metrics?.prompt_tokens || calculatedPromptTokens;
+        const completionTokens = (receivedTelemetry as RawTurnTelemetry | null)?.metrics?.completion_tokens || estimateTokens(accumulatedReply);
+        const costInfo = calculateTokenCost(activeModelName, promptTokens, completionTokens);
+
+        const turnTelemetry: RawTurnTelemetry = (receivedTelemetry as RawTurnTelemetry) || {
+          turn_id: turnId,
+          turn_index: turnIndex,
+          session_id: currentSessionId,
+          timestamp: new Date().toISOString(),
+          duration_ms: durationMs,
+          provider: isRawMode ? 'direct-api' : (activeProviderId || 'direct-api'),
+          model: activeModelName,
+          raw_mode: isRawMode,
+          skill_id: primarySkillId,
+          request: {
+            prompt,
+            system_prompt: assistantPrompt,
+            context_files: referencedDocs.map((p) => ({ path: p })),
+            dynamic_context: dynamicContext?.content,
+            history_messages: historyPayload,
+            tools_schema: [],
+            full_payload: chatPayload,
+          },
+          response: {
+            reply: accumulatedReply,
+            tool_calls: receivedToolCalls,
+            stream_events: streamEventsList,
+            finish_reason: 'stop',
+          },
+          metrics: {
+            prompt_tokens: promptTokens,
+            completion_tokens: completionTokens,
+            total_tokens: promptTokens + completionTokens,
+            is_estimated: true,
+            cost_usd: costInfo.costUsd,
+            pricing_formula: costInfo.formula,
+            duration_ms: durationMs,
+          },
         };
-        useCopilotStore.getState().addMessage(assistantMessage);
-      } else {
-        const errorMessage: ChatMessage = {
-          id: `msg-err-${Date.now()}`,
-          sender: 'system',
-          content: 'Desculpe, ocorreu um erro ao se comunicar com o modelo de IA. Verifique as configurações de provedor.',
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        };
-        useCopilotStore.getState().addMessage(errorMessage);
+
+        useCopilotStore.getState().addSessionTelemetryTurn(currentSessionId, turnTelemetry);
+
+        // Atualiza a mensagem da IA com as métricas do turno
+        useCopilotStore.getState().setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantMsgId
+              ? {
+                  ...m,
+                  metrics: turnTelemetry.metrics,
+                  raw_turn_id: turnTelemetry.turn_id,
+                  turn_index: turnTelemetry.turn_index,
+                }
+              : m
+          )
+        );
+      } catch (streamErr) {
+        // Fallback síncrono em caso de indisponibilidade de streaming
+        const res = await API.sendChatMessage(chatPayload);
+
+        if (res.ok && res.data) {
+          let proposedDiff = res.data.diff;
+          if (!proposedDiff && Array.isArray(res.data.tool_calls)) {
+            const diffTool = res.data.tool_calls.find((tc) => tc.tool === 'docs_propose_diff');
+            if (diffTool && diffTool.result?.data) {
+              proposedDiff = {
+                path: diffTool.result.data.file_path,
+                old_content: diffTool.result.data.original_content,
+                new_content: diffTool.result.data.proposed_content,
+                rationale: diffTool.result.data.rationale,
+              };
+            }
+          }
+
+          const durationMs = Date.now() - turnStartTime;
+          const activeModelName = res.data.model || aiSettings?.active_model || 'gemini-2.5-flash';
+          const historyText = historyPayload.map((h) => `${h.sender}: ${h.text}`).join('\n');
+          const calculatedPromptTokens = estimateTokens(prompt + (effectiveContent ? `\n${effectiveContent}` : '') + (assistantPrompt ? `\n${assistantPrompt}` : '') + (historyText ? `\n${historyText}` : ''));
+          const promptTokens = res.data.usage?.prompt_tokens || calculatedPromptTokens;
+          const completionTokens = res.data.usage?.completion_tokens || estimateTokens(res.data.reply || '');
+          const costInfo = calculateTokenCost(activeModelName, promptTokens, completionTokens);
+
+          const turnTelemetry: RawTurnTelemetry = (res.data as any).telemetry_turn || {
+            turn_id: turnId,
+            turn_index: turnIndex,
+            session_id: currentSessionId,
+            timestamp: new Date().toISOString(),
+            duration_ms: durationMs,
+            provider: res.data.provider || (isRawMode ? 'direct-api' : (activeProviderId || 'direct-api')),
+            model: activeModelName,
+            raw_mode: isRawMode,
+            skill_id: primarySkillId,
+            request: {
+              prompt,
+              system_prompt: assistantPrompt,
+              context_files: referencedDocs.map((p) => ({ path: p })),
+              dynamic_context: dynamicContext?.content,
+              history_messages: historyPayload,
+              tools_schema: [],
+              full_payload: chatPayload,
+            },
+            response: {
+              reply: res.data.reply || '',
+              tool_calls: res.data.tool_calls || [],
+              finish_reason: 'stop',
+              raw_response: res.data,
+            },
+            metrics: res.data.usage || {
+              prompt_tokens: promptTokens,
+              completion_tokens: completionTokens,
+              total_tokens: promptTokens + completionTokens,
+              is_estimated: true,
+              cost_usd: costInfo.costUsd,
+              pricing_formula: costInfo.formula,
+              duration_ms: durationMs,
+            },
+          };
+
+          useCopilotStore.getState().addSessionTelemetryTurn(currentSessionId, turnTelemetry);
+
+          const assistantMessage: ChatMessage = {
+            id: `msg-ai-${Date.now()}`,
+            sender: 'assistant',
+            content: res.data.reply || 'Operação concluída com sucesso.',
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            diff: proposedDiff,
+            tool_calls: res.data.tool_calls,
+            steps_count: res.data.steps_count,
+            skill_id: isRawMode ? undefined : primarySkillId,
+            raw_turn_id: turnTelemetry.turn_id,
+            turn_index: turnTelemetry.turn_index,
+            metrics: turnTelemetry.metrics,
+          };
+          useCopilotStore.getState().addMessage(assistantMessage);
+        } else {
+          const errorMessage: ChatMessage = {
+            id: `msg-err-${Date.now()}`,
+            sender: 'system',
+            content: 'Desculpe, ocorreu um erro ao se comunicar com o modelo de IA. Verifique as configurações de provedor.',
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          };
+          useCopilotStore.getState().addMessage(errorMessage);
+        }
       }
     } catch (err) {
       console.error('[AIContext] Erro no envio de mensagem para IA:', err);
@@ -478,6 +819,17 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       clearTimeout(stepTimer3);
       clearTimeout(stepTimer4);
       setIsThinking(false);
+
+      // Atualiza automaticamente o documento, árvore e histórico de sessões
+      try {
+        useCopilotStore.getState().incrementHistoryVersion();
+        await reloadActiveFile?.(true);
+        await loadTree?.();
+        await refreshPendingChanges?.();
+        await refreshGitStatus?.();
+      } catch (refreshErr) {
+        console.warn('[AIContext] Erro ao sincronizar workspace após resposta do agente:', refreshErr);
+      }
     }
   };
 
@@ -586,9 +938,15 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
         setIsGlobalScope,
 
         activeSkillId,
+        activeSkillIds,
+        templateSkills: effectiveTemplateSkills,
         isRawMode,
         isSkillsModalOpen,
         setActiveSkillId,
+        setActiveSkillIds,
+        toggleSkill,
+        addActiveSkill,
+        removeActiveSkill,
         setIsRawMode,
         openSkillsModal,
         closeSkillsModal,

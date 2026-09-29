@@ -95,10 +95,17 @@ export interface StatusItem {
   badge?: string;
 }
 
+export interface BadgeOption {
+  name: string;
+  color?: string;
+  description?: string;
+}
+
 export interface ProjectMetadataOptions {
   categories: CategoryOption[];
   statuses: StatusItem[];
   tags: TagOption[];
+  badges?: (BadgeOption | string)[];
 }
 
 export interface PR {
@@ -179,6 +186,11 @@ export interface AISettingsState {
   has_key?: boolean;
   custom_endpoint?: string;
   providers?: Record<string, AIProviderMeta>;
+  default_provider?: string;
+  antigravity_cli_path?: string;
+  claude_cli_path?: string;
+  agent_effort?: 'low' | 'medium' | 'high';
+  agent_model?: string;
 }
 
 export interface TemplateItem {
@@ -214,6 +226,45 @@ export interface TutorialItem {
   content: string;
 }
 
+export interface RawTurnMetrics {
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+  is_estimated?: boolean;
+  cost_usd: number;
+  pricing_formula?: string;
+  duration_ms?: number;
+}
+
+export interface RawTurnTelemetry {
+  turn_id: string;
+  turn_index: number;
+  session_id: string;
+  timestamp: string;
+  duration_ms?: number;
+  provider: string;
+  model: string;
+  raw_mode: boolean;
+  skill_id?: string;
+  request: {
+    prompt: string;
+    system_prompt?: string;
+    context_files?: Array<{ path: string; size?: number; snippet?: string }>;
+    dynamic_context?: string;
+    history_messages?: Array<{ role?: string; sender?: string; content?: string; text?: string }>;
+    tools_schema?: any[];
+    full_payload?: any;
+  };
+  response: {
+    reply: string;
+    tool_calls?: ToolCallRecord[];
+    stream_events?: any[];
+    finish_reason?: string;
+    raw_response?: any;
+  };
+  metrics: RawTurnMetrics;
+}
+
 export interface ChatMessage {
   id: string;
   sender: 'user' | 'assistant' | 'system';
@@ -230,6 +281,9 @@ export interface ChatMessage {
   tool_calls?: ToolCallRecord[];
   skill_id?: string;
   steps_count?: number;
+  raw_turn_id?: string;
+  turn_index?: number;
+  metrics?: RawTurnMetrics;
 }
 
 export interface GitFileStatus {

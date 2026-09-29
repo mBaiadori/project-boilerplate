@@ -13,7 +13,18 @@ import {
   type TextFragmentQuery
 } from '../../utils/text-fragment';
 
-declare const mermaid: any;
+import mermaid from 'mermaid';
+
+try {
+  mermaid.initialize({
+    startOnLoad: false,
+    theme: 'default',
+    securityLevel: 'loose',
+    fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif',
+  });
+} catch (e) {
+  console.warn('[NotionEditorEngine] Erro ao inicializar mermaid:', e);
+}
 
 function escapeHtml(text: string): string {
   if (!text) return '';
@@ -762,14 +773,7 @@ export class NotionEditorEngine {
   // MARKDOWN TO DOM (PARSER)
   // ===========================================================================
 
-  setMarkdown(markdown = '') {
-    if (!markdown.trim()) {
-      this.canvas.innerHTML = '<p><br></p>';
-      this.pushSnapshot(true);
-      return;
-    }
-
-    const lines = markdown.split(/\r?\n/);
+  parseMarkdownLinesToHtml(lines: string[]): string {
     const htmlFragments: string[] = [];
     let i = 0;
 
@@ -831,12 +835,13 @@ export class NotionEditorEngine {
         else if (['warning'].includes(rawType)) type = 'warning';
         else if (['danger', 'caution'].includes(rawType)) type = 'danger';
 
-        let calloutBody = '';
+        const calloutLines: string[] = [];
         i++;
         while (i < lines.length && lines[i].startsWith('>')) {
-          calloutBody += lines[i].replace(/^>\s?/, '') + '\n';
+          calloutLines.push(lines[i].replace(/^>\s?/, ''));
           i++;
         }
+        const calloutBody = calloutLines.join('\n');
         htmlFragments.push(this.createCalloutBlockHtml(type, calloutBody.trim()));
         continue;
       }
@@ -895,14 +900,15 @@ export class NotionEditorEngine {
         continue;
       }
 
-      // 9. Blockquote
+      // 9. Blockquote / Card Container (Rich recursive markdown support)
       if (line.startsWith('>')) {
-        let quoteText = '';
+        const quoteLines: string[] = [];
         while (i < lines.length && lines[i].startsWith('>')) {
-          quoteText += lines[i].replace(/^>\s?/, '') + ' ';
+          quoteLines.push(lines[i].replace(/^>\s?/, ''));
           i++;
         }
-        htmlFragments.push(`<blockquote>${this.parseInlineMarkdown(quoteText.trim())}</blockquote>`);
+        const innerHtml = this.parseMarkdownLinesToHtml(quoteLines);
+        htmlFragments.push(`<blockquote>${innerHtml}</blockquote>`);
         continue;
       }
 
@@ -941,7 +947,18 @@ export class NotionEditorEngine {
       i++;
     }
 
-    this.canvas.innerHTML = htmlFragments.join('\n');
+    return htmlFragments.join('\n');
+  }
+
+  setMarkdown(markdown = '') {
+    if (!markdown.trim()) {
+      this.canvas.innerHTML = '<p><br></p>';
+      this.pushSnapshot(true);
+      return;
+    }
+
+    const lines = markdown.split(/\r?\n/);
+    this.canvas.innerHTML = this.parseMarkdownLinesToHtml(lines);
     this.renderAllMermaidBlocks();
     this.attachInteractiveListeners();
     this.pushSnapshot(true);
@@ -959,6 +976,53 @@ export class NotionEditorEngine {
   // ===========================================================================
   // DOM TO MARKDOWN (SERIALIZER)
   // ===========================================================================
+
+  serializeBlockquote(blockquote: HTMLElement): string {
+    const lines: string[] = [];
+    const children = Array.from(blockquote.childNodes);
+
+    for (const child of children) {
+      if (child.nodeType === Node.TEXT_NODE) {
+        const text = child.textContent?.trim();
+        if (text) lines.push(`> ${text}`);
+      } else if (child.nodeType === Node.ELEMENT_NODE) {
+        const el = child as HTMLElement;
+        const tag = el.tagName ? el.tagName.toLowerCase() : '';
+
+        if (tag === 'h1') lines.push(`> # ${this.serializeInline(el)}`);
+        else if (tag === 'h2') lines.push(`> ## ${this.serializeInline(el)}`);
+        else if (tag === 'h3') lines.push(`> ### ${this.serializeInline(el)}`);
+        else if (tag === 'h4') lines.push(`> #### ${this.serializeInline(el)}`);
+        else if (tag === 'p') {
+          const text = this.serializeInline(el).trim();
+          lines.push(text ? `> ${text}` : '>');
+        } else if (tag === 'ul') {
+          el.querySelectorAll(':scope > li').forEach((li) => {
+            lines.push(`> * ${this.serializeInline(li as HTMLElement)}`);
+          });
+        } else if (tag === 'ol') {
+          let idx = 1;
+          el.querySelectorAll(':scope > li').forEach((li) => {
+            lines.push(`> ${idx}. ${this.serializeInline(li as HTMLElement)}`);
+            idx++;
+          });
+        } else if (tag === 'hr') {
+          lines.push('> ---');
+        } else if (el.classList.contains('notion-code-block')) {
+          const lang = el.querySelector('.notion-code-lang')?.textContent?.trim() || '';
+          const code = (el.querySelector('.notion-code-content') as HTMLElement)?.innerText || '';
+          lines.push(`> \`\`\`${lang}`);
+          code.split('\n').forEach((cLine) => lines.push(`> ${cLine}`));
+          lines.push('> ```');
+        } else {
+          const text = this.serializeInline(el).trim();
+          if (text) lines.push(`> ${text}`);
+        }
+      }
+    }
+
+    return lines.length > 0 ? lines.join('\n') : '> ';
+  }
 
   getMarkdown(): string {
     const lines: string[] = [];
@@ -991,8 +1055,7 @@ export class NotionEditorEngine {
         lines.push('---');
         lines.push('');
       } else if (tag === 'blockquote') {
-        const text = this.serializeInline(node).trim();
-        lines.push(`> ${text}`);
+        lines.push(this.serializeBlockquote(node));
         lines.push('');
       } else if (tag === 'ul') {
         node.querySelectorAll('li').forEach(li => {
@@ -1304,13 +1367,17 @@ export class NotionEditorEngine {
 
     if (!renderArea || !code) return;
 
+    const renderId = `mermaid-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
     try {
-      const renderId = `m-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
       const { svg } = await mermaid.render(renderId, code);
       renderArea.innerHTML = svg;
     } catch (e: any) {
+      // Remove any stray error elements mermaid might append to body
+      const strayErr = document.getElementById(`d${renderId}`);
+      if (strayErr) strayErr.remove();
+
       renderArea.innerHTML = `
-        <div style="color:#ef4444; font-size:12px; padding:12px; display:flex; align-items:center; gap:6px;">
+        <div style="color:#ef4444; font-size:12px; padding:12px; display:flex; align-items:center; gap:6px; background:#fef2f2; border-radius:6px; border:1px solid #fecaca;">
           <span class="material-symbols-outlined icon-xs">warning</span>
           <span>Erro na sintaxe Mermaid: ${escapeHtml(e?.message || String(e))}</span>
         </div>
@@ -1703,36 +1770,65 @@ export class NotionEditorEngine {
     this.recordChange();
   }
 
-  insertBlockHtml(html: string) {
-    const div = document.createElement('div');
-    div.innerHTML = html.trim();
-    const element = div.firstElementChild as HTMLElement;
-    if (!element) return;
+  insertBlocksHtml(html: string) {
+    const temp = document.createElement('div');
+    temp.innerHTML = html.trim();
+    const elements = Array.from(temp.children) as HTMLElement[];
+    if (elements.length === 0) return;
 
     const selection = window.getSelection();
+    let currentTarget: HTMLElement | null = null;
+    let shouldReplaceTarget = false;
+
     if (selection && selection.rangeCount > 0) {
       const range = selection.getRangeAt(0);
-      let targetNode = range.startContainer as HTMLElement | null;
-      while (targetNode && targetNode.parentElement !== this.canvas && targetNode !== this.canvas) {
-        targetNode = targetNode.parentElement;
+      let node: Node | null = range.startContainer;
+      while (node && node.parentElement !== this.canvas && node !== this.canvas) {
+        node = node.parentElement;
       }
-
-      if (targetNode && targetNode.parentElement === this.canvas) {
-        if (!targetNode.textContent?.trim()) {
-          targetNode.replaceWith(element);
-        } else {
-          targetNode.insertAdjacentElement('afterend', element);
+      if (node && node.parentElement === this.canvas) {
+        currentTarget = node as HTMLElement;
+        const text = currentTarget.textContent?.trim() || '';
+        if (!text && !currentTarget.querySelector('table, pre, .notion-mermaid-block, .notion-callout')) {
+          shouldReplaceTarget = true;
         }
-      } else {
-        this.canvas.appendChild(element);
+      }
+    }
+
+    let lastEl: HTMLElement | null = null;
+    if (currentTarget && shouldReplaceTarget) {
+      currentTarget.replaceWith(elements[0]);
+      lastEl = elements[0];
+      let insertAfter = elements[0];
+      for (let k = 1; k < elements.length; k++) {
+        insertAfter.insertAdjacentElement('afterend', elements[k]);
+        insertAfter = elements[k];
+        lastEl = elements[k];
+      }
+    } else if (currentTarget) {
+      let insertAfter = currentTarget;
+      for (let k = 0; k < elements.length; k++) {
+        insertAfter.insertAdjacentElement('afterend', elements[k]);
+        insertAfter = elements[k];
+        lastEl = elements[k];
       }
     } else {
-      this.canvas.appendChild(element);
+      for (const el of elements) {
+        this.canvas.appendChild(el);
+        lastEl = el;
+      }
     }
 
     this.attachInteractiveListeners();
-    this.placeCursorIn(element);
+    this.renderAllMermaidBlocks();
+    if (lastEl) {
+      this.placeCursorIn(lastEl);
+    }
     this.recordChange();
+  }
+
+  insertBlockHtml(html: string) {
+    this.insertBlocksHtml(html);
   }
 
   placeCursorIn(element: HTMLElement) {
@@ -1755,8 +1851,28 @@ export class NotionEditorEngine {
   handlePaste(e: ClipboardEvent) {
     e.preventDefault();
     const text = (e.clipboardData || (window as any).clipboardData)?.getData('text/plain') || '';
-    document.execCommand('insertText', false, text);
-    this.recordChange();
+    if (!text) return;
+
+    // Detect if text contains markdown constructs or multiple lines
+    const hasMarkdownOrMultiline =
+      text.includes('\n') ||
+      /^#{1,6}\s/m.test(text) ||
+      /^[-*+]\s/m.test(text) ||
+      /^\d+\.\s/m.test(text) ||
+      /^>\s/m.test(text) ||
+      /^```/m.test(text) ||
+      /\|.*\|/.test(text) ||
+      /\*\*.*?\*\*/.test(text) ||
+      /\[.*?\]\(.*?\)/.test(text);
+
+    if (hasMarkdownOrMultiline) {
+      const lines = text.split(/\r?\n/);
+      const html = this.parseMarkdownLinesToHtml(lines);
+      this.insertBlocksHtml(html);
+    } else {
+      document.execCommand('insertText', false, text);
+      this.recordChange();
+    }
   }
 
   recordChange() {

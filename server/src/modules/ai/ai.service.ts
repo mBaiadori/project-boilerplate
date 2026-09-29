@@ -7,6 +7,7 @@ import { PROJECTS_DIR, DEFAULT_GLOBAL_SYSTEM_PROMPT } from '../../config/constan
 import { loadConfig } from '../../config/storage.js';
 import { toolRegistry } from './tools/ToolRegistry.js';
 import { ToolCallExecutionRecord } from './tools/tool.types.js';
+import { estimateTokens, calculateTokenCost } from './tokens.helper.js';
 
 export interface ChatMessage {
   role: 'user' | 'model' | 'assistant' | 'system';
@@ -24,20 +25,64 @@ export interface AIServiceCallOptions {
   max_steps?: number;
 }
 
+export interface RawTurnMetrics {
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+  is_estimated?: boolean;
+  cost_usd: number;
+  pricing_formula?: string;
+  duration_ms?: number;
+}
+
+export interface RawTurnTelemetryRecord {
+  turn_id: string;
+  turn_index: number;
+  session_id: string;
+  timestamp: string;
+  duration_ms?: number;
+  provider: string;
+  model: string;
+  raw_mode: boolean;
+  skill_id?: string;
+  request: {
+    prompt: string;
+    system_prompt?: string;
+    context_files?: Array<{ path: string; size?: number; snippet?: string }>;
+    dynamic_context?: string;
+    history_messages?: Array<{ role: string; content?: string; text?: string }>;
+    tools_schema?: any[];
+    full_payload?: any;
+  };
+  response: {
+    reply: string;
+    tool_calls?: any[];
+    stream_events?: any[];
+    finish_reason?: string;
+    raw_response?: any;
+  };
+  metrics: RawTurnMetrics;
+}
+
 export interface AIExecutionResult {
   reply: string;
   provider: string;
   model: string;
   tool_calls?: ToolCallExecutionRecord[];
   steps_count?: number;
+  duration_ms?: number;
+  usage?: RawTurnMetrics;
+  raw_response?: any;
 }
 
 export class AIService {
-  private getMemoryDir(repoName: string): string {
-    return path.join(PROJECTS_DIR, repoName || 'local', '.spec-memory');
+  private getMemoryDir(repoName?: string): string {
+    const cfg = loadConfig();
+    const resolvedRepo = (repoName && repoName !== 'local') ? repoName : (cfg.active_repo?.name || 'default');
+    return path.join(PROJECTS_DIR, resolvedRepo, '.spec-memory');
   }
 
-  private getSessionsDir(repoName: string): string {
+  private getSessionsDir(repoName?: string): string {
     return path.join(this.getMemoryDir(repoName), 'sessions');
   }
 
@@ -65,6 +110,7 @@ export class AIService {
     customSystemPrompt?: string,
     repoName: string = 'local'
   ): Promise<AIExecutionResult> {
+    const startTime = Date.now();
     const provider = (aiSettings.provider || 'gemini').toLowerCase();
     const model = aiSettings.model || 'gemini-2.5-flash';
     const apiKey = aiSettings.api_key || process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY || '';
@@ -85,7 +131,7 @@ export class AIService {
     const maxSteps = 5;
 
     // ──────────────────────────────────────────────────────────────────────────
-    // 1. Google Gemini (com suporte a Function Calling e Retry no modelo escolhido)
+    // 1. Google Gemini (com suporte a Function Calling e Retry)
     // ──────────────────────────────────────────────────────────────────────────
     if (provider === 'gemini') {
       if (!apiKey) {
@@ -93,6 +139,14 @@ export class AIService {
           reply: `⚠️ Chave da API do Google Gemini não configurada. Defina sua chave nas Configurações do Sistema ou via variável GEMINI_API_KEY.\n\n*Prompt recebido:* ${prompt}`,
           provider: 'gemini',
           model,
+          duration_ms: Date.now() - startTime,
+          usage: {
+            prompt_tokens: estimateTokens(fullUserPrompt),
+            completion_tokens: 20,
+            total_tokens: estimateTokens(fullUserPrompt) + 20,
+            cost_usd: 0,
+            is_estimated: true,
+          },
         };
       }
 
@@ -122,6 +176,8 @@ export class AIService {
 
       let lastError: any = null;
       const maxAttempts = 2;
+      let promptTokensReported = 0;
+      let completionTokensReported = 0;
 
       for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         try {
@@ -133,6 +189,13 @@ export class AIService {
             currentStep++;
             const result = await geminiModel.generateContent({ contents: stepContents });
             const response = result.response;
+
+            // Extrai uso de tokens real da API se disponível
+            if (response.usageMetadata) {
+              promptTokensReported = response.usageMetadata.promptTokenCount || promptTokensReported;
+              completionTokensReported += response.usageMetadata.candidatesTokenCount || 0;
+            }
+
             const functionCalls = response.functionCalls();
 
             if (!functionCalls || functionCalls.length === 0) {
@@ -140,7 +203,6 @@ export class AIService {
               break;
             }
 
-            // Grava a resposta do modelo no histórico do loop
             stepContents.push({
               role: 'model',
               parts: response.candidates?.[0]?.content?.parts || [],
@@ -170,12 +232,28 @@ export class AIService {
             });
           }
 
+          const durationMs = Date.now() - startTime;
+          const finalPromptTokens = promptTokensReported || estimateTokens(systemPrompt + JSON.stringify(stepContents));
+          const finalCompletionTokens = completionTokensReported || estimateTokens(finalResponseText + JSON.stringify(executedToolRecords));
+          const totalTokens = finalPromptTokens + finalCompletionTokens;
+          const costInfo = calculateTokenCost(selectedModelName, finalPromptTokens, finalCompletionTokens);
+
           return {
             reply: finalResponseText || 'Tarefa processada pelo agente.',
             provider: 'gemini',
             model: selectedModelName,
             tool_calls: executedToolRecords,
             steps_count: currentStep,
+            duration_ms: durationMs,
+            usage: {
+              prompt_tokens: finalPromptTokens,
+              completion_tokens: finalCompletionTokens,
+              total_tokens: totalTokens,
+              is_estimated: !promptTokensReported,
+              cost_usd: costInfo.costUsd,
+              pricing_formula: costInfo.formula,
+              duration_ms: durationMs,
+            },
           };
         } catch (err: any) {
           lastError = err;
@@ -183,7 +261,6 @@ export class AIService {
           const isOverloaded = errMsg.includes('503') || errMsg.includes('high demand') || errMsg.includes('429') || errMsg.includes('ResourceExhausted');
 
           if (isOverloaded && attempt < maxAttempts) {
-            // Espera 1.2s antes de tentar novamente o mesmo modelo
             await new Promise((resolve) => setTimeout(resolve, 1200));
             continue;
           }
@@ -191,10 +268,20 @@ export class AIService {
         }
       }
 
+      const durationMs = Date.now() - startTime;
       return {
         reply: `Erro ao comunicar com Google Gemini (${selectedModelName}): ${lastError?.message || String(lastError)}`,
         provider: 'gemini',
         model: selectedModelName,
+        duration_ms: durationMs,
+        usage: {
+          prompt_tokens: estimateTokens(fullUserPrompt),
+          completion_tokens: 15,
+          total_tokens: estimateTokens(fullUserPrompt) + 15,
+          cost_usd: 0,
+          is_estimated: true,
+          duration_ms: durationMs,
+        },
       };
     }
 
@@ -203,10 +290,12 @@ export class AIService {
     // ──────────────────────────────────────────────────────────────────────────
     if (provider === 'openai') {
       if (!apiKey) {
+        const durationMs = Date.now() - startTime;
         return {
           reply: '⚠️ Chave da API OpenAI não configurada.',
           provider: 'openai',
           model: model || 'gpt-4o',
+          duration_ms: durationMs,
         };
       }
 
@@ -226,6 +315,8 @@ export class AIService {
 
         let currentStep = 0;
         let finalReply = '';
+        let totalPromptTokens = 0;
+        let totalCompletionTokens = 0;
 
         while (currentStep < maxSteps) {
           currentStep++;
@@ -234,6 +325,11 @@ export class AIService {
             messages,
             tools: openAITools,
           });
+
+          if (response.usage) {
+            totalPromptTokens = response.usage.prompt_tokens;
+            totalCompletionTokens += response.usage.completion_tokens;
+          }
 
           const choice = response.choices[0];
           const msg = choice?.message;
@@ -269,18 +365,35 @@ export class AIService {
           }
         }
 
+        const durationMs = Date.now() - startTime;
+        const promptTokens = totalPromptTokens || estimateTokens(systemPrompt + JSON.stringify(messages));
+        const completionTokens = totalCompletionTokens || estimateTokens(finalReply + JSON.stringify(executedToolRecords));
+        const costInfo = calculateTokenCost(model || 'gpt-4o', promptTokens, completionTokens);
+
         return {
           reply: finalReply || 'Processamento concluído pelo agente.',
           provider: 'openai',
           model: model || 'gpt-4o',
           tool_calls: executedToolRecords,
           steps_count: currentStep,
+          duration_ms: durationMs,
+          usage: {
+            prompt_tokens: promptTokens,
+            completion_tokens: completionTokens,
+            total_tokens: promptTokens + completionTokens,
+            is_estimated: !totalPromptTokens,
+            cost_usd: costInfo.costUsd,
+            pricing_formula: costInfo.formula,
+            duration_ms: durationMs,
+          },
         };
       } catch (err: any) {
+        const durationMs = Date.now() - startTime;
         return {
           reply: `Erro OpenAI: ${err.message || String(err)}`,
           provider: 'openai',
           model,
+          duration_ms: durationMs,
         };
       }
     }
@@ -290,10 +403,12 @@ export class AIService {
     // ──────────────────────────────────────────────────────────────────────────
     if (provider === 'anthropic') {
       if (!apiKey) {
+        const durationMs = Date.now() - startTime;
         return {
           reply: '⚠️ Chave da API Anthropic não configurada.',
           provider: 'anthropic',
           model: model || 'claude-3-5-sonnet',
+          duration_ms: durationMs,
         };
       }
 
@@ -312,6 +427,8 @@ export class AIService {
 
         let currentStep = 0;
         let finalReply = '';
+        let totalInputTokens = 0;
+        let totalOutputTokens = 0;
 
         while (currentStep < maxSteps) {
           currentStep++;
@@ -322,6 +439,11 @@ export class AIService {
             messages,
             tools: anthropicTools,
           });
+
+          if (response.usage) {
+            totalInputTokens = response.usage.input_tokens;
+            totalOutputTokens += response.usage.output_tokens;
+          }
 
           if (response.stop_reason !== 'tool_use') {
             const textBlock = response.content.find((c: any) => c.type === 'text') as any;
@@ -359,18 +481,35 @@ export class AIService {
           });
         }
 
+        const durationMs = Date.now() - startTime;
+        const promptTokens = totalInputTokens || estimateTokens(systemPrompt + JSON.stringify(messages));
+        const completionTokens = totalOutputTokens || estimateTokens(finalReply + JSON.stringify(executedToolRecords));
+        const costInfo = calculateTokenCost(model || 'claude-3-5-sonnet', promptTokens, completionTokens);
+
         return {
           reply: finalReply || 'Processamento concluído.',
           provider: 'anthropic',
           model: model || 'claude-3-5-sonnet',
           tool_calls: executedToolRecords,
           steps_count: currentStep,
+          duration_ms: durationMs,
+          usage: {
+            prompt_tokens: promptTokens,
+            completion_tokens: completionTokens,
+            total_tokens: promptTokens + completionTokens,
+            is_estimated: !totalInputTokens,
+            cost_usd: costInfo.costUsd,
+            pricing_formula: costInfo.formula,
+            duration_ms: durationMs,
+          },
         };
       } catch (err: any) {
+        const durationMs = Date.now() - startTime;
         return {
           reply: `Erro Anthropic: ${err.message || String(err)}`,
           provider: 'anthropic',
           model,
+          duration_ms: durationMs,
         };
       }
     }
@@ -402,28 +541,54 @@ export class AIService {
           messages,
         });
 
+        const durationMs = Date.now() - startTime;
+        const finalReply = response.choices[0]?.message?.content || '';
+        const promptTokens = response.usage?.prompt_tokens || estimateTokens(systemPrompt + JSON.stringify(messages));
+        const completionTokens = response.usage?.completion_tokens || estimateTokens(finalReply);
+
         return {
-          reply: response.choices[0]?.message?.content || '',
+          reply: finalReply,
           provider: 'ollama',
           model: model || 'llama3.3',
+          duration_ms: durationMs,
+          usage: {
+            prompt_tokens: promptTokens,
+            completion_tokens: completionTokens,
+            total_tokens: promptTokens + completionTokens,
+            cost_usd: 0,
+            pricing_formula: 'Hardware Local (Custo: $0.00)',
+            duration_ms: durationMs,
+          },
         };
       } catch (err: any) {
+        const durationMs = Date.now() - startTime;
         return {
           reply: `Erro Ollama Local (${endpoint}): ${err.message || String(err)}`,
           provider: 'ollama',
           model,
+          duration_ms: durationMs,
         };
       }
     }
 
+    const durationMs = Date.now() - startTime;
     return {
       reply: `Provedor de IA '${provider}' não suportado.`,
       provider,
       model,
+      duration_ms: durationMs,
     };
   }
 
-  appendChatEvent(repoName: string, filePath: string, sessionId: string, role: string, text: string, metadata?: { model?: string; author?: string }) {
+  appendChatEvent(
+    repoName: string,
+    filePath: string,
+    sessionId: string,
+    role: string,
+    text: string,
+    metadata?: { model?: string; author?: string },
+    telemetryTurn?: RawTurnTelemetryRecord
+  ) {
     const sessionsDir = this.getSessionsDir(repoName);
     fs.mkdirSync(sessionsDir, { recursive: true });
 
@@ -435,7 +600,8 @@ export class AIService {
       updated_at: new Date().toISOString(),
       author: { name: metadata?.author || 'Developer', role: 'Developer' },
       model: metadata?.model || 'gemini',
-      events: []
+      events: [],
+      telemetry_turns: [],
     };
 
     if (fs.existsSync(sessionFile)) {
@@ -444,9 +610,16 @@ export class AIService {
       } catch {}
     }
 
+    if (!Array.isArray(sessionData.telemetry_turns)) {
+      sessionData.telemetry_turns = [];
+    }
+    if (!Array.isArray(sessionData.events)) {
+      sessionData.events = [];
+    }
+
     sessionData.updated_at = new Date().toISOString();
     if (metadata?.model) sessionData.model = metadata.model;
-    if (filePath && !sessionData.path) sessionData.path = filePath;
+    if (filePath && (!sessionData.path || sessionData.path === 'Global')) sessionData.path = filePath;
 
     sessionData.events.push({
       role,
@@ -454,13 +627,33 @@ export class AIService {
       timestamp: new Date().toISOString(),
     });
 
-    // Calcula métricas
+    if (telemetryTurn) {
+      // Verifica se já existe o turno pelo turn_id ou substitui/adiciona
+      const existingIdx = sessionData.telemetry_turns.findIndex((t: any) => t.turn_id === telemetryTurn.turn_id);
+      if (existingIdx >= 0) {
+        sessionData.telemetry_turns[existingIdx] = telemetryTurn;
+      } else {
+        sessionData.telemetry_turns.push(telemetryTurn);
+      }
+    }
+
+    // Calcula métricas consolidadas
     const rounds = Math.ceil(sessionData.events.length / 2);
     const approxTokens = sessionData.events.reduce((acc: number, ev: any) => acc + Math.ceil((ev.text?.length || 0) / 4), 0);
+    
+    const totalPromptTokens = sessionData.telemetry_turns.reduce((acc: number, t: any) => acc + (t.metrics?.prompt_tokens || 0), 0);
+    const totalCompletionTokens = sessionData.telemetry_turns.reduce((acc: number, t: any) => acc + (t.metrics?.completion_tokens || 0), 0);
+    const totalTokens = (totalPromptTokens + totalCompletionTokens) || approxTokens;
+    const totalCostUsd = sessionData.telemetry_turns.reduce((acc: number, t: any) => acc + (t.metrics?.cost_usd || 0), 0);
+
     sessionData.metrics = {
       rounds,
-      total_tokens: approxTokens,
+      total_tokens: totalTokens,
+      prompt_tokens: totalPromptTokens,
+      completion_tokens: totalCompletionTokens,
+      total_cost_usd: totalCostUsd,
       event_count: sessionData.events.length,
+      turns_count: sessionData.telemetry_turns.length,
     };
 
     fs.writeFileSync(sessionFile, JSON.stringify(sessionData, null, 2), 'utf-8');
@@ -483,37 +676,57 @@ export class AIService {
     const files = fs.readdirSync(sessionsDir).filter((f) => f.endsWith('.json'));
     const sessions = [];
 
+    const parseTimestamp = (val?: string | number, fallbackMs: number = 0): number => {
+      if (!val) return fallbackMs;
+      if (typeof val === 'number') return val;
+      const t = new Date(val).getTime();
+      if (!isNaN(t) && t > 0) return t;
+      const match = String(val).match(/\d{10,13}/);
+      if (match) return parseInt(match[0], 10);
+      return fallbackMs;
+    };
+
     for (const f of files) {
       try {
-        const data = JSON.parse(fs.readFileSync(path.join(sessionsDir, f), 'utf-8'));
-        
-        // Se foi solicitado filtro por filePath específico (e não for global/index), podemos ponderar
-        if (filePath && data.path && data.path !== filePath && filePath !== 'index.md') {
-          // Permite todas se não quiser filtro restritivo, mas aqui incluímos na lista
-        }
+        const fullPath = path.join(sessionsDir, f);
+        const stats = fs.statSync(fullPath);
+        const data = JSON.parse(fs.readFileSync(fullPath, 'utf-8'));
 
         const lastEvent = data.events && data.events.length > 0 ? data.events[data.events.length - 1] : null;
         const firstUserEvent = data.events ? data.events.find((e: any) => e.role === 'user') : null;
+
+        const mtimeIso = stats.mtime.toISOString();
+        const rawUpdated = data.updated_at || lastEvent?.timestamp || mtimeIso;
+        const rawCreated = data.created_at || data.events?.[0]?.timestamp || mtimeIso;
+
+        const updatedTs = Math.max(
+          parseTimestamp(rawUpdated, stats.mtimeMs),
+          parseTimestamp(lastEvent?.timestamp, stats.mtimeMs),
+          stats.mtimeMs
+        );
 
         sessions.push({
           session_id: data.session_id || f.replace('.json', ''),
           path: data.path || 'Global',
           event_count: data.events?.length || 0,
-          created_at: data.created_at || data.events?.[0]?.timestamp || new Date().toISOString(),
-          updated_at: data.updated_at || lastEvent?.timestamp || data.created_at || new Date().toISOString(),
+          created_at: rawCreated,
+          updated_at: rawUpdated,
+          timestamp: updatedTs,
           model: data.model || 'AI Assistant',
           author: data.author || { name: 'Developer' },
           preview: firstUserEvent?.text ? (firstUserEvent.text.length > 90 ? firstUserEvent.text.slice(0, 90) + '...' : firstUserEvent.text) : 'Conversa com Copilot',
           metrics: data.metrics || {
             rounds: Math.ceil((data.events?.length || 1) / 2),
             total_tokens: 0,
+            total_cost_usd: 0,
           },
+          telemetry_turns: data.telemetry_turns || [],
         });
       } catch {}
     }
 
-    // Ordena da mais recente para a mais antiga
-    sessions.sort((a, b) => new Date(b.updated_at || b.created_at).getTime() - new Date(a.updated_at || a.created_at).getTime());
+    // Ordena rigorosamente da mais recente para a mais antiga
+    sessions.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
 
     return { sessions };
   }
@@ -566,7 +779,6 @@ export class AIService {
     const handoffFile = path.join(handoffsDir, 'latest.md');
     fs.writeFileSync(handoffFile, content, 'utf-8');
 
-    // Salva também com timestamp para histórico de handoffs
     const archiveHandoffFile = path.join(handoffsDir, `handoff-${sessionId}.md`);
     fs.writeFileSync(archiveHandoffFile, content, 'utf-8');
 

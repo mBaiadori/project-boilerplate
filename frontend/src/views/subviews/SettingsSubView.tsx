@@ -41,23 +41,38 @@ import {
   AlertTriangle,
   FileText,
   ExternalLink,
+  Terminal,
+  Zap,
+  Sparkles,
 } from "lucide-react";
 import type { TaxonomyItem, DocumentMetadataItem } from "../../types";
 
-// 28 Cores do Arco-Íris (7 Matizes do Arco-Íris x 4 Variações de Tonalidade)
+// 32 Cores Harmonizadas (8 Matizes x 4 Variações Verticais com o Centro na cor Base 500)
+// Linha 0 (Topo): Tom Suave / Claro (250/300)
+// Linha 1 (Centro): Cor Base Central (500)
+// Linha 2 (Médio): Tom Vigoroso / Contraste (600)
+// Linha 3 (Base): Tom Profundo / Escuro (800)
 export const RAINBOW_28_HUES = [
   { name: "Vermelho", colors: ["#fca5a5", "#ef4444", "#dc2626", "#991b1b"] },
-  { name: "Laranja", colors: ["#fdba74", "#f97316", "#ea580c", "#9a3412"] },
-  { name: "Amarelo", colors: ["#fde047", "#eab308", "#ca8a04", "#854d0e"] },
-  { name: "Verde", colors: ["#86efac", "#22c55e", "#16a34a", "#166534"] },
-  { name: "Ciano", colors: ["#67e8f9", "#06b6d4", "#0891b2", "#155e75"] },
-  { name: "Azul", colors: ["#93c5fd", "#3b82f6", "#2563eb", "#1e40af"] },
-  { name: "Violeta", colors: ["#d8b4fe", "#a855f7", "#9333ea", "#581c87"] },
+  { name: "Laranja", colors: ["#fed7aa", "#f97316", "#ea580c", "#9a3412"] },
+  {
+    name: "Âmbar/Amarelo",
+    colors: ["#fef08a", "#eab308", "#ca8a04", "#854d0e"],
+  },
+  { name: "Verde", colors: ["#bbf7d0", "#22c55e", "#16a34a", "#14532d"] },
+  { name: "Ciano/Teal", colors: ["#a5f3fc", "#06b6d4", "#0891b2", "#164e63"] },
+  { name: "Azul", colors: ["#bfdbfe", "#3b82f6", "#2563eb", "#1e3a8a"] },
+  {
+    name: "Violeta/Roxo",
+    colors: ["#e9d5ff", "#a855f7", "#9333ea", "#581c87"],
+  },
+  {
+    name: "Rosa/Magenta",
+    colors: ["#fbcfe8", "#ec4899", "#db2777", "#831843"],
+  },
 ];
 
 export const ALL_28_COLORS = RAINBOW_28_HUES.flatMap((h) => h.colors);
-
-
 
 // Helper para normalizar nome de status com hífen e minúsculas
 function formatStatusName(val: string): string {
@@ -243,6 +258,17 @@ export const SettingsSubView: React.FC = () => {
   const [editCatName, setEditCatName] = useState<string>("");
   const [editCatColor, setEditCatColor] = useState<string>("#3b82f6");
 
+  // Badges (Tipos de Documento) State
+  const [badges, setBadges] = useState<TaxonomyItem[]>([]);
+  const [isAddingBadge, setIsAddingBadge] = useState<boolean>(false);
+  const [newBadgeName, setNewBadgeName] = useState<string>("");
+  const [newBadgeColor, setNewBadgeColor] = useState<string>("#3b82f6");
+  const [editingBadgeIndex, setEditingBadgeIndex] = useState<number | null>(
+    null,
+  );
+  const [editBadgeName, setEditBadgeName] = useState<string>("");
+  const [editBadgeColor, setEditBadgeColor] = useState<string>("#3b82f6");
+
   // Tags State
   const [tags, setTags] = useState<TaxonomyItem[]>([]);
   const [isAddingTag, setIsAddingTag] = useState<boolean>(false);
@@ -271,7 +297,7 @@ export const SettingsSubView: React.FC = () => {
   // Estado de confirmação de exclusão com alerta de referências
   const [deleteDialog, setDeleteDialog] = useState<{
     isOpen: boolean;
-    type: "status" | "category" | "tag";
+    type: "status" | "category" | "tag" | "badge";
     nameOrKey: string;
     label: string;
     referencingDocs: DocumentMetadataItem[];
@@ -289,6 +315,52 @@ export const SettingsSubView: React.FC = () => {
   const [projectTemplatePrompt, setProjectTemplatePrompt] =
     useState<string>("");
   const [minApprovals, setMinApprovals] = useState<number>(1);
+
+  // Connected Agent Harness State (Antigravity CLI / Claude Code / Direct API)
+  const [harnessProvider, setHarnessProvider] = useState<string>("antigravity");
+  const [antigravityCliPath, setAntigravityCliPath] = useState<string>("");
+  const [claudeCliPath, setClaudeCliPath] = useState<string>("");
+  const [agentEffort, setAgentEffort] = useState<"low" | "medium" | "high">(
+    "medium",
+  );
+  const [agentModelOverride, setAgentModelOverride] = useState<string>("");
+  const [detectedProviders, setDetectedProviders] = useState<
+    Array<{
+      id: string;
+      name: string;
+      description: string;
+      mode: string;
+      isAvailable: boolean;
+      isAuthenticated: boolean;
+      statusMessage?: string;
+    }>
+  >([]);
+  const [isCheckingHarness, setIsCheckingHarness] = useState<boolean>(false);
+  const [harnessCheckFeedback, setHarnessCheckFeedback] = useState<
+    string | null
+  >(null);
+
+  const checkHarnessProviders = useCallback(async () => {
+    setIsCheckingHarness(true);
+    try {
+      const res = await API.getAIProviders();
+      if (res.ok && res.data?.providers) {
+        setDetectedProviders(res.data.providers);
+        setHarnessCheckFeedback(
+          "Conectividade e status dos agentes atualizados!",
+        );
+      }
+    } catch (err) {
+      console.error(
+        "[SettingsSubView] Erro ao checar provedores de agentes:",
+        err,
+      );
+      setHarnessCheckFeedback("Erro ao verificar conectividade dos agentes.");
+    } finally {
+      setIsCheckingHarness(false);
+      setTimeout(() => setHarnessCheckFeedback(null), 3500);
+    }
+  }, []);
 
   // Status feedback
   const [saveStatus, setSaveStatus] = useState<string | null>(null);
@@ -347,9 +419,25 @@ export const SettingsSubView: React.FC = () => {
           (activeProv === "gemini" ? "gemini-2.5-flash" : "gpt-4o"),
       );
       setEndpoint(aiSettings.custom_endpoint || "http://localhost:11434/v1");
+      if (aiSettings.default_provider) {
+        setHarnessProvider(aiSettings.default_provider);
+      }
+      if (aiSettings.antigravity_cli_path) {
+        setAntigravityCliPath(aiSettings.antigravity_cli_path);
+      }
+      if (aiSettings.claude_cli_path) {
+        setClaudeCliPath(aiSettings.claude_cli_path);
+      }
+      if (aiSettings.agent_effort) {
+        setAgentEffort(aiSettings.agent_effort);
+      }
+      if (aiSettings.agent_model) {
+        setAgentModelOverride(aiSettings.agent_model);
+      }
       fetchModelsForProvider(activeProv, undefined, aiSettings.custom_endpoint);
     }
-  }, [aiSettings, fetchModelsForProvider]);
+    checkHarnessProviders();
+  }, [aiSettings, fetchModelsForProvider, checkHarnessProviders]);
 
   const selectOptions: SelectOption[] = useMemo(() => {
     if (modelsList.length === 0) {
@@ -430,6 +518,42 @@ export const SettingsSubView: React.FC = () => {
             },
           );
           setCategories(parsedCats);
+        }
+
+        if (Array.isArray(pCfg.badges)) {
+          const defaultBadgeColors: Record<string, string> = {
+            RFC: "#3b82f6",
+            ADR: "#8b5cf6",
+            PRD: "#10b981",
+            DOC: "#64748b",
+            API: "#f59e0b",
+            SPEC: "#06b6d4",
+            GUIDE: "#ec4899",
+            TEST: "#14b8a6",
+          };
+          const parsedBadges: TaxonomyItem[] = pCfg.badges.map(
+            (b: any, idx: number) => {
+              if (typeof b === "string") {
+                const name = b.trim().toUpperCase();
+                return {
+                  name,
+                  color:
+                    defaultBadgeColors[name] ||
+                    ALL_28_COLORS[(idx * 2) % ALL_28_COLORS.length],
+                };
+              }
+              const name = String(b.name || "")
+                .trim()
+                .toUpperCase();
+              const color = String(
+                b.color ||
+                  defaultBadgeColors[name] ||
+                  ALL_28_COLORS[(idx * 2) % ALL_28_COLORS.length],
+              );
+              return { name, color };
+            },
+          );
+          setBadges(parsedBadges);
         }
 
         if (Array.isArray(pCfg.tags)) {
@@ -526,6 +650,27 @@ export const SettingsSubView: React.FC = () => {
           `Erro ao atualizar categoria no documento ${doc.path}:`,
           err,
         );
+      }
+    }
+  };
+
+  // Propagação de renomeação de badge (tipo) em documentos
+  const propagateBadgeRename = async (oldName: string, newName: string) => {
+    if (oldName === newName) return;
+    const affectedDocs = docMetadataList.filter(
+      (d) =>
+        (d.badge && d.badge.toUpperCase() === oldName.toUpperCase()) ||
+        (d.type && d.type.toUpperCase() === oldName.toUpperCase()),
+    );
+    for (const doc of affectedDocs) {
+      try {
+        await API.updateDocumentMetadataItem({
+          path: doc.path,
+          meta: { badge: newName },
+          repo: activeRepo?.name,
+        });
+      } catch (err) {
+        console.warn(`Erro ao atualizar badge no documento ${doc.path}:`, err);
       }
     }
   };
@@ -631,6 +776,77 @@ export const SettingsSubView: React.FC = () => {
 
     if (oldName !== trimmed) {
       await propagateCategoryRename(oldName, trimmed);
+    }
+  };
+
+  // Handlers para Badges (Tipos de Documento)
+  const handleAddBadge = () => {
+    const trimmed = newBadgeName.trim().toUpperCase();
+    if (!trimmed || badges.some((b) => b.name.toUpperCase() === trimmed))
+      return;
+    setBadges([...badges, { name: trimmed, color: newBadgeColor }]);
+    setNewBadgeName("");
+    setIsAddingBadge(false);
+  };
+
+  const handleRequestRemoveBadge = (index: number) => {
+    const target = badges[index];
+    if (!target) return;
+    const referencing = docMetadataList.filter(
+      (d) =>
+        (d.badge && d.badge.toUpperCase() === target.name.toUpperCase()) ||
+        (d.type && d.type.toUpperCase() === target.name.toUpperCase()),
+    );
+
+    if (referencing.length > 0) {
+      setDeleteDialog({
+        isOpen: true,
+        type: "badge",
+        nameOrKey: target.name,
+        label: target.name.toUpperCase(),
+        referencingDocs: referencing,
+        onConfirm: async () => {
+          for (const doc of referencing) {
+            try {
+              await API.updateDocumentMetadataItem({
+                path: doc.path,
+                meta: { badge: "" },
+                repo: activeRepo?.name,
+              });
+            } catch {}
+          }
+          setBadges((prev) => prev.filter((_, i) => i !== index));
+          setDeleteDialog((d) => ({ ...d, isOpen: false }));
+        },
+      });
+    } else {
+      setBadges(badges.filter((_, i) => i !== index));
+      if (editingBadgeIndex === index) setEditingBadgeIndex(null);
+    }
+  };
+
+  const handleStartEditBadge = (index: number) => {
+    setEditingBadgeIndex(index);
+    setEditBadgeName(badges[index].name);
+    setEditBadgeColor(badges[index].color || "#3b82f6");
+  };
+
+  const handleSaveEditBadge = async () => {
+    if (editingBadgeIndex === null) return;
+    const oldName = badges[editingBadgeIndex].name;
+    const trimmed = editBadgeName.trim().toUpperCase();
+    if (!trimmed) return;
+
+    const updated = [...badges];
+    updated[editingBadgeIndex] = {
+      name: trimmed,
+      color: editBadgeColor,
+    };
+    setBadges(updated);
+    setEditingBadgeIndex(null);
+
+    if (oldName !== trimmed) {
+      await propagateBadgeRename(oldName, trimmed);
     }
   };
 
@@ -767,12 +983,17 @@ export const SettingsSubView: React.FC = () => {
     }
   };
 
-
-
   const handleSaveAISettings = async () => {
     try {
-      await saveAISettings(provider, model, apiKey, endpoint);
-      setSaveStatus("Configurações do Motor de IA salvas com sucesso!");
+      await saveAISettings(provider, model, apiKey, endpoint, {
+        default_provider: harnessProvider,
+        antigravity_cli_path: antigravityCliPath,
+        claude_cli_path: claudeCliPath,
+        agent_effort: agentEffort,
+        agent_model: agentModelOverride,
+      });
+      await checkHarnessProviders();
+      setSaveStatus("Configurações de IA e Agentes CLI salvas com sucesso!");
       setTimeout(() => setSaveStatus(null), 3500);
     } catch (err) {
       console.error("[SettingsSubView] Erro ao salvar IA:", err);
@@ -783,9 +1004,16 @@ export const SettingsSubView: React.FC = () => {
   const handleSaveAllSettings = async () => {
     setIsSavingAll(true);
     try {
-      await saveAISettings(provider, model, apiKey, endpoint);
+      await saveAISettings(provider, model, apiKey, endpoint, {
+        default_provider: harnessProvider,
+        antigravity_cli_path: antigravityCliPath,
+        claude_cli_path: claudeCliPath,
+        agent_effort: agentEffort,
+        agent_model: agentModelOverride,
+      });
       await saveProjectConfig({
         categories,
+        badges,
         tags,
         statuses,
         ai_template_prompt: projectTemplatePrompt,
@@ -793,6 +1021,7 @@ export const SettingsSubView: React.FC = () => {
           min_approvals_default: minApprovals,
         },
       });
+      await checkHarnessProviders();
 
       setSaveStatus("Todas as configurações foram salvas com sucesso!");
       setTimeout(() => setSaveStatus(null), 3500);
@@ -925,7 +1154,7 @@ export const SettingsSubView: React.FC = () => {
                   color: "#0f172a",
                 }}
               >
-                Taxonomia & Governança do Projeto
+                Taxonomia & Governança
               </h3>
               <p
                 style={{
@@ -1219,7 +1448,321 @@ export const SettingsSubView: React.FC = () => {
               </div>
             </div>
 
-            {/* 1.2 Tags */}
+            {/* 1.2 Tipos de Documento / Badges */}
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "8px",
+                borderTop: "1px solid #f8fafc",
+                paddingTop: "14px",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: "12px",
+                    fontWeight: 600,
+                    color: "#334155",
+                  }}
+                >
+                  Tipos de Documento (Badges)
+                </span>
+                <span style={{ fontSize: "11px", color: "#94a3b8" }}>
+                  Tipologia estrutural única por documento (ex: RFC, ADR, PRD,
+                  DOC)
+                </span>
+              </div>
+
+              {/* Lista de Chips de Badges com Edição Inline */}
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: "6px",
+                  alignItems: "center",
+                }}
+              >
+                {badges.map((bdg, idx) => {
+                  const isEditing = editingBadgeIndex === idx;
+                  const bdgColor = bdg.color || "#3b82f6";
+
+                  if (isEditing) {
+                    return (
+                      <div
+                        key={idx}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "5px",
+                          padding: "2px 6px 2px 8px",
+                          borderRadius: "12px",
+                          backgroundColor: `${editBadgeColor}16`,
+                          border: `1.5px solid ${editBadgeColor}`,
+                          fontSize: "11px",
+                          fontWeight: 700,
+                          color: editBadgeColor,
+                          letterSpacing: "0.04em",
+                        }}
+                      >
+                        <ColorDotPicker
+                          color={editBadgeColor}
+                          onChange={setEditBadgeColor}
+                          size={14}
+                        />
+                        <input
+                          type="text"
+                          value={editBadgeName}
+                          onChange={(e) =>
+                            setEditBadgeName(e.target.value.toUpperCase())
+                          }
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") handleSaveEditBadge();
+                            if (e.key === "Escape") setEditingBadgeIndex(null);
+                          }}
+                          style={{
+                            border: "none",
+                            background: "transparent",
+                            outline: "none",
+                            fontSize: "11px",
+                            fontWeight: 700,
+                            letterSpacing: "0.04em",
+                            width: `${Math.max(editBadgeName.length, 4)}ch`,
+                            color: editBadgeColor,
+                            padding: 0,
+                            textTransform: "uppercase",
+                          }}
+                          autoFocus
+                        />
+                        <button
+                          type="button"
+                          onClick={handleSaveEditBadge}
+                          style={{
+                            background: "none",
+                            border: "none",
+                            cursor: "pointer",
+                            padding: 0,
+                            color: editBadgeColor,
+                            opacity: 0.85,
+                          }}
+                          title="Salvar (Enter)"
+                        >
+                          <Check size={12} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditingBadgeIndex(null)}
+                          style={{
+                            background: "none",
+                            border: "none",
+                            cursor: "pointer",
+                            padding: 0,
+                            color: "#94a3b8",
+                          }}
+                          title="Cancelar (Esc)"
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div
+                      key={idx}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "5px",
+                        padding: "2px 6px 2px 8px",
+                        borderRadius: "12px",
+                        backgroundColor: `${bdgColor}14`,
+                        border: `1px solid ${bdgColor}45`,
+                        fontSize: "11px",
+                        fontWeight: 700,
+                        letterSpacing: "0.04em",
+                        color: bdgColor,
+                        transition: "all 0.12s ease",
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: 5,
+                          height: 5,
+                          borderRadius: "50%",
+                          backgroundColor: bdgColor,
+                        }}
+                      />
+                      <span
+                        onClick={() => handleStartEditBadge(idx)}
+                        style={{ cursor: "pointer" }}
+                        title="Clique para editar tipo"
+                      >
+                        {bdg.name.toUpperCase()}
+                      </span>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "1px",
+                        }}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => handleStartEditBadge(idx)}
+                          style={{
+                            background: "transparent",
+                            border: "none",
+                            cursor: "pointer",
+                            padding: "1px",
+                            display: "flex",
+                            alignItems: "center",
+                            color: bdgColor,
+                            opacity: 0.6,
+                          }}
+                          title="Editar"
+                        >
+                          <Edit2 size={9} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleRequestRemoveBadge(idx)}
+                          style={{
+                            background: "transparent",
+                            border: "none",
+                            cursor: "pointer",
+                            padding: "1px",
+                            display: "flex",
+                            alignItems: "center",
+                            color: bdgColor,
+                            opacity: 0.6,
+                          }}
+                          title="Remover"
+                        >
+                          <Trash2 size={9} />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {/* Botão + ou Chip de Adicionar Badge */}
+                {isAddingBadge ? (
+                  <div
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "5px",
+                      padding: "2px 6px 2px 8px",
+                      borderRadius: "12px",
+                      backgroundColor: `${newBadgeColor}16`,
+                      border: `1.5px solid ${newBadgeColor}`,
+                      fontSize: "11px",
+                      fontWeight: 700,
+                      letterSpacing: "0.04em",
+                      color: newBadgeColor,
+                    }}
+                  >
+                    <ColorDotPicker
+                      color={newBadgeColor}
+                      onChange={setNewBadgeColor}
+                      size={14}
+                    />
+                    <input
+                      type="text"
+                      placeholder="TIPO..."
+                      value={newBadgeName}
+                      onChange={(e) =>
+                        setNewBadgeName(e.target.value.toUpperCase())
+                      }
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleAddBadge();
+                        if (e.key === "Escape") {
+                          setIsAddingBadge(false);
+                          setNewBadgeName("");
+                        }
+                      }}
+                      style={{
+                        border: "none",
+                        background: "transparent",
+                        outline: "none",
+                        fontSize: "11px",
+                        fontWeight: 700,
+                        letterSpacing: "0.04em",
+                        width: `${Math.max(newBadgeName.length, 6)}ch`,
+                        color: newBadgeColor,
+                        padding: 0,
+                        textTransform: "uppercase",
+                      }}
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddBadge}
+                      disabled={!newBadgeName.trim()}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        cursor: newBadgeName.trim() ? "pointer" : "default",
+                        padding: 0,
+                        color: newBadgeColor,
+                        opacity: newBadgeName.trim() ? 0.9 : 0.4,
+                      }}
+                      title="Criar (Enter)"
+                    >
+                      <Check size={12} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsAddingBadge(false);
+                        setNewBadgeName("");
+                      }}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        cursor: "pointer",
+                        padding: 0,
+                        color: "#94a3b8",
+                      }}
+                      title="Cancelar (Esc)"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setIsAddingBadge(true)}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      width: "22px",
+                      height: "22px",
+                      borderRadius: "50%",
+                      border: "1px dashed #cbd5e1",
+                      background: "#ffffff",
+                      color: "#64748b",
+                      cursor: "pointer",
+                      padding: 0,
+                      transition: "all 0.12s ease",
+                    }}
+                    title="Adicionar Tipo de Documento / Badge"
+                  >
+                    <Plus size={12} />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* 1.3 Tags */}
             <div
               style={{
                 display: "flex",
@@ -1800,8 +2343,310 @@ export const SettingsSubView: React.FC = () => {
           </div>
         </section>
 
-        {/* 2. SEÇÃO: MOTOR DE IA */}
-        <section id="ai-engine" style={{ scrollMarginTop: "72px" }}>
+        {/* 2. SEÇÃO: MOTOR DE IA E HARNESS DE AGENTES */}
+        <section
+          id="ai-engine"
+          style={{
+            scrollMarginTop: "72px",
+            display: "flex",
+            flexDirection: "column",
+            gap: 16,
+          }}
+        >
+          {/* CARD 1: AGENTES CONECTADOS & CLI HARNESS */}
+          <Card variant="elevated">
+            <CardHeader
+              title={
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <Terminal size={17} style={{ color: "#2563eb" }} />
+                  <span>Agentes Conectados & CLI Harness (Proxy)</span>
+                </div>
+              }
+              subtitle="Execução de alto desempenho conectada aos agentes e CLIs autenticados no computador."
+              actions={
+                <Badge
+                  variant={
+                    harnessProvider === "antigravity"
+                      ? "primary"
+                      : harnessProvider === "claude-code"
+                        ? "warning"
+                        : "neutral"
+                  }
+                >
+                  {harnessProvider.toUpperCase()}
+                </Badge>
+              }
+            />
+
+            <CardContent
+              style={{ display: "flex", flexDirection: "column", gap: 16 }}
+            >
+              {/* Seleção de Harness */}
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+                  gap: 10,
+                }}
+              >
+                {[
+                  {
+                    id: "antigravity",
+                    name: "Google Antigravity Agent",
+                    cliName: "agy",
+                    sub: "Agente multi-ferramenta com streaming SSE e raciocínio contextual",
+                    icon: <Zap size={15} style={{ color: "#2563eb" }} />,
+                    detected:
+                      detectedProviders.find((p) => p.id === "antigravity")
+                        ?.isAvailable ?? true,
+                    statusMsg:
+                      detectedProviders.find((p) => p.id === "antigravity")
+                        ?.statusMessage || "Detectado em ~/.local/bin/agy",
+                  },
+                  {
+                    id: "claude-code",
+                    name: "Claude Code CLI",
+                    cliName: "claude",
+                    sub: "Harness conectado ao agente oficial Claude Code CLI",
+                    icon: <Sparkles size={15} style={{ color: "#d97706" }} />,
+                    detected:
+                      detectedProviders.find((p) => p.id === "claude-code")
+                        ?.isAvailable ?? true,
+                    statusMsg:
+                      detectedProviders.find((p) => p.id === "claude-code")
+                        ?.statusMessage || "Detectado em ~/.local/bin/claude",
+                  },
+                  {
+                    id: "direct-api",
+                    name: "Direct API Fallback",
+                    cliName: "RAW / SDK",
+                    sub: "Chamadas diretas de modelo via SDK e chaves de API em nuvem",
+                    icon: <Cpu size={15} style={{ color: "#10b981" }} />,
+                    detected: true,
+                    statusMsg: "Sempre disponível com chaves de API",
+                  },
+                ].map((item) => {
+                  const isSelected = harnessProvider === item.id;
+                  return (
+                    <div
+                      key={item.id}
+                      onClick={() => setHarnessProvider(item.id)}
+                      style={{
+                        padding: "12px 14px",
+                        borderRadius: "8px",
+                        border: isSelected
+                          ? "2px solid #2563eb"
+                          : "1px solid #e2e8f0",
+                        background: isSelected ? "#eff6ff" : "#ffffff",
+                        cursor: "pointer",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 6,
+                        transition: "all 0.15s ease",
+                        boxShadow: isSelected
+                          ? "0 2px 8px rgba(37,99,235,0.12)"
+                          : "none",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 6,
+                          }}
+                        >
+                          {item.icon}
+                          <strong
+                            style={{
+                              fontSize: "13px",
+                              color: isSelected ? "#1d4ed8" : "#0f172a",
+                            }}
+                          >
+                            {item.name}
+                          </strong>
+                        </div>
+                        <span
+                          style={{
+                            fontSize: "10px",
+                            fontWeight: 600,
+                            padding: "2px 6px",
+                            borderRadius: "12px",
+                            background: item.detected ? "#dcfce7" : "#fee2e2",
+                            color: item.detected ? "#15803d" : "#b91c1c",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 4,
+                          }}
+                        >
+                          <span
+                            style={{
+                              width: 6,
+                              height: 6,
+                              borderRadius: "50%",
+                              background: item.detected ? "#16a34a" : "#dc2626",
+                            }}
+                          />
+                          {item.detected ? "Detectado" : "Não Localizado"}
+                        </span>
+                      </div>
+                      <p
+                        style={{
+                          fontSize: "11.5px",
+                          color: "#64748b",
+                          margin: 0,
+                          lineHeight: 1.4,
+                        }}
+                      >
+                        {item.sub}
+                      </p>
+                      <span
+                        style={{
+                          fontSize: "10px",
+                          color: item.detected ? "#059669" : "#dc2626",
+                          fontWeight: 500,
+                        }}
+                      >
+                        {item.statusMsg}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Parâmetros do Agente: Nível de Raciocínio (Effort) & Teste */}
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: 14,
+                  alignItems: "center",
+                }}
+              >
+                <FormField label="Raciocínio do Agente:">
+                  <div style={{ display: "flex", gap: 8 }}>
+                    {[
+                      { id: "low", label: "⚡ Rápido", sub: "" },
+                      {
+                        id: "medium",
+                        label: "⚖️ Equilibrado",
+                        sub: "",
+                      },
+                      {
+                        id: "high",
+                        label: "🧠 Profundo",
+                        sub: "",
+                      },
+                    ].map((eff) => {
+                      const isEffSelected = agentEffort === eff.id;
+                      return (
+                        <button
+                          key={eff.id}
+                          type="button"
+                          onClick={() => setAgentEffort(eff.id as any)}
+                          style={{
+                            flex: 1,
+                            padding: "8px 6px",
+                            borderRadius: "6px",
+                            border: isEffSelected
+                              ? "1.5px solid #2563eb"
+                              : "1px solid #cbd5e1",
+                            background: isEffSelected ? "#eff6ff" : "#ffffff",
+                            color: isEffSelected ? "#1d4ed8" : "#475569",
+                            fontSize: "12px",
+                            fontWeight: isEffSelected ? 600 : 500,
+                            cursor: "pointer",
+                            transition: "all 0.12s ease",
+                            textAlign: "center",
+                          }}
+                        >
+                          <div>{eff.label}</div>
+                          <div style={{ fontSize: "9.5px", color: "#64748b" }}>
+                            {eff.sub}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </FormField>
+
+                <div
+                  style={{ display: "flex", flexDirection: "column", gap: 6 }}
+                >
+                  <label
+                    style={{
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      color: "#334155",
+                    }}
+                  >
+                    Status da Conexão CLI:
+                  </label>
+                  <div
+                    style={{ display: "flex", gap: 8, alignItems: "center" }}
+                  >
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      leftIcon={
+                        <RefreshCw
+                          size={13}
+                          className={isCheckingHarness ? "spinning" : ""}
+                        />
+                      }
+                      onClick={checkHarnessProviders}
+                      disabled={isCheckingHarness}
+                    >
+                      {isCheckingHarness
+                        ? "Verificando..."
+                        : "Testar Detecção de CLIs"}
+                    </Button>
+                    {harnessCheckFeedback && (
+                      <span
+                        style={{
+                          fontSize: "11px",
+                          color: "#16a34a",
+                          fontWeight: 500,
+                        }}
+                      >
+                        {harnessCheckFeedback}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Caminhos customizados para portabilidade */}
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: 12,
+                }}
+              >
+                <FormField label="Caminho Customizado Antigravity CLI (Opcional):">
+                  <Input
+                    placeholder="Ex: ~/.local/bin/agy ou /usr/local/bin/agy"
+                    value={antigravityCliPath}
+                    onChange={(e) => setAntigravityCliPath(e.target.value)}
+                  />
+                </FormField>
+                <FormField label="Caminho Customizado Claude Code CLI (Opcional):">
+                  <Input
+                    placeholder="Ex: ~/.local/bin/claude ou /usr/local/bin/claude"
+                    value={claudeCliPath}
+                    onChange={(e) => setClaudeCliPath(e.target.value)}
+                  />
+                </FormField>
+              </div>
+            </CardContent>
+          </Card>
           <Card variant="elevated">
             <CardHeader
               title={
@@ -1979,19 +2824,24 @@ export const SettingsSubView: React.FC = () => {
                   border: "1px solid #e2e8f0",
                 }}
               >
-                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                <div
+                  style={{ display: "flex", flexDirection: "column", gap: 4 }}
+                >
                   <strong style={{ fontSize: "13px", color: "#0f172a" }}>
                     Editor & Estúdio de Templates
                   </strong>
                   <span style={{ fontSize: "12px", color: "#64748b" }}>
-                    Acesse o editor rico para criar novos templates, importar modelos da comunidade e editar o conteúdo em Markdown.
+                    Acesse o editor rico para criar novos templates, importar
+                    modelos da comunidade e editar o conteúdo em Markdown.
                   </span>
                 </div>
 
                 <Button
                   variant="primary"
                   onClick={() =>
-                    navigate(`/projects/${activeRepo?.name || "default"}/templates`)
+                    navigate(
+                      `/projects/${activeRepo?.name || "default"}/templates`,
+                    )
                   }
                   style={{
                     display: "flex",
@@ -2079,7 +2929,9 @@ export const SettingsSubView: React.FC = () => {
                 ? "Status"
                 : deleteDialog.type === "category"
                   ? "Categoria"
-                  : "Tag"}{" "}
+                  : deleteDialog.type === "badge"
+                    ? "Tipo / Badge"
+                    : "Tag"}{" "}
               em Uso
             </span>
           </div>

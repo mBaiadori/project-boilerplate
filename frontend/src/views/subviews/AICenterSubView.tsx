@@ -211,7 +211,7 @@ return {
         await loadAllData();
         if (selectedSkill?.id === skillId) setSelectedSkill(null);
         if (activeSkillId === skillId)
-          setActiveSkillId("living-docs-governance");
+          setActiveSkillId(null);
         setTimeout(() => setActionFeedback(null), 3500);
       }
     } catch (err: any) {
