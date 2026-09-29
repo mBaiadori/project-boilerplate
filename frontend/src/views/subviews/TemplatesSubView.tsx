@@ -117,13 +117,29 @@ const DEFAULT_CATEGORY_OPTIONS: SelectOption[] = [
   },
 ];
 
-const DEFAULT_BADGE_PRESETS: Array<{ name: string; color?: string; description?: string }> = [
+const DEFAULT_BADGE_PRESETS: Array<{
+  name: string;
+  color?: string;
+  description?: string;
+}> = [
   { name: "RFC", color: "#a855f7", description: "Request for Comments" },
-  { name: "ADR", color: "#3b82f6", description: "Architecture Decision Record" },
-  { name: "PRD", color: "#f97316", description: "Product Requirements Document" },
+  {
+    name: "ADR",
+    color: "#3b82f6",
+    description: "Architecture Decision Record",
+  },
+  {
+    name: "PRD",
+    color: "#f97316",
+    description: "Product Requirements Document",
+  },
   { name: "DOC", color: "#22c55e", description: "Documentação Técnica" },
   { name: "API", color: "#06b6d4", description: "Especificação de API" },
-  { name: "SPEC", color: "#6366f1", description: "Especificação de Funcionalidade" },
+  {
+    name: "SPEC",
+    color: "#6366f1",
+    description: "Especificação de Funcionalidade",
+  },
   { name: "GUIDE", color: "#ec4899", description: "Guia e Manual" },
   { name: "TEST", color: "#eab308", description: "Plano de Testes" },
 ];
@@ -870,8 +886,12 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
                             badgePresets.find((b) => b.name === tplBadge)?.color
                               ? {
                                   background: `${badgePresets.find((b) => b.name === tplBadge)?.color}25`,
-                                  color: badgePresets.find((b) => b.name === tplBadge)?.color,
-                                  borderColor: badgePresets.find((b) => b.name === tplBadge)?.color,
+                                  color: badgePresets.find(
+                                    (b) => b.name === tplBadge,
+                                  )?.color,
+                                  borderColor: badgePresets.find(
+                                    (b) => b.name === tplBadge,
+                                  )?.color,
                                 }
                               : undefined
                           }
@@ -1293,27 +1313,6 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
               {templates.length} {templates.length === 1 ? "modelo" : "modelos"}
             </Badge>
           </div>
-          <p
-            style={{
-              margin: "6px 0 0 0",
-              fontSize: "13.5px",
-              color: "var(--color-on-surface-variant)",
-            }}
-          >
-            Central de modelos técnicos padronizados com Prompt de Copilot
-            integrado (
-            <code
-              style={{
-                fontFamily: "var(--font-mono, monospace)",
-                background: "var(--color-surface-container-high)",
-                padding: "2px 6px",
-                borderRadius: "4px",
-              }}
-            >
-              .templates.json
-            </code>
-            ).
-          </p>
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>

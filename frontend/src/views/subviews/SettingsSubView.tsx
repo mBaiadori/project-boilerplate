@@ -3,7 +3,6 @@ import React, {
   useEffect,
   useCallback,
   useMemo,
-  useRef,
 } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { useAI } from "../../context/AIContext";
@@ -25,19 +24,23 @@ import {
   Badge,
   AlertBanner,
   Modal,
+  PageContainer,
+  PageHeader,
+  PageBody,
+  Stack,
+  Row,
+  Divider,
 } from "../../components/ui";
+import { TaxonomyChipEditor } from "../../components/common/TaxonomyChipEditor";
+import { RAINBOW_28_HUES } from "../../components/common/ColorDotPicker";
 import { useNavigate } from "react-router-dom";
 import {
   Cpu,
   RefreshCw,
-  Edit2,
-  Plus,
   Trash2,
   Save,
   LogOut,
-  Check,
   Layers,
-  X,
   AlertTriangle,
   FileText,
   ExternalLink,
@@ -46,31 +49,6 @@ import {
   Sparkles,
 } from "lucide-react";
 import type { TaxonomyItem, DocumentMetadataItem } from "../../types";
-
-// 32 Cores Harmonizadas (8 Matizes x 4 Variações Verticais com o Centro na cor Base 500)
-// Linha 0 (Topo): Tom Suave / Claro (250/300)
-// Linha 1 (Centro): Cor Base Central (500)
-// Linha 2 (Médio): Tom Vigoroso / Contraste (600)
-// Linha 3 (Base): Tom Profundo / Escuro (800)
-export const RAINBOW_28_HUES = [
-  { name: "Vermelho", colors: ["#fca5a5", "#ef4444", "#dc2626", "#991b1b"] },
-  { name: "Laranja", colors: ["#fed7aa", "#f97316", "#ea580c", "#9a3412"] },
-  {
-    name: "Âmbar/Amarelo",
-    colors: ["#fef08a", "#eab308", "#ca8a04", "#854d0e"],
-  },
-  { name: "Verde", colors: ["#bbf7d0", "#22c55e", "#16a34a", "#14532d"] },
-  { name: "Ciano/Teal", colors: ["#a5f3fc", "#06b6d4", "#0891b2", "#164e63"] },
-  { name: "Azul", colors: ["#bfdbfe", "#3b82f6", "#2563eb", "#1e3a8a"] },
-  {
-    name: "Violeta/Roxo",
-    colors: ["#e9d5ff", "#a855f7", "#9333ea", "#581c87"],
-  },
-  {
-    name: "Rosa/Magenta",
-    colors: ["#fbcfe8", "#ec4899", "#db2777", "#831843"],
-  },
-];
 
 export const ALL_28_COLORS = RAINBOW_28_HUES.flatMap((h) => h.colors);
 
@@ -84,154 +62,6 @@ function formatStatusName(val: string): string {
     .replace(/\s+/g, "-")
     .replace(/[^a-z0-9-_]/g, "");
 }
-
-// Componente Popover de Seleção de Cor Discreto (Círculo)
-const ColorDotPicker: React.FC<{
-  color: string;
-  onChange: (newColor: string) => void;
-  size?: number;
-}> = ({ color, onChange, size = 18 }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleOutside = (e: MouseEvent) => {
-      if (
-        containerRef.current &&
-        !containerRef.current.contains(e.target as Node)
-      ) {
-        setIsOpen(false);
-      }
-    };
-    if (isOpen) {
-      document.addEventListener("mousedown", handleOutside);
-    }
-    return () => document.removeEventListener("mousedown", handleOutside);
-  }, [isOpen]);
-
-  return (
-    <div
-      ref={containerRef}
-      style={{
-        position: "relative",
-        display: "inline-flex",
-        alignItems: "center",
-      }}
-    >
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          setIsOpen(!isOpen);
-        }}
-        title={`Cor: ${color}. Clique para escolher.`}
-        style={{
-          width: size,
-          height: size,
-          borderRadius: "50%",
-          backgroundColor: color,
-          border: "2px solid #ffffff",
-          boxShadow: "0 0 0 1px rgba(0,0,0,0.15), 0 1px 2px rgba(0,0,0,0.1)",
-          cursor: "pointer",
-          padding: 0,
-          flexShrink: 0,
-          transition: "transform 0.15s ease",
-        }}
-        onMouseEnter={(e) => (e.currentTarget.style.transform = "scale(1.2)")}
-        onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
-      />
-
-      {isOpen && (
-        <div
-          onClick={(e) => e.stopPropagation()}
-          style={{
-            position: "absolute",
-            top: "calc(100% + 6px)",
-            left: 0,
-            zIndex: 200,
-            background: "#ffffff",
-            border: "1px solid #e2e8f0",
-            borderRadius: "8px",
-            boxShadow:
-              "0 10px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1)",
-            padding: "8px",
-            display: "flex",
-            flexDirection: "column",
-            gap: "6px",
-            minWidth: "155px",
-          }}
-        >
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(7, 1fr)",
-              gap: "4px",
-            }}
-          >
-            {RAINBOW_28_HUES.map((hueGroup) => (
-              <div
-                key={hueGroup.name}
-                style={{ display: "flex", flexDirection: "column", gap: "4px" }}
-              >
-                {hueGroup.colors.map((hex) => {
-                  const isSelected = color.toLowerCase() === hex.toLowerCase();
-                  return (
-                    <button
-                      key={hex}
-                      type="button"
-                      onClick={() => {
-                        onChange(hex);
-                        setIsOpen(false);
-                      }}
-                      title={`${hueGroup.name}: ${hex}`}
-                      style={{
-                        width: "16px",
-                        height: "16px",
-                        borderRadius: "50%",
-                        backgroundColor: hex,
-                        border: isSelected
-                          ? "2px solid #000"
-                          : "1px solid rgba(0,0,0,0.08)",
-                        boxShadow: isSelected
-                          ? "0 0 0 2px rgba(37,99,235,0.5)"
-                          : "none",
-                        cursor: "pointer",
-                        padding: 0,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      {isSelected && (
-                        <Check
-                          size={9}
-                          style={{
-                            color: [
-                              "#fca5a5",
-                              "#fdba74",
-                              "#fde047",
-                              "#86efac",
-                              "#67e8f9",
-                              "#93c5fd",
-                              "#d8b4fe",
-                            ].includes(hex)
-                              ? "#000"
-                              : "#fff",
-                            strokeWidth: 3,
-                          }}
-                        />
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
 
 export const SettingsSubView: React.FC = () => {
   const navigate = useNavigate();
@@ -1034,66 +864,16 @@ export const SettingsSubView: React.FC = () => {
   };
 
   return (
-    <div
-      className="settings-subview-container"
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        height: "100%",
-        width: "100%",
-        overflowY: "auto",
-        background: "#f8fafc",
-      }}
-    >
+    <PageContainer className="settings-subview-container">
       {/* Cabeçalho */}
-      <header
-        style={{
-          position: "sticky",
-          top: 0,
-          zIndex: 30,
-          background: "#ffffff",
-          borderBottom: "1px solid #e2e8f0",
-          boxShadow: "0 1px 2px rgba(0, 0, 0, 0.02)",
-          padding: "0 32px",
-        }}
-      >
-        <div
-          style={{
-            maxWidth: "960px",
-            margin: "0 auto",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            height: "56px",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-            }}
-          >
-            <span
-              style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a" }}
-            >
-              Configurações
-            </span>
-            <span
-              style={{
-                fontSize: "11px",
-                fontWeight: 600,
-                color: "#2563eb",
-                background: "#eff6ff",
-                padding: "1px 7px",
-                borderRadius: "10px",
-                border: "1px solid #dbeafe",
-              }}
-            >
-              {activeRepo?.name || "local"}
-            </span>
-          </div>
-
+      <PageHeader
+        title="Configurações"
+        badge={
+          <Badge variant="primary" size="sm">
+            {activeRepo?.name || "local"}
+          </Badge>
+        }
+        actions={
           <Button
             id="btn-save-top-all-settings"
             variant="primary"
@@ -1104,21 +884,12 @@ export const SettingsSubView: React.FC = () => {
           >
             {isSavingAll ? "Salvando..." : "Salvar"}
           </Button>
-        </div>
-      </header>
+        }
+      />
 
       {/* Conteúdo Principal */}
-      <main
-        style={{
-          maxWidth: "960px",
-          width: "100%",
-          margin: "0 auto",
-          padding: "24px 32px 64px 32px",
-          display: "flex",
-          flexDirection: "column",
-          gap: "24px",
-        }}
-      >
+      <PageBody>
+        <div style={{ maxWidth: "960px", width: "100%", margin: "0 auto", display: "flex", flexDirection: "column", gap: "24px" }}>
         {saveStatus && (
           <AlertBanner
             type={saveStatus.includes("Erro") ? "error" : "success"}
@@ -1129,1236 +900,154 @@ export const SettingsSubView: React.FC = () => {
 
         {/* 1. SEÇÃO: CATEGORIAS, TAGS & STATUS */}
         <section id="categories-tags" style={{ scrollMarginTop: "72px" }}>
-          <div
-            style={{
-              background: "#ffffff",
-              borderRadius: "10px",
-              border: "1px solid #e2e8f0",
-              padding: "20px 24px",
-              display: "flex",
-              flexDirection: "column",
-              gap: "20px",
-            }}
-          >
-            <div
-              style={{
-                borderBottom: "1px solid #f1f5f9",
-                paddingBottom: "12px",
-              }}
-            >
-              <h3
-                style={{
-                  margin: 0,
-                  fontSize: "14.5px",
-                  fontWeight: 700,
-                  color: "#0f172a",
-                }}
-              >
-                Taxonomia & Governança
-              </h3>
-              <p
-                style={{
-                  margin: "2px 0 0 0",
-                  fontSize: "12px",
-                  color: "#64748b",
-                }}
-              >
-                Personalize categorias, tags e status com cores hexadecimais
-                integradas.
-              </p>
-            </div>
-
-            {/* 1.1 Categorias */}
-            <div
-              style={{ display: "flex", flexDirection: "column", gap: "8px" }}
-            >
-              <span
-                style={{ fontSize: "12px", fontWeight: 600, color: "#334155" }}
-              >
-                Categorias
-              </span>
-
-              {/* Lista de Chips com Edição Inline no Próprio Chip */}
-              <div
-                style={{
-                  display: "flex",
-                  flexWrap: "wrap",
-                  gap: "6px",
-                  alignItems: "center",
-                }}
-              >
-                {categories.map((cat, idx) => {
-                  const isEditing = editingCatIndex === idx;
-
-                  if (isEditing) {
-                    return (
-                      <div
-                        key={idx}
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: "5px",
-                          padding: "3px 6px 3px 8px",
-                          borderRadius: "14px",
-                          backgroundColor: `${editCatColor}16`,
-                          border: `1.5px solid ${editCatColor}`,
-                          fontSize: "12px",
-                          fontWeight: 600,
-                          color: editCatColor,
-                        }}
-                      >
-                        <ColorDotPicker
-                          color={editCatColor}
-                          onChange={setEditCatColor}
-                          size={14}
-                        />
-                        <input
-                          type="text"
-                          value={editCatName}
-                          onChange={(e) => setEditCatName(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") handleSaveEditCategory();
-                            if (e.key === "Escape") setEditingCatIndex(null);
-                          }}
-                          style={{
-                            border: "none",
-                            background: "transparent",
-                            outline: "none",
-                            fontSize: "12px",
-                            fontWeight: 600,
-                            width: `${Math.max(editCatName.length, 6)}ch`,
-                            color: editCatColor,
-                            padding: 0,
-                          }}
-                          autoFocus
-                        />
-                        <button
-                          type="button"
-                          onClick={handleSaveEditCategory}
-                          style={{
-                            background: "none",
-                            border: "none",
-                            cursor: "pointer",
-                            padding: 0,
-                            color: editCatColor,
-                            opacity: 0.8,
-                          }}
-                          title="Salvar (Enter)"
-                        >
-                          <Check size={12} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setEditingCatIndex(null)}
-                          style={{
-                            background: "none",
-                            border: "none",
-                            cursor: "pointer",
-                            padding: 0,
-                            color: "#94a3b8",
-                          }}
-                          title="Cancelar (Esc)"
-                        >
-                          <X size={12} />
-                        </button>
-                      </div>
-                    );
-                  }
-
-                  return (
-                    <div
-                      key={idx}
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: "6px",
-                        padding: "3px 8px 3px 10px",
-                        borderRadius: "14px",
-                        backgroundColor: `${cat.color}14`,
-                        border: `1px solid ${cat.color}40`,
-                        fontSize: "12px",
-                        fontWeight: 600,
-                        color: cat.color,
-                        transition: "all 0.12s ease",
-                      }}
-                    >
-                      <div
-                        style={{
-                          width: 6,
-                          height: 6,
-                          borderRadius: "50%",
-                          backgroundColor: cat.color,
-                        }}
-                      />
-                      <span
-                        onClick={() => handleStartEditCategory(idx)}
-                        style={{ cursor: "pointer" }}
-                        title="Clique para editar"
-                      >
-                        {cat.name.toUpperCase()}
-                      </span>
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "2px",
-                        }}
-                      >
-                        <button
-                          type="button"
-                          onClick={() => handleStartEditCategory(idx)}
-                          style={{
-                            background: "transparent",
-                            border: "none",
-                            cursor: "pointer",
-                            padding: "1px",
-                            display: "flex",
-                            alignItems: "center",
-                            color: cat.color,
-                            opacity: 0.6,
-                          }}
-                          title="Editar"
-                        >
-                          <Edit2 size={10} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleRequestRemoveCategory(idx)}
-                          style={{
-                            background: "transparent",
-                            border: "none",
-                            cursor: "pointer",
-                            padding: "1px",
-                            display: "flex",
-                            alignItems: "center",
-                            color: cat.color,
-                            opacity: 0.6,
-                          }}
-                          title="Remover"
-                        >
-                          <Trash2 size={10} />
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-
-                {/* Botão + ou Chip de Adicionar Categoria */}
-                {isAddingCategory ? (
-                  <div
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "5px",
-                      padding: "3px 6px 3px 8px",
-                      borderRadius: "14px",
-                      backgroundColor: `${newCatColor}16`,
-                      border: `1.5px solid ${newCatColor}`,
-                      fontSize: "12px",
-                      fontWeight: 600,
-                      color: newCatColor,
+          <Card variant="elevated">
+            <CardHeader
+              title="Taxonomia & Governança"
+              subtitle="Personalize categorias, tags, badges e status com cores integradas do sistema."
+            />
+            <CardContent>
+              <Stack gap="md">
+                {/* 1.1 Categorias */}
+                <Stack gap="xs">
+                  <span className="ui-text-subtitle ui-text-bold">Categorias</span>
+                  <TaxonomyChipEditor
+                    items={categories}
+                    editingIndex={editingCatIndex}
+                    editName={editCatName}
+                    editColor={editCatColor}
+                    onStartEdit={handleStartEditCategory}
+                    onEditNameChange={setEditCatName}
+                    onEditColorChange={setEditCatColor}
+                    onSaveEdit={handleSaveEditCategory}
+                    onCancelEdit={() => setEditingCatIndex(null)}
+                    onRequestRemove={handleRequestRemoveCategory}
+                    isAdding={isAddingCategory}
+                    newName={newCatName}
+                    newColor={newCatColor}
+                    onStartAdd={() => setIsAddingCategory(true)}
+                    onNewNameChange={setNewCatName}
+                    onNewColorChange={setNewCatColor}
+                    onSaveAdd={handleAddCategory}
+                    onCancelAdd={() => {
+                      setIsAddingCategory(false);
+                      setNewCatName("");
                     }}
-                  >
-                    <ColorDotPicker
-                      color={newCatColor}
-                      onChange={setNewCatColor}
-                      size={14}
-                    />
-                    <input
-                      type="text"
-                      placeholder="categoria..."
-                      value={newCatName}
-                      onChange={(e) => setNewCatName(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") handleAddCategory();
-                        if (e.key === "Escape") {
-                          setIsAddingCategory(false);
-                          setNewCatName("");
-                        }
-                      }}
-                      style={{
-                        border: "none",
-                        background: "transparent",
-                        outline: "none",
-                        fontSize: "12px",
-                        fontWeight: 600,
-                        width: `${Math.max(newCatName.length, 10)}ch`,
-                        color: newCatColor,
-                        padding: 0,
-                      }}
-                      autoFocus
-                    />
-                    <button
-                      type="button"
-                      onClick={handleAddCategory}
-                      disabled={!newCatName.trim()}
-                      style={{
-                        background: "none",
-                        border: "none",
-                        cursor: newCatName.trim() ? "pointer" : "default",
-                        padding: 0,
-                        color: newCatColor,
-                        opacity: newCatName.trim() ? 0.9 : 0.4,
-                      }}
-                      title="Criar (Enter)"
-                    >
-                      <Check size={12} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsAddingCategory(false);
-                        setNewCatName("");
-                      }}
-                      style={{
-                        background: "none",
-                        border: "none",
-                        cursor: "pointer",
-                        padding: 0,
-                        color: "#94a3b8",
-                      }}
-                      title="Cancelar (Esc)"
-                    >
-                      <X size={12} />
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setIsAddingCategory(true)}
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      width: "24px",
-                      height: "24px",
-                      borderRadius: "50%",
-                      border: "1px dashed #cbd5e1",
-                      background: "#ffffff",
-                      color: "#64748b",
-                      cursor: "pointer",
-                      padding: 0,
-                      transition: "all 0.12s ease",
+                    placeholder="categoria..."
+                    addTooltip="Adicionar Categoria"
+                  />
+                </Stack>
+
+                <Divider />
+
+                {/* 1.2 Tipos de Documento / Badges */}
+                <Stack gap="xs">
+                  <Row align="center" justify="between">
+                    <span className="ui-text-subtitle ui-text-bold">Tipos de Documento (Badges)</span>
+                    <span className="ui-text-caption ui-text-muted">Tipologia estrutural única por documento (ex: RFC, ADR, PRD, DOC)</span>
+                  </Row>
+                  <TaxonomyChipEditor
+                    items={badges}
+                    editingIndex={editingBadgeIndex}
+                    editName={editBadgeName}
+                    editColor={editBadgeColor}
+                    onStartEdit={handleStartEditBadge}
+                    onEditNameChange={setEditBadgeName}
+                    onEditColorChange={setEditBadgeColor}
+                    onSaveEdit={handleSaveEditBadge}
+                    onCancelEdit={() => setEditingBadgeIndex(null)}
+                    onRequestRemove={handleRequestRemoveBadge}
+                    isAdding={isAddingBadge}
+                    newName={newBadgeName}
+                    newColor={newBadgeColor}
+                    onStartAdd={() => setIsAddingBadge(true)}
+                    onNewNameChange={setNewBadgeName}
+                    onNewColorChange={setNewBadgeColor}
+                    onSaveAdd={handleAddBadge}
+                    onCancelAdd={() => {
+                      setIsAddingBadge(false);
+                      setNewBadgeName("");
                     }}
-                    title="Adicionar Categoria"
-                  >
-                    <Plus size={13} />
-                  </button>
-                )}
-              </div>
-            </div>
+                    placeholder="tipo..."
+                    addTooltip="Adicionar Tipo de Documento / Badge"
+                  />
+                </Stack>
 
-            {/* 1.2 Tipos de Documento / Badges */}
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "8px",
-                borderTop: "1px solid #f8fafc",
-                paddingTop: "14px",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                }}
-              >
-                <span
-                  style={{
-                    fontSize: "12px",
-                    fontWeight: 600,
-                    color: "#334155",
-                  }}
-                >
-                  Tipos de Documento (Badges)
-                </span>
-                <span style={{ fontSize: "11px", color: "#94a3b8" }}>
-                  Tipologia estrutural única por documento (ex: RFC, ADR, PRD,
-                  DOC)
-                </span>
-              </div>
+                <Divider />
 
-              {/* Lista de Chips de Badges com Edição Inline */}
-              <div
-                style={{
-                  display: "flex",
-                  flexWrap: "wrap",
-                  gap: "6px",
-                  alignItems: "center",
-                }}
-              >
-                {badges.map((bdg, idx) => {
-                  const isEditing = editingBadgeIndex === idx;
-                  const bdgColor = bdg.color || "#3b82f6";
-
-                  if (isEditing) {
-                    return (
-                      <div
-                        key={idx}
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: "5px",
-                          padding: "2px 6px 2px 8px",
-                          borderRadius: "12px",
-                          backgroundColor: `${editBadgeColor}16`,
-                          border: `1.5px solid ${editBadgeColor}`,
-                          fontSize: "11px",
-                          fontWeight: 700,
-                          color: editBadgeColor,
-                          letterSpacing: "0.04em",
-                        }}
-                      >
-                        <ColorDotPicker
-                          color={editBadgeColor}
-                          onChange={setEditBadgeColor}
-                          size={14}
-                        />
-                        <input
-                          type="text"
-                          value={editBadgeName}
-                          onChange={(e) =>
-                            setEditBadgeName(e.target.value.toUpperCase())
-                          }
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") handleSaveEditBadge();
-                            if (e.key === "Escape") setEditingBadgeIndex(null);
-                          }}
-                          style={{
-                            border: "none",
-                            background: "transparent",
-                            outline: "none",
-                            fontSize: "11px",
-                            fontWeight: 700,
-                            letterSpacing: "0.04em",
-                            width: `${Math.max(editBadgeName.length, 4)}ch`,
-                            color: editBadgeColor,
-                            padding: 0,
-                            textTransform: "uppercase",
-                          }}
-                          autoFocus
-                        />
-                        <button
-                          type="button"
-                          onClick={handleSaveEditBadge}
-                          style={{
-                            background: "none",
-                            border: "none",
-                            cursor: "pointer",
-                            padding: 0,
-                            color: editBadgeColor,
-                            opacity: 0.85,
-                          }}
-                          title="Salvar (Enter)"
-                        >
-                          <Check size={12} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setEditingBadgeIndex(null)}
-                          style={{
-                            background: "none",
-                            border: "none",
-                            cursor: "pointer",
-                            padding: 0,
-                            color: "#94a3b8",
-                          }}
-                          title="Cancelar (Esc)"
-                        >
-                          <X size={12} />
-                        </button>
-                      </div>
-                    );
-                  }
-
-                  return (
-                    <div
-                      key={idx}
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: "5px",
-                        padding: "2px 6px 2px 8px",
-                        borderRadius: "12px",
-                        backgroundColor: `${bdgColor}14`,
-                        border: `1px solid ${bdgColor}45`,
-                        fontSize: "11px",
-                        fontWeight: 700,
-                        letterSpacing: "0.04em",
-                        color: bdgColor,
-                        transition: "all 0.12s ease",
-                      }}
-                    >
-                      <div
-                        style={{
-                          width: 5,
-                          height: 5,
-                          borderRadius: "50%",
-                          backgroundColor: bdgColor,
-                        }}
-                      />
-                      <span
-                        onClick={() => handleStartEditBadge(idx)}
-                        style={{ cursor: "pointer" }}
-                        title="Clique para editar tipo"
-                      >
-                        {bdg.name.toUpperCase()}
-                      </span>
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "1px",
-                        }}
-                      >
-                        <button
-                          type="button"
-                          onClick={() => handleStartEditBadge(idx)}
-                          style={{
-                            background: "transparent",
-                            border: "none",
-                            cursor: "pointer",
-                            padding: "1px",
-                            display: "flex",
-                            alignItems: "center",
-                            color: bdgColor,
-                            opacity: 0.6,
-                          }}
-                          title="Editar"
-                        >
-                          <Edit2 size={9} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleRequestRemoveBadge(idx)}
-                          style={{
-                            background: "transparent",
-                            border: "none",
-                            cursor: "pointer",
-                            padding: "1px",
-                            display: "flex",
-                            alignItems: "center",
-                            color: bdgColor,
-                            opacity: 0.6,
-                          }}
-                          title="Remover"
-                        >
-                          <Trash2 size={9} />
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-
-                {/* Botão + ou Chip de Adicionar Badge */}
-                {isAddingBadge ? (
-                  <div
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "5px",
-                      padding: "2px 6px 2px 8px",
-                      borderRadius: "12px",
-                      backgroundColor: `${newBadgeColor}16`,
-                      border: `1.5px solid ${newBadgeColor}`,
-                      fontSize: "11px",
-                      fontWeight: 700,
-                      letterSpacing: "0.04em",
-                      color: newBadgeColor,
+                {/* 1.3 Tags */}
+                <Stack gap="xs">
+                  <span className="ui-text-subtitle ui-text-bold">Tags</span>
+                  <TaxonomyChipEditor
+                    items={tags}
+                    editingIndex={editingTagIndex}
+                    editName={editTagName}
+                    editColor={editTagColor}
+                    onStartEdit={handleStartEditTag}
+                    onEditNameChange={setEditTagName}
+                    onEditColorChange={setEditTagColor}
+                    onSaveEdit={handleSaveEditTag}
+                    onCancelEdit={() => setEditingTagIndex(null)}
+                    onRequestRemove={handleRequestRemoveTag}
+                    isAdding={isAddingTag}
+                    newName={newTagName}
+                    newColor={newTagColor}
+                    onStartAdd={() => setIsAddingTag(true)}
+                    onNewNameChange={setNewTagName}
+                    onNewColorChange={setNewTagColor}
+                    onSaveAdd={handleAddTag}
+                    onCancelAdd={() => {
+                      setIsAddingTag(false);
+                      setNewTagName("");
                     }}
-                  >
-                    <ColorDotPicker
-                      color={newBadgeColor}
-                      onChange={setNewBadgeColor}
-                      size={14}
-                    />
-                    <input
-                      type="text"
-                      placeholder="TIPO..."
-                      value={newBadgeName}
-                      onChange={(e) =>
-                        setNewBadgeName(e.target.value.toUpperCase())
-                      }
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") handleAddBadge();
-                        if (e.key === "Escape") {
-                          setIsAddingBadge(false);
-                          setNewBadgeName("");
-                        }
-                      }}
-                      style={{
-                        border: "none",
-                        background: "transparent",
-                        outline: "none",
-                        fontSize: "11px",
-                        fontWeight: 700,
-                        letterSpacing: "0.04em",
-                        width: `${Math.max(newBadgeName.length, 6)}ch`,
-                        color: newBadgeColor,
-                        padding: 0,
-                        textTransform: "uppercase",
-                      }}
-                      autoFocus
-                    />
-                    <button
-                      type="button"
-                      onClick={handleAddBadge}
-                      disabled={!newBadgeName.trim()}
-                      style={{
-                        background: "none",
-                        border: "none",
-                        cursor: newBadgeName.trim() ? "pointer" : "default",
-                        padding: 0,
-                        color: newBadgeColor,
-                        opacity: newBadgeName.trim() ? 0.9 : 0.4,
-                      }}
-                      title="Criar (Enter)"
-                    >
-                      <Check size={12} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsAddingBadge(false);
-                        setNewBadgeName("");
-                      }}
-                      style={{
-                        background: "none",
-                        border: "none",
-                        cursor: "pointer",
-                        padding: 0,
-                        color: "#94a3b8",
-                      }}
-                      title="Cancelar (Esc)"
-                    >
-                      <X size={12} />
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setIsAddingBadge(true)}
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      width: "22px",
-                      height: "22px",
-                      borderRadius: "50%",
-                      border: "1px dashed #cbd5e1",
-                      background: "#ffffff",
-                      color: "#64748b",
-                      cursor: "pointer",
-                      padding: 0,
-                      transition: "all 0.12s ease",
+                    placeholder="tag..."
+                    addTooltip="Adicionar Tag"
+                  />
+                </Stack>
+
+                <Divider />
+
+                {/* 1.4 Status */}
+                <Stack gap="xs">
+                  <span className="ui-text-subtitle ui-text-bold">Status de Documento</span>
+                  <TaxonomyChipEditor
+                    items={statuses}
+                    editingIndex={editingStatusIndex}
+                    editName={editStatusName}
+                    editColor={editStatusColor}
+                    onStartEdit={handleStartEditStatus}
+                    onEditNameChange={setEditStatusName}
+                    onEditColorChange={setEditStatusColor}
+                    onSaveEdit={handleSaveEditStatus}
+                    onCancelEdit={() => setEditingStatusIndex(null)}
+                    onRequestRemove={handleRequestRemoveStatus}
+                    isAdding={isAddingStatus}
+                    newName={newStatusName}
+                    newColor={newStatusColor}
+                    onStartAdd={() => setIsAddingStatus(true)}
+                    onNewNameChange={setNewStatusName}
+                    onNewColorChange={setNewStatusColor}
+                    onSaveAdd={handleAddStatus}
+                    onCancelAdd={() => {
+                      setIsAddingStatus(false);
+                      setNewStatusName("");
                     }}
-                    title="Adicionar Tipo de Documento / Badge"
-                  >
-                    <Plus size={12} />
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* 1.3 Tags */}
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "8px",
-                borderTop: "1px solid #f8fafc",
-                paddingTop: "14px",
-              }}
-            >
-              <span
-                style={{ fontSize: "12px", fontWeight: 600, color: "#334155" }}
-              >
-                Tags
-              </span>
-
-              {/* Lista de Chips de Tags com Edição Inline */}
-              <div
-                style={{
-                  display: "flex",
-                  flexWrap: "wrap",
-                  gap: "6px",
-                  alignItems: "center",
-                }}
-              >
-                {tags.map((tag, idx) => {
-                  const isEditing = editingTagIndex === idx;
-
-                  if (isEditing) {
-                    return (
-                      <div
-                        key={idx}
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: "5px",
-                          padding: "2px 6px 2px 8px",
-                          borderRadius: "12px",
-                          backgroundColor: `${editTagColor}16`,
-                          border: `1.5px solid ${editTagColor}`,
-                          fontSize: "11.5px",
-                          fontWeight: 500,
-                          color: editTagColor,
-                        }}
-                      >
-                        <ColorDotPicker
-                          color={editTagColor}
-                          onChange={setEditTagColor}
-                          size={14}
-                        />
-                        <span style={{ opacity: 0.7 }}>#</span>
-                        <input
-                          type="text"
-                          value={editTagName}
-                          onChange={(e) => setEditTagName(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") handleSaveEditTag();
-                            if (e.key === "Escape") setEditingTagIndex(null);
-                          }}
-                          style={{
-                            border: "none",
-                            background: "transparent",
-                            outline: "none",
-                            fontSize: "11.5px",
-                            fontWeight: 500,
-                            width: `${Math.max(editTagName.length, 5)}ch`,
-                            color: editTagColor,
-                            padding: 0,
-                          }}
-                          autoFocus
-                        />
-                        <button
-                          type="button"
-                          onClick={handleSaveEditTag}
-                          style={{
-                            background: "none",
-                            border: "none",
-                            cursor: "pointer",
-                            padding: 0,
-                            color: editTagColor,
-                            opacity: 0.8,
-                          }}
-                          title="Salvar (Enter)"
-                        >
-                          <Check size={12} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setEditingTagIndex(null)}
-                          style={{
-                            background: "none",
-                            border: "none",
-                            cursor: "pointer",
-                            padding: 0,
-                            color: "#94a3b8",
-                          }}
-                          title="Cancelar (Esc)"
-                        >
-                          <X size={12} />
-                        </button>
-                      </div>
-                    );
-                  }
-
-                  return (
-                    <div
-                      key={idx}
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: "4px",
-                        padding: "2px 6px 2px 8px",
-                        borderRadius: "12px",
-                        backgroundColor: `${tag.color}12`,
-                        border: `1px solid ${tag.color}35`,
-                        fontSize: "11.5px",
-                        fontWeight: 500,
-                        color: tag.color,
-                        transition: "all 0.12s ease",
-                      }}
-                    >
-                      <span
-                        onClick={() => handleStartEditTag(idx)}
-                        style={{ cursor: "pointer" }}
-                        title="Clique para editar tag"
-                      >
-                        #{tag.name}
-                      </span>
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "1px",
-                        }}
-                      >
-                        <button
-                          type="button"
-                          onClick={() => handleStartEditTag(idx)}
-                          style={{
-                            background: "transparent",
-                            border: "none",
-                            cursor: "pointer",
-                            padding: "1px",
-                            display: "flex",
-                            alignItems: "center",
-                            color: tag.color,
-                            opacity: 0.6,
-                          }}
-                          title="Editar"
-                        >
-                          <Edit2 size={9} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleRequestRemoveTag(idx)}
-                          style={{
-                            background: "transparent",
-                            border: "none",
-                            cursor: "pointer",
-                            padding: "1px",
-                            display: "flex",
-                            alignItems: "center",
-                            color: tag.color,
-                            opacity: 0.6,
-                          }}
-                          title="Remover"
-                        >
-                          <Trash2 size={9} />
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-
-                {/* Botão + ou Chip de Adicionar Tag */}
-                {isAddingTag ? (
-                  <div
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "5px",
-                      padding: "2px 6px 2px 8px",
-                      borderRadius: "12px",
-                      backgroundColor: `${newTagColor}16`,
-                      border: `1.5px solid ${newTagColor}`,
-                      fontSize: "11.5px",
-                      fontWeight: 500,
-                      color: newTagColor,
-                    }}
-                  >
-                    <ColorDotPicker
-                      color={newTagColor}
-                      onChange={setNewTagColor}
-                      size={14}
-                    />
-                    <span style={{ opacity: 0.7 }}>#</span>
-                    <input
-                      type="text"
-                      placeholder="tag..."
-                      value={newTagName}
-                      onChange={(e) => setNewTagName(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") handleAddTag();
-                        if (e.key === "Escape") {
-                          setIsAddingTag(false);
-                          setNewTagName("");
-                        }
-                      }}
-                      style={{
-                        border: "none",
-                        background: "transparent",
-                        outline: "none",
-                        fontSize: "11.5px",
-                        fontWeight: 500,
-                        width: `${Math.max(newTagName.length, 6)}ch`,
-                        color: newTagColor,
-                        padding: 0,
-                      }}
-                      autoFocus
-                    />
-                    <button
-                      type="button"
-                      onClick={handleAddTag}
-                      disabled={!newTagName.trim()}
-                      style={{
-                        background: "none",
-                        border: "none",
-                        cursor: newTagName.trim() ? "pointer" : "default",
-                        padding: 0,
-                        color: newTagColor,
-                        opacity: newTagName.trim() ? 0.9 : 0.4,
-                      }}
-                      title="Criar (Enter)"
-                    >
-                      <Check size={12} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsAddingTag(false);
-                        setNewTagName("");
-                      }}
-                      style={{
-                        background: "none",
-                        border: "none",
-                        cursor: "pointer",
-                        padding: 0,
-                        color: "#94a3b8",
-                      }}
-                      title="Cancelar (Esc)"
-                    >
-                      <X size={12} />
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setIsAddingTag(true)}
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      width: "22px",
-                      height: "22px",
-                      borderRadius: "50%",
-                      border: "1px dashed #cbd5e1",
-                      background: "#ffffff",
-                      color: "#64748b",
-                      cursor: "pointer",
-                      padding: 0,
-                      transition: "all 0.12s ease",
-                    }}
-                    title="Adicionar Tag"
-                  >
-                    <Plus size={12} />
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* 1.3 Statuses (Com Cores Rainbow e Formatação Automática) */}
-            <div
-              style={{
-                borderTop: "1px solid #f8fafc",
-                paddingTop: "14px",
-                display: "flex",
-                flexDirection: "column",
-                gap: "8px",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                }}
-              >
-                <span
-                  style={{
-                    fontSize: "12px",
-                    fontWeight: 600,
-                    color: "#334155",
-                  }}
-                >
-                  Status de Governança
-                </span>
-              </div>
-
-              {/* Chips de Status com Edição Inline */}
-              <div
-                style={{
-                  display: "flex",
-                  flexWrap: "wrap",
-                  gap: "6px",
-                  alignItems: "center",
-                }}
-              >
-                {statuses.map((st, idx) => {
-                  const isEditing = editingStatusIndex === idx;
-                  const stColor = st.color || "#22c55e";
-
-                  if (isEditing) {
-                    return (
-                      <div
-                        key={idx}
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: "5px",
-                          padding: "3px 6px 3px 8px",
-                          borderRadius: "14px",
-                          backgroundColor: `${editStatusColor}16`,
-                          border: `1.5px solid ${editStatusColor}`,
-                          fontSize: "12px",
-                          fontWeight: 600,
-                          color: editStatusColor,
-                        }}
-                      >
-                        <ColorDotPicker
-                          color={editStatusColor}
-                          onChange={setEditStatusColor}
-                          size={14}
-                        />
-                        <input
-                          type="text"
-                          value={editStatusName}
-                          onChange={(e) => setEditStatusName(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") handleSaveEditStatus();
-                            if (e.key === "Escape") setEditingStatusIndex(null);
-                          }}
-                          style={{
-                            border: "none",
-                            background: "transparent",
-                            outline: "none",
-                            fontSize: "12px",
-                            fontWeight: 600,
-                            width: `${Math.max(editStatusName.length, 6)}ch`,
-                            color: editStatusColor,
-                            padding: 0,
-                          }}
-                          autoFocus
-                        />
-                        <button
-                          type="button"
-                          onClick={handleSaveEditStatus}
-                          style={{
-                            background: "none",
-                            border: "none",
-                            cursor: "pointer",
-                            padding: 0,
-                            color: editStatusColor,
-                            opacity: 0.85,
-                          }}
-                          title="Salvar (Enter)"
-                        >
-                          <Check size={12} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setEditingStatusIndex(null)}
-                          style={{
-                            background: "none",
-                            border: "none",
-                            cursor: "pointer",
-                            padding: 0,
-                            color: "#94a3b8",
-                          }}
-                          title="Cancelar (Esc)"
-                        >
-                          <X size={12} />
-                        </button>
-                      </div>
-                    );
-                  }
-
-                  return (
-                    <div
-                      key={idx}
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: "6px",
-                        padding: "3px 8px 3px 10px",
-                        borderRadius: "14px",
-                        backgroundColor: `${stColor}14`,
-                        border: `1px solid ${stColor}40`,
-                        fontSize: "12px",
-                        fontWeight: 600,
-                        color: stColor,
-                        transition: "all 0.12s ease",
-                      }}
-                    >
-                      <div
-                        style={{
-                          width: 6,
-                          height: 6,
-                          borderRadius: "50%",
-                          backgroundColor: stColor,
-                        }}
-                      />
-                      <span
-                        onClick={() => handleStartEditStatus(idx)}
-                        style={{ cursor: "pointer" }}
-                        title="Clique para editar status"
-                      >
-                        {st.name.toUpperCase()}
-                      </span>
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "2px",
-                        }}
-                      >
-                        <button
-                          type="button"
-                          onClick={() => handleStartEditStatus(idx)}
-                          style={{
-                            background: "transparent",
-                            border: "none",
-                            cursor: "pointer",
-                            padding: "1px",
-                            display: "flex",
-                            alignItems: "center",
-                            color: stColor,
-                            opacity: 0.6,
-                          }}
-                          title="Editar"
-                        >
-                          <Edit2 size={10} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleRequestRemoveStatus(idx)}
-                          style={{
-                            background: "transparent",
-                            border: "none",
-                            cursor: "pointer",
-                            padding: "1px",
-                            display: "flex",
-                            alignItems: "center",
-                            color: stColor,
-                            opacity: 0.6,
-                          }}
-                          title="Remover"
-                        >
-                          <Trash2 size={10} />
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-
-                {/* Botão + ou Chip de Adicionar Status */}
-                {isAddingStatus ? (
-                  <div
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "5px",
-                      padding: "3px 6px 3px 8px",
-                      borderRadius: "14px",
-                      backgroundColor: `${newStatusColor}16`,
-                      border: `1.5px solid ${newStatusColor}`,
-                      fontSize: "12px",
-                      fontWeight: 600,
-                      color: newStatusColor,
-                    }}
-                  >
-                    <ColorDotPicker
-                      color={newStatusColor}
-                      onChange={setNewStatusColor}
-                      size={14}
-                    />
-                    <input
-                      type="text"
-                      placeholder="status..."
-                      value={newStatusName}
-                      onChange={(e) => setNewStatusName(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") handleAddStatus();
-                        if (e.key === "Escape") {
-                          setIsAddingStatus(false);
-                          setNewStatusName("");
-                        }
-                      }}
-                      style={{
-                        border: "none",
-                        background: "transparent",
-                        outline: "none",
-                        fontSize: "12px",
-                        fontWeight: 600,
-                        width: `${Math.max(newStatusName.length, 8)}ch`,
-                        color: newStatusColor,
-                        padding: 0,
-                      }}
-                      autoFocus
-                    />
-                    <button
-                      type="button"
-                      onClick={handleAddStatus}
-                      disabled={!newStatusName.trim()}
-                      style={{
-                        background: "none",
-                        border: "none",
-                        cursor: newStatusName.trim() ? "pointer" : "default",
-                        padding: 0,
-                        color: newStatusColor,
-                        opacity: newStatusName.trim() ? 0.9 : 0.4,
-                      }}
-                      title="Criar (Enter)"
-                    >
-                      <Check size={12} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsAddingStatus(false);
-                        setNewStatusName("");
-                      }}
-                      style={{
-                        background: "none",
-                        border: "none",
-                        cursor: "pointer",
-                        padding: 0,
-                        color: "#94a3b8",
-                      }}
-                      title="Cancelar (Esc)"
-                    >
-                      <X size={12} />
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setIsAddingStatus(true)}
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      width: "24px",
-                      height: "24px",
-                      borderRadius: "50%",
-                      border: "1px dashed #cbd5e1",
-                      background: "#ffffff",
-                      color: "#64748b",
-                      cursor: "pointer",
-                      padding: 0,
-                      transition: "all 0.12s ease",
-                    }}
-                    title="Adicionar Status"
-                  >
-                    <Plus size={13} />
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
+                    placeholder="status..."
+                    addTooltip="Adicionar Status"
+                  />
+                </Stack>
+              </Stack>
+            </CardContent>
+          </Card>
         </section>
 
         {/* 2. SEÇÃO: MOTOR DE IA E HARNESS DE AGENTES */}
-        <section
-          id="ai-engine"
-          style={{
-            scrollMarginTop: "72px",
-            display: "flex",
-            flexDirection: "column",
-            gap: 16,
-          }}
-        >
+        <section id="ai-engine" className="ui-stack ui-stack--md" style={{ scrollMarginTop: "72px" }}>
           {/* CARD 1: AGENTES CONECTADOS & CLI HARNESS */}
           <Card variant="elevated">
             <CardHeader
               title={
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <Terminal size={17} style={{ color: "#2563eb" }} />
+                <div className="ui-row ui-row--align-center ui-row--sm">
+                  <Terminal size={17} className="ui-text-primary" />
                   <span>Agentes Conectados & CLI Harness (Proxy)</span>
                 </div>
               }
@@ -2378,280 +1067,149 @@ export const SettingsSubView: React.FC = () => {
               }
             />
 
-            <CardContent
-              style={{ display: "flex", flexDirection: "column", gap: 16 }}
-            >
-              {/* Seleção de Harness */}
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-                  gap: 10,
-                }}
-              >
-                {[
-                  {
-                    id: "antigravity",
-                    name: "Google Antigravity Agent",
-                    cliName: "agy",
-                    sub: "Agente multi-ferramenta com streaming SSE e raciocínio contextual",
-                    icon: <Zap size={15} style={{ color: "#2563eb" }} />,
-                    detected:
-                      detectedProviders.find((p) => p.id === "antigravity")
-                        ?.isAvailable ?? true,
-                    statusMsg:
-                      detectedProviders.find((p) => p.id === "antigravity")
-                        ?.statusMessage || "Detectado em ~/.local/bin/agy",
-                  },
-                  {
-                    id: "claude-code",
-                    name: "Claude Code CLI",
-                    cliName: "claude",
-                    sub: "Harness conectado ao agente oficial Claude Code CLI",
-                    icon: <Sparkles size={15} style={{ color: "#d97706" }} />,
-                    detected:
-                      detectedProviders.find((p) => p.id === "claude-code")
-                        ?.isAvailable ?? true,
-                    statusMsg:
-                      detectedProviders.find((p) => p.id === "claude-code")
-                        ?.statusMessage || "Detectado em ~/.local/bin/claude",
-                  },
-                  {
-                    id: "direct-api",
-                    name: "Direct API Fallback",
-                    cliName: "RAW / SDK",
-                    sub: "Chamadas diretas de modelo via SDK e chaves de API em nuvem",
-                    icon: <Cpu size={15} style={{ color: "#10b981" }} />,
-                    detected: true,
-                    statusMsg: "Sempre disponível com chaves de API",
-                  },
-                ].map((item) => {
-                  const isSelected = harnessProvider === item.id;
-                  return (
-                    <div
-                      key={item.id}
-                      onClick={() => setHarnessProvider(item.id)}
-                      style={{
-                        padding: "12px 14px",
-                        borderRadius: "8px",
-                        border: isSelected
-                          ? "2px solid #2563eb"
-                          : "1px solid #e2e8f0",
-                        background: isSelected ? "#eff6ff" : "#ffffff",
-                        cursor: "pointer",
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: 6,
-                        transition: "all 0.15s ease",
-                        boxShadow: isSelected
-                          ? "0 2px 8px rgba(37,99,235,0.12)"
-                          : "none",
-                      }}
-                    >
+            <CardContent>
+              <Stack gap="md">
+                {/* Seleção de Harness */}
+                <div className="ui-grid-cards">
+                  {[
+                    {
+                      id: "antigravity",
+                      name: "Google Antigravity Agent",
+                      cliName: "agy",
+                      sub: "Agente multi-ferramenta com streaming SSE e raciocínio contextual",
+                      icon: <Zap size={15} className="ui-text-primary" />,
+                      detected:
+                        detectedProviders.find((p) => p.id === "antigravity")
+                          ?.isAvailable ?? true,
+                      statusMsg:
+                        detectedProviders.find((p) => p.id === "antigravity")
+                          ?.statusMessage || "Detectado em ~/.local/bin/agy",
+                    },
+                    {
+                      id: "claude-code",
+                      name: "Claude Code CLI",
+                      cliName: "claude",
+                      sub: "Harness conectado ao agente oficial Claude Code CLI",
+                      icon: <Sparkles size={15} className="ui-text-warning" />,
+                      detected:
+                        detectedProviders.find((p) => p.id === "claude-code")
+                          ?.isAvailable ?? true,
+                      statusMsg:
+                        detectedProviders.find((p) => p.id === "claude-code")
+                          ?.statusMessage || "Detectado em ~/.local/bin/claude",
+                    },
+                    {
+                      id: "direct-api",
+                      name: "Direct API Fallback",
+                      cliName: "RAW / SDK",
+                      sub: "Chamadas diretas de modelo via SDK e chaves de API em nuvem",
+                      icon: <Cpu size={15} className="ui-text-success" />,
+                      detected: true,
+                      statusMsg: "Sempre disponível com chaves de API",
+                    },
+                  ].map((item) => {
+                    const isSelected = harnessProvider === item.id;
+                    return (
                       <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                        }}
+                        key={item.id}
+                        onClick={() => setHarnessProvider(item.id)}
+                        className={`ui-select-tile ${isSelected ? "ui-select-tile--selected" : ""}`}
                       >
-                        <div
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 6,
-                          }}
-                        >
-                          {item.icon}
-                          <strong
-                            style={{
-                              fontSize: "13px",
-                              color: isSelected ? "#1d4ed8" : "#0f172a",
-                            }}
-                          >
-                            {item.name}
-                          </strong>
+                        <div className="ui-select-tile__header">
+                          <div className="ui-row ui-row--align-center ui-row--xs">
+                            {item.icon}
+                            <strong className="ui-text-title">{item.name}</strong>
+                          </div>
+                          <Badge variant={item.detected ? "success" : "danger"} size="sm" dot>
+                            {item.detected ? "Detectado" : "Não Localizado"}
+                          </Badge>
                         </div>
-                        <span
-                          style={{
-                            fontSize: "10px",
-                            fontWeight: 600,
-                            padding: "2px 6px",
-                            borderRadius: "12px",
-                            background: item.detected ? "#dcfce7" : "#fee2e2",
-                            color: item.detected ? "#15803d" : "#b91c1c",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 4,
-                          }}
-                        >
-                          <span
-                            style={{
-                              width: 6,
-                              height: 6,
-                              borderRadius: "50%",
-                              background: item.detected ? "#16a34a" : "#dc2626",
-                            }}
-                          />
-                          {item.detected ? "Detectado" : "Não Localizado"}
+                        <p className="ui-select-tile__sub">{item.sub}</p>
+                        <span className={`ui-text-caption ${item.detected ? "ui-text-success" : "ui-text-danger"}`}>
+                          {item.statusMsg}
                         </span>
                       </div>
-                      <p
-                        style={{
-                          fontSize: "11.5px",
-                          color: "#64748b",
-                          margin: 0,
-                          lineHeight: 1.4,
-                        }}
-                      >
-                        {item.sub}
-                      </p>
-                      <span
-                        style={{
-                          fontSize: "10px",
-                          color: item.detected ? "#059669" : "#dc2626",
-                          fontWeight: 500,
-                        }}
-                      >
-                        {item.statusMsg}
-                      </span>
+                    );
+                  })}
+                </div>
+
+                {/* Parâmetros do Agente: Nível de Raciocínio (Effort) & Teste */}
+                <div className="ui-grid-2cols">
+                  <FormField label="Raciocínio do Agente:">
+                    <div className="ui-segmented-group">
+                      {[
+                        { id: "low", label: "⚡ Rápido", sub: "" },
+                        { id: "medium", label: "⚖️ Equilibrado", sub: "" },
+                        { id: "high", label: "🧠 Profundo", sub: "" },
+                      ].map((eff) => {
+                        const isEffSelected = agentEffort === eff.id;
+                        return (
+                          <button
+                            key={eff.id}
+                            type="button"
+                            onClick={() => setAgentEffort(eff.id as any)}
+                            className={`ui-segmented-btn ${isEffSelected ? "ui-segmented-btn--active" : ""}`}
+                          >
+                            <div>{eff.label}</div>
+                            <div className="ui-text-caption ui-text-muted">{eff.sub}</div>
+                          </button>
+                        );
+                      })}
                     </div>
-                  );
-                })}
-              </div>
+                  </FormField>
 
-              {/* Parâmetros do Agente: Nível de Raciocínio (Effort) & Teste */}
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: 14,
-                  alignItems: "center",
-                }}
-              >
-                <FormField label="Raciocínio do Agente:">
-                  <div style={{ display: "flex", gap: 8 }}>
-                    {[
-                      { id: "low", label: "⚡ Rápido", sub: "" },
-                      {
-                        id: "medium",
-                        label: "⚖️ Equilibrado",
-                        sub: "",
-                      },
-                      {
-                        id: "high",
-                        label: "🧠 Profundo",
-                        sub: "",
-                      },
-                    ].map((eff) => {
-                      const isEffSelected = agentEffort === eff.id;
-                      return (
-                        <button
-                          key={eff.id}
-                          type="button"
-                          onClick={() => setAgentEffort(eff.id as any)}
-                          style={{
-                            flex: 1,
-                            padding: "8px 6px",
-                            borderRadius: "6px",
-                            border: isEffSelected
-                              ? "1.5px solid #2563eb"
-                              : "1px solid #cbd5e1",
-                            background: isEffSelected ? "#eff6ff" : "#ffffff",
-                            color: isEffSelected ? "#1d4ed8" : "#475569",
-                            fontSize: "12px",
-                            fontWeight: isEffSelected ? 600 : 500,
-                            cursor: "pointer",
-                            transition: "all 0.12s ease",
-                            textAlign: "center",
-                          }}
-                        >
-                          <div>{eff.label}</div>
-                          <div style={{ fontSize: "9.5px", color: "#64748b" }}>
-                            {eff.sub}
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </FormField>
-
-                <div
-                  style={{ display: "flex", flexDirection: "column", gap: 6 }}
-                >
-                  <label
-                    style={{
-                      fontSize: "12px",
-                      fontWeight: 600,
-                      color: "#334155",
-                    }}
-                  >
-                    Status da Conexão CLI:
-                  </label>
-                  <div
-                    style={{ display: "flex", gap: 8, alignItems: "center" }}
-                  >
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      leftIcon={
-                        <RefreshCw
-                          size={13}
-                          className={isCheckingHarness ? "spinning" : ""}
-                        />
-                      }
-                      onClick={checkHarnessProviders}
-                      disabled={isCheckingHarness}
-                    >
-                      {isCheckingHarness
-                        ? "Verificando..."
-                        : "Testar Detecção de CLIs"}
-                    </Button>
-                    {harnessCheckFeedback && (
-                      <span
-                        style={{
-                          fontSize: "11px",
-                          color: "#16a34a",
-                          fontWeight: 500,
-                        }}
+                  <div className="ui-stack ui-stack--xs">
+                    <label className="ui-text-subtitle ui-text-bold">Status da Conexão CLI:</label>
+                    <div className="ui-row ui-row--align-center ui-row--sm">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        leftIcon={
+                          <RefreshCw
+                            size={13}
+                            className={isCheckingHarness ? "spinning" : ""}
+                          />
+                        }
+                        onClick={checkHarnessProviders}
+                        disabled={isCheckingHarness}
                       >
-                        {harnessCheckFeedback}
-                      </span>
-                    )}
+                        {isCheckingHarness ? "Verificando..." : "Testar Detecção de CLIs"}
+                      </Button>
+                      {harnessCheckFeedback && (
+                        <span className="ui-text-caption ui-text-success ui-text-bold">
+                          {harnessCheckFeedback}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              {/* Caminhos customizados para portabilidade */}
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: 12,
-                }}
-              >
-                <FormField label="Caminho Customizado Antigravity CLI (Opcional):">
-                  <Input
-                    placeholder="Ex: ~/.local/bin/agy ou /usr/local/bin/agy"
-                    value={antigravityCliPath}
-                    onChange={(e) => setAntigravityCliPath(e.target.value)}
-                  />
-                </FormField>
-                <FormField label="Caminho Customizado Claude Code CLI (Opcional):">
-                  <Input
-                    placeholder="Ex: ~/.local/bin/claude ou /usr/local/bin/claude"
-                    value={claudeCliPath}
-                    onChange={(e) => setClaudeCliPath(e.target.value)}
-                  />
-                </FormField>
-              </div>
+                {/* Caminhos customizados para portabilidade */}
+                <div className="ui-grid-2cols">
+                  <FormField label="Caminho Customizado Antigravity CLI (Opcional):">
+                    <Input
+                      placeholder="Ex: ~/.local/bin/agy ou /usr/local/bin/agy"
+                      value={antigravityCliPath}
+                      onChange={(e) => setAntigravityCliPath(e.target.value)}
+                    />
+                  </FormField>
+                  <FormField label="Caminho Customizado Claude Code CLI (Opcional):">
+                    <Input
+                      placeholder="Ex: ~/.local/bin/claude ou /usr/local/bin/claude"
+                      value={claudeCliPath}
+                      onChange={(e) => setClaudeCliPath(e.target.value)}
+                    />
+                  </FormField>
+                </div>
+              </Stack>
             </CardContent>
           </Card>
+
           <Card variant="elevated">
             <CardHeader
               title={
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <Cpu size={17} style={{ color: "#10b981" }} />
+                <div className="ui-row ui-row--align-center ui-row--sm">
+                  <Cpu size={17} className="ui-text-success" />
                   <span>Motor de Inteligência Artificial</span>
                 </div>
               }
@@ -2661,128 +1219,95 @@ export const SettingsSubView: React.FC = () => {
               }
             />
 
-            <CardContent
-              style={{ display: "flex", flexDirection: "column", gap: 14 }}
-            >
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
-                  gap: 8,
-                }}
-              >
-                {[
-                  {
-                    id: "gemini",
-                    name: "Google Gemini",
-                    sub: "Flash 2.5 & Pro",
-                  },
-                  { id: "openai", name: "OpenAI", sub: "GPT-4o & o3-mini" },
-                  {
-                    id: "anthropic",
-                    name: "Anthropic",
-                    sub: "Claude 3.7 & 3.5",
-                  },
-                  { id: "deepseek", name: "DeepSeek", sub: "V3 & R1" },
-                  { id: "local", name: "Ollama Local", sub: "Localhost" },
-                ].map((p) => {
-                  const isSelected = provider === p.id;
-                  return (
-                    <div
-                      key={p.id}
-                      onClick={() => {
-                        setProvider(p.id);
-                        fetchModelsForProvider(p.id, apiKey, endpoint);
-                      }}
-                      style={{
-                        padding: "8px 10px",
-                        borderRadius: "6px",
-                        border: isSelected
-                          ? "1.5px solid #10b981"
-                          : "1px solid #e2e8f0",
-                        background: isSelected ? "#f0fdf4" : "#ffffff",
-                        cursor: "pointer",
-                        transition: "all 0.12s ease",
-                      }}
-                    >
-                      <strong
-                        style={{
-                          fontSize: "12px",
-                          color: isSelected ? "#047857" : "#1e293b",
-                          display: "block",
+            <CardContent>
+              <Stack gap="md">
+                <div className="ui-grid-cards ui-grid-cards--sm">
+                  {[
+                    {
+                      id: "gemini",
+                      name: "Google Gemini",
+                      sub: "Flash 2.5 & Pro",
+                    },
+                    { id: "openai", name: "OpenAI", sub: "GPT-4o & o3-mini" },
+                    {
+                      id: "anthropic",
+                      name: "Anthropic",
+                      sub: "Claude 3.7 & 3.5",
+                    },
+                    { id: "deepseek", name: "DeepSeek", sub: "V3 & R1" },
+                    { id: "local", name: "Ollama Local", sub: "Localhost" },
+                  ].map((p) => {
+                    const isSelected = provider === p.id;
+                    return (
+                      <div
+                        key={p.id}
+                        onClick={() => {
+                          setProvider(p.id);
+                          fetchModelsForProvider(p.id, apiKey, endpoint);
                         }}
+                        className={`ui-select-tile ${isSelected ? "ui-select-tile--success-selected" : ""}`}
                       >
-                        {p.name}
-                      </strong>
-                      <span style={{ fontSize: "10.5px", color: "#64748b" }}>
-                        {p.sub}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
+                        <strong className="ui-text-title">{p.name}</strong>
+                        <span className="ui-select-tile__sub">{p.sub}</span>
+                      </div>
+                    );
+                  })}
+                </div>
 
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: 12,
-                }}
-              >
-                <FormField label="Modelo Selecionado:">
-                  <div
-                    style={{ display: "flex", gap: 6, alignItems: "center" }}
-                  >
-                    <div style={{ flex: 1 }}>
-                      <SelectDropdown
-                        value={model}
-                        options={selectOptions}
-                        onChange={(val) => setModel(val)}
-                        placeholder="Selecione o modelo..."
-                        searchable={selectOptions.length > 5}
-                        searchPlaceholder="Filtrar..."
-                        leadingIcon="smart_toy"
-                      />
+                <div className="ui-grid-2cols">
+                  <FormField label="Modelo Selecionado:">
+                    <div className="ui-row ui-row--align-center ui-row--xs" style={{ width: "100%" }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <SelectDropdown
+                          value={model}
+                          options={selectOptions}
+                          onChange={(val) => setModel(val)}
+                          placeholder="Selecione o modelo..."
+                          searchable={selectOptions.length > 5}
+                          searchPlaceholder="Filtrar..."
+                          leadingIcon="smart_toy"
+                        />
+                      </div>
+                      <IconButton
+                        size="sm"
+                        bordered
+                        tooltip="Recarregar modelos do provedor"
+                        onClick={() =>
+                          fetchModelsForProvider(provider, apiKey, endpoint)
+                        }
+                        disabled={isLoadingModels}
+                      >
+                        <RefreshCw
+                          size={13}
+                          className={isLoadingModels ? "spinning" : ""}
+                        />
+                      </IconButton>
                     </div>
-                    <IconButton
-                      size="sm"
-                      bordered
-                      tooltip="Recarregar modelos do provedor"
-                      onClick={() =>
+                  </FormField>
+
+                  <FormField label="Chave de API (API Key):">
+                    <Input
+                      type="password"
+                      placeholder="Cole sua chave aqui..."
+                      value={apiKey}
+                      onChange={(e) => setApiKey(e.target.value)}
+                      onBlur={() =>
+                        apiKey.trim() &&
                         fetchModelsForProvider(provider, apiKey, endpoint)
                       }
-                      disabled={isLoadingModels}
-                    >
-                      <RefreshCw
-                        size={13}
-                        className={isLoadingModels ? "spinning" : ""}
-                      />
-                    </IconButton>
-                  </div>
-                </FormField>
+                    />
+                  </FormField>
+                </div>
 
-                <FormField label="Chave de API (API Key):">
-                  <Input
-                    type="password"
-                    placeholder="Cole sua chave aqui..."
-                    value={apiKey}
-                    onChange={(e) => setApiKey(e.target.value)}
-                    onBlur={() =>
-                      apiKey.trim() &&
-                      fetchModelsForProvider(provider, apiKey, endpoint)
-                    }
-                  />
-                </FormField>
-              </div>
-
-              {provider === "local" && (
-                <FormField label="Endpoint Local (Ollama):">
-                  <Input
-                    value={endpoint}
-                    onChange={(e) => setEndpoint(e.target.value)}
-                  />
-                </FormField>
-              )}
+                {provider === "local" && (
+                  <FormField label="Endpoint Local (Ollama):">
+                    <Input
+                      value={endpoint}
+                      onChange={(e) => setEndpoint(e.target.value)}
+                    />
+                  </FormField>
+                )}
+              </Stack>
             </CardContent>
 
             <CardFooter>
@@ -2803,7 +1328,7 @@ export const SettingsSubView: React.FC = () => {
           <Card variant="elevated">
             <CardHeader
               title={
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div className="ui-row ui-row--align-center ui-row--sm">
                   <Layers size={17} style={{ color: "#8b5cf6" }} />
                   <span>Criador de Templates</span>
                 </div>
@@ -2813,24 +1338,12 @@ export const SettingsSubView: React.FC = () => {
             />
 
             <CardContent>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  padding: "16px 20px",
-                  borderRadius: "8px",
-                  background: "#f8fafc",
-                  border: "1px solid #e2e8f0",
-                }}
-              >
-                <div
-                  style={{ display: "flex", flexDirection: "column", gap: 4 }}
-                >
-                  <strong style={{ fontSize: "13px", color: "#0f172a" }}>
+              <div className="ui-panel ui-panel--subtle ui-row ui-row--align-center ui-row--justify-between ui-row--wrap ui-row--md">
+                <div className="ui-stack ui-stack--xs" style={{ flex: 1, minWidth: "260px" }}>
+                  <strong className="ui-text-title">
                     Editor & Estúdio de Templates
                   </strong>
-                  <span style={{ fontSize: "12px", color: "#64748b" }}>
+                  <span className="ui-text-body-sm ui-text-muted">
                     Acesse o editor rico para criar novos templates, importar
                     modelos da comunidade e editar o conteúdo em Markdown.
                   </span>
@@ -2838,20 +1351,13 @@ export const SettingsSubView: React.FC = () => {
 
                 <Button
                   variant="primary"
+                  leftIcon={<ExternalLink size={14} />}
                   onClick={() =>
                     navigate(
                       `/projects/${activeRepo?.name || "default"}/templates`,
                     )
                   }
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 6,
-                    padding: "8px 16px",
-                    flexShrink: 0,
-                  }}
                 >
-                  <ExternalLink size={14} />
                   Abrir Editor de Templates
                 </Button>
               </div>
@@ -2861,37 +1367,22 @@ export const SettingsSubView: React.FC = () => {
 
         {/* 4. SEÇÃO: SESSÃO & GITHUB */}
         <section id="user-session" style={{ scrollMarginTop: "72px" }}>
-          <div
-            style={{
-              background: "#ffffff",
-              borderRadius: "10px",
-              border: "1px solid #e2e8f0",
-              padding: "14px 18px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div className="ui-panel ui-row ui-row--align-center ui-row--justify-between">
+            <div className="ui-row ui-row--align-center ui-row--sm">
               <img
                 src={
                   user?.avatar_url ||
                   `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.name || "User")}&background=2563eb&color=fff`
                 }
                 alt="Avatar"
+                className="ui-avatar"
                 style={{ width: 34, height: 34, borderRadius: "50%" }}
               />
-              <div>
-                <strong
-                  style={{
-                    fontSize: "13px",
-                    color: "#0f172a",
-                    display: "block",
-                  }}
-                >
+              <div className="ui-stack ui-stack--xs">
+                <strong className="ui-text-title">
                   {user?.name || "Usuário Autenticado"}
                 </strong>
-                <span style={{ fontSize: "11px", color: "#64748b" }}>
+                <span className="ui-text-caption ui-text-muted">
                   @{user?.login || "github"}
                 </span>
               </div>
@@ -2907,7 +1398,8 @@ export const SettingsSubView: React.FC = () => {
             </Button>
           </div>
         </section>
-      </main>
+        </div>
+      </PageBody>
 
       {/* Modal de Alerta de Referências na Exclusão */}
       <Modal
@@ -3017,6 +1509,6 @@ export const SettingsSubView: React.FC = () => {
           </span>
         </div>
       </Modal>
-    </div>
+    </PageContainer>
   );
 };

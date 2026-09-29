@@ -1,20 +1,24 @@
 import React from "react";
 
 export type CardVariant = "default" | "elevated" | "flat";
+export type CardPadding = "none" | "sm" | "md" | "lg" | "xl";
 
 export interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
   variant?: CardVariant;
+  padding?: CardPadding;
 }
 
 export const Card: React.FC<CardProps> = ({
   children,
   variant = "default",
+  padding,
   className = "",
   ...props
 }) => {
   const variantClass = variant !== "default" ? `ui-card--${variant}` : "";
+  const paddingClass = padding ? `ui-card--p-${padding}` : "";
   return (
-    <div className={`ui-card ${variantClass} ${className}`.trim()} {...props}>
+    <div className={`ui-card ${variantClass} ${paddingClass} ${className}`.trim()} {...props}>
       {children}
     </div>
   );

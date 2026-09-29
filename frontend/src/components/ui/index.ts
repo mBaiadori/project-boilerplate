@@ -18,3 +18,4 @@ export * from "./Tabs";
 export * from "./PageHeader";
 export * from "./StatCard";
 export * from "./Chip";
+export * from "./Layout";

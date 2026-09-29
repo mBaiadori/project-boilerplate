@@ -3,6 +3,7 @@ import { API } from '../../services/api';
 import { useAI } from '../../context/AIContext';
 import { useWorkspace } from '../../context/WorkspaceContext';
 import { useCopilotStore } from '../../stores/copilotStore';
+import { Badge, Button } from '../ui';
 
 interface HistorySidebarProps {
   isOpen: boolean;
@@ -72,7 +73,7 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
       if (histRes.ok && histRes.data) {
         const rawSessions: any[] = Array.isArray(histRes.data.sessions) ? histRes.data.sessions : [];
         
-        // Ordenação infalível: mais recente sempre primeiro
+        // Ordenação: mais recente sempre primeiro
         rawSessions.sort((a, b) => {
           const timeA = a.timestamp || new Date(a.updated_at || a.created_at || 0).getTime() || 0;
           const timeB = b.timestamp || new Date(b.updated_at || b.created_at || 0).getTime() || 0;
@@ -195,25 +196,14 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
     });
   }, [sessions, searchTerm]);
 
-  // Taxonomia de cor primária do projeto
-  const projectColor = projectConfig?.primary_color || 'var(--primary, #2563eb)';
+  const projectColor = projectConfig?.primary_color || 'var(--color-primary, #2563eb)';
 
   if (!isOpen) return null;
 
   return (
-    <aside
-      className="ai-copilot-prompt-sidebar ai-copilot-history-sidebar"
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        height: '100%',
-        maxHeight: '100%',
-        minHeight: 0,
-        overflow: 'hidden',
-      }}
-    >
+    <aside className="ai-copilot-prompt-sidebar ai-copilot-history-sidebar ui-sidebar-drawer">
       {/* 1. Header do Painel */}
-      <div className="ai-prompt-sidebar-header" style={{ flexShrink: 0 }}>
+      <div className="ui-sidebar-drawer__header">
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
           <div
             style={{
@@ -233,59 +223,38 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
             </span>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-            <strong style={{ fontSize: '12.5px', color: 'var(--text-heading, #0f172a)', whiteSpace: 'nowrap' }}>
+            <strong style={{ fontSize: '12.5px', color: 'var(--color-text-primary, #0f172a)', whiteSpace: 'nowrap' }}>
               Histórico de Conversas
             </strong>
-            <span
-              style={{
-                fontSize: '10.5px',
-                color: 'var(--text-muted, #64748b)',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              }}
-            >
+            <span className="ui-text-muted" style={{ fontSize: '10.5px', whiteSpace: 'nowrap' }}>
               {docPath || 'Global'} &bull; {sessions.length} {sessions.length === 1 ? 'salva' : 'salvas'}
             </span>
           </div>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
-          <button
-            type="button"
-            className="btn btn-ghost btn-xs"
-            title="Iniciar novo chat limpo"
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={handleNewChat}
-            style={{
-              fontSize: '11px',
-              padding: '3px 7px',
-              color: 'var(--primary, #2563eb)',
-              fontWeight: 600,
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '3px',
-            }}
+            title="Iniciar novo chat limpo"
+            icon={<span className="material-symbols-outlined" style={{ fontSize: '14px' }}>add_comment</span>}
           >
-            <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>
-              add_comment
-            </span>
             Novo
-          </button>
+          </Button>
           <button
-            className="btn-icon ai-copilot-refresh-history-btn"
+            className="btn-icon"
             type="button"
             title="Recarregar histórico"
             onClick={loadHistory}
-            style={{ width: '28px', height: '28px', padding: 0 }}
           >
             <span className="material-symbols-outlined icon-xs">refresh</span>
           </button>
           <button
-            className="btn-icon ai-copilot-close-history-sidebar-btn"
+            className="btn-icon"
             type="button"
             title="Fechar painel de histórico"
             onClick={onClose}
-            style={{ width: '28px', height: '28px', padding: 0 }}
           >
             <span className="material-symbols-outlined icon-sm">close</span>
           </button>
@@ -297,34 +266,21 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
         <div
           style={{
             padding: '7px 12px',
-            background: '#dcfce7',
-            color: '#15803d',
+            background: 'var(--color-success-subtle, #dcfce7)',
+            color: 'var(--color-success, #15803d)',
             fontSize: '11px',
             fontWeight: 600,
             textAlign: 'center',
-            borderBottom: '1px solid #bbf7d0',
+            borderBottom: '1px solid var(--color-border-subtle, #bbf7d0)',
             flexShrink: 0,
-            animation: 'fadeIn 0.2s ease',
           }}
         >
           {feedback}
         </div>
       )}
 
-      {/* 3. Corpo com Scroll Vertical Ilimitado */}
-      <div
-        className="ai-history-sidebar-body"
-        style={{
-          flex: 1,
-          minHeight: 0,
-          overflowY: 'auto',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '10px',
-          padding: '12px',
-          boxSizing: 'border-box',
-        }}
-      >
+      {/* 3. Corpo com Scroll Vertical */}
+      <div className="ui-sidebar-drawer__body" style={{ display: 'flex', flexDirection: 'column', gap: '10px', padding: '12px' }}>
         {selectedSession ? (
           /* ================= VISUALIZAÇÃO DETALHADA DA SESSÃO ================= */
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, gap: '10px' }}>
@@ -334,38 +290,32 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                borderBottom: '1px solid var(--border-color, #e2e8f0)',
+                borderBottom: '1px solid var(--color-border-subtle, #e2e8f0)',
                 paddingBottom: '8px',
                 flexShrink: 0,
               }}
             >
-              <button
-                type="button"
-                className="btn btn-ghost btn-xs"
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11.5px' }}
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => setSelectedSession(null)}
+                icon={<span className="material-symbols-outlined" style={{ fontSize: '15px' }}>arrow_back</span>}
               >
-                <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>
-                  arrow_back
-                </span>
                 Voltar à lista
-              </button>
+              </Button>
               <div style={{ display: 'flex', gap: '6px' }}>
-                <button
-                  type="button"
-                  className="btn btn-primary btn-xs"
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11px', padding: '4px 9px' }}
+                <Button
+                  variant="primary"
+                  size="sm"
                   onClick={() => handleRestoreToChat(selectedSession.session_id)}
+                  icon={<span className="material-symbols-outlined" style={{ fontSize: '14px' }}>restore</span>}
                 >
-                  <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>
-                    restore
-                  </span>
                   Restaurar no Chat
-                </button>
+                </Button>
                 <button
                   type="button"
-                  className="btn btn-ghost btn-xs"
-                  style={{ color: '#ef4444', padding: '4px 6px' }}
+                  className="btn-icon"
+                  style={{ color: 'var(--color-danger, #ef4444)' }}
                   title="Excluir sessão"
                   onClick={() => handleDeleteSession(selectedSession.session_id)}
                 >
@@ -377,39 +327,31 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
             </div>
 
             {/* Metadados da Sessão */}
-            <div
-              style={{
-                background: 'var(--bg-surface, #ffffff)',
-                border: '1px solid var(--border-color, #e2e8f0)',
-                borderRadius: '8px',
-                padding: '9px 12px',
-                flexShrink: 0,
-              }}
-            >
+            <div className="ui-card" style={{ padding: '9px 12px', flexShrink: 0 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                <strong style={{ fontSize: '12px', color: 'var(--text-heading, #0f172a)' }}>
+                <strong style={{ fontSize: '12px', color: 'var(--color-text-primary, #0f172a)' }}>
                   {selectedSession.author?.name || 'Developer'}
                 </strong>
-                <span style={{ fontSize: '10.5px', color: 'var(--text-muted, #64748b)' }}>
+                <span className="ui-text-muted" style={{ fontSize: '10.5px' }}>
                   {formatRelativeTime(selectedSession.updated_at || selectedSession.created_at)}
                 </span>
               </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', fontSize: '10.5px', color: 'var(--text-muted, #64748b)', marginTop: '4px' }}>
-                <span style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: '4px', fontWeight: 500 }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '4px' }}>
+                <Badge variant="neutral" size="sm">
                   🤖 {selectedSession.model || 'AI Assistant'}
-                </span>
-                <span style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: '4px', fontWeight: 500 }}>
+                </Badge>
+                <Badge variant="neutral" size="sm">
                   📄 {selectedSession.path || 'Global'}
-                </span>
+                </Badge>
                 {selectedSession.metrics?.total_tokens ? (
-                  <span style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: '4px', fontWeight: 500 }}>
+                  <Badge variant="neutral" size="sm">
                     ⚡ {selectedSession.metrics.total_tokens} tokens
-                  </span>
+                  </Badge>
                 ) : null}
               </div>
             </div>
 
-            {/* Stream de Mensagens da Sessão (Scroll Livre sem maxHeight rígido) */}
+            {/* Stream de Mensagens da Sessão */}
             <div
               className="ai-history-messages-stream"
               style={{
@@ -432,8 +374,8 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
                         position: 'relative',
                         padding: '9px 11px',
                         borderRadius: '9px',
-                        background: isUser ? '#f0f7ff' : '#f8fafc',
-                        border: `1px solid ${isUser ? '#bfdbfe' : '#e2e8f0'}`,
+                        background: isUser ? 'var(--color-primary-subtle, #eff6ff)' : 'var(--color-surface-subtle, #f8fafc)',
+                        border: `1px solid ${isUser ? 'var(--color-primary-subtle, #bfdbfe)' : 'var(--color-border-subtle, #e2e8f0)'}`,
                         fontSize: '11.5px',
                         lineHeight: 1.45,
                       }}
@@ -442,7 +384,7 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
                         <strong
                           style={{
                             fontSize: '10.5px',
-                            color: isUser ? '#1d4ed8' : '#475569',
+                            color: isUser ? 'var(--color-primary, #1d4ed8)' : 'var(--color-text-secondary, #475569)',
                             display: 'inline-flex',
                             alignItems: 'center',
                             gap: '4px',
@@ -454,7 +396,7 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
                           {isUser ? 'Você' : (selectedSession.model || 'Assistente')}
                         </strong>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span style={{ fontSize: '10px', color: 'var(--text-muted, #94a3b8)' }}>
+                          <span className="ui-text-muted" style={{ fontSize: '10px' }}>
                             {ev.timestamp ? new Date(ev.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
                           </span>
                           <button
@@ -465,7 +407,7 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
                               border: 'none',
                               cursor: 'pointer',
                               padding: '2px',
-                              color: copiedIndex === i ? '#10b981' : '#94a3b8',
+                              color: copiedIndex === i ? 'var(--color-success, #10b981)' : 'var(--color-text-muted, #94a3b8)',
                               display: 'inline-flex',
                               alignItems: 'center',
                             }}
@@ -477,29 +419,31 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
                           </button>
                         </div>
                       </div>
-                      <div style={{ whiteSpace: 'pre-wrap', color: '#1e293b', wordBreak: 'break-word' }}>
+                      <div style={{ whiteSpace: 'pre-wrap', color: 'var(--color-text-primary, #1e293b)', wordBreak: 'break-word' }}>
                         {ev.text || ev.content}
                       </div>
                     </div>
                   );
                 })
               ) : (
-                <div style={{ padding: '24px 16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '11px' }}>
-                  Nenhuma mensagem registrada nesta sessão.
+                <div className="ui-empty-state" style={{ padding: '24px 16px' }}>
+                  <span className="ui-text-muted" style={{ fontSize: '11px' }}>
+                    Nenhuma mensagem registrada nesta sessão.
+                  </span>
                 </div>
               )}
             </div>
           </div>
         ) : (
-          /* ================= LISTA GERAL DE SESSÕES COM SCROLL ================= */
+          /* ================= LISTA GERAL DE SESSÕES ================= */
           <>
             {/* 1. Card de Memória Consolidada (Handoff) */}
             <div
+              className="ui-card"
               style={{
                 padding: '9px 12px',
-                background: 'rgba(37, 99, 235, 0.03)',
-                border: '1px solid rgba(37, 99, 235, 0.16)',
-                borderRadius: '9px',
+                background: 'var(--color-primary-subtle, rgba(37, 99, 235, 0.03))',
+                borderColor: 'var(--color-primary-subtle, rgba(37, 99, 235, 0.16))',
                 flexShrink: 0,
               }}
             >
@@ -513,69 +457,59 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
                 onClick={() => setIsHandoffExpanded(!isHandoffExpanded)}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span className="material-symbols-outlined icon-xs" style={{ color: 'var(--primary, #2563eb)' }}>
+                  <span className="material-symbols-outlined icon-xs" style={{ color: 'var(--color-primary, #2563eb)' }}>
                     psychology
                   </span>
-                  <strong style={{ fontSize: '11.5px', color: 'var(--primary, #2563eb)' }}>
+                  <strong style={{ fontSize: '11.5px', color: 'var(--color-primary, #2563eb)' }}>
                     Memória Consolidada
                   </strong>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <span className="ai-copilot-status-badge custom" style={{ fontSize: '9px', padding: '1px 5px' }}>
+                  <Badge variant="primary" size="sm">
                     .spec-memory
-                  </span>
-                  <span className="material-symbols-outlined" style={{ fontSize: '15px', color: 'var(--text-muted)' }}>
+                  </Badge>
+                  <span className="material-symbols-outlined" style={{ fontSize: '15px', color: 'var(--color-text-muted)' }}>
                     {isHandoffExpanded ? 'expand_less' : 'expand_more'}
                   </span>
                 </div>
               </div>
 
               {isHandoffExpanded && (
-                <div style={{ marginTop: '8px', animation: 'fadeIn 0.15s ease' }}>
+                <div style={{ marginTop: '8px' }}>
                   <div
                     style={{
                       fontSize: '11px',
                       lineHeight: '1.4',
-                      color: 'var(--text-body)',
+                      color: 'var(--color-text-primary)',
                       maxHeight: '110px',
                       overflowY: 'auto',
                       whiteSpace: 'pre-wrap',
-                      fontFamily: 'monospace',
-                      background: '#fff',
+                      fontFamily: 'var(--font-family-mono)',
+                      background: 'var(--color-surface, #fff)',
                       padding: '6px 8px',
                       borderRadius: '5px',
-                      border: '1px solid var(--border-color, #e2e8f0)',
+                      border: '1px solid var(--color-border-subtle, #e2e8f0)',
                     }}
                   >
                     {briefing || 'Nenhum handoff gerado ainda. Clique em "Consolidar" para salvar a síntese desta sessão.'}
                   </div>
 
                   <div style={{ display: 'flex', gap: '6px', marginTop: '7px' }}>
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-xs"
-                      style={{
-                        flex: 1,
-                        fontSize: '10.5px',
-                        padding: '3px 6px',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '4px',
-                      }}
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      style={{ flex: 1 }}
                       disabled={isConsolidating}
                       onClick={handleConsolidateMemory}
+                      icon={<span className="material-symbols-outlined" style={{ fontSize: '13px' }}>save_as</span>}
                     >
-                      <span className="material-symbols-outlined" style={{ fontSize: '13px' }}>
-                        save_as
-                      </span>
                       {isConsolidating ? 'Consolidando...' : 'Consolidar Memória'}
-                    </button>
+                    </Button>
                     {briefing && (
                       <button
                         type="button"
-                        className="btn btn-ghost btn-xs"
-                        style={{ fontSize: '10.5px', color: '#ef4444' }}
+                        className="btn-icon"
+                        style={{ color: 'var(--color-danger, #ef4444)' }}
                         onClick={handleResetMemory}
                         title="Limpar memória"
                       >
@@ -591,14 +525,14 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
 
             {/* 2. Barra de Busca e Filtro de Conversas */}
             {sessions.length > 0 && (
-              <div className="ai-history-search-wrapper" style={{ flexShrink: 0 }}>
+              <div style={{ position: 'relative', display: 'flex', alignItems: 'center', flexShrink: 0 }}>
                 <span
                   className="material-symbols-outlined"
                   style={{
                     position: 'absolute',
                     left: '9px',
                     fontSize: '16px',
-                    color: '#94a3b8',
+                    color: 'var(--color-text-muted, #94a3b8)',
                     pointerEvents: 'none',
                   }}
                 >
@@ -606,10 +540,17 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
                 </span>
                 <input
                   type="text"
-                  className="ai-history-search-input"
                   placeholder={`Buscar em ${sessions.length} conversas...`}
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '6px 26px 6px 30px',
+                    fontSize: '11.5px',
+                    borderRadius: '6px',
+                    border: '1px solid var(--color-border-subtle, #cbd5e1)',
+                    background: 'var(--color-surface, #ffffff)',
+                  }}
                 />
                 {searchTerm && (
                   <button
@@ -622,7 +563,7 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
                       border: 'none',
                       cursor: 'pointer',
                       padding: 0,
-                      color: '#94a3b8',
+                      color: 'var(--color-text-muted, #94a3b8)',
                     }}
                     title="Limpar busca"
                   >
@@ -634,10 +575,10 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
               </div>
             )}
 
-            {/* 3. Lista de Conversas com Scroll Natural Ilimitado */}
+            {/* 3. Lista de Conversas */}
             {isLoading ? (
-              <div style={{ textAlign: 'center', padding: '30px 16px', color: 'var(--text-muted)', fontSize: '11.5px' }}>
-                <span className="material-symbols-outlined" style={{ fontSize: '24px', animation: 'spin 1s infinite linear', color: 'var(--primary, #2563eb)', display: 'block', margin: '0 auto 8px auto' }}>
+              <div style={{ textAlign: 'center', padding: '30px 16px', color: 'var(--color-text-muted)', fontSize: '11.5px' }}>
+                <span className="material-symbols-outlined" style={{ fontSize: '24px', animation: 'spin 1s infinite linear', color: 'var(--color-primary, #2563eb)', display: 'block', margin: '0 auto 8px auto' }}>
                   sync
                 </span>
                 Carregando histórico de conversas...
@@ -654,10 +595,10 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 2px', flexShrink: 0 }}>
-                  <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-heading)' }}>
+                  <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-text-primary)' }}>
                     {searchTerm ? `Resultados (${filteredSessions.length} de ${sessions.length})` : `Conversas Recentes (${sessions.length})`}
                   </span>
-                  <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
+                  <span className="ui-text-muted" style={{ fontSize: '10px' }}>
                     Mais recente primeiro
                   </span>
                 </div>
@@ -669,8 +610,9 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
                   return (
                     <div
                       key={s.session_id || idx}
-                      className={`ai-history-session-card ${isActive ? 'is-active-session' : ''}`}
+                      className={`ui-sidebar-item ${isActive ? 'ui-sidebar-item--active' : ''}`}
                       onClick={() => handleSelectSession(s.session_id)}
+                      style={{ flexDirection: 'column', alignItems: 'stretch', gap: '5px' }}
                     >
                       {/* Topo do Card: Autor, Badge Ativa e Data */}
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -678,7 +620,7 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
                           <strong
                             style={{
                               fontSize: '11.5px',
-                              color: 'var(--text-heading, #0f172a)',
+                              color: 'var(--color-text-primary, #0f172a)',
                               whiteSpace: 'nowrap',
                               overflow: 'hidden',
                               textOverflow: 'ellipsis',
@@ -688,23 +630,14 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
                             {s.author?.name || 'Developer'}
                           </strong>
                           {isActive && (
-                            <span
-                              style={{
-                                fontSize: '9.5px',
-                                padding: '1px 5px',
-                                borderRadius: '4px',
-                                background: '#dbeafe',
-                                color: '#1d4ed8',
-                                fontWeight: 600,
-                              }}
-                            >
+                            <Badge variant="primary" size="sm">
                               Ativa
-                            </span>
+                            </Badge>
                           )}
                         </div>
 
                         <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          <span style={{ fontSize: '10px', color: 'var(--text-muted, #64748b)' }} title={s.updated_at ? new Date(s.updated_at).toLocaleString('pt-BR') : ''}>
+                          <span className="ui-text-muted" style={{ fontSize: '10px' }} title={s.updated_at ? new Date(s.updated_at).toLocaleString('pt-BR') : ''}>
                             {formattedTime}
                           </span>
                           <button
@@ -715,7 +648,7 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
                               border: 'none',
                               cursor: 'pointer',
                               padding: '2px',
-                              color: '#94a3b8',
+                              color: 'var(--color-text-muted, #94a3b8)',
                               display: 'inline-flex',
                               alignItems: 'center',
                             }}
@@ -734,7 +667,7 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
                           style={{
                             margin: 0,
                             fontSize: '11px',
-                            color: '#334155',
+                            color: 'var(--color-text-secondary, #334155)',
                             lineHeight: 1.35,
                             overflow: 'hidden',
                             display: '-webkit-box',
@@ -746,17 +679,17 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
                         </p>
                       )}
 
-                      {/* Rodapé do Card: Metadados e Botão de Ação Rápida */}
+                      {/* Rodapé do Card */}
                       <div
                         style={{
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'space-between',
                           fontSize: '10px',
-                          color: 'var(--text-muted, #64748b)',
+                          color: 'var(--color-text-muted, #64748b)',
                           marginTop: '2px',
                           paddingTop: '4px',
-                          borderTop: '1px dashed #f1f5f9',
+                          borderTop: '1px dashed var(--color-border-subtle, #f1f5f9)',
                         }}
                       >
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', overflow: 'hidden' }}>
@@ -773,27 +706,15 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
                           <span>💬 {s.event_count || s.metrics?.rounds || 1} msg</span>
                         </div>
 
-                        <button
-                          type="button"
-                          className="btn btn-ghost btn-xs"
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           onClick={(e) => handleRestoreToChat(s.session_id, e)}
-                          style={{
-                            fontSize: '10px',
-                            padding: '1px 5px',
-                            height: '20px',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '3px',
-                            color: 'var(--primary, #2563eb)',
-                            fontWeight: 600,
-                          }}
                           title="Restaurar esta conversa no Copilot"
+                          icon={<span className="material-symbols-outlined" style={{ fontSize: '12px' }}>restore</span>}
                         >
-                          <span className="material-symbols-outlined" style={{ fontSize: '12px' }}>
-                            restore
-                          </span>
                           Restaurar
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   );
@@ -801,63 +722,45 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
               </div>
             ) : (
               /* Estado Vazio */
-              <div
-                className="ai-history-empty-state"
-                style={{
-                  textAlign: 'center',
-                  padding: '30px 16px',
-                  background: 'var(--bg-surface, #ffffff)',
-                  border: '1px dashed var(--border-color, #cbd5e1)',
-                  borderRadius: '12px',
-                  margin: 'auto 0',
-                }}
-              >
+              <div className="ui-empty-state" style={{ margin: 'auto 0' }}>
                 <div
                   style={{
                     width: '42px',
                     height: '42px',
                     margin: '0 auto 10px auto',
                     borderRadius: '50%',
-                    background: 'rgba(37, 99, 235, 0.08)',
+                    background: 'var(--color-primary-subtle, rgba(37, 99, 235, 0.08))',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    color: 'var(--primary, #2563eb)',
+                    color: 'var(--color-primary, #2563eb)',
                   }}
                 >
                   <span className="material-symbols-outlined icon-md">
                     {searchTerm ? 'search_off' : 'forum'}
                   </span>
                 </div>
-                <strong style={{ display: 'block', fontSize: '12.5px', color: 'var(--text-heading, #0f172a)', marginBottom: '4px' }}>
+                <strong style={{ display: 'block', fontSize: '12.5px', color: 'var(--color-text-primary, #0f172a)', marginBottom: '4px' }}>
                   {searchTerm ? 'Nenhuma conversa encontrada' : 'Nenhum histórico arquivado ainda'}
                 </strong>
-                <p style={{ margin: '0 0 12px 0', fontSize: '11px', lineHeight: 1.4, color: 'var(--text-muted, #64748b)' }}>
+                <p className="ui-text-muted" style={{ margin: '0 0 12px 0', fontSize: '11px', lineHeight: 1.4 }}>
                   {searchTerm
                     ? `Nenhum resultado corresponde ao termo "${searchTerm}".`
                     : 'Todas as suas mensagens no Copilot são gravadas e versionadas automaticamente no Git.'}
                 </p>
                 {searchTerm ? (
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-xs"
-                    onClick={() => setSearchTerm('')}
-                    style={{ fontSize: '11px' }}
-                  >
+                  <Button variant="secondary" size="sm" onClick={() => setSearchTerm('')}>
                     Limpar Filtro
-                  </button>
+                  </Button>
                 ) : (
-                  <button
-                    type="button"
-                    className="btn btn-primary btn-xs"
+                  <Button
+                    variant="primary"
+                    size="sm"
                     onClick={handleNewChat}
-                    style={{ fontSize: '11px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                    icon={<span className="material-symbols-outlined" style={{ fontSize: '13px' }}>add</span>}
                   >
-                    <span className="material-symbols-outlined" style={{ fontSize: '13px' }}>
-                      add
-                    </span>
                     Iniciar Nova Conversa
-                  </button>
+                  </Button>
                 )}
               </div>
             )}

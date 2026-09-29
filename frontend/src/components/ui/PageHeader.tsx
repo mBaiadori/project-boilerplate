@@ -10,6 +10,7 @@ export interface PageHeaderProps {
   backTooltip?: string;
   actions?: React.ReactNode;
   icon?: React.ReactNode;
+  children?: React.ReactNode;
   className?: string;
 }
 
@@ -21,10 +22,11 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
   backTooltip = "Voltar",
   actions,
   icon,
+  children,
   className = "",
 }) => {
-  return (
-    <div className={`ui-page-header ${className}`.trim()}>
+  const headerContent = (
+    <div className={`ui-page-header ${children ? "ui-page-header--has-children" : ""} ${!children ? className : ""}`.trim()}>
       <div className="ui-page-header__left">
         {onBack && (
           <IconButton
@@ -48,6 +50,19 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
         </div>
       </div>
       {actions && <div className="ui-page-header__actions">{actions}</div>}
+    </div>
+  );
+
+  if (!children) {
+    return headerContent;
+  }
+
+  return (
+    <div className={`ui-page-header-wrapper ${className}`.trim()}>
+      {headerContent}
+      <div className="ui-page-header__subbar">
+        {children}
+      </div>
     </div>
   );
 };
