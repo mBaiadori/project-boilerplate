@@ -262,7 +262,30 @@ Retorne APENAS um JSON válido no formato:
           repoName,
         );
 
-        if (aiResult?.reply) {
+        const isLikelyErrorReply = (text: string) => {
+          if (!text) return true;
+          const lower = text.toLowerCase().trim();
+          return (
+            lower.startsWith('erro') ||
+            lower.startsWith('error') ||
+            lower.startsWith('⚠️') ||
+            lower.includes('resource has been exhausted') ||
+            lower.includes('resourceexhausted') ||
+            lower.includes('quota') ||
+            lower.includes('rate limit') ||
+            lower.includes('429') ||
+            lower.includes('503') ||
+            lower.includes('não configurada') ||
+            lower.includes('não suportado') ||
+            lower.includes('overloaded') ||
+            lower.includes('high demand') ||
+            lower.includes('failed to fetch') ||
+            lower.includes('unauthorized') ||
+            lower.includes('invalid_api_key')
+          );
+        };
+
+        if (aiResult?.reply && !isLikelyErrorReply(aiResult.reply)) {
           let cleanJson = aiResult.reply.trim();
           if (cleanJson.includes('```json')) {
             cleanJson = cleanJson.replace(/^```json\s*/i, '').replace(/```\s*$/, '').trim();
@@ -272,30 +295,25 @@ Retorne APENAS um JSON válido no formato:
 
           try {
             const parsed = JSON.parse(cleanJson);
-            if (parsed.title && (parsed.description || parsed.body)) {
-              const desc = parsed.description || parsed.body;
-              return {
-                success: true,
-                title: parsed.title,
-                description: desc,
-                body: desc,
-                type: 'docs',
-                layer: 'Especificações',
-              };
+            if (
+              parsed.title &&
+              typeof parsed.title === 'string' &&
+              (parsed.description || parsed.body)
+            ) {
+              const desc = String(parsed.description || parsed.body);
+              if (!isLikelyErrorReply(parsed.title) && !isLikelyErrorReply(desc)) {
+                return {
+                  success: true,
+                  title: parsed.title,
+                  description: desc,
+                  body: desc,
+                  type: 'docs',
+                  layer: 'Especificações',
+                };
+              }
             }
           } catch {
-            if (cleanJson.length > 20) {
-              const firstLine = cleanJson.split('\n')[0].replace(/^[#*\s-]+/, '').trim();
-              const autoTitle = firstLine.length < 80 ? firstLine : `docs: atualização de ${changedPaths.length} documento(s)`;
-              return {
-                success: true,
-                title: autoTitle,
-                description: cleanJson,
-                body: cleanJson,
-                type: 'docs',
-                layer: 'Especificações',
-              };
-            }
+            console.warn('[PRsService] Resposta da IA não é um JSON válido. Acionando gerador heurístico local.');
           }
         }
       } catch (aiErr) {

@@ -1,9 +1,4 @@
-import React, {
-  useState,
-  useEffect,
-  useCallback,
-  useMemo,
-} from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { useAI } from "../../context/AIContext";
 import { useWorkspace } from "../../context/WorkspaceContext";
@@ -889,515 +884,556 @@ export const SettingsSubView: React.FC = () => {
 
       {/* Conteúdo Principal */}
       <PageBody>
-        <div style={{ maxWidth: "960px", width: "100%", margin: "0 auto", display: "flex", flexDirection: "column", gap: "24px" }}>
-        {saveStatus && (
-          <AlertBanner
-            type={saveStatus.includes("Erro") ? "error" : "success"}
-            title={saveStatus}
-            onClose={() => setSaveStatus(null)}
-          />
-        )}
-
-        {/* 1. SEÇÃO: CATEGORIAS, TAGS & STATUS */}
-        <section id="categories-tags" style={{ scrollMarginTop: "72px" }}>
-          <Card variant="elevated">
-            <CardHeader
-              title="Taxonomia & Governança"
-              subtitle="Personalize categorias, tags, badges e status com cores integradas do sistema."
+        <div
+          style={{
+            maxWidth: "960px",
+            width: "100%",
+            margin: "0 auto",
+            display: "flex",
+            flexDirection: "column",
+            gap: "24px",
+          }}
+        >
+          {saveStatus && (
+            <AlertBanner
+              type={saveStatus.includes("Erro") ? "error" : "success"}
+              title={saveStatus}
+              onClose={() => setSaveStatus(null)}
             />
-            <CardContent>
-              <Stack gap="md">
-                {/* 1.1 Categorias */}
-                <Stack gap="xs">
-                  <span className="ui-text-subtitle ui-text-bold">Categorias</span>
-                  <TaxonomyChipEditor
-                    items={categories}
-                    editingIndex={editingCatIndex}
-                    editName={editCatName}
-                    editColor={editCatColor}
-                    onStartEdit={handleStartEditCategory}
-                    onEditNameChange={setEditCatName}
-                    onEditColorChange={setEditCatColor}
-                    onSaveEdit={handleSaveEditCategory}
-                    onCancelEdit={() => setEditingCatIndex(null)}
-                    onRequestRemove={handleRequestRemoveCategory}
-                    isAdding={isAddingCategory}
-                    newName={newCatName}
-                    newColor={newCatColor}
-                    onStartAdd={() => setIsAddingCategory(true)}
-                    onNewNameChange={setNewCatName}
-                    onNewColorChange={setNewCatColor}
-                    onSaveAdd={handleAddCategory}
-                    onCancelAdd={() => {
-                      setIsAddingCategory(false);
-                      setNewCatName("");
-                    }}
-                    placeholder="categoria..."
-                    addTooltip="Adicionar Categoria"
-                  />
+          )}
+
+          {/* 1. SEÇÃO: CATEGORIAS, TAGS & STATUS */}
+          <section id="categories-tags" style={{ scrollMarginTop: "72px" }}>
+            <Card variant="elevated">
+              <CardHeader
+                title="Taxonomia & Governança"
+                subtitle="Personalize categorias, tags, badges e status com cores integradas do sistema."
+              />
+              <CardContent>
+                <Stack gap="md">
+                  {/* 1.1 Categorias */}
+                  <Stack gap="xs">
+                    <span className="ui-text-subtitle ui-text-bold">
+                      Categorias
+                    </span>
+                    <TaxonomyChipEditor
+                      items={categories}
+                      editingIndex={editingCatIndex}
+                      editName={editCatName}
+                      editColor={editCatColor}
+                      onStartEdit={handleStartEditCategory}
+                      onEditNameChange={setEditCatName}
+                      onEditColorChange={setEditCatColor}
+                      onSaveEdit={handleSaveEditCategory}
+                      onCancelEdit={() => setEditingCatIndex(null)}
+                      onRequestRemove={handleRequestRemoveCategory}
+                      isAdding={isAddingCategory}
+                      newName={newCatName}
+                      newColor={newCatColor}
+                      onStartAdd={() => setIsAddingCategory(true)}
+                      onNewNameChange={setNewCatName}
+                      onNewColorChange={setNewCatColor}
+                      onSaveAdd={handleAddCategory}
+                      onCancelAdd={() => {
+                        setIsAddingCategory(false);
+                        setNewCatName("");
+                      }}
+                      placeholder="categoria..."
+                      addTooltip="Adicionar Categoria"
+                    />
+                  </Stack>
+
+                  <Divider />
+
+                  {/* 1.2 Tipos de Documento / Badges */}
+                  <Stack gap="xs">
+                    <Row align="center" justify="between">
+                      <span className="ui-text-subtitle ui-text-bold">
+                        Tipos de Documento (Badges)
+                      </span>
+                    </Row>
+                    <TaxonomyChipEditor
+                      items={badges}
+                      editingIndex={editingBadgeIndex}
+                      editName={editBadgeName}
+                      editColor={editBadgeColor}
+                      onStartEdit={handleStartEditBadge}
+                      onEditNameChange={setEditBadgeName}
+                      onEditColorChange={setEditBadgeColor}
+                      onSaveEdit={handleSaveEditBadge}
+                      onCancelEdit={() => setEditingBadgeIndex(null)}
+                      onRequestRemove={handleRequestRemoveBadge}
+                      isAdding={isAddingBadge}
+                      newName={newBadgeName}
+                      newColor={newBadgeColor}
+                      onStartAdd={() => setIsAddingBadge(true)}
+                      onNewNameChange={setNewBadgeName}
+                      onNewColorChange={setNewBadgeColor}
+                      onSaveAdd={handleAddBadge}
+                      onCancelAdd={() => {
+                        setIsAddingBadge(false);
+                        setNewBadgeName("");
+                      }}
+                      placeholder="tipo..."
+                      addTooltip="Adicionar Tipo de Documento / Badge"
+                    />
+                  </Stack>
+
+                  <Divider />
+
+                  {/* 1.3 Tags */}
+                  <Stack gap="xs">
+                    <span className="ui-text-subtitle ui-text-bold">Tags</span>
+                    <TaxonomyChipEditor
+                      items={tags}
+                      editingIndex={editingTagIndex}
+                      editName={editTagName}
+                      editColor={editTagColor}
+                      onStartEdit={handleStartEditTag}
+                      onEditNameChange={setEditTagName}
+                      onEditColorChange={setEditTagColor}
+                      onSaveEdit={handleSaveEditTag}
+                      onCancelEdit={() => setEditingTagIndex(null)}
+                      onRequestRemove={handleRequestRemoveTag}
+                      isAdding={isAddingTag}
+                      newName={newTagName}
+                      newColor={newTagColor}
+                      onStartAdd={() => setIsAddingTag(true)}
+                      onNewNameChange={setNewTagName}
+                      onNewColorChange={setNewTagColor}
+                      onSaveAdd={handleAddTag}
+                      onCancelAdd={() => {
+                        setIsAddingTag(false);
+                        setNewTagName("");
+                      }}
+                      placeholder="tag..."
+                      addTooltip="Adicionar Tag"
+                    />
+                  </Stack>
+
+                  <Divider />
+
+                  {/* 1.4 Status */}
+                  <Stack gap="xs">
+                    <span className="ui-text-subtitle ui-text-bold">
+                      Status de Documento
+                    </span>
+                    <TaxonomyChipEditor
+                      items={statuses}
+                      editingIndex={editingStatusIndex}
+                      editName={editStatusName}
+                      editColor={editStatusColor}
+                      onStartEdit={handleStartEditStatus}
+                      onEditNameChange={setEditStatusName}
+                      onEditColorChange={setEditStatusColor}
+                      onSaveEdit={handleSaveEditStatus}
+                      onCancelEdit={() => setEditingStatusIndex(null)}
+                      onRequestRemove={handleRequestRemoveStatus}
+                      isAdding={isAddingStatus}
+                      newName={newStatusName}
+                      newColor={newStatusColor}
+                      onStartAdd={() => setIsAddingStatus(true)}
+                      onNewNameChange={setNewStatusName}
+                      onNewColorChange={setNewStatusColor}
+                      onSaveAdd={handleAddStatus}
+                      onCancelAdd={() => {
+                        setIsAddingStatus(false);
+                        setNewStatusName("");
+                      }}
+                      placeholder="status..."
+                      addTooltip="Adicionar Status"
+                    />
+                  </Stack>
                 </Stack>
+              </CardContent>
+            </Card>
+          </section>
 
-                <Divider />
+          {/* 2. SEÇÃO: MOTOR DE IA E HARNESS DE AGENTES */}
+          <section
+            id="ai-engine"
+            className="ui-stack ui-stack--md"
+            style={{ scrollMarginTop: "72px" }}
+          >
+            {/* CARD 1: AGENTES CONECTADOS & CLI HARNESS */}
+            <Card variant="elevated">
+              <CardHeader
+                title={
+                  <div className="ui-row ui-row--align-center ui-row--sm">
+                    <Terminal size={17} className="ui-text-primary" />
+                    <span>Agentes Conectados & CLI Harness (Proxy)</span>
+                  </div>
+                }
+                subtitle="Execução de alto desempenho conectada aos agentes e CLIs autenticados no computador."
+                actions={
+                  <Badge
+                    variant={
+                      harnessProvider === "antigravity"
+                        ? "primary"
+                        : harnessProvider === "claude-code"
+                          ? "warning"
+                          : "neutral"
+                    }
+                  >
+                    {harnessProvider.toUpperCase()}
+                  </Badge>
+                }
+              />
 
-                {/* 1.2 Tipos de Documento / Badges */}
-                <Stack gap="xs">
-                  <Row align="center" justify="between">
-                    <span className="ui-text-subtitle ui-text-bold">Tipos de Documento (Badges)</span>
-                    <span className="ui-text-caption ui-text-muted">Tipologia estrutural única por documento (ex: RFC, ADR, PRD, DOC)</span>
-                  </Row>
-                  <TaxonomyChipEditor
-                    items={badges}
-                    editingIndex={editingBadgeIndex}
-                    editName={editBadgeName}
-                    editColor={editBadgeColor}
-                    onStartEdit={handleStartEditBadge}
-                    onEditNameChange={setEditBadgeName}
-                    onEditColorChange={setEditBadgeColor}
-                    onSaveEdit={handleSaveEditBadge}
-                    onCancelEdit={() => setEditingBadgeIndex(null)}
-                    onRequestRemove={handleRequestRemoveBadge}
-                    isAdding={isAddingBadge}
-                    newName={newBadgeName}
-                    newColor={newBadgeColor}
-                    onStartAdd={() => setIsAddingBadge(true)}
-                    onNewNameChange={setNewBadgeName}
-                    onNewColorChange={setNewBadgeColor}
-                    onSaveAdd={handleAddBadge}
-                    onCancelAdd={() => {
-                      setIsAddingBadge(false);
-                      setNewBadgeName("");
-                    }}
-                    placeholder="tipo..."
-                    addTooltip="Adicionar Tipo de Documento / Badge"
-                  />
-                </Stack>
-
-                <Divider />
-
-                {/* 1.3 Tags */}
-                <Stack gap="xs">
-                  <span className="ui-text-subtitle ui-text-bold">Tags</span>
-                  <TaxonomyChipEditor
-                    items={tags}
-                    editingIndex={editingTagIndex}
-                    editName={editTagName}
-                    editColor={editTagColor}
-                    onStartEdit={handleStartEditTag}
-                    onEditNameChange={setEditTagName}
-                    onEditColorChange={setEditTagColor}
-                    onSaveEdit={handleSaveEditTag}
-                    onCancelEdit={() => setEditingTagIndex(null)}
-                    onRequestRemove={handleRequestRemoveTag}
-                    isAdding={isAddingTag}
-                    newName={newTagName}
-                    newColor={newTagColor}
-                    onStartAdd={() => setIsAddingTag(true)}
-                    onNewNameChange={setNewTagName}
-                    onNewColorChange={setNewTagColor}
-                    onSaveAdd={handleAddTag}
-                    onCancelAdd={() => {
-                      setIsAddingTag(false);
-                      setNewTagName("");
-                    }}
-                    placeholder="tag..."
-                    addTooltip="Adicionar Tag"
-                  />
-                </Stack>
-
-                <Divider />
-
-                {/* 1.4 Status */}
-                <Stack gap="xs">
-                  <span className="ui-text-subtitle ui-text-bold">Status de Documento</span>
-                  <TaxonomyChipEditor
-                    items={statuses}
-                    editingIndex={editingStatusIndex}
-                    editName={editStatusName}
-                    editColor={editStatusColor}
-                    onStartEdit={handleStartEditStatus}
-                    onEditNameChange={setEditStatusName}
-                    onEditColorChange={setEditStatusColor}
-                    onSaveEdit={handleSaveEditStatus}
-                    onCancelEdit={() => setEditingStatusIndex(null)}
-                    onRequestRemove={handleRequestRemoveStatus}
-                    isAdding={isAddingStatus}
-                    newName={newStatusName}
-                    newColor={newStatusColor}
-                    onStartAdd={() => setIsAddingStatus(true)}
-                    onNewNameChange={setNewStatusName}
-                    onNewColorChange={setNewStatusColor}
-                    onSaveAdd={handleAddStatus}
-                    onCancelAdd={() => {
-                      setIsAddingStatus(false);
-                      setNewStatusName("");
-                    }}
-                    placeholder="status..."
-                    addTooltip="Adicionar Status"
-                  />
-                </Stack>
-              </Stack>
-            </CardContent>
-          </Card>
-        </section>
-
-        {/* 2. SEÇÃO: MOTOR DE IA E HARNESS DE AGENTES */}
-        <section id="ai-engine" className="ui-stack ui-stack--md" style={{ scrollMarginTop: "72px" }}>
-          {/* CARD 1: AGENTES CONECTADOS & CLI HARNESS */}
-          <Card variant="elevated">
-            <CardHeader
-              title={
-                <div className="ui-row ui-row--align-center ui-row--sm">
-                  <Terminal size={17} className="ui-text-primary" />
-                  <span>Agentes Conectados & CLI Harness (Proxy)</span>
-                </div>
-              }
-              subtitle="Execução de alto desempenho conectada aos agentes e CLIs autenticados no computador."
-              actions={
-                <Badge
-                  variant={
-                    harnessProvider === "antigravity"
-                      ? "primary"
-                      : harnessProvider === "claude-code"
-                        ? "warning"
-                        : "neutral"
-                  }
-                >
-                  {harnessProvider.toUpperCase()}
-                </Badge>
-              }
-            />
-
-            <CardContent>
-              <Stack gap="md">
-                {/* Seleção de Harness */}
-                <div className="ui-grid-cards">
-                  {[
-                    {
-                      id: "antigravity",
-                      name: "Google Antigravity Agent",
-                      cliName: "agy",
-                      sub: "Agente multi-ferramenta com streaming SSE e raciocínio contextual",
-                      icon: <Zap size={15} className="ui-text-primary" />,
-                      detected:
-                        detectedProviders.find((p) => p.id === "antigravity")
-                          ?.isAvailable ?? true,
-                      statusMsg:
-                        detectedProviders.find((p) => p.id === "antigravity")
-                          ?.statusMessage || "Detectado em ~/.local/bin/agy",
-                    },
-                    {
-                      id: "claude-code",
-                      name: "Claude Code CLI",
-                      cliName: "claude",
-                      sub: "Harness conectado ao agente oficial Claude Code CLI",
-                      icon: <Sparkles size={15} className="ui-text-warning" />,
-                      detected:
-                        detectedProviders.find((p) => p.id === "claude-code")
-                          ?.isAvailable ?? true,
-                      statusMsg:
-                        detectedProviders.find((p) => p.id === "claude-code")
-                          ?.statusMessage || "Detectado em ~/.local/bin/claude",
-                    },
-                    {
-                      id: "direct-api",
-                      name: "Direct API Fallback",
-                      cliName: "RAW / SDK",
-                      sub: "Chamadas diretas de modelo via SDK e chaves de API em nuvem",
-                      icon: <Cpu size={15} className="ui-text-success" />,
-                      detected: true,
-                      statusMsg: "Sempre disponível com chaves de API",
-                    },
-                  ].map((item) => {
-                    const isSelected = harnessProvider === item.id;
-                    return (
-                      <div
-                        key={item.id}
-                        onClick={() => setHarnessProvider(item.id)}
-                        className={`ui-select-tile ${isSelected ? "ui-select-tile--selected" : ""}`}
-                      >
-                        <div className="ui-select-tile__header">
-                          <div className="ui-row ui-row--align-center ui-row--xs">
-                            {item.icon}
-                            <strong className="ui-text-title">{item.name}</strong>
+              <CardContent>
+                <Stack gap="md">
+                  {/* Seleção de Harness */}
+                  <div className="ui-grid-cards">
+                    {[
+                      {
+                        id: "antigravity",
+                        name: "Google Antigravity Agent",
+                        cliName: "agy",
+                        sub: "Agente multi-ferramenta com streaming SSE e raciocínio contextual",
+                        icon: <Zap size={15} className="ui-text-primary" />,
+                        detected:
+                          detectedProviders.find((p) => p.id === "antigravity")
+                            ?.isAvailable ?? true,
+                        statusMsg:
+                          detectedProviders.find((p) => p.id === "antigravity")
+                            ?.statusMessage || "Detectado em ~/.local/bin/agy",
+                      },
+                      {
+                        id: "claude-code",
+                        name: "Claude Code CLI",
+                        cliName: "claude",
+                        sub: "Harness conectado ao agente oficial Claude Code CLI",
+                        icon: (
+                          <Sparkles size={15} className="ui-text-warning" />
+                        ),
+                        detected:
+                          detectedProviders.find((p) => p.id === "claude-code")
+                            ?.isAvailable ?? true,
+                        statusMsg:
+                          detectedProviders.find((p) => p.id === "claude-code")
+                            ?.statusMessage ||
+                          "Detectado em ~/.local/bin/claude",
+                      },
+                      {
+                        id: "direct-api",
+                        name: "Direct API Fallback",
+                        cliName: "RAW / SDK",
+                        sub: "Chamadas diretas de modelo via SDK e chaves de API em nuvem",
+                        icon: <Cpu size={15} className="ui-text-success" />,
+                        detected: true,
+                        statusMsg: "Sempre disponível com chaves de API",
+                      },
+                    ].map((item) => {
+                      const isSelected = harnessProvider === item.id;
+                      return (
+                        <div
+                          key={item.id}
+                          onClick={() => setHarnessProvider(item.id)}
+                          className={`ui-select-tile ${isSelected ? "ui-select-tile--selected" : ""}`}
+                        >
+                          <div className="ui-select-tile__header">
+                            <div className="ui-row ui-row--align-center ui-row--xs">
+                              {item.icon}
+                              <strong className="ui-text-title">
+                                {item.name}
+                              </strong>
+                            </div>
+                            <Badge
+                              variant={item.detected ? "success" : "danger"}
+                              size="sm"
+                              dot
+                            >
+                              {item.detected ? "Detectado" : "Não Localizado"}
+                            </Badge>
                           </div>
-                          <Badge variant={item.detected ? "success" : "danger"} size="sm" dot>
-                            {item.detected ? "Detectado" : "Não Localizado"}
-                          </Badge>
-                        </div>
-                        <p className="ui-select-tile__sub">{item.sub}</p>
-                        <span className={`ui-text-caption ${item.detected ? "ui-text-success" : "ui-text-danger"}`}>
-                          {item.statusMsg}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Parâmetros do Agente: Nível de Raciocínio (Effort) & Teste */}
-                <div className="ui-grid-2cols">
-                  <FormField label="Raciocínio do Agente:">
-                    <div className="ui-segmented-group">
-                      {[
-                        { id: "low", label: "⚡ Rápido", sub: "" },
-                        { id: "medium", label: "⚖️ Equilibrado", sub: "" },
-                        { id: "high", label: "🧠 Profundo", sub: "" },
-                      ].map((eff) => {
-                        const isEffSelected = agentEffort === eff.id;
-                        return (
-                          <button
-                            key={eff.id}
-                            type="button"
-                            onClick={() => setAgentEffort(eff.id as any)}
-                            className={`ui-segmented-btn ${isEffSelected ? "ui-segmented-btn--active" : ""}`}
+                          <p className="ui-select-tile__sub">{item.sub}</p>
+                          <span
+                            className={`ui-text-caption ${item.detected ? "ui-text-success" : "ui-text-danger"}`}
                           >
-                            <div>{eff.label}</div>
-                            <div className="ui-text-caption ui-text-muted">{eff.sub}</div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </FormField>
+                            {item.statusMsg}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
 
-                  <div className="ui-stack ui-stack--xs">
-                    <label className="ui-text-subtitle ui-text-bold">Status da Conexão CLI:</label>
-                    <div className="ui-row ui-row--align-center ui-row--sm">
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        leftIcon={
-                          <RefreshCw
-                            size={13}
-                            className={isCheckingHarness ? "spinning" : ""}
-                          />
-                        }
-                        onClick={checkHarnessProviders}
-                        disabled={isCheckingHarness}
-                      >
-                        {isCheckingHarness ? "Verificando..." : "Testar Detecção de CLIs"}
-                      </Button>
-                      {harnessCheckFeedback && (
-                        <span className="ui-text-caption ui-text-success ui-text-bold">
-                          {harnessCheckFeedback}
-                        </span>
-                      )}
+                  {/* Parâmetros do Agente: Nível de Raciocínio (Effort) & Teste */}
+                  <div className="ui-grid-2cols">
+                    <FormField label="Raciocínio do Agente:">
+                      <div className="ui-segmented-group">
+                        {[
+                          { id: "low", label: "⚡ Rápido", sub: "" },
+                          { id: "medium", label: "⚖️ Equilibrado", sub: "" },
+                          { id: "high", label: "🧠 Profundo", sub: "" },
+                        ].map((eff) => {
+                          const isEffSelected = agentEffort === eff.id;
+                          return (
+                            <button
+                              key={eff.id}
+                              type="button"
+                              onClick={() => setAgentEffort(eff.id as any)}
+                              className={`ui-segmented-btn ${isEffSelected ? "ui-segmented-btn--active" : ""}`}
+                            >
+                              <div>{eff.label}</div>
+                              <div className="ui-text-caption ui-text-muted">
+                                {eff.sub}
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </FormField>
+
+                    <div className="ui-stack ui-stack--xs">
+                      <label className="ui-text-subtitle ui-text-bold">
+                        Status da Conexão CLI:
+                      </label>
+                      <div className="ui-row ui-row--align-center ui-row--sm">
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          leftIcon={
+                            <RefreshCw
+                              size={13}
+                              className={isCheckingHarness ? "spinning" : ""}
+                            />
+                          }
+                          onClick={checkHarnessProviders}
+                          disabled={isCheckingHarness}
+                        >
+                          {isCheckingHarness
+                            ? "Verificando..."
+                            : "Testar Detecção de CLIs"}
+                        </Button>
+                        {harnessCheckFeedback && (
+                          <span className="ui-text-caption ui-text-success ui-text-bold">
+                            {harnessCheckFeedback}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                {/* Caminhos customizados para portabilidade */}
-                <div className="ui-grid-2cols">
-                  <FormField label="Caminho Customizado Antigravity CLI (Opcional):">
-                    <Input
-                      placeholder="Ex: ~/.local/bin/agy ou /usr/local/bin/agy"
-                      value={antigravityCliPath}
-                      onChange={(e) => setAntigravityCliPath(e.target.value)}
-                    />
-                  </FormField>
-                  <FormField label="Caminho Customizado Claude Code CLI (Opcional):">
-                    <Input
-                      placeholder="Ex: ~/.local/bin/claude ou /usr/local/bin/claude"
-                      value={claudeCliPath}
-                      onChange={(e) => setClaudeCliPath(e.target.value)}
-                    />
-                  </FormField>
-                </div>
-              </Stack>
-            </CardContent>
-          </Card>
+                  {/* Caminhos customizados para portabilidade */}
+                  <div className="ui-grid-2cols">
+                    <FormField label="Caminho Customizado Antigravity CLI (Opcional):">
+                      <Input
+                        placeholder="Ex: ~/.local/bin/agy ou /usr/local/bin/agy"
+                        value={antigravityCliPath}
+                        onChange={(e) => setAntigravityCliPath(e.target.value)}
+                      />
+                    </FormField>
+                    <FormField label="Caminho Customizado Claude Code CLI (Opcional):">
+                      <Input
+                        placeholder="Ex: ~/.local/bin/claude ou /usr/local/bin/claude"
+                        value={claudeCliPath}
+                        onChange={(e) => setClaudeCliPath(e.target.value)}
+                      />
+                    </FormField>
+                  </div>
+                </Stack>
+              </CardContent>
+            </Card>
 
-          <Card variant="elevated">
-            <CardHeader
-              title={
-                <div className="ui-row ui-row--align-center ui-row--sm">
-                  <Cpu size={17} className="ui-text-success" />
-                  <span>Motor de Inteligência Artificial</span>
-                </div>
-              }
-              subtitle="Provedor e modelo para assistência e copiloto."
-              actions={
-                <Badge variant="success">{provider.toUpperCase()}</Badge>
-              }
-            />
+            <Card variant="elevated">
+              <CardHeader
+                title={
+                  <div className="ui-row ui-row--align-center ui-row--sm">
+                    <Cpu size={17} className="ui-text-success" />
+                    <span>Motor de Inteligência Artificial</span>
+                  </div>
+                }
+                subtitle="Provedor e modelo para assistência e copiloto."
+                actions={
+                  <Badge variant="success">{provider.toUpperCase()}</Badge>
+                }
+              />
 
-            <CardContent>
-              <Stack gap="md">
-                <div className="ui-grid-cards ui-grid-cards--sm">
-                  {[
-                    {
-                      id: "gemini",
-                      name: "Google Gemini",
-                      sub: "Flash 2.5 & Pro",
-                    },
-                    { id: "openai", name: "OpenAI", sub: "GPT-4o & o3-mini" },
-                    {
-                      id: "anthropic",
-                      name: "Anthropic",
-                      sub: "Claude 3.7 & 3.5",
-                    },
-                    { id: "deepseek", name: "DeepSeek", sub: "V3 & R1" },
-                    { id: "local", name: "Ollama Local", sub: "Localhost" },
-                  ].map((p) => {
-                    const isSelected = provider === p.id;
-                    return (
+              <CardContent>
+                <Stack gap="md">
+                  <div className="ui-grid-cards ui-grid-cards--sm">
+                    {[
+                      {
+                        id: "gemini",
+                        name: "Google Gemini",
+                        sub: "Flash 2.5 & Pro",
+                      },
+                      { id: "openai", name: "OpenAI", sub: "GPT-4o & o3-mini" },
+                      {
+                        id: "anthropic",
+                        name: "Anthropic",
+                        sub: "Claude 3.7 & 3.5",
+                      },
+                      { id: "deepseek", name: "DeepSeek", sub: "V3 & R1" },
+                      { id: "local", name: "Ollama Local", sub: "Localhost" },
+                    ].map((p) => {
+                      const isSelected = provider === p.id;
+                      return (
+                        <div
+                          key={p.id}
+                          onClick={() => {
+                            setProvider(p.id);
+                            fetchModelsForProvider(p.id, apiKey, endpoint);
+                          }}
+                          className={`ui-select-tile ${isSelected ? "ui-select-tile--success-selected" : ""}`}
+                        >
+                          <strong className="ui-text-title">{p.name}</strong>
+                          <span className="ui-select-tile__sub">{p.sub}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="ui-grid-2cols">
+                    <FormField label="Modelo Selecionado:">
                       <div
-                        key={p.id}
-                        onClick={() => {
-                          setProvider(p.id);
-                          fetchModelsForProvider(p.id, apiKey, endpoint);
-                        }}
-                        className={`ui-select-tile ${isSelected ? "ui-select-tile--success-selected" : ""}`}
+                        className="ui-row ui-row--align-center ui-row--xs"
+                        style={{ width: "100%" }}
                       >
-                        <strong className="ui-text-title">{p.name}</strong>
-                        <span className="ui-select-tile__sub">{p.sub}</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <SelectDropdown
+                            value={model}
+                            options={selectOptions}
+                            onChange={(val) => setModel(val)}
+                            placeholder="Selecione o modelo..."
+                            searchable={selectOptions.length > 5}
+                            searchPlaceholder="Filtrar..."
+                            leadingIcon="smart_toy"
+                          />
+                        </div>
+                        <IconButton
+                          size="sm"
+                          bordered
+                          tooltip="Recarregar modelos do provedor"
+                          onClick={() =>
+                            fetchModelsForProvider(provider, apiKey, endpoint)
+                          }
+                          disabled={isLoadingModels}
+                        >
+                          <RefreshCw
+                            size={13}
+                            className={isLoadingModels ? "spinning" : ""}
+                          />
+                        </IconButton>
                       </div>
-                    );
-                  })}
-                </div>
+                    </FormField>
 
-                <div className="ui-grid-2cols">
-                  <FormField label="Modelo Selecionado:">
-                    <div className="ui-row ui-row--align-center ui-row--xs" style={{ width: "100%" }}>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <SelectDropdown
-                          value={model}
-                          options={selectOptions}
-                          onChange={(val) => setModel(val)}
-                          placeholder="Selecione o modelo..."
-                          searchable={selectOptions.length > 5}
-                          searchPlaceholder="Filtrar..."
-                          leadingIcon="smart_toy"
-                        />
-                      </div>
-                      <IconButton
-                        size="sm"
-                        bordered
-                        tooltip="Recarregar modelos do provedor"
-                        onClick={() =>
+                    <FormField label="Chave de API (API Key):">
+                      <Input
+                        type="password"
+                        placeholder="Cole sua chave aqui..."
+                        value={apiKey}
+                        onChange={(e) => setApiKey(e.target.value)}
+                        onBlur={() =>
+                          apiKey.trim() &&
                           fetchModelsForProvider(provider, apiKey, endpoint)
                         }
-                        disabled={isLoadingModels}
-                      >
-                        <RefreshCw
-                          size={13}
-                          className={isLoadingModels ? "spinning" : ""}
-                        />
-                      </IconButton>
-                    </div>
-                  </FormField>
+                      />
+                    </FormField>
+                  </div>
 
-                  <FormField label="Chave de API (API Key):">
-                    <Input
-                      type="password"
-                      placeholder="Cole sua chave aqui..."
-                      value={apiKey}
-                      onChange={(e) => setApiKey(e.target.value)}
-                      onBlur={() =>
-                        apiKey.trim() &&
-                        fetchModelsForProvider(provider, apiKey, endpoint)
-                      }
-                    />
-                  </FormField>
-                </div>
+                  {provider === "local" && (
+                    <FormField label="Endpoint Local (Ollama):">
+                      <Input
+                        value={endpoint}
+                        onChange={(e) => setEndpoint(e.target.value)}
+                      />
+                    </FormField>
+                  )}
+                </Stack>
+              </CardContent>
 
-                {provider === "local" && (
-                  <FormField label="Endpoint Local (Ollama):">
-                    <Input
-                      value={endpoint}
-                      onChange={(e) => setEndpoint(e.target.value)}
-                    />
-                  </FormField>
-                )}
-              </Stack>
-            </CardContent>
-
-            <CardFooter>
-              <Button
-                variant="primary"
-                size="sm"
-                leftIcon={<Save size={13} />}
-                onClick={handleSaveAISettings}
-              >
-                Salvar Motor de IA
-              </Button>
-            </CardFooter>
-          </Card>
-        </section>
-
-        {/* 3. SEÇÃO: CRIADOR DE TEMPLATES */}
-        <section id="template-prompt" style={{ scrollMarginTop: "72px" }}>
-          <Card variant="elevated">
-            <CardHeader
-              title={
-                <div className="ui-row ui-row--align-center ui-row--sm">
-                  <Layers size={17} style={{ color: "#8b5cf6" }} />
-                  <span>Criador de Templates</span>
-                </div>
-              }
-              subtitle="Crie, customize e gerencie templates de documentação viva no editor dedicado."
-              actions={<Badge variant="purple">Template Studio</Badge>}
-            />
-
-            <CardContent>
-              <div className="ui-panel ui-panel--subtle ui-row ui-row--align-center ui-row--justify-between ui-row--wrap ui-row--md">
-                <div className="ui-stack ui-stack--xs" style={{ flex: 1, minWidth: "260px" }}>
-                  <strong className="ui-text-title">
-                    Editor & Estúdio de Templates
-                  </strong>
-                  <span className="ui-text-body-sm ui-text-muted">
-                    Acesse o editor rico para criar novos templates, importar
-                    modelos da comunidade e editar o conteúdo em Markdown.
-                  </span>
-                </div>
-
+              <CardFooter>
                 <Button
                   variant="primary"
-                  leftIcon={<ExternalLink size={14} />}
-                  onClick={() =>
-                    navigate(
-                      `/projects/${activeRepo?.name || "default"}/templates`,
-                    )
-                  }
+                  size="sm"
+                  leftIcon={<Save size={13} />}
+                  onClick={handleSaveAISettings}
                 >
-                  Abrir Editor de Templates
+                  Salvar Motor de IA
                 </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </section>
+              </CardFooter>
+            </Card>
+          </section>
 
-        {/* 4. SEÇÃO: SESSÃO & GITHUB */}
-        <section id="user-session" style={{ scrollMarginTop: "72px" }}>
-          <div className="ui-panel ui-row ui-row--align-center ui-row--justify-between">
-            <div className="ui-row ui-row--align-center ui-row--sm">
-              <img
-                src={
-                  user?.avatar_url ||
-                  `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.name || "User")}&background=2563eb&color=fff`
+          {/* 3. SEÇÃO: CRIADOR DE TEMPLATES */}
+          <section id="template-prompt" style={{ scrollMarginTop: "72px" }}>
+            <Card variant="elevated">
+              <CardHeader
+                title={
+                  <div className="ui-row ui-row--align-center ui-row--sm">
+                    <Layers size={17} style={{ color: "#8b5cf6" }} />
+                    <span>Criador de Templates</span>
+                  </div>
                 }
-                alt="Avatar"
-                className="ui-avatar"
-                style={{ width: 34, height: 34, borderRadius: "50%" }}
+                subtitle="Crie, customize e gerencie templates de documentação viva no editor dedicado."
+                actions={<Badge variant="purple">Template Studio</Badge>}
               />
-              <div className="ui-stack ui-stack--xs">
-                <strong className="ui-text-title">
-                  {user?.name || "Usuário Autenticado"}
-                </strong>
-                <span className="ui-text-caption ui-text-muted">
-                  @{user?.login || "github"}
-                </span>
-              </div>
-            </div>
 
-            <Button
-              variant="danger"
-              size="sm"
-              leftIcon={<LogOut size={13} />}
-              onClick={logout}
-            >
-              Desconectar
-            </Button>
-          </div>
-        </section>
+              <CardContent>
+                <div className="ui-panel ui-panel--subtle ui-row ui-row--align-center ui-row--justify-between ui-row--wrap ui-row--md">
+                  <div
+                    className="ui-stack ui-stack--xs"
+                    style={{ flex: 1, minWidth: "260px" }}
+                  >
+                    <strong className="ui-text-title">
+                      Editor & Estúdio de Templates
+                    </strong>
+                    <span className="ui-text-body-sm ui-text-muted">
+                      Acesse o editor rico para criar novos templates, importar
+                      modelos da comunidade e editar o conteúdo em Markdown.
+                    </span>
+                  </div>
+
+                  <Button
+                    variant="primary"
+                    leftIcon={<ExternalLink size={14} />}
+                    onClick={() =>
+                      navigate(
+                        `/projects/${activeRepo?.name || "default"}/templates`,
+                      )
+                    }
+                  >
+                    Abrir Editor de Templates
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </section>
+
+          {/* 4. SEÇÃO: SESSÃO & GITHUB */}
+          <section id="user-session" style={{ scrollMarginTop: "72px" }}>
+            <div className="ui-panel ui-row ui-row--align-center ui-row--justify-between">
+              <div className="ui-row ui-row--align-center ui-row--sm">
+                <img
+                  src={
+                    user?.avatar_url ||
+                    `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.name || "User")}&background=2563eb&color=fff`
+                  }
+                  alt="Avatar"
+                  className="ui-avatar"
+                  style={{ width: 34, height: 34, borderRadius: "50%" }}
+                />
+                <div className="ui-stack ui-stack--xs">
+                  <strong className="ui-text-title">
+                    {user?.name || "Usuário Autenticado"}
+                  </strong>
+                  <span className="ui-text-caption ui-text-muted">
+                    @{user?.login || "github"}
+                  </span>
+                </div>
+              </div>
+
+              <Button
+                variant="danger"
+                size="sm"
+                leftIcon={<LogOut size={13} />}
+                onClick={logout}
+              >
+                Desconectar
+              </Button>
+            </div>
+          </section>
         </div>
       </PageBody>
 
