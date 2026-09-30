@@ -502,19 +502,27 @@
 
 .ui-input-icon-left {
   position: absolute;
-  left: 12px;
+  left: 11px;
+  top: 50%;
+  transform: translateY(-50%);
   color: var(--md-sys-color-on-surface-variant, #5f6368);
   pointer-events: none;
   display: flex;
   align-items: center;
+  justify-content: center;
+  z-index: 2;
 }
 
 .ui-input-icon-right {
   position: absolute;
-  right: 12px;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
   color: var(--md-sys-color-on-surface-variant, #5f6368);
   display: flex;
   align-items: center;
+  justify-content: center;
+  z-index: 2;
 }
 
 .ui-input,
@@ -536,12 +544,21 @@
   height: 38px;
 }
 
+.ui-input::-webkit-search-cancel-button,
+.ui-input::-webkit-search-decoration,
+.ui-input::-webkit-search-results-button,
+.ui-input::-webkit-search-results-decoration {
+  -webkit-appearance: none;
+  appearance: none;
+  display: none;
+}
+
 .ui-input--with-left-icon {
-  padding-left: 38px;
+  padding-left: 38px !important;
 }
 
 .ui-input--with-right-icon {
-  padding-right: 38px;
+  padding-right: 38px !important;
 }
 
 .ui-input:focus,

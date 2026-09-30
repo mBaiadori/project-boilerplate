@@ -5,6 +5,8 @@ import { AICopilotPanel } from '../components/copilot/AICopilotPanel';
 import { PromptSidebar } from '../components/copilot/PromptSidebar';
 import { HistorySidebar } from '../components/copilot/HistorySidebar';
 import { RawInspectorSidebar } from '../components/copilot/RawInspectorSidebar';
+import { ContextSidebar } from '../components/copilot/ContextSidebar';
+import { SkillsSidebar } from '../components/copilot/SkillsSidebar';
 import { DiffModal } from '../components/modals/DiffModal';
 import { ScaffoldModal } from '../components/modals/ScaffoldModal';
 import { AISettingsModal } from '../components/modals/AISettingsModal';
@@ -41,7 +43,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onBackToRepos }) =
     : 'editor';
 
   const [isCopilotOpen, setIsCopilotOpen] = useState(false);
-  const [activeCopilotSidebar, setActiveCopilotSidebar] = useState<'prompt' | 'history' | 'raw' | null>(null);
+  const [activeCopilotSidebar, setActiveCopilotSidebar] = useState<'prompt' | 'history' | 'raw' | 'context' | 'skills' | null>(null);
   const [isDiffModalOpen, setIsDiffModalOpen] = useState(false);
   const [isScaffoldModalOpen, setIsScaffoldModalOpen] = useState(false);
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
@@ -268,6 +270,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onBackToRepos }) =
           />
         )}
 
+        {isCopilotOpen && activeCopilotSidebar === 'context' && (
+          <ContextSidebar
+            isOpen={true}
+            onClose={() => setActiveCopilotSidebar(null)}
+          />
+        )}
+
+        {isCopilotOpen && activeCopilotSidebar === 'skills' && (
+          <SkillsSidebar
+            isOpen={true}
+            onClose={() => setActiveCopilotSidebar(null)}
+          />
+        )}
+
         {/* Vertical Resizer: Workspace Content <-> Global AI Copilot */}
         {isCopilotOpen && (
           <div
@@ -296,6 +312,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onBackToRepos }) =
             onOpenPrompt={() => setActiveCopilotSidebar(activeCopilotSidebar === 'prompt' ? null : 'prompt')}
             onOpenHistory={() => setActiveCopilotSidebar(activeCopilotSidebar === 'history' ? null : 'history')}
             onOpenRaw={() => setActiveCopilotSidebar(activeCopilotSidebar === 'raw' ? null : 'raw')}
+            onOpenContext={() => setActiveCopilotSidebar(activeCopilotSidebar === 'context' ? null : 'context')}
+            onOpenSkills={() => setActiveCopilotSidebar(activeCopilotSidebar === 'skills' ? null : 'skills')}
           />
         </aside>
       </div>

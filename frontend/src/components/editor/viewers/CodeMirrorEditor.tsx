@@ -8,6 +8,11 @@ import { css } from '@codemirror/lang-css';
 import { python } from '@codemirror/lang-python';
 import { sql } from '@codemirror/lang-sql';
 import { yaml } from '@codemirror/lang-yaml';
+import { cpp } from '@codemirror/lang-cpp';
+import { rust } from '@codemirror/lang-rust';
+import { java } from '@codemirror/lang-java';
+import { php } from '@codemirror/lang-php';
+import { xml } from '@codemirror/lang-xml';
 import { getFileExtension, getLanguageLabel } from '../../../utils/file-types';
 import { useWorkspace } from '../../../context/WorkspaceContext';
 import { FileCode, Save, Laptop } from 'lucide-react';
@@ -85,6 +90,16 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = ({
       exts.push(javascript({ typescript: true, jsx: ext === 'tsx' }));
     } else if (['js', 'jsx', 'mjs', 'cjs'].includes(ext)) {
       exts.push(javascript({ jsx: ext === 'jsx' }));
+    } else if (['ino', 'pde', 'cpp', 'c', 'cc', 'cxx', 'h', 'hpp', 'hxx', 'inl', 'tpp'].includes(ext)) {
+      exts.push(cpp());
+    } else if (ext === 'rs') {
+      exts.push(rust());
+    } else if (['java', 'kt', 'kts'].includes(ext)) {
+      exts.push(java());
+    } else if (ext === 'php') {
+      exts.push(php());
+    } else if (['xml', 'svg', 'plist'].includes(ext)) {
+      exts.push(xml());
     } else if (ext === 'json') {
       exts.push(json());
     } else if (['html', 'htm'].includes(ext)) {

@@ -1,16 +1,16 @@
-import React, { useState } from 'react';
-import { API } from '../../services/api';
-import { Button, IconButton, Modal, FormField, Textarea } from '../ui';
-import { 
-  Copy, 
-  FileText, 
-  Download, 
-  FolderOpen, 
-  Upload, 
-  RefreshCw, 
-  Check, 
-  UploadCloud 
-} from 'lucide-react';
+import React, { useState } from "react";
+import { API } from "../../services/api";
+import { Button, IconButton, Modal, FormField, Textarea } from "../ui";
+import {
+  Copy,
+  FileText,
+  Download,
+  FolderOpen,
+  Upload,
+  RefreshCw,
+  Check,
+  UploadCloud,
+} from "lucide-react";
 
 interface DocActionBarProps {
   filePath: string;
@@ -26,11 +26,13 @@ export const DocActionBar: React.FC<DocActionBarProps> = ({
   onReload,
 }) => {
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
-  const [importText, setImportText] = useState('');
-  const [copiedNotification, setCopiedNotification] = useState<string | null>(null);
+  const [importText, setImportText] = useState("");
+  const [copiedNotification, setCopiedNotification] = useState<string | null>(
+    null,
+  );
 
   const wordCount = content.trim() ? content.trim().split(/\s+/).length : 0;
-  const lineCount = content.split('\n').length;
+  const lineCount = content.split("\n").length;
 
   const showNotification = (msg: string) => {
     setCopiedNotification(msg);
@@ -41,32 +43,35 @@ export const DocActionBar: React.FC<DocActionBarProps> = ({
     try {
       const res = await API.openInOS(filePath);
       if (res.ok) {
-        showNotification('Aberto no PC!');
+        showNotification("Aberto no PC!");
       } else {
-        alert(res.data?.error || 'Não foi possível abrir o arquivo no sistema operacional.');
+        alert(
+          res.data?.error ||
+            "Não foi possível abrir o arquivo no sistema operacional.",
+        );
       }
     } catch {
-      alert('Erro ao comunicar com o servidor.');
+      alert("Erro ao comunicar com o servidor.");
     }
   };
 
   const handleCopyPath = () => {
     navigator.clipboard.writeText(filePath);
-    showNotification('Caminho copiado!');
+    showNotification("Caminho copiado!");
   };
 
   const handleCopyFullDoc = () => {
     navigator.clipboard.writeText(content);
-    showNotification('Documento copiado!');
+    showNotification("Documento copiado!");
   };
 
   const handleExportMarkdown = () => {
-    const filename = filePath.split('/').pop() || 'document.md';
-    const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
+    const filename = filePath.split("/").pop() || "document.md";
+    const blob = new Blob([content], { type: "text/markdown;charset=utf-8" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
+    const a = document.createElement("a");
     a.href = url;
-    a.download = filename.endsWith('.md') ? filename : `${filename}.md`;
+    a.download = filename.endsWith(".md") ? filename : `${filename}.md`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -82,7 +87,7 @@ export const DocActionBar: React.FC<DocActionBarProps> = ({
       if (text) {
         onImportContent(text);
         setIsImportModalOpen(false);
-        showNotification('Arquivo importado com sucesso!');
+        showNotification("Arquivo importado com sucesso!");
       }
     };
     reader.readAsText(file);
@@ -92,8 +97,8 @@ export const DocActionBar: React.FC<DocActionBarProps> = ({
     if (importText.trim()) {
       onImportContent(importText);
       setIsImportModalOpen(false);
-      setImportText('');
-      showNotification('Conteúdo importado com sucesso!');
+      setImportText("");
+      showNotification("Conteúdo importado com sucesso!");
     }
   };
 
@@ -102,17 +107,17 @@ export const DocActionBar: React.FC<DocActionBarProps> = ({
       <div
         className="doc-action-bar"
         style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '6px 16px',
-          borderBottom: '1px solid var(--color-outline-variant)',
-          background: 'var(--color-surface-container-low)',
-          fontSize: '12px',
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "6px 16px",
+          borderBottom: "1px solid var(--color-outline-variant)",
+          background: "var(--color-surface-container-low)",
+          fontSize: "12px",
         }}
       >
         {/* Left: Actions */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
           <Button
             variant="ghost"
             size="sm"
@@ -150,7 +155,7 @@ export const DocActionBar: React.FC<DocActionBarProps> = ({
             title="Abrir no gerenciador de arquivos do PC"
             icon={<FolderOpen size={13} />}
           >
-            Abrir no PC
+            Abrir
           </Button>
 
           <Button
@@ -173,9 +178,24 @@ export const DocActionBar: React.FC<DocActionBarProps> = ({
         </div>
 
         {/* Right: Notification & Counters */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--color-outline)' }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            color: "var(--color-outline)",
+          }}
+        >
           {copiedNotification && (
-            <span style={{ color: 'var(--color-success)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+            <span
+              style={{
+                color: "var(--color-success)",
+                fontWeight: 600,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "4px",
+              }}
+            >
               <Check size={14} /> {copiedNotification}
             </span>
           )}
@@ -194,7 +214,11 @@ export const DocActionBar: React.FC<DocActionBarProps> = ({
         size="md"
         footer={
           <>
-            <Button variant="secondary" size="sm" onClick={() => setIsImportModalOpen(false)}>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setIsImportModalOpen(false)}
+            >
               Cancelar
             </Button>
             <Button
@@ -209,7 +233,7 @@ export const DocActionBar: React.FC<DocActionBarProps> = ({
           </>
         }
       >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
           <FormField
             label="Opção 1: Selecionar arquivo do computador (.md)"
             helperText="Selecione um arquivo .md, .txt ou .markdown para carregar o conteúdo."
@@ -219,19 +243,39 @@ export const DocActionBar: React.FC<DocActionBarProps> = ({
               accept=".md,.txt,.markdown"
               onChange={handleFileUpload}
               style={{
-                fontSize: '12.5px',
-                color: 'var(--color-on-surface)',
-                padding: '6px 0',
+                fontSize: "12.5px",
+                color: "var(--color-on-surface)",
+                padding: "6px 0",
               }}
             />
           </FormField>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <div style={{ flex: 1, height: '1px', background: 'var(--color-outline-variant)' }} />
-            <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-outline)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <div
+              style={{
+                flex: 1,
+                height: "1px",
+                background: "var(--color-outline-variant)",
+              }}
+            />
+            <span
+              style={{
+                fontSize: "11px",
+                fontWeight: 600,
+                color: "var(--color-outline)",
+                textTransform: "uppercase",
+                letterSpacing: "0.05em",
+              }}
+            >
               OU
             </span>
-            <div style={{ flex: 1, height: '1px', background: 'var(--color-outline-variant)' }} />
+            <div
+              style={{
+                flex: 1,
+                height: "1px",
+                background: "var(--color-outline-variant)",
+              }}
+            />
           </div>
 
           <FormField
@@ -243,7 +287,10 @@ export const DocActionBar: React.FC<DocActionBarProps> = ({
               value={importText}
               onChange={(e) => setImportText(e.target.value)}
               placeholder="# Cole o conteúdo Markdown aqui..."
-              style={{ fontFamily: 'var(--font-mono, monospace)', fontSize: '12.5px' }}
+              style={{
+                fontFamily: "var(--font-mono, monospace)",
+                fontSize: "12.5px",
+              }}
             />
           </FormField>
         </div>

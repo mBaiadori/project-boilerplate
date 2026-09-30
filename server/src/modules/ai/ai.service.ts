@@ -79,8 +79,18 @@ export interface AIExecutionResult {
 export class AIService {
   private getMemoryDir(repoName?: string): string {
     const cfg = loadConfig();
-    const resolvedRepo = (repoName && repoName !== 'local') ? repoName : (cfg.active_repo?.name || 'default');
-    return path.join(PROJECTS_DIR, resolvedRepo, '.spec-memory');
+    let resolvedRepo = (repoName && repoName !== 'local' && repoName !== 'default')
+      ? repoName
+      : (cfg.active_repo?.name || 'default');
+
+    const targetDir = path.join(PROJECTS_DIR, resolvedRepo, '.spec-memory');
+    if (!fs.existsSync(targetDir) && cfg.active_repo?.name) {
+      const activeDir = path.join(PROJECTS_DIR, cfg.active_repo.name, '.spec-memory');
+      if (fs.existsSync(activeDir)) {
+        return activeDir;
+      }
+    }
+    return targetDir;
   }
 
   private getSessionsDir(repoName?: string): string {
@@ -661,8 +671,20 @@ export class AIService {
   }
 
   getChatHistory(repoName: string, sessionId?: string, filePath?: string) {
-    const sessionsDir = this.getSessionsDir(repoName);
-    if (!fs.existsSync(sessionsDir)) return { sessions: [] };
+    let sessionsDir = this.getSessionsDir(repoName);
+    if (!fs.existsSync(sessionsDir)) {
+      const cfg = loadConfig();
+      if (cfg.active_repo?.name && cfg.active_repo.name !== repoName) {
+        const fallbackDir = path.join(PROJECTS_DIR, cfg.active_repo.name, '.spec-memory', 'sessions');
+        if (fs.existsSync(fallbackDir)) {
+          sessionsDir = fallbackDir;
+        } else {
+          return { sessions: [] };
+        }
+      } else {
+        return { sessions: [] };
+      }
+    }
 
     if (sessionId) {
       const sessionFile = path.join(sessionsDir, `${sessionId}.json`);
@@ -706,6 +728,11 @@ export class AIService {
           stats.mtimeMs
         );
 
+        const userText = firstUserEvent?.text || firstUserEvent?.content || '';
+        const previewText = userText
+          ? (userText.length > 90 ? userText.slice(0, 90) + '...' : userText)
+          : (lastEvent?.text ? (lastEvent.text.length > 90 ? lastEvent.text.slice(0, 90) + '...' : lastEvent.text) : 'Conversa com Copilot');
+
         sessions.push({
           session_id: data.session_id || f.replace('.json', ''),
           path: data.path || 'Global',
@@ -715,7 +742,7 @@ export class AIService {
           timestamp: updatedTs,
           model: data.model || 'AI Assistant',
           author: data.author || { name: 'Developer' },
-          preview: firstUserEvent?.text ? (firstUserEvent.text.length > 90 ? firstUserEvent.text.slice(0, 90) + '...' : firstUserEvent.text) : 'Conversa com Copilot',
+          preview: previewText,
           metrics: data.metrics || {
             rounds: Math.ceil((data.events?.length || 1) / 2),
             total_tokens: 0,
@@ -735,7 +762,16 @@ export class AIService {
   getSessionDetails(repoName: string, sessionId?: string) {
     if (!sessionId) return null;
     const sessionsDir = this.getSessionsDir(repoName);
-    const sessionFile = path.join(sessionsDir, `${sessionId}.json`);
+    let sessionFile = path.join(sessionsDir, `${sessionId}.json`);
+    if (!fs.existsSync(sessionFile)) {
+      const cfg = loadConfig();
+      if (cfg.active_repo?.name && cfg.active_repo.name !== repoName) {
+        const fallbackFile = path.join(PROJECTS_DIR, cfg.active_repo.name, '.spec-memory', 'sessions', `${sessionId}.json`);
+        if (fs.existsSync(fallbackFile)) {
+          sessionFile = fallbackFile;
+        }
+      }
+    }
     if (fs.existsSync(sessionFile)) {
       try {
         return JSON.parse(fs.readFileSync(sessionFile, 'utf-8'));
@@ -746,7 +782,16 @@ export class AIService {
 
   deleteSession(repoName: string, sessionId: string) {
     const sessionsDir = this.getSessionsDir(repoName);
-    const sessionFile = path.join(sessionsDir, `${sessionId}.json`);
+    let sessionFile = path.join(sessionsDir, `${sessionId}.json`);
+    if (!fs.existsSync(sessionFile)) {
+      const cfg = loadConfig();
+      if (cfg.active_repo?.name && cfg.active_repo.name !== repoName) {
+        const fallbackFile = path.join(PROJECTS_DIR, cfg.active_repo.name, '.spec-memory', 'sessions', `${sessionId}.json`);
+        if (fs.existsSync(fallbackFile)) {
+          sessionFile = fallbackFile;
+        }
+      }
+    }
     if (fs.existsSync(sessionFile)) {
       try {
         fs.unlinkSync(sessionFile);

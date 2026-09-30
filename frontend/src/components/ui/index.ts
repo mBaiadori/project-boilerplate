@@ -19,3 +19,4 @@ export * from "./PageHeader";
 export * from "./StatCard";
 export * from "./Chip";
 export * from "./Layout";
+export * from "../common/SelectDropdown";

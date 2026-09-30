@@ -35,7 +35,7 @@ export const RawInspectorSidebar: React.FC<RawInspectorSidebarProps> = ({
   rawPayload: fallbackPayload,
   rawResponse: fallbackResponse,
 }) => {
-  const { currentSessionId, aiSettings, isRawMode } = useAI();
+  const { currentSessionId, aiSettings } = useAI();
   const sessionTelemetry = useCopilotStore((s) => s.sessionTelemetry);
   const activeRawTurnIndex = useCopilotStore((s) => s.activeRawTurnIndex);
   const setActiveRawTurnIndex = useCopilotStore((s) => s.setActiveRawTurnIndex);
@@ -132,7 +132,7 @@ export const RawInspectorSidebar: React.FC<RawInspectorSidebarProps> = ({
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `raio-x-mensagem-${selectedTurnIndex + 1}-${Date.now()}.json`;
+    a.download = `telemetria-mensagem-${selectedTurnIndex + 1}-${Date.now()}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -152,7 +152,7 @@ export const RawInspectorSidebar: React.FC<RawInspectorSidebarProps> = ({
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `raio-x-sessao-${currentSessionId}-${Date.now()}.json`;
+    a.download = `telemetria-sessao-${currentSessionId}-${Date.now()}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -166,21 +166,39 @@ export const RawInspectorSidebar: React.FC<RawInspectorSidebarProps> = ({
   const pricingInfo = getPricingForModel(currentModelName);
 
   return (
-    <aside className="ai-copilot-prompt-sidebar ai-copilot-raw-sidebar ui-sidebar-drawer" style={{ width: "460px", maxWidth: "60vw" }}>
+    <aside
+      className="ai-copilot-prompt-sidebar ai-copilot-raw-sidebar ui-sidebar-drawer"
+      style={{ width: "460px", maxWidth: "60vw" }}
+    >
       {/* Top Header */}
       <div className="ui-sidebar-drawer__header">
-        <div style={{ display: "flex", flexDirection: "column", gap: "2px", minWidth: 0 }}>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "2px",
+            minWidth: 0,
+          }}
+        >
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary, #0f172a)" }}>
-              Telemetria & Raio-X RAW
+            <span
+              style={{
+                fontSize: "13px",
+                fontWeight: 600,
+                color: "var(--color-text-primary, #0f172a)",
+              }}
+            >
+              Telemetria & Logs
             </span>
-            <Badge variant={isRawMode ? "warning" : "neutral"} size="sm">
-              {isRawMode ? "Modo Direto (RAW)" : "Harness com Agente"}
-            </Badge>
           </div>
           <span className="ui-text-muted" style={{ fontSize: "11px" }}>
             Documento:{" "}
-            <span style={{ fontFamily: "var(--font-family-mono)", color: "var(--color-text-secondary)" }}>
+            <span
+              style={{
+                fontFamily: "var(--font-family-mono)",
+                color: "var(--color-text-secondary)",
+              }}
+            >
               {docPath}
             </span>
           </span>
@@ -191,7 +209,7 @@ export const RawInspectorSidebar: React.FC<RawInspectorSidebarProps> = ({
             variant="ghost"
             size="sm"
             onClick={handleExportFullSession}
-            title="Exportar sessão completa em JSON"
+            title="Exportar telemetria e logs da sessão completa em JSON"
             icon={<Download size={13} />}
           >
             Exportar
@@ -199,7 +217,7 @@ export const RawInspectorSidebar: React.FC<RawInspectorSidebarProps> = ({
           <button
             className="btn-icon"
             type="button"
-            title="Fechar inspetor"
+            title="Fechar telemetria"
             onClick={onClose}
           >
             <X size={15} />
@@ -219,27 +237,66 @@ export const RawInspectorSidebar: React.FC<RawInspectorSidebarProps> = ({
         }}
       >
         <div style={{ display: "flex", flexDirection: "column" }}>
-          <span className="ui-text-muted" style={{ fontSize: "10px", textTransform: "uppercase", fontWeight: 600 }}>
+          <span
+            className="ui-text-muted"
+            style={{
+              fontSize: "10px",
+              textTransform: "uppercase",
+              fontWeight: 600,
+            }}
+          >
             Mensagens no Chat
           </span>
-          <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary, #0f172a)" }}>
+          <span
+            style={{
+              fontSize: "13px",
+              fontWeight: 600,
+              color: "var(--color-text-primary, #0f172a)",
+            }}
+          >
             {sessionAggregates.totalTurns}{" "}
             {sessionAggregates.totalTurns === 1 ? "interação" : "interações"}
           </span>
         </div>
         <div style={{ display: "flex", flexDirection: "column" }}>
-          <span className="ui-text-muted" style={{ fontSize: "10px", textTransform: "uppercase", fontWeight: 600 }}>
+          <span
+            className="ui-text-muted"
+            style={{
+              fontSize: "10px",
+              textTransform: "uppercase",
+              fontWeight: 600,
+            }}
+          >
             Tokens Acumulados
           </span>
-          <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-primary, #2563eb)" }}>
+          <span
+            style={{
+              fontSize: "13px",
+              fontWeight: 600,
+              color: "var(--color-primary, #2563eb)",
+            }}
+          >
             {formatTokenCount(sessionAggregates.totalTokens)}
           </span>
         </div>
         <div style={{ display: "flex", flexDirection: "column" }}>
-          <span className="ui-text-muted" style={{ fontSize: "10px", textTransform: "uppercase", fontWeight: 600 }}>
+          <span
+            className="ui-text-muted"
+            style={{
+              fontSize: "10px",
+              textTransform: "uppercase",
+              fontWeight: 600,
+            }}
+          >
             Custo Estimado
           </span>
-          <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-success, #16a34a)" }}>
+          <span
+            style={{
+              fontSize: "13px",
+              fontWeight: 600,
+              color: "var(--color-success, #16a34a)",
+            }}
+          >
             {formatCostUsd(sessionAggregates.totalCostUsd, pricingInfo.isLocal)}
           </span>
         </div>
@@ -258,10 +315,21 @@ export const RawInspectorSidebar: React.FC<RawInspectorSidebarProps> = ({
               gap: "8px",
             }}
           >
-            <div style={{ position: "relative", display: "flex", alignItems: "center", flex: 1 }}>
+            <div
+              style={{
+                position: "relative",
+                display: "flex",
+                alignItems: "center",
+                flex: 1,
+              }}
+            >
               <Search
                 size={13}
-                style={{ position: "absolute", left: "10px", color: "var(--color-text-muted, #94a3b8)" }}
+                style={{
+                  position: "absolute",
+                  left: "10px",
+                  color: "var(--color-text-muted, #94a3b8)",
+                }}
               />
               <input
                 type="text"
@@ -293,7 +361,8 @@ export const RawInspectorSidebar: React.FC<RawInspectorSidebarProps> = ({
             {displayTurns.length > 0 ? (
               displayTurns.map((turn) => {
                 const originalIndex =
-                  currentTurns.findIndex((t) => t.turn_id === turn.turn_id) !== -1
+                  currentTurns.findIndex((t) => t.turn_id === turn.turn_id) !==
+                  -1
                     ? currentTurns.findIndex((t) => t.turn_id === turn.turn_id)
                     : turn.turn_index
                       ? turn.turn_index - 1
@@ -320,7 +389,9 @@ export const RawInspectorSidebar: React.FC<RawInspectorSidebarProps> = ({
                       border: isSelected
                         ? "1.5px solid var(--color-primary, #2563eb)"
                         : "1px solid var(--color-border-subtle, #e2e8f0)",
-                      background: isSelected ? "var(--color-primary-subtle, #eff6ff)" : "var(--color-surface, #ffffff)",
+                      background: isSelected
+                        ? "var(--color-primary-subtle, #eff6ff)"
+                        : "var(--color-surface, #ffffff)",
                       cursor: "pointer",
                       transition: "all 0.15s ease",
                       display: "flex",
@@ -328,9 +399,27 @@ export const RawInspectorSidebar: React.FC<RawInspectorSidebarProps> = ({
                       gap: "6px",
                     }}
                   >
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                        <span style={{ fontSize: "11.5px", fontWeight: 700, color: "var(--color-text-primary, #0f172a)" }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "6px",
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontSize: "11.5px",
+                            fontWeight: 700,
+                            color: "var(--color-text-primary, #0f172a)",
+                          }}
+                        >
                           Mensagem #{turnNumber}
                         </span>
                         {isLatest && (
@@ -339,7 +428,10 @@ export const RawInspectorSidebar: React.FC<RawInspectorSidebarProps> = ({
                           </Badge>
                         )}
                         {turn.timestamp && (
-                          <span className="ui-text-muted" style={{ fontSize: "10.5px" }}>
+                          <span
+                            className="ui-text-muted"
+                            style={{ fontSize: "10.5px" }}
+                          >
                             {new Date(turn.timestamp).toLocaleTimeString([], {
                               hour: "2-digit",
                               minute: "2-digit",
@@ -348,15 +440,35 @@ export const RawInspectorSidebar: React.FC<RawInspectorSidebarProps> = ({
                         )}
                       </div>
 
-                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                        <Badge variant="neutral" size="sm" title={`Entrada: ${formatTokenCount(turn.metrics?.prompt_tokens)} | Saída: ${formatTokenCount(turn.metrics?.completion_tokens)}`}>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "6px",
+                        }}
+                      >
+                        <Badge
+                          variant="neutral"
+                          size="sm"
+                          title={`Entrada: ${formatTokenCount(turn.metrics?.prompt_tokens)} | Saída: ${formatTokenCount(turn.metrics?.completion_tokens)}`}
+                        >
                           {formatTokenCount(turn.metrics?.total_tokens)}
                         </Badge>
-                        <ChevronRight size={14} style={{ color: "var(--color-text-muted, #94a3b8)" }} />
+                        <ChevronRight
+                          size={14}
+                          style={{ color: "var(--color-text-muted, #94a3b8)" }}
+                        />
                       </div>
                     </div>
 
-                    <p style={{ margin: 0, fontSize: "11.5px", color: "var(--color-text-secondary, #334155)", lineHeight: 1.35 }}>
+                    <p
+                      style={{
+                        margin: 0,
+                        fontSize: "11.5px",
+                        color: "var(--color-text-secondary, #334155)",
+                        lineHeight: 1.35,
+                      }}
+                    >
                       {promptSnippet.length > 110
                         ? `${promptSnippet.slice(0, 110)}...`
                         : promptSnippet}
@@ -373,8 +485,14 @@ export const RawInspectorSidebar: React.FC<RawInspectorSidebarProps> = ({
                       }}
                     >
                       <span>
-                        Entrada: <strong>{formatTokenCount(turn.metrics?.prompt_tokens)}</strong> · Saída:{" "}
-                        <strong>{formatTokenCount(turn.metrics?.completion_tokens)}</strong>
+                        Entrada:{" "}
+                        <strong>
+                          {formatTokenCount(turn.metrics?.prompt_tokens)}
+                        </strong>{" "}
+                        · Saída:{" "}
+                        <strong>
+                          {formatTokenCount(turn.metrics?.completion_tokens)}
+                        </strong>
                       </span>
                       <span>
                         {hasTools
@@ -422,7 +540,13 @@ export const RawInspectorSidebar: React.FC<RawInspectorSidebarProps> = ({
             </Button>
 
             <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-              <span style={{ fontSize: "11px", fontWeight: 600, color: "var(--color-text-primary, #0f172a)" }}>
+              <span
+                style={{
+                  fontSize: "11px",
+                  fontWeight: 600,
+                  color: "var(--color-text-primary, #0f172a)",
+                }}
+              >
                 Mensagem {selectedTurnIndex + 1} de {currentTurns.length}
               </span>
               <div style={{ display: "flex", gap: "2px" }}>
@@ -462,7 +586,7 @@ export const RawInspectorSidebar: React.FC<RawInspectorSidebarProps> = ({
               { id: "request", label: "Enviado (Request)" },
               { id: "response", label: "Recebido (Response)" },
               { id: "costs", label: "Tokens & Preço" },
-              { id: "json", label: "JSON Bruto" },
+              { id: "json", label: "Payload" },
             ].map((tab) => {
               const isActive = detailTab === tab.id;
               return (
@@ -480,7 +604,9 @@ export const RawInspectorSidebar: React.FC<RawInspectorSidebarProps> = ({
                       ? "2px solid var(--color-primary, #2563eb)"
                       : "2px solid transparent",
                     background: "none",
-                    color: isActive ? "var(--color-primary, #2563eb)" : "var(--color-text-muted, #64748b)",
+                    color: isActive
+                      ? "var(--color-primary, #2563eb)"
+                      : "var(--color-text-muted, #64748b)",
                     cursor: "pointer",
                     textAlign: "center",
                     transition: "all 0.1s ease",
@@ -505,7 +631,13 @@ export const RawInspectorSidebar: React.FC<RawInspectorSidebarProps> = ({
           >
             {/* TAB 1: ENVIADO */}
             {detailTab === "request" && (
-              <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "12px",
+                }}
+              >
                 <RawCodeViewer
                   title="Prompt do Usuário"
                   content={activeTurn.request?.prompt}
@@ -524,18 +656,28 @@ export const RawInspectorSidebar: React.FC<RawInspectorSidebarProps> = ({
                   maxHeight="160px"
                 />
 
-                <div className="ui-card" style={{ padding: 0, overflow: "hidden" }}>
+                <div
+                  className="ui-card"
+                  style={{ padding: 0, overflow: "hidden" }}
+                >
                   <div
                     style={{
                       padding: "8px 12px",
                       background: "var(--color-surface-subtle, #f8fafc)",
-                      borderBottom: "1px solid var(--color-border-subtle, #e2e8f0)",
+                      borderBottom:
+                        "1px solid var(--color-border-subtle, #e2e8f0)",
                       display: "flex",
                       justifyContent: "space-between",
                       alignItems: "center",
                     }}
                   >
-                    <span style={{ fontSize: "11.5px", fontWeight: 600, color: "var(--color-text-primary, #0f172a)" }}>
+                    <span
+                      style={{
+                        fontSize: "11.5px",
+                        fontWeight: 600,
+                        color: "var(--color-text-primary, #0f172a)",
+                      }}
+                    >
                       Arquivos e Contexto Injetados
                     </span>
                     <Badge variant="neutral" size="sm">
@@ -551,7 +693,8 @@ export const RawInspectorSidebar: React.FC<RawInspectorSidebarProps> = ({
                       gap: "6px",
                     }}
                   >
-                    {activeTurn.request?.context_files && activeTurn.request.context_files.length > 0 ? (
+                    {activeTurn.request?.context_files &&
+                    activeTurn.request.context_files.length > 0 ? (
                       activeTurn.request.context_files.map((cf, idx) => (
                         <div
                           key={idx}
@@ -559,7 +702,8 @@ export const RawInspectorSidebar: React.FC<RawInspectorSidebarProps> = ({
                             padding: "4px 8px",
                             background: "var(--color-surface-subtle, #f8fafc)",
                             borderRadius: "4px",
-                            border: "1px solid var(--color-border-subtle, #e2e8f0)",
+                            border:
+                              "1px solid var(--color-border-subtle, #e2e8f0)",
                             fontFamily: "var(--font-family-mono)",
                           }}
                         >
@@ -574,7 +718,15 @@ export const RawInspectorSidebar: React.FC<RawInspectorSidebarProps> = ({
 
                     {activeTurn.request?.dynamic_context && (
                       <div style={{ marginTop: "4px" }}>
-                        <span style={{ fontSize: "10.5px", fontWeight: 600, color: "var(--color-text-secondary)", display: "block", marginBottom: "2px" }}>
+                        <span
+                          style={{
+                            fontSize: "10.5px",
+                            fontWeight: 600,
+                            color: "var(--color-text-secondary)",
+                            display: "block",
+                            marginBottom: "2px",
+                          }}
+                        >
                           Fragmento Dinâmico Selecionado:
                         </span>
                         <pre
@@ -596,22 +748,33 @@ export const RawInspectorSidebar: React.FC<RawInspectorSidebarProps> = ({
                   </div>
                 </div>
 
-                <div className="ui-card" style={{ padding: 0, overflow: "hidden" }}>
+                <div
+                  className="ui-card"
+                  style={{ padding: 0, overflow: "hidden" }}
+                >
                   <div
                     style={{
                       padding: "8px 12px",
                       background: "var(--color-surface-subtle, #f8fafc)",
-                      borderBottom: "1px solid var(--color-border-subtle, #e2e8f0)",
+                      borderBottom:
+                        "1px solid var(--color-border-subtle, #e2e8f0)",
                       display: "flex",
                       justifyContent: "space-between",
                       alignItems: "center",
                     }}
                   >
-                    <span style={{ fontSize: "11.5px", fontWeight: 600, color: "var(--color-text-primary, #0f172a)" }}>
+                    <span
+                      style={{
+                        fontSize: "11.5px",
+                        fontWeight: 600,
+                        color: "var(--color-text-primary, #0f172a)",
+                      }}
+                    >
                       Histórico Anterior Transmitido
                     </span>
                     <Badge variant="neutral" size="sm">
-                      {activeTurn.request?.history_messages?.length || 0} mensagens
+                      {activeTurn.request?.history_messages?.length || 0}{" "}
+                      mensagens
                     </Badge>
                   </div>
                   <div
@@ -625,7 +788,8 @@ export const RawInspectorSidebar: React.FC<RawInspectorSidebarProps> = ({
                       gap: "4px",
                     }}
                   >
-                    {activeTurn.request?.history_messages && activeTurn.request.history_messages.length > 0 ? (
+                    {activeTurn.request?.history_messages &&
+                    activeTurn.request.history_messages.length > 0 ? (
                       activeTurn.request.history_messages.map((hm, idx) => (
                         <div
                           key={idx}
@@ -633,13 +797,19 @@ export const RawInspectorSidebar: React.FC<RawInspectorSidebarProps> = ({
                             padding: "3px 6px",
                             background: "var(--color-surface-subtle, #f8fafc)",
                             borderRadius: "4px",
-                            border: "1px solid var(--color-border-subtle, #e2e8f0)",
+                            border:
+                              "1px solid var(--color-border-subtle, #e2e8f0)",
                           }}
                         >
                           <strong>
-                            {hm.role === "user" || hm.sender === "user" ? "Usuário" : "Assistente"}:{" "}
+                            {hm.role === "user" || hm.sender === "user"
+                              ? "Usuário"
+                              : "Assistente"}
+                            :{" "}
                           </strong>
-                          <span>{(hm.content || hm.text || "").slice(0, 70)}...</span>
+                          <span>
+                            {(hm.content || hm.text || "").slice(0, 70)}...
+                          </span>
                         </div>
                       ))
                     ) : (
@@ -654,7 +824,13 @@ export const RawInspectorSidebar: React.FC<RawInspectorSidebarProps> = ({
 
             {/* TAB 2: RECEBIDO */}
             {detailTab === "response" && (
-              <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "12px",
+                }}
+              >
                 <RawCodeViewer
                   title="Texto Gerado"
                   content={activeTurn.response?.reply}
@@ -664,19 +840,30 @@ export const RawInspectorSidebar: React.FC<RawInspectorSidebarProps> = ({
                   maxHeight="200px"
                 />
 
-                <div className="ui-card" style={{ padding: 0, overflow: "hidden" }}>
+                <div
+                  className="ui-card"
+                  style={{ padding: 0, overflow: "hidden" }}
+                >
                   <div
                     style={{
                       padding: "8px 12px",
                       background: "var(--color-surface-subtle, #f8fafc)",
-                      borderBottom: "1px solid var(--color-border-subtle, #e2e8f0)",
+                      borderBottom:
+                        "1px solid var(--color-border-subtle, #e2e8f0)",
                       display: "flex",
                       justifyContent: "space-between",
                       alignItems: "center",
                     }}
                   >
-                    <span style={{ fontSize: "11.5px", fontWeight: 600, color: "var(--color-text-primary, #0f172a)" }}>
-                      Ferramentas Executadas ({activeTurn.response?.tool_calls?.length || 0})
+                    <span
+                      style={{
+                        fontSize: "11.5px",
+                        fontWeight: 600,
+                        color: "var(--color-text-primary, #0f172a)",
+                      }}
+                    >
+                      Ferramentas Executadas (
+                      {activeTurn.response?.tool_calls?.length || 0})
                     </span>
                   </div>
                   <div
@@ -688,44 +875,85 @@ export const RawInspectorSidebar: React.FC<RawInspectorSidebarProps> = ({
                       gap: "6px",
                     }}
                   >
-                    {activeTurn.response?.tool_calls && activeTurn.response.tool_calls.length > 0 ? (
-                      activeTurn.response.tool_calls.map((tc: any, idx: number) => (
-                        <div
-                          key={idx}
-                          style={{
-                            background: "var(--color-surface-subtle, #f8fafc)",
-                            border: "1px solid var(--color-border-subtle, #e2e8f0)",
-                            borderRadius: "4px",
-                            padding: "8px",
-                          }}
-                        >
-                          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
-                            <span style={{ fontFamily: "var(--font-family-mono)", fontWeight: 600, color: "var(--color-text-primary, #0f172a)" }}>
-                              {tc.tool || tc.name}
-                            </span>
-                            <Badge variant={tc.result?.success !== false ? "success" : "danger"} size="sm">
-                              {tc.result?.success !== false ? "Sucesso" : "Erro"}
-                            </Badge>
-                          </div>
-                          <details style={{ fontSize: "10.5px", color: "var(--color-text-secondary, #475569)" }}>
-                            <summary style={{ cursor: "pointer" }}>Entrada e Retorno</summary>
-                            <pre
+                    {activeTurn.response?.tool_calls &&
+                    activeTurn.response.tool_calls.length > 0 ? (
+                      activeTurn.response.tool_calls.map(
+                        (tc: any, idx: number) => (
+                          <div
+                            key={idx}
+                            style={{
+                              background:
+                                "var(--color-surface-subtle, #f8fafc)",
+                              border:
+                                "1px solid var(--color-border-subtle, #e2e8f0)",
+                              borderRadius: "4px",
+                              padding: "8px",
+                            }}
+                          >
+                            <div
                               style={{
-                                margin: "4px 0 0 0",
-                                padding: "6px",
-                                background: "var(--color-surface, #ffffff)",
-                                borderRadius: "4px",
-                                border: "1px solid var(--color-border-subtle, #e2e8f0)",
-                                fontSize: "10px",
-                                maxHeight: "100px",
-                                overflowY: "auto",
+                                display: "flex",
+                                justifyContent: "space-between",
+                                marginBottom: "4px",
                               }}
                             >
-                              {JSON.stringify({ args: tc.args || tc.input, result: tc.result || tc.output }, null, 2)}
-                            </pre>
-                          </details>
-                        </div>
-                      ))
+                              <span
+                                style={{
+                                  fontFamily: "var(--font-family-mono)",
+                                  fontWeight: 600,
+                                  color: "var(--color-text-primary, #0f172a)",
+                                }}
+                              >
+                                {tc.tool || tc.name}
+                              </span>
+                              <Badge
+                                variant={
+                                  tc.result?.success !== false
+                                    ? "success"
+                                    : "danger"
+                                }
+                                size="sm"
+                              >
+                                {tc.result?.success !== false
+                                  ? "Sucesso"
+                                  : "Erro"}
+                              </Badge>
+                            </div>
+                            <details
+                              style={{
+                                fontSize: "10.5px",
+                                color: "var(--color-text-secondary, #475569)",
+                              }}
+                            >
+                              <summary style={{ cursor: "pointer" }}>
+                                Entrada e Retorno
+                              </summary>
+                              <pre
+                                style={{
+                                  margin: "4px 0 0 0",
+                                  padding: "6px",
+                                  background: "var(--color-surface, #ffffff)",
+                                  borderRadius: "4px",
+                                  border:
+                                    "1px solid var(--color-border-subtle, #e2e8f0)",
+                                  fontSize: "10px",
+                                  maxHeight: "100px",
+                                  overflowY: "auto",
+                                }}
+                              >
+                                {JSON.stringify(
+                                  {
+                                    args: tc.args || tc.input,
+                                    result: tc.result || tc.output,
+                                  },
+                                  null,
+                                  2,
+                                )}
+                              </pre>
+                            </details>
+                          </div>
+                        ),
+                      )
                     ) : (
                       <span className="ui-text-muted">
                         Nenhuma ferramenta executada neste turno.
@@ -734,46 +962,81 @@ export const RawInspectorSidebar: React.FC<RawInspectorSidebarProps> = ({
                   </div>
                 </div>
 
-                {activeTurn.response?.stream_events && activeTurn.response.stream_events.length > 0 && (
-                  <div className="ui-card" style={{ padding: 0, overflow: "hidden" }}>
+                {activeTurn.response?.stream_events &&
+                  activeTurn.response.stream_events.length > 0 && (
                     <div
-                      style={{
-                        padding: "8px 12px",
-                        background: "var(--color-surface-subtle, #f8fafc)",
-                        borderBottom: "1px solid var(--color-border-subtle, #e2e8f0)",
-                      }}
+                      className="ui-card"
+                      style={{ padding: 0, overflow: "hidden" }}
                     >
-                      <span style={{ fontSize: "11.5px", fontWeight: 600, color: "var(--color-text-primary, #0f172a)" }}>
-                        Linha do Tempo de Eventos SSE ({activeTurn.response.stream_events.length})
-                      </span>
+                      <div
+                        style={{
+                          padding: "8px 12px",
+                          background: "var(--color-surface-subtle, #f8fafc)",
+                          borderBottom:
+                            "1px solid var(--color-border-subtle, #e2e8f0)",
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontSize: "11.5px",
+                            fontWeight: 600,
+                            color: "var(--color-text-primary, #0f172a)",
+                          }}
+                        >
+                          Linha do Tempo de Eventos SSE (
+                          {activeTurn.response.stream_events.length})
+                        </span>
+                      </div>
+                      <div
+                        style={{
+                          padding: "8px 12px",
+                          fontSize: "10.5px",
+                          maxHeight: "120px",
+                          overflowY: "auto",
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "3px",
+                        }}
+                      >
+                        {activeTurn.response.stream_events
+                          .slice(0, 15)
+                          .map((ev: any, idx: number) => (
+                            <div
+                              key={idx}
+                              style={{
+                                fontFamily: "var(--font-family-mono)",
+                                color: "var(--color-text-secondary, #475569)",
+                              }}
+                            >
+                              [{ev.type}]{" "}
+                              {ev.toolName ? `tool: ${ev.toolName}` : ""}
+                            </div>
+                          ))}
+                      </div>
                     </div>
-                    <div
-                      style={{
-                        padding: "8px 12px",
-                        fontSize: "10.5px",
-                        maxHeight: "120px",
-                        overflowY: "auto",
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: "3px",
-                      }}
-                    >
-                      {activeTurn.response.stream_events.slice(0, 15).map((ev: any, idx: number) => (
-                        <div key={idx} style={{ fontFamily: "var(--font-family-mono)", color: "var(--color-text-secondary, #475569)" }}>
-                          [{ev.type}] {ev.toolName ? `tool: ${ev.toolName}` : ""}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                  )}
               </div>
             )}
 
             {/* TAB 3: TOKENS & PRECIFICAÇÃO */}
             {detailTab === "costs" && (
-              <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "14px",
+                }}
+              >
                 <div className="ui-card" style={{ padding: "12px" }}>
-                  <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--color-text-primary, #0f172a)", display: "block", marginBottom: "10px" }}>
+                  <span
+                    style={{
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      color: "var(--color-text-primary, #0f172a)",
+                      display: "block",
+                      marginBottom: "10px",
+                    }}
+                  >
                     Contagem de Tokens Desta Mensagem
                   </span>
 
@@ -785,29 +1048,91 @@ export const RawInspectorSidebar: React.FC<RawInspectorSidebarProps> = ({
                       marginBottom: "12px",
                     }}
                   >
-                    <div style={{ padding: "8px", background: "var(--color-surface-subtle, #f8fafc)", borderRadius: "6px", border: "1px solid var(--color-border-subtle, #e2e8f0)", textAlign: "center" }}>
-                      <span className="ui-text-muted" style={{ fontSize: "10px", textTransform: "uppercase", display: "block" }}>
+                    <div
+                      style={{
+                        padding: "8px",
+                        background: "var(--color-surface-subtle, #f8fafc)",
+                        borderRadius: "6px",
+                        border: "1px solid var(--color-border-subtle, #e2e8f0)",
+                        textAlign: "center",
+                      }}
+                    >
+                      <span
+                        className="ui-text-muted"
+                        style={{
+                          fontSize: "10px",
+                          textTransform: "uppercase",
+                          display: "block",
+                        }}
+                      >
                         Entrada
                       </span>
-                      <strong style={{ fontSize: "15px", color: "var(--color-text-primary, #0f172a)" }}>
+                      <strong
+                        style={{
+                          fontSize: "15px",
+                          color: "var(--color-text-primary, #0f172a)",
+                        }}
+                      >
                         {formatTokenCount(activeTurn.metrics?.prompt_tokens)}
                       </strong>
                     </div>
 
-                    <div style={{ padding: "8px", background: "var(--color-surface-subtle, #f8fafc)", borderRadius: "6px", border: "1px solid var(--color-border-subtle, #e2e8f0)", textAlign: "center" }}>
-                      <span className="ui-text-muted" style={{ fontSize: "10px", textTransform: "uppercase", display: "block" }}>
+                    <div
+                      style={{
+                        padding: "8px",
+                        background: "var(--color-surface-subtle, #f8fafc)",
+                        borderRadius: "6px",
+                        border: "1px solid var(--color-border-subtle, #e2e8f0)",
+                        textAlign: "center",
+                      }}
+                    >
+                      <span
+                        className="ui-text-muted"
+                        style={{
+                          fontSize: "10px",
+                          textTransform: "uppercase",
+                          display: "block",
+                        }}
+                      >
                         Saída
                       </span>
-                      <strong style={{ fontSize: "15px", color: "var(--color-text-primary, #0f172a)" }}>
-                        {formatTokenCount(activeTurn.metrics?.completion_tokens)}
+                      <strong
+                        style={{
+                          fontSize: "15px",
+                          color: "var(--color-text-primary, #0f172a)",
+                        }}
+                      >
+                        {formatTokenCount(
+                          activeTurn.metrics?.completion_tokens,
+                        )}
                       </strong>
                     </div>
 
-                    <div style={{ padding: "8px", background: "var(--color-surface-subtle, #f8fafc)", borderRadius: "6px", border: "1px solid var(--color-border-subtle, #e2e8f0)", textAlign: "center" }}>
-                      <span className="ui-text-muted" style={{ fontSize: "10px", textTransform: "uppercase", display: "block" }}>
+                    <div
+                      style={{
+                        padding: "8px",
+                        background: "var(--color-surface-subtle, #f8fafc)",
+                        borderRadius: "6px",
+                        border: "1px solid var(--color-border-subtle, #e2e8f0)",
+                        textAlign: "center",
+                      }}
+                    >
+                      <span
+                        className="ui-text-muted"
+                        style={{
+                          fontSize: "10px",
+                          textTransform: "uppercase",
+                          display: "block",
+                        }}
+                      >
                         Total
                       </span>
-                      <strong style={{ fontSize: "15px", color: "var(--color-primary, #2563eb)" }}>
+                      <strong
+                        style={{
+                          fontSize: "15px",
+                          color: "var(--color-primary, #2563eb)",
+                        }}
+                      >
                         {formatTokenCount(activeTurn.metrics?.total_tokens)}
                       </strong>
                     </div>
@@ -823,23 +1148,56 @@ export const RawInspectorSidebar: React.FC<RawInspectorSidebarProps> = ({
                       borderRadius: "4px",
                     }}
                   >
-                    <span style={{ fontSize: "11px", color: "var(--color-text-secondary, #334155)" }}>
+                    <span
+                      style={{
+                        fontSize: "11px",
+                        color: "var(--color-text-secondary, #334155)",
+                      }}
+                    >
                       Custo Estimado da Mensagem:
                     </span>
-                    <strong style={{ fontSize: "13px", color: "var(--color-success, #16a34a)" }}>
-                      {formatCostUsd(activeTurn.metrics?.cost_usd, pricingInfo.isLocal)}
+                    <strong
+                      style={{
+                        fontSize: "13px",
+                        color: "var(--color-success, #16a34a)",
+                      }}
+                    >
+                      {formatCostUsd(
+                        activeTurn.metrics?.cost_usd,
+                        pricingInfo.isLocal,
+                      )}
                     </strong>
                   </div>
                 </div>
 
                 {/* Explicação da Origem do Custo */}
-                <div className="ui-card" style={{ padding: "12px", display: "flex", flexDirection: "column", gap: "8px" }}>
-                  <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--color-text-primary, #0f172a)" }}>
+                <div
+                  className="ui-card"
+                  style={{
+                    padding: "12px",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "8px",
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      color: "var(--color-text-primary, #0f172a)",
+                    }}
+                  >
                     Origem da Precificação & Modelo
                   </span>
 
-                  <p className="ui-text-muted" style={{ margin: 0, fontSize: "11px", lineHeight: 1.4 }}>
-                    Os valores são calculados com base nas tabelas públicas oficiais dos provedores de API por 1 milhão de tokens. Modelos locais ou CLIs executados no seu computador são computados como gratuitos ($0.00).
+                  <p
+                    className="ui-text-muted"
+                    style={{ margin: 0, fontSize: "11px", lineHeight: 1.4 }}
+                  >
+                    Os valores são calculados com base nas tabelas públicas
+                    oficiais dos provedores de API por 1 milhão de tokens.
+                    Modelos locais ou CLIs executados no seu computador são
+                    computados como gratuitos ($0.00).
                   </p>
 
                   <div
@@ -854,22 +1212,50 @@ export const RawInspectorSidebar: React.FC<RawInspectorSidebarProps> = ({
                       gap: "4px",
                     }}
                   >
-                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                      }}
+                    >
                       <span className="ui-text-muted">Modelo Ativo:</span>
-                      <span style={{ fontFamily: "var(--font-family-mono)", color: "var(--color-text-primary, #0f172a)" }}>
+                      <span
+                        style={{
+                          fontFamily: "var(--font-family-mono)",
+                          color: "var(--color-text-primary, #0f172a)",
+                        }}
+                      >
                         {currentModelName}
                       </span>
                     </div>
-                    <div style={{ display: "flex", justifyContent: "space-between" }}>
-                      <span className="ui-text-muted">Taxa Entrada (Prompt):</span>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                      }}
+                    >
+                      <span className="ui-text-muted">
+                        Taxa Entrada (Prompt):
+                      </span>
                       <span>
-                        {pricingInfo.isLocal ? "$0.00 / 1M" : `$${pricingInfo.promptPerMillion} / 1M tokens`}
+                        {pricingInfo.isLocal
+                          ? "$0.00 / 1M"
+                          : `$${pricingInfo.promptPerMillion} / 1M tokens`}
                       </span>
                     </div>
-                    <div style={{ display: "flex", justifyContent: "space-between" }}>
-                      <span className="ui-text-muted">Taxa Saída (Completion):</span>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                      }}
+                    >
+                      <span className="ui-text-muted">
+                        Taxa Saída (Completion):
+                      </span>
                       <span>
-                        {pricingInfo.isLocal ? "$0.00 / 1M" : `$${pricingInfo.completionPerMillion} / 1M tokens`}
+                        {pricingInfo.isLocal
+                          ? "$0.00 / 1M"
+                          : `$${pricingInfo.completionPerMillion} / 1M tokens`}
                       </span>
                     </div>
                   </div>
@@ -877,34 +1263,76 @@ export const RawInspectorSidebar: React.FC<RawInspectorSidebarProps> = ({
               </div>
             )}
 
-            {/* TAB 4: JSON BRUTO */}
+            {/* TAB 4: PAYLOAD */}
             {detailTab === "json" && (
-              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                <div style={{ display: "flex", justifyContent: "flex-end", gap: "6px" }}>
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "10px",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "flex-end",
+                    alignItems: "center",
+                    gap: "6px",
+                  }}
+                >
                   <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => copyToClipboard(JSON.stringify(activeTurn, null, 2), "raw-json")}
-                    icon={copiedKey === "raw-json" ? <Check size={12} /> : <Copy size={12} />}
+                    variant="ghost"
+                    size="xs"
+                    onClick={() =>
+                      copyToClipboard(
+                        JSON.stringify(activeTurn, null, 2),
+                        "raw-json",
+                      )
+                    }
+                    icon={
+                      copiedKey === "raw-json" ? (
+                        <Check
+                          size={13}
+                          style={{ color: "var(--color-success, #16a34a)" }}
+                        />
+                      ) : (
+                        <Copy size={13} />
+                      )
+                    }
+                    title="Copiar JSON do payload"
                   >
-                    {copiedKey === "raw-json" ? "Copiado" : "Copiar JSON"}
+                    {copiedKey === "raw-json" ? "Copiado" : "Copiar"}
                   </Button>
                   <Button
-                    variant="secondary"
-                    size="sm"
+                    variant="ghost"
+                    size="xs"
                     onClick={handleExportTurn}
-                    icon={<Download size={12} />}
+                    icon={<Download size={13} />}
+                    title="Baixar JSON do payload"
                   >
-                    Baixar JSON
+                    Baixar
                   </Button>
                 </div>
 
-                <RawCodeViewer
-                  title="Payload JSON Completo"
-                  content={activeTurn}
-                  isJson
-                  maxHeight="400px"
-                />
+                <pre
+                  style={{
+                    margin: 0,
+                    padding: "12px 14px",
+                    background: "var(--color-surface-subtle, #f8fafc)",
+                    borderRadius: "6px",
+                    border: "1px solid var(--color-border-subtle, #e2e8f0)",
+                    fontFamily: "var(--font-family-mono, monospace)",
+                    fontSize: "11px",
+                    lineHeight: "1.5",
+                    color: "var(--color-text-primary, #0f172a)",
+                    whiteSpace: "pre-wrap",
+                    wordBreak: "break-word",
+                    maxHeight: "calc(100vh - 280px)",
+                    overflowY: "auto",
+                  }}
+                >
+                  {activeTurn ? JSON.stringify(activeTurn, null, 2) : "{}"}
+                </pre>
               </div>
             )}
           </div>
@@ -913,3 +1341,5 @@ export const RawInspectorSidebar: React.FC<RawInspectorSidebarProps> = ({
     </aside>
   );
 };
+
+export const TelemetrySidebar = RawInspectorSidebar;

@@ -3,7 +3,6 @@ import { marked } from "marked";
 import { useAI } from "../../context/AIContext";
 import { useWorkspace } from "../../context/WorkspaceContext";
 import { SkillsHubModal } from "../modals/SkillsHubModal";
-import { ContextSelectorModal } from "./ContextSelectorModal";
 import { AgentApprovalCard } from "./AgentApprovalCard";
 import { RagSearchModal } from "./RagSearchModal";
 import { useCopilotStore } from "../../stores/copilotStore";
@@ -17,6 +16,8 @@ interface AICopilotPanelProps {
   onOpenPrompt?: () => void;
   onOpenHistory?: () => void;
   onOpenRaw?: () => void;
+  onOpenContext?: () => void;
+  onOpenSkills?: () => void;
   onApplyContent?: (content: string) => void;
 }
 
@@ -26,6 +27,8 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
   onOpenPrompt = () => {},
   onOpenHistory = () => {},
   onOpenRaw = () => {},
+  onOpenContext = () => {},
+  onOpenSkills = () => {},
   onApplyContent,
 }) => {
   const {
@@ -108,9 +111,6 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
     const s = sec % 60;
     return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
   };
-
-  // Context Selector Modal state
-  const [isContextModalOpen, setIsContextModalOpen] = useState(false);
 
   // Click outside listener for all popovers
   useEffect(() => {
@@ -870,10 +870,18 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
           <Button
             size="xs"
             variant="ghost"
-            title="Inspetor RAW (Ver Prompts, Memória e Payloads)"
+            title="Telemetria & Logs (Tokens, custos, payloads e chamadas de ferramentas)"
             onClick={onOpenRaw}
+            icon={
+              <span
+                className="material-symbols-outlined"
+                style={{ fontSize: "14px" }}
+              >
+                query_stats
+              </span>
+            }
           >
-            RAW
+            Telemetria
           </Button>
 
           <IconButton
@@ -881,7 +889,9 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
             variant="ghost"
             title="Linha de Raciocínio & Histórico de Sessões"
             onClick={onOpenHistory}
-            icon={<span className="material-symbols-outlined icon-sm">history</span>}
+            icon={
+              <span className="material-symbols-outlined icon-sm">history</span>
+            }
           />
 
           <IconButton
@@ -889,7 +899,9 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
             variant="ghost"
             title="Recolher Assistente"
             onClick={onClose}
-            icon={<span className="material-symbols-outlined icon-sm">close</span>}
+            icon={
+              <span className="material-symbols-outlined icon-sm">close</span>
+            }
           />
         </div>
       </div>
@@ -1084,7 +1096,7 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
         {/* Context Attachment Clip Icon with Dynamic Status Color & Tooltip */}
         <button
           type="button"
-          onClick={() => setIsContextModalOpen(true)}
+          onClick={onOpenContext}
           style={{
             background: "none",
             border: "none",
@@ -1175,7 +1187,9 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
                     className="material-symbols-outlined"
                     style={{
                       fontSize: "13px",
-                      color: isDir ? "#9333ea" : "var(--color-primary, #2563eb)",
+                      color: isDir
+                        ? "#9333ea"
+                        : "var(--color-primary, #2563eb)",
                     }}
                   >
                     {isDir ? "folder" : "description"}
@@ -1185,28 +1199,29 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
                 title={isDir ? `Pasta: ${docPath}` : `Arquivo: ${docPath}`}
                 style={{ maxWidth: "180px" }}
               >
-                {label}{isDir ? "/" : ""}
+                {label}
+                {isDir ? "/" : ""}
               </Chip>
             );
           })
         )}
 
-        {/* Action: Open Advanced Context Selector Modal */}
+        {/* Action: Open Advanced Context Selector Sidebar */}
         {!isTemplateEditorMode && (
           <Button
             type="button"
             size="xs"
             variant="outline"
-            onClick={() => setIsContextModalOpen(true)}
+            onClick={onOpenContext}
             icon={
               <span
                 className="material-symbols-outlined"
                 style={{ fontSize: "13px" }}
               >
-                add
+                folder_managed
               </span>
             }
-            title="Abrir Seletor de Contexto (múltiplos arquivos ou pastas inteiras)"
+            title="Abrir Seletor de Contexto no painel lateral"
           >
             {referencedDocs.length === 0 ? "Anexar Contexto" : "Gerenciar"}
           </Button>
@@ -1601,7 +1616,7 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
           {/* 3. Add Skill Button / Trigger */}
           <button
             type="button"
-            onClick={() => setIsSkillsDropdownOpen(!isSkillsDropdownOpen)}
+            onClick={onOpenSkills}
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -1616,7 +1631,7 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
               border: "1px dashed var(--color-outline-variant, #cbd5e1)",
               transition: "all 0.15s ease",
             }}
-            title="Adicionar ou alternar outras skills para a conversa"
+            title="Adicionar ou alternar outras skills para a conversa no painel lateral"
           >
             <span
               className="material-symbols-outlined"
@@ -1625,12 +1640,6 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
               add
             </span>
             <span>Skill</span>
-            <span
-              className="material-symbols-outlined"
-              style={{ fontSize: "12px", opacity: 0.7 }}
-            >
-              expand_more
-            </span>
           </button>
 
           {/* 4. Skills Dropdown Menu */}
@@ -2483,12 +2492,6 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
           setActiveSkillId(skill.id);
           closeSkillsModal();
         }}
-      />
-
-      {/* Context Selector Modal (Files & Folders Multi-Selection) */}
-      <ContextSelectorModal
-        isOpen={isContextModalOpen}
-        onClose={() => setIsContextModalOpen(false)}
       />
 
       {/* Local Workspace RAG Search Modal */}

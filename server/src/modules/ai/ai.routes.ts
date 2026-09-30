@@ -115,6 +115,10 @@ export async function aiRoutes(fastify: FastifyInstance) {
 
       const briefing = aiService.getBriefing(repoName, filePath);
       const streamEvents: ProviderStreamEvent[] = [];
+      const currentAuthor = cfg.user?.name || cfg.user?.login || 'Developer';
+
+      // Salva imediatamente a mensagem do usuário no histórico da sessão
+      aiService.appendChatEvent(repoName, filePath, sessionId, 'user', prompt, { model: provider.name, author: currentAuthor });
 
       try {
         const result = await provider.sendMessage(
@@ -174,8 +178,6 @@ export async function aiRoutes(fastify: FastifyInstance) {
           },
         };
 
-        const currentAuthor = cfg.user?.name || cfg.user?.login || 'Developer';
-        aiService.appendChatEvent(repoName, filePath, sessionId, 'user', prompt, { model: provider.name, author: currentAuthor }, telemetryTurn);
         aiService.appendChatEvent(repoName, filePath, sessionId, 'model', result.reply, { model: provider.name, author: 'Agent' }, telemetryTurn);
 
         return reply.send({
@@ -190,6 +192,7 @@ export async function aiRoutes(fastify: FastifyInstance) {
           usage: telemetryTurn.metrics,
         });
       } catch (err: any) {
+        aiService.appendChatEvent(repoName, filePath, sessionId, 'model', `⚠️ ${err?.message || 'Erro ao comunicar com o agente conectado.'}`, { model: provider.name, author: 'Agent' });
         return reply.status(500).send({ error: err?.message || 'Erro ao comunicar com o agente conectado.' });
       }
     }
@@ -401,6 +404,9 @@ export async function aiRoutes(fastify: FastifyInstance) {
     const basePrompt = body.assistant_prompt || cfg.settings?.global_system_prompt || '';
     const fullSystemPrompt = `${basePrompt}${resolvedSkillPrompt}${briefing ? `\n\n${briefing}` : ''}`.trim();
 
+    const currentAuthor = cfg.user?.name || cfg.user?.login || 'Developer';
+    aiService.appendChatEvent(repoName, filePath, sessionId, 'user', prompt, { model: provider.name, author: currentAuthor });
+
     try {
       const result = await provider.sendMessage(sessionId, prompt, sendEvent, {
         briefing: fullSystemPrompt,
@@ -467,15 +473,15 @@ export async function aiRoutes(fastify: FastifyInstance) {
         timestamp: Date.now(),
       });
 
-      const currentAuthor = cfg.user?.name || cfg.user?.login || 'Developer';
-      aiService.appendChatEvent(repoName, filePath, sessionId, 'user', prompt, { model: provider.name, author: currentAuthor }, telemetryTurn);
       aiService.appendChatEvent(repoName, filePath, sessionId, 'model', accumulatedReply, { model: provider.name, author: 'Agent' }, telemetryTurn);
     } catch (err: any) {
+      const errorMsg = err?.message || String(err);
+      aiService.appendChatEvent(repoName, filePath, sessionId, 'model', `⚠️ ${errorMsg}`, { model: provider.name, author: 'Agent' });
       sendEvent({
         type: 'error',
         provider: provider.id,
         sessionId,
-        data: err?.message || String(err),
+        data: errorMsg,
         timestamp: Date.now(),
       });
     } finally {

@@ -41,6 +41,11 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
         <input
           ref={ref}
           value={value}
+          style={{
+            paddingLeft: prefixIcon ? '38px' : undefined,
+            paddingRight: suffixIcon || onClear || clearable ? '38px' : undefined,
+            ...props.style,
+          }}
           className={`ui-input ${errorClass} ${leftPadClass} ${rightPadClass} ${className}`.trim()}
           {...props}
         />
@@ -77,7 +82,7 @@ export const SearchInput = React.forwardRef<HTMLInputElement, SearchInputProps>(
     return (
       <Input
         ref={ref}
-        type="search"
+        type="text"
         placeholder={placeholder}
         startIcon={<Search size={16} />}
         onClear={onClear}
