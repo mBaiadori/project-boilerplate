@@ -406,9 +406,11 @@ export const SkillsSubView: React.FC = () => {
                         alignItems: "center",
                       }}
                     >
-                      <Badge variant="primary" size="sm">
-                        {skill.category || "Geral"}
-                      </Badge>
+                      {skill.category && (
+                        <Badge variant="primary" size="sm">
+                          {skill.category}
+                        </Badge>
+                      )}
                       {isSystem ? (
                         <Badge variant="info" size="sm">
                           Sistema

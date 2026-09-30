@@ -30,6 +30,7 @@ import {
   EmptyState,
   Spinner,
   FilterChips,
+  Chip,
 } from "../../components/ui";
 import {
   Layers,
@@ -59,90 +60,6 @@ interface TemplatesSubViewProps {
 
 type Tab = "projeto" | "comunidade";
 type ViewMode = "grid" | "editor";
-
-const DEFAULT_CATEGORY_OPTIONS: SelectOption[] = [
-  {
-    value: "geral",
-    label: "Geral",
-    description: "Diretrizes e documentação padrão",
-    icon: "folder",
-  },
-  {
-    value: "engenharia",
-    label: "Engenharia",
-    description: "Arquitetura de software e código",
-    icon: "terminal",
-  },
-  {
-    value: "arquitetura",
-    label: "Arquitetura",
-    description: "Decisões técnicas e ADRs",
-    icon: "account_tree",
-  },
-  {
-    value: "requisitos",
-    label: "Requisitos",
-    description: "Especificações funcionais e RFCs",
-    icon: "fact_check",
-  },
-  {
-    value: "api",
-    label: "API & Contratos",
-    description: "Endpoints, REST e GraphQL",
-    icon: "api",
-  },
-  {
-    value: "produto",
-    label: "Produto",
-    description: "PRDs, visão e roadmap",
-    icon: "inventory_2",
-  },
-  {
-    value: "design",
-    label: "Design & UX",
-    description: "Design system e interfaces",
-    icon: "palette",
-  },
-  {
-    value: "devops",
-    label: "DevOps",
-    description: "CI/CD, infraestrutura e cloud",
-    icon: "cloud_sync",
-  },
-  {
-    value: "seguranca",
-    label: "Segurança",
-    description: "Governança e conformidade",
-    icon: "security",
-  },
-];
-
-const DEFAULT_BADGE_PRESETS: Array<{
-  name: string;
-  color?: string;
-  description?: string;
-}> = [
-  { name: "RFC", color: "#a855f7", description: "Request for Comments" },
-  {
-    name: "ADR",
-    color: "#3b82f6",
-    description: "Architecture Decision Record",
-  },
-  {
-    name: "PRD",
-    color: "#f97316",
-    description: "Product Requirements Document",
-  },
-  { name: "DOC", color: "#22c55e", description: "Documentação Técnica" },
-  { name: "API", color: "#06b6d4", description: "Especificação de API" },
-  {
-    name: "SPEC",
-    color: "#6366f1",
-    description: "Especificação de Funcionalidade",
-  },
-  { name: "GUIDE", color: "#ec4899", description: "Guia e Manual" },
-  { name: "TEST", color: "#eab308", description: "Plano de Testes" },
-];
 
 export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
   const { projectMetaOptions, projectConfig } = useWorkspace();
@@ -283,7 +200,7 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
     return matchesCat && matchesSearch;
   });
 
-  // Dynamic Badge Presets from .project.config.json or Defaults
+  // Dynamic Badge Presets from .project.config.json (vazio por padrão se não configurado)
   const badgePresets = useMemo<
     Array<{ name: string; color?: string; description?: string }>
   >(() => {
@@ -301,10 +218,10 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
         )
         .filter((b) => Boolean(b.name));
     }
-    return DEFAULT_BADGE_PRESETS;
+    return [];
   }, [projectMetaOptions?.badges, projectConfig?.badges]);
 
-  // Options for Category SelectDropdown from .project.config.json or Defaults
+  // Options for Category SelectDropdown from .project.config.json
   const categoryDropdownOptions: SelectOption[] = useMemo(() => {
     const rawProjectCats =
       projectMetaOptions?.categories || projectConfig?.categories;
@@ -314,21 +231,13 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
       baseList = rawProjectCats.map((cat: any) => {
         const name = typeof cat === "string" ? cat : cat.name;
         const lower = String(name || "").toLowerCase();
-        const defaultMatch = DEFAULT_CATEGORY_OPTIONS.find(
-          (d) => d.value.toLowerCase() === lower,
-        );
         return {
           value: lower,
-          label: defaultMatch
-            ? defaultMatch.label
-            : name.charAt(0).toUpperCase() + name.slice(1),
-          description:
-            defaultMatch?.description || `Categoria do projeto (${name})`,
-          icon: defaultMatch?.icon || "folder",
+          label: name.charAt(0).toUpperCase() + name.slice(1),
+          description: `Categoria do projeto (${name})`,
+          icon: "folder",
         };
       });
-    } else {
-      baseList = [...DEFAULT_CATEGORY_OPTIONS];
     }
 
     if (
@@ -370,29 +279,25 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
     setIsEditMode(false);
     setTplId("");
     setTplTemplateName("");
-    setTplTitle("Novo Template");
-    setTplCategory("engenharia");
+    setTplTitle("");
+    setTplCategory("");
     setTplBadge("DOC");
     setTplDesc("");
     setTplTags([]);
     setTagInputValue("");
-    setTplContent(
-      "# Novo Documento Técnico\n\n## 1. Visão Geral\nDescreva aqui o propósito.",
-    );
-    setTplPrompt(
-      "Atue como um Arquiteto de Software sênior guiando o usuário no preenchimento desta especificação.",
-    );
+    setTplContent("");
+    setTplPrompt("");
     setTplSkills([]);
     setSaveError("");
     setSaveSuccessMsg("");
     setShowConfigDrawer(false);
 
     setActiveEditingTemplate({
-      id: "novo-template",
-      title: "Novo Template",
-      category: "engenharia",
+      id: "",
+      title: "",
+      category: "",
       description: "",
-      prompt: "Atue como um Arquiteto de Software sênior.",
+      prompt: "",
       skills: [],
     });
 
@@ -404,7 +309,7 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
     setTplId(tpl.id);
     setTplTemplateName(tpl.templateName || tpl.id);
     setTplTitle(tpl.title);
-    setTplCategory(tpl.category || "geral");
+    setTplCategory(tpl.category || "");
     setTplBadge(tpl.badge || "");
     setTplDesc(tpl.description || "");
     setTplTags(tpl.tags || []);
@@ -420,7 +325,7 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
       id: tpl.id,
       templateName: tpl.templateName || tpl.id,
       title: tpl.title,
-      category: tpl.category || "geral",
+      category: tpl.category || "",
       badge: tpl.badge,
       description: tpl.description,
       tags: tpl.tags,
@@ -484,7 +389,7 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
       id: finalId,
       templateName: finalId,
       title: tplTitle.trim(),
-      category: tplCategory.trim() || "geral",
+      category: tplCategory.trim(),
       badge: tplBadge.trim() || undefined,
       description: tplDesc.trim() || undefined,
       tags: tagsArray,
@@ -911,39 +816,20 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
                   >
                     {badgePresets.map((preset) => {
                       const isSelected = tplBadge === preset.name;
-                      const presetColor =
-                        preset.color || "var(--color-primary)";
                       return (
-                        <button
+                        <Chip
                           key={preset.name}
-                          type="button"
+                          size="xs"
+                          active={isSelected}
+                          color={preset.color}
                           onClick={() => {
                             setTplBadge(preset.name);
                             updateActiveEditingTemplate({ badge: preset.name });
                           }}
                           title={preset.description || preset.name}
-                          style={{
-                            fontSize: "10px",
-                            padding: "1px 6px",
-                            borderRadius: "4px",
-                            border: isSelected
-                              ? `1px solid ${presetColor}`
-                              : "1px solid var(--color-outline-variant)",
-                            background: isSelected
-                              ? preset.color
-                                ? `${preset.color}25`
-                                : "var(--color-primary-container)"
-                              : "var(--color-surface-container-high)",
-                            color: isSelected
-                              ? presetColor
-                              : "var(--color-on-surface-variant)",
-                            cursor: "pointer",
-                            fontWeight: 600,
-                            transition: "all 0.12s ease",
-                          }}
                         >
                           {preset.name}
-                        </button>
+                        </Chip>
                       );
                     })}
                   </div>
@@ -998,43 +884,15 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
                   }}
                 >
                   {tplTags.map((tag) => (
-                    <span
+                    <Chip
                       key={tag}
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: "4px",
-                        fontSize: "11px",
-                        padding: "2px 7px",
-                        borderRadius: "4px",
-                        background: "var(--color-surface)",
-                        color: "var(--color-on-surface)",
-                        border: "1px solid var(--color-outline-variant)",
-                        fontWeight: 500,
-                      }}
+                      size="xs"
+                      variant="outlined"
+                      icon={<Tag size={11} />}
+                      onRemove={() => handleRemoveTag(tag)}
                     >
-                      <Tag
-                        size={10}
-                        style={{ color: "var(--color-primary)" }}
-                      />
                       {tag}
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveTag(tag)}
-                        style={{
-                          background: "none",
-                          border: "none",
-                          cursor: "pointer",
-                          padding: 0,
-                          display: "inline-flex",
-                          alignItems: "center",
-                          color: "var(--color-outline)",
-                        }}
-                        title={`Remover tag ${tag}`}
-                      >
-                        <X size={11} />
-                      </button>
-                    </span>
+                    </Chip>
                   ))}
 
                   <input
@@ -1180,42 +1038,16 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
                     const skillLabel =
                       skillInfo?.title || skillInfo?.name || skillId;
                     return (
-                      <span
+                      <Chip
                         key={skillId}
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: "6px",
-                          padding: "4px 10px",
-                          borderRadius: "14px",
-                          background: "var(--color-primary-container)",
-                          color: "var(--color-primary)",
-                          border: "1px solid var(--color-primary)",
-                          fontSize: "11.5px",
-                          fontWeight: 600,
-                          transition: "all 0.15s ease",
-                        }}
+                        size="sm"
+                        color="var(--md-sys-color-primary, #1a73e8)"
+                        icon={<Sparkles size={12} />}
+                        onRemove={() => handleRemoveSkill(skillId)}
+                        title={`Desvincular ${skillLabel}`}
                       >
-                        <Sparkles size={12} />
-                        <span>{skillLabel}</span>
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveSkill(skillId)}
-                          style={{
-                            background: "transparent",
-                            border: "none",
-                            cursor: "pointer",
-                            padding: 0,
-                            display: "inline-flex",
-                            alignItems: "center",
-                            color: "var(--color-primary)",
-                            opacity: 0.85,
-                          }}
-                          title={`Desvincular ${skillLabel}`}
-                        >
-                          <X size={12} />
-                        </button>
-                      </span>
+                        {skillLabel}
+                      </Chip>
                     );
                   })
                 )}
@@ -1448,9 +1280,11 @@ export const TemplatesSubView: React.FC<TemplatesSubViewProps> = () => {
                   subtitle={tpl.templateName || tpl.id}
                   action={
                     <div style={{ display: "flex", gap: "4px" }}>
-                      <Badge variant="primary" size="sm">
-                        {tpl.category || "Geral"}
-                      </Badge>
+                      {tpl.category && (
+                        <Badge variant="primary" size="sm">
+                          {tpl.category}
+                        </Badge>
+                      )}
                       {tpl.badge && (
                         <Badge variant="success" size="sm">
                           {tpl.badge}

@@ -87,50 +87,10 @@ export function loadProjectsMasterConfig(): Record<string, any> {
     },
     project_defaults: {
       version: "1.0.0",
-      categories: [
-        "geral",
-        "arquitetura",
-        "engenharia",
-        "produto",
-        "segurança",
-        "infraestrutura",
-        "dados",
-      ],
-      tags: [
-        "backend",
-        "frontend",
-        "api",
-        "database",
-        "security",
-        "core",
-        "auth",
-        "mobile",
-        "spec",
-      ],
-      statuses: [
-        { key: "draft", label: "Rascunho (DRAFT)", badge: "badge-neutral" },
-        {
-          key: "proposed",
-          label: "Proposto (PROPOSED)",
-          badge: "badge-warning",
-        },
-        { key: "review", label: "Em Revisão (REVIEW)", badge: "badge-info" },
-        {
-          key: "approved",
-          label: "Aprovado (APPROVED)",
-          badge: "badge-success",
-        },
-        {
-          key: "superseded",
-          label: "Substituído (SUPERSEDED)",
-          badge: "badge-secondary",
-        },
-        {
-          key: "deprecated",
-          label: "Obsoleto (DEPRECATED)",
-          badge: "badge-danger",
-        },
-      ],
+      categories: [],
+      tags: [],
+      statuses: [],
+      badges: [],
       governance_rules: { min_approvals_default: 1 },
       default_reviewers: [],
     },
@@ -511,35 +471,19 @@ function verifyAndRepairStructure(
         modified = true;
       }
       if (!Array.isArray(targetJson.categories)) {
-        targetJson.categories = srcJson.categories || [
-          "geral",
-          "engenharia",
-          "produto",
-        ];
+        targetJson.categories = Array.isArray(srcJson.categories) ? srcJson.categories : [];
         modified = true;
       }
       if (!Array.isArray(targetJson.tags)) {
-        targetJson.tags = srcJson.tags || ["rfc", "prd", "api", "guia"];
+        targetJson.tags = Array.isArray(srcJson.tags) ? srcJson.tags : [];
         modified = true;
       }
-      if (
-        !Array.isArray(targetJson.statuses) ||
-        targetJson.statuses.length === 0
-      ) {
-        targetJson.statuses = srcJson.statuses || [
-          { key: "draft", label: "Rascunho (DRAFT)", badge: "badge-neutral" },
-          { key: "review", label: "Em Revisão (REVIEW)", badge: "badge-info" },
-          {
-            key: "approved",
-            label: "Aprovado (APPROVED)",
-            badge: "badge-success",
-          },
-          {
-            key: "deprecated",
-            label: "Obsoleto (DEPRECATED)",
-            badge: "badge-danger",
-          },
-        ];
+      if (!Array.isArray(targetJson.statuses)) {
+        targetJson.statuses = Array.isArray(srcJson.statuses) ? srcJson.statuses : [];
+        modified = true;
+      }
+      if (!Array.isArray(targetJson.badges)) {
+        targetJson.badges = Array.isArray(srcJson.badges) ? srcJson.badges : [];
         modified = true;
       }
       if (!targetJson.governance_rules) {
@@ -713,22 +657,10 @@ export async function ensureDefaultRepoFiles(repoName: string): Promise<void> {
         repository_url: cfg.active_repo?.html_url || "",
         lead: cfg.user?.login ? `@${cfg.user.login}` : "@equipe",
       },
-      categories: ["geral", "engenharia", "produto", "arquitetura", "guias"],
-      tags: ["rfc", "prd", "api", "backend", "frontend", "infra"],
-      statuses: [
-        { key: "draft", label: "Rascunho (DRAFT)", badge: "badge-neutral" },
-        { key: "review", label: "Em Revisão (REVIEW)", badge: "badge-info" },
-        {
-          key: "approved",
-          label: "Aprovado (APPROVED)",
-          badge: "badge-success",
-        },
-        {
-          key: "deprecated",
-          label: "Obsoleto (DEPRECATED)",
-          badge: "badge-danger",
-        },
-      ],
+      categories: [],
+      tags: [],
+      statuses: [],
+      badges: [],
       governance_rules: { min_approvals_default: 1 },
       reviewers: [],
       ai_assistant_prompt:

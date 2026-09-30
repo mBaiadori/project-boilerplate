@@ -10,7 +10,12 @@ import type {
   CustomToolItem,
   CommunityToolItem,
 } from "../../types";
-import { Tabs, FilterChips, SearchInput } from "../../components/ui";
+import {
+  Tabs,
+  FilterChips,
+  SearchInput,
+  Button,
+} from "../../components/ui";
 import { Sparkles, Bot, Wrench, Cable } from "lucide-react";
 
 type MainTab = "skills" | "agents" | "tools" | "mcp";
@@ -2773,16 +2778,17 @@ return {
                   gap: "8px",
                 }}
               >
-                <button
+                <Button
                   type="button"
-                  className="btn btn-ghost btn-sm"
+                  variant="ghost"
+                  size="sm"
                   onClick={() => setIsAddingMcp(false)}
                 >
                   Cancelar
-                </button>
-                <button type="submit" className="btn btn-primary btn-sm">
+                </Button>
+                <Button type="submit" variant="primary" size="sm">
                   Salvar no .mcp.json
-                </button>
+                </Button>
               </div>
             </form>
           </div>
@@ -3380,23 +3386,27 @@ return {
                   background: "var(--color-surface-container-low, #f8f9fa)",
                 }}
               >
-                <button
+                <Button
                   type="button"
-                  className="btn btn-ghost btn-sm"
+                  variant="ghost"
+                  size="sm"
                   onClick={() => setIsCustomToolModalOpen(false)}
                 >
                   Cancelar
-                </button>
-                <button
+                </Button>
+                <Button
                   type="submit"
                   form="custom-tool-form"
-                  className="btn btn-primary btn-sm"
+                  variant="primary"
+                  size="sm"
+                  icon={
+                    <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
+                      save
+                    </span>
+                  }
                 >
-                  <span className="material-symbols-outlined icon-xs">
-                    save
-                  </span>
                   Salvar Ferramenta no Projeto
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -3721,17 +3731,19 @@ return {
                   background: "var(--color-surface-container-low, #f8f9fa)",
                 }}
               >
-                <button
+                <Button
                   type="button"
-                  className="btn btn-secondary btn-sm"
+                  variant="secondary"
+                  size="sm"
                   onClick={() => setSelectedCommunityTool(null)}
                 >
                   Fechar
-                </button>
+                </Button>
                 {selectedCommunityTool.server_id && (
-                  <button
+                  <Button
                     type="button"
-                    className="btn btn-primary btn-sm"
+                    variant="primary"
+                    size="sm"
                     onClick={() => {
                       const matchingTpl = mcpTemplates.find(
                         (t) => t.id === selectedCommunityTool.server_id,
@@ -3744,7 +3756,7 @@ return {
                     }}
                   >
                     Configurar Conector MCP
-                  </button>
+                  </Button>
                 )}
               </div>
             </div>

@@ -8,6 +8,7 @@
 import React, { useState, useEffect } from "react";
 import { useAI } from "../../context/AIContext";
 import { useWorkspace } from "../../context/WorkspaceContext";
+import { Button, IconButton } from "../ui";
 
 interface PromptSidebarProps {
   isOpen: boolean;
@@ -137,14 +138,13 @@ export const PromptSidebar: React.FC<PromptSidebarProps> = ({
             </span>
           </div>
         </div>
-        <button
-          className="btn-icon ai-copilot-close-prompt-sidebar-btn"
-          type="button"
+        <IconButton
+          size="sm"
+          variant="ghost"
           title="Fechar painel"
           onClick={onClose}
-        >
-          <span className="material-symbols-outlined icon-sm">close</span>
-        </button>
+          icon={<span className="material-symbols-outlined icon-sm">close</span>}
+        />
       </div>
 
       <div
@@ -193,20 +193,14 @@ export const PromptSidebar: React.FC<PromptSidebarProps> = ({
             </strong>
           </div>
           {onOpenAIModal && (
-            <button
-              className="btn btn-secondary btn-xs"
-              type="button"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "4px",
-                fontSize: "11px",
-              }}
+            <Button
+              size="xs"
+              variant="secondary"
               onClick={onOpenAIModal}
+              icon={<span className="material-symbols-outlined" style={{ fontSize: "14px" }}>tune</span>}
             >
-              <span className="material-symbols-outlined icon-xs">tune</span>{" "}
               Provedores
-            </button>
+            </Button>
           )}
         </div>
 
@@ -741,18 +735,19 @@ export const PromptSidebar: React.FC<PromptSidebarProps> = ({
               Salvo no .project.config.json
             </span>
           )}
-          <button
-            className="btn btn-primary btn-xs"
-            type="button"
-            disabled={isSaving}
-            style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}
+          <Button
+            variant="primary"
+            size="xs"
+            isLoading={isSaving}
             onClick={handleSaveTemplateCreatorPrompt}
+            icon={
+              <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>
+                save
+              </span>
+            }
           >
-            <span className="material-symbols-outlined icon-xs">
-              {isSaving ? "sync" : "save"}
-            </span>
             {isSaving ? "Salvando..." : "Salvar no Projeto"}
-          </button>
+          </Button>
         </div>
       )}
     </aside>

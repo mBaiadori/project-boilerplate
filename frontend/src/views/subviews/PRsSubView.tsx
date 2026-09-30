@@ -732,64 +732,39 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
 
                                         <div className="ui-row ui-row--align-center ui-row--xs">
                                           {isOpen && (
-                                            <button
+                                            <Button
                                               type="button"
+                                              size="xs"
+                                              variant="tonal"
                                               onClick={() => handleEditDocumentInPR(pr, f.path)}
                                               title={`Abrir e editar "${f.path}" diretamente na branch deste PR (${pr.branch})`}
-                                              style={{
-                                                padding: "3px 8px",
-                                                borderRadius: "4px",
-                                                border: "1px solid var(--md-sys-color-primary, #1a73e8)",
-                                                background: "var(--md-sys-color-primary-container, #e8f0fe)",
-                                                color: "var(--md-sys-color-primary, #1a73e8)",
-                                                fontSize: "11px",
-                                                fontWeight: 600,
-                                                display: "inline-flex",
-                                                alignItems: "center",
-                                                gap: "4px",
-                                                cursor: "pointer",
-                                              }}
+                                              icon={
+                                                <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>
+                                                  edit_note
+                                                </span>
+                                              }
                                             >
-                                              <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>
-                                                edit_note
-                                              </span>
                                               Editar Documento
-                                            </button>
+                                            </Button>
                                           )}
 
-                                          <div className="ui-btn-group" style={{ background: "var(--color-border-subtle, #e2e8f0)", padding: "2px", borderRadius: "4px" }}>
-                                            <button
+                                          <div className="ui-btn-group" style={{ background: "var(--color-border-subtle, #e2e8f0)", padding: "2px", borderRadius: "6px" }}>
+                                            <Button
                                               type="button"
+                                              size="xs"
+                                              variant={isVisual ? "secondary" : "ghost"}
                                               onClick={() => setPrViewModes((prev) => ({ ...prev, [fileKey]: "visual" }))}
-                                              style={{
-                                                padding: "2px 8px",
-                                                border: "none",
-                                                borderRadius: "3px",
-                                                fontSize: "11px",
-                                                fontWeight: 600,
-                                                cursor: "pointer",
-                                                background: isVisual ? "var(--color-surface, #ffffff)" : "transparent",
-                                                color: isVisual ? "var(--color-primary, #2563eb)" : "var(--color-text-muted, #64748b)",
-                                              }}
                                             >
                                               Visualização Formatada
-                                            </button>
-                                            <button
+                                            </Button>
+                                            <Button
                                               type="button"
+                                              size="xs"
+                                              variant={!isVisual ? "secondary" : "ghost"}
                                               onClick={() => setPrViewModes((prev) => ({ ...prev, [fileKey]: "raw" }))}
-                                              style={{
-                                                padding: "2px 8px",
-                                                border: "none",
-                                                borderRadius: "3px",
-                                                fontSize: "11px",
-                                                fontWeight: 600,
-                                                cursor: "pointer",
-                                                background: !isVisual ? "var(--color-surface, #ffffff)" : "transparent",
-                                                color: !isVisual ? "var(--color-primary, #2563eb)" : "var(--color-text-muted, #64748b)",
-                                              }}
                                             >
-                                              Código (Diff)
-                                            </button>
+                                              Modo RAW (Diff)
+                                            </Button>
                                           </div>
                                         </div>
                                       </div>

@@ -135,7 +135,7 @@ function sanitizeTemplateItem(
   const templateName = item.templateName || item.name || id;
   const title = item.title || templateName;
   const ext = item.ext || "md";
-  const category = item.category || item.categories || "geral";
+  const category = item.category || item.categories || "";
   const tags = Array.isArray(item.tags)
     ? item.tags
     : item.tags

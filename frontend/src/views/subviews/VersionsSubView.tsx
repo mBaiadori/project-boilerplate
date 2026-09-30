@@ -19,6 +19,7 @@ import {
   PageHeader,
   PageBody,
   Row,
+  FilterChips,
 } from "../../components/ui";
 import { DiffViewer } from "../../components/common";
 import {
@@ -92,7 +93,8 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
     );
   };
 
-  const [whatsNewFilter, setWhatsNewFilter] = useState<WhatsNewFilterType>("all");
+  const [whatsNewFilter, setWhatsNewFilter] =
+    useState<WhatsNewFilterType>("all");
   const [prTitle, setPrTitle] = useState("");
   const [prDescription, setPrDescription] = useState("");
   const [isCreatingPR, setIsCreatingPR] = useState(false);
@@ -105,17 +107,31 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
   } | null>(null);
 
   // File diff state: team diffs vs local diffs vs system diffs
-  const [expandedWhatsNewFiles, setExpandedWhatsNewFiles] = useState<Record<string, boolean>>({});
-  const [whatsNewDiffs, setWhatsNewDiffs] = useState<Record<string, string>>({});
-  const [loadingWhatsNewDiffs, setLoadingWhatsNewDiffs] = useState<Record<string, boolean>>({});
+  const [expandedWhatsNewFiles, setExpandedWhatsNewFiles] = useState<
+    Record<string, boolean>
+  >({});
+  const [whatsNewDiffs, setWhatsNewDiffs] = useState<Record<string, string>>(
+    {},
+  );
+  const [loadingWhatsNewDiffs, setLoadingWhatsNewDiffs] = useState<
+    Record<string, boolean>
+  >({});
 
-  const [expandedDraftFiles, setExpandedDraftFiles] = useState<Record<string, boolean>>({});
+  const [expandedDraftFiles, setExpandedDraftFiles] = useState<
+    Record<string, boolean>
+  >({});
   const [draftDiffs, setDraftDiffs] = useState<Record<string, string>>({});
-  const [loadingDraftDiffs, setLoadingDraftDiffs] = useState<Record<string, boolean>>({});
+  const [loadingDraftDiffs, setLoadingDraftDiffs] = useState<
+    Record<string, boolean>
+  >({});
 
-  const [expandedSystemFiles, setExpandedSystemFiles] = useState<Record<string, boolean>>({});
+  const [expandedSystemFiles, setExpandedSystemFiles] = useState<
+    Record<string, boolean>
+  >({});
   const [systemDiffs, setSystemDiffs] = useState<Record<string, string>>({});
-  const [loadingSystemDiffs, setLoadingSystemDiffs] = useState<Record<string, boolean>>({});
+  const [loadingSystemDiffs, setLoadingSystemDiffs] = useState<
+    Record<string, boolean>
+  >({});
 
   // Reset local state when active repo changes
   useEffect(() => {
@@ -290,7 +306,10 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
 
   const toggleWhatsNewFile = (filePath: string) => {
     const isNowExpanded = !expandedWhatsNewFiles[filePath];
-    setExpandedWhatsNewFiles((prev) => ({ ...prev, [filePath]: isNowExpanded }));
+    setExpandedWhatsNewFiles((prev) => ({
+      ...prev,
+      [filePath]: isNowExpanded,
+    }));
     if (isNowExpanded) {
       fetchWhatsNewDiff(filePath);
     }
@@ -452,8 +471,12 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
     if (adds === undefined || dels === undefined) {
       if (diffText) {
         const lines = diffText.split("\n");
-        adds = lines.filter((l) => l.startsWith("+") && !l.startsWith("+++")).length;
-        dels = lines.filter((l) => l.startsWith("-") && !l.startsWith("---")).length;
+        adds = lines.filter(
+          (l) => l.startsWith("+") && !l.startsWith("+++"),
+        ).length;
+        dels = lines.filter(
+          (l) => l.startsWith("-") && !l.startsWith("---"),
+        ).length;
       } else {
         adds = 0;
         dels = 0;
@@ -487,14 +510,6 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
       {/* Pinned Top Header & Tab Navigation Bar */}
       <PageHeader
         title="Central de Edições"
-        subtitle={
-          <span>
-            Repositório:{" "}
-            <strong style={{ color: "var(--color-text-primary, #1e293b)" }}>
-              {activeRepo?.name || "Local"}
-            </strong>
-          </span>
-        }
         icon={
           <div
             style={{
@@ -508,7 +523,10 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
               color: "var(--md-sys-color-primary, #1a73e8)",
             }}
           >
-            <span className="material-symbols-outlined" style={{ fontSize: "24px" }}>
+            <span
+              className="material-symbols-outlined"
+              style={{ fontSize: "24px" }}
+            >
               history_edu
             </span>
           </div>
@@ -552,7 +570,8 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
               id: "whats-new",
               label: "Novidades da Equipe",
               icon: <Sparkles size={16} />,
-              count: whatsNewFiles.length > 0 ? whatsNewFiles.length : undefined,
+              count:
+                whatsNewFiles.length > 0 ? whatsNewFiles.length : undefined,
               badgeVariant: "success",
             },
             {
@@ -566,7 +585,10 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
               id: "system",
               label: "Sistema",
               icon: <Settings size={16} />,
-              count: allSystemDraftFiles.length > 0 ? allSystemDraftFiles.length : undefined,
+              count:
+                allSystemDraftFiles.length > 0
+                  ? allSystemDraftFiles.length
+                  : undefined,
               badgeVariant: "info",
             },
           ]}
@@ -575,7 +597,16 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
 
       {/* Main Content Area */}
       <PageBody>
-        <div style={{ maxWidth: "1200px", width: "100%", margin: "0 auto", display: "flex", flexDirection: "column", gap: "20px" }}>
+        <div
+          style={{
+            maxWidth: "1200px",
+            width: "100%",
+            margin: "0 auto",
+            display: "flex",
+            flexDirection: "column",
+            gap: "20px",
+          }}
+        >
           {/* Feedback Alert */}
           {feedback && (
             <AlertBanner
@@ -590,7 +621,11 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
             <div className="ui-stack ui-stack--lg">
               {/* Top Summary Banner */}
               <Card variant="elevated" padding="lg">
-                <Row justify="between" align="center" style={{ width: "100%", flexWrap: "wrap", gap: "16px" }}>
+                <Row
+                  justify="between"
+                  align="center"
+                  style={{ width: "100%", flexWrap: "wrap", gap: "16px" }}
+                >
                   <div className="ui-row ui-row--align-center ui-row--md">
                     <div
                       style={{
@@ -604,14 +639,27 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
                         color: "var(--color-success, #16a34a)",
                       }}
                     >
-                      <span className="material-symbols-outlined" style={{ fontSize: "26px" }}>
+                      <span
+                        className="material-symbols-outlined"
+                        style={{ fontSize: "26px" }}
+                      >
                         auto_awesome
                       </span>
                     </div>
                     <div>
-                      <h3 className="ui-heading-3" style={{ margin: 0 }}>Novidades</h3>
-                      <span className="ui-text-muted" style={{ fontSize: "13px", marginTop: "3px", display: "block" }}>
-                        {whatsNewSummary?.summaryMessage || "Nenhuma atualização recente."}
+                      <h3 className="ui-heading-3" style={{ margin: 0 }}>
+                        Novidades
+                      </h3>
+                      <span
+                        className="ui-text-muted"
+                        style={{
+                          fontSize: "13px",
+                          marginTop: "3px",
+                          display: "block",
+                        }}
+                      >
+                        {whatsNewSummary?.summaryMessage ||
+                          "Nenhuma atualização recente."}
                       </span>
                     </div>
                   </div>
@@ -622,7 +670,14 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
                       size="sm"
                       onClick={handleSync}
                       disabled={isSyncing}
-                      icon={<span className="material-symbols-outlined" style={{ fontSize: "16px" }}>cloud_sync</span>}
+                      icon={
+                        <span
+                          className="material-symbols-outlined"
+                          style={{ fontSize: "16px" }}
+                        >
+                          cloud_sync
+                        </span>
+                      }
                     >
                       {isSyncing ? "Buscando..." : "Buscar Novidades"}
                     </Button>
@@ -631,7 +686,14 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
                       variant="primary"
                       size="sm"
                       onClick={handleMarkAsSeen}
-                      icon={<span className="material-symbols-outlined" style={{ fontSize: "18px" }}>done_all</span>}
+                      icon={
+                        <span
+                          className="material-symbols-outlined"
+                          style={{ fontSize: "18px" }}
+                        >
+                          done_all
+                        </span>
+                      }
                     >
                       Marcar tudo como visto
                     </Button>
@@ -640,99 +702,134 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
               </Card>
 
               {/* Filter Chips Bar */}
-              <div className="ui-row ui-row--align-center ui-row--sm" style={{ flexWrap: "wrap" }}>
-                <span className="ui-text-muted" style={{ fontSize: "13px", fontWeight: 600, marginRight: "4px" }}>
+              <div
+                className="ui-row ui-row--align-center ui-row--sm"
+                style={{ flexWrap: "wrap" }}
+              >
+                <span
+                  className="ui-text-muted"
+                  style={{
+                    fontSize: "13px",
+                    fontWeight: 600,
+                    marginRight: "4px",
+                  }}
+                >
                   Filtrar por:
                 </span>
 
-                <button
-                  type="button"
-                  onClick={() => setWhatsNewFilter("all")}
-                  className={`ui-filter-chip ${whatsNewFilter === "all" ? "ui-filter-chip--active" : ""}`}
-                >
-                  Todos ({whatsNewFiles.length})
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setWhatsNewFilter("new")}
-                  className={`ui-filter-chip ${whatsNewFilter === "new" ? "ui-filter-chip--active-success" : ""}`}
-                >
-                  ✨ Novos Documentos ({newFilesCount})
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setWhatsNewFilter("modified")}
-                  className={`ui-filter-chip ${whatsNewFilter === "modified" ? "ui-filter-chip--active-warning" : ""}`}
-                >
-                  📝 Documentos Alterados ({modFilesCount})
-                </button>
-
-                {whatsNewProposals.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setWhatsNewFilter("proposals")}
-                    className={`ui-filter-chip ${whatsNewFilter === "proposals" ? "ui-filter-chip--active-purple" : ""}`}
-                  >
-                    🔀 Propostas Integradas ({whatsNewProposals.length})
-                  </button>
-                )}
+                <FilterChips<WhatsNewFilterType>
+                  activeId={whatsNewFilter}
+                  onChange={(id) => setWhatsNewFilter(id)}
+                  size="sm"
+                  items={[
+                    { id: "all", label: `Todos (${whatsNewFiles.length})` },
+                    { id: "new", label: `Novos Documentos (${newFilesCount})` },
+                    {
+                      id: "modified",
+                      label: `Documentos Alterados (${modFilesCount})`,
+                    },
+                    ...(whatsNewProposals.length > 0
+                      ? [
+                          {
+                            id: "proposals" as WhatsNewFilterType,
+                            label: `Propostas Integradas (${whatsNewProposals.length})`,
+                          },
+                        ]
+                      : []),
+                  ]}
+                />
               </div>
 
               {/* Integrated Proposals Section */}
-              {(whatsNewFilter === "all" || whatsNewFilter === "proposals") && whatsNewProposals.length > 0 && (
-                <Card variant="elevated" padding="none">
-                  <div className="ui-card__header">
-                    <div className="ui-row ui-row--align-center ui-row--xs">
-                      <span className="material-symbols-outlined" style={{ fontSize: "20px", color: "#7c3aed" }}>
-                        verified
-                      </span>
-                      <strong style={{ fontSize: "14px", color: "var(--color-text-primary, #0f172a)" }}>
-                        Propostas de Especificação Aprovadas e Integradas
-                      </strong>
-                    </div>
-                  </div>
-                  <div className="ui-card__content" style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                    {whatsNewProposals.map((pr, idx) => (
-                      <div
-                        key={idx}
-                        className="ui-card ui-card--flat"
-                        style={{
-                          padding: "14px 18px",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                        }}
-                      >
-                        <div className="ui-row ui-row--align-center ui-row--sm">
-                          <Badge variant="primary" size="sm">
-                            Proposta #{pr.id}
-                          </Badge>
-                          <span style={{ fontSize: "13.5px", fontWeight: 600, color: "var(--color-text-primary, #1e293b)" }}>
-                            {pr.title}
-                          </span>
-                        </div>
-                        {pr.author && (
-                          <span className="ui-text-muted" style={{ fontSize: "12.5px" }}>
-                            Autor:{" "}
-                            <strong style={{ color: "var(--color-text-primary, #1e293b)" }}>
-                              {pr.author}
-                            </strong>
-                          </span>
-                        )}
+              {(whatsNewFilter === "all" || whatsNewFilter === "proposals") &&
+                whatsNewProposals.length > 0 && (
+                  <Card variant="elevated" padding="none">
+                    <div className="ui-card__header">
+                      <div className="ui-row ui-row--align-center ui-row--xs">
+                        <span
+                          className="material-symbols-outlined"
+                          style={{ fontSize: "20px", color: "#7c3aed" }}
+                        >
+                          verified
+                        </span>
+                        <strong
+                          style={{
+                            fontSize: "14px",
+                            color: "var(--color-text-primary, #0f172a)",
+                          }}
+                        >
+                          Propostas de Especificação Aprovadas e Integradas
+                        </strong>
                       </div>
-                    ))}
-                  </div>
-                </Card>
-              )}
+                    </div>
+                    <div
+                      className="ui-card__content"
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "10px",
+                      }}
+                    >
+                      {whatsNewProposals.map((pr, idx) => (
+                        <div
+                          key={idx}
+                          className="ui-card ui-card--flat"
+                          style={{
+                            padding: "14px 18px",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                          }}
+                        >
+                          <div className="ui-row ui-row--align-center ui-row--sm">
+                            <Badge variant="primary" size="sm">
+                              Proposta #{pr.id}
+                            </Badge>
+                            <span
+                              style={{
+                                fontSize: "13.5px",
+                                fontWeight: 600,
+                                color: "var(--color-text-primary, #1e293b)",
+                              }}
+                            >
+                              {pr.title}
+                            </span>
+                          </div>
+                          {pr.author && (
+                            <span
+                              className="ui-text-muted"
+                              style={{ fontSize: "12.5px" }}
+                            >
+                              Autor:{" "}
+                              <strong
+                                style={{
+                                  color: "var(--color-text-primary, #1e293b)",
+                                }}
+                              >
+                                {pr.author}
+                              </strong>
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </Card>
+                )}
 
               {/* Changed Files Received from Team */}
               {whatsNewFilter !== "proposals" && (
                 <Card variant="elevated" padding="none">
                   {filteredWhatsNewFiles.length === 0 ? (
                     <div className="ui-empty-state" style={{ padding: "40px" }}>
-                      <span className="material-symbols-outlined" style={{ fontSize: "32px", color: "var(--color-success, #16a34a)", display: "block", marginBottom: "8px" }}>
+                      <span
+                        className="material-symbols-outlined"
+                        style={{
+                          fontSize: "32px",
+                          color: "var(--color-success, #16a34a)",
+                          display: "block",
+                          marginBottom: "8px",
+                        }}
+                      >
                         check_circle
                       </span>
                       Nenhum documento com este filtro nesta atualização.
@@ -749,8 +846,11 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
                           <div
                             key={file.path || idx}
                             style={{
-                              borderBottom: "1px solid var(--color-border-subtle, #e2e8f0)",
-                              background: isExpanded ? "var(--color-surface-subtle, #f8fafc)" : "transparent",
+                              borderBottom:
+                                "1px solid var(--color-border-subtle, #e2e8f0)",
+                              background: isExpanded
+                                ? "var(--color-surface-subtle, #f8fafc)"
+                                : "transparent",
                             }}
                           >
                             <div
@@ -761,21 +861,34 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
                                 padding: "14px 20px",
                                 cursor: "pointer",
                                 userSelect: "none",
-                                background: isExpanded ? "var(--color-primary-subtle, #f1f5f9)" : "transparent",
+                                background: isExpanded
+                                  ? "var(--color-primary-subtle, #f1f5f9)"
+                                  : "transparent",
                                 transition: "background 0.15s ease",
                               }}
                             >
                               <div
                                 onClick={() => toggleWhatsNewFile(file.path)}
-                                style={{ display: "flex", alignItems: "center", gap: "10px", minWidth: 0, flex: 1, paddingRight: "16px" }}
+                                style={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "10px",
+                                  minWidth: 0,
+                                  flex: 1,
+                                  paddingRight: "16px",
+                                }}
                               >
                                 <span
                                   className="material-symbols-outlined"
                                   style={{
                                     fontSize: "20px",
-                                    color: isExpanded ? "var(--color-primary, #1a73e8)" : "var(--color-text-muted, #94a3b8)",
+                                    color: isExpanded
+                                      ? "var(--color-primary, #1a73e8)"
+                                      : "var(--color-text-muted, #94a3b8)",
                                     transition: "transform 0.2s ease",
-                                    transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)",
+                                    transform: isExpanded
+                                      ? "rotate(90deg)"
+                                      : "rotate(0deg)",
                                   }}
                                 >
                                   chevron_right
@@ -795,7 +908,11 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
                                             : "var(--color-text-muted, #64748b)",
                                   }}
                                 >
-                                  {file.status === "D" ? "delete_outline" : file.status === "A" ? "note_add" : "description"}
+                                  {file.status === "D"
+                                    ? "delete_outline"
+                                    : file.status === "A"
+                                      ? "note_add"
+                                      : "description"}
                                 </span>
 
                                 <span
@@ -814,7 +931,15 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
                                 </span>
 
                                 <Badge
-                                  variant={file.status === "M" ? "warning" : file.status === "A" ? "success" : file.status === "D" ? "danger" : "neutral"}
+                                  variant={
+                                    file.status === "M"
+                                      ? "warning"
+                                      : file.status === "A"
+                                        ? "success"
+                                        : file.status === "D"
+                                          ? "danger"
+                                          : "neutral"
+                                  }
                                   size="sm"
                                 >
                                   {file.statusLabel ||
@@ -826,16 +951,37 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
                                 </Badge>
                               </div>
 
-                              <div className="ui-row ui-row--align-center ui-row--sm" style={{ flexShrink: 0 }}>
+                              <div
+                                className="ui-row ui-row--align-center ui-row--sm"
+                                style={{ flexShrink: 0 }}
+                              >
                                 {(file.additions > 0 || file.deletions > 0) && (
-                                  <div className="ui-row ui-row--xs" style={{ fontFamily: "var(--font-family-mono)", fontSize: "12px", marginRight: "8px" }}>
+                                  <div
+                                    className="ui-row ui-row--xs"
+                                    style={{
+                                      fontFamily: "var(--font-family-mono)",
+                                      fontSize: "12px",
+                                      marginRight: "8px",
+                                    }}
+                                  >
                                     {file.additions > 0 && (
-                                      <span style={{ color: "var(--color-success, #16a34a)", fontWeight: 600 }}>
+                                      <span
+                                        style={{
+                                          color:
+                                            "var(--color-success, #16a34a)",
+                                          fontWeight: 600,
+                                        }}
+                                      >
                                         +{file.additions}
                                       </span>
                                     )}
                                     {file.deletions > 0 && (
-                                      <span style={{ color: "var(--color-danger, #dc2626)", fontWeight: 600 }}>
+                                      <span
+                                        style={{
+                                          color: "var(--color-danger, #dc2626)",
+                                          fontWeight: 600,
+                                        }}
+                                      >
                                         -{file.deletions}
                                       </span>
                                     )}
@@ -850,32 +996,38 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
                                     handleOpenFileClick(file.path);
                                   }}
                                   title="Abrir este documento no editor"
-                                  icon={<span className="material-symbols-outlined" style={{ fontSize: "15px" }}>open_in_new</span>}
+                                  icon={
+                                    <span
+                                      className="material-symbols-outlined"
+                                      style={{ fontSize: "15px" }}
+                                    >
+                                      open_in_new
+                                    </span>
+                                  }
                                 >
                                   Abrir Documento
                                 </Button>
 
-                                <button
+                                <Button
                                   type="button"
+                                  size="xs"
+                                  variant="ghost"
                                   onClick={() => toggleWhatsNewFile(file.path)}
-                                  style={{
-                                    fontSize: "12px",
-                                    padding: "5px 10px",
-                                    borderRadius: "6px",
-                                    background: "transparent",
-                                    border: "none",
-                                    color: "var(--color-primary, #1a73e8)",
-                                    cursor: "pointer",
-                                    fontWeight: 500,
-                                  }}
                                 >
-                                  {isExpanded ? "Ocultar mudanças" : "Ver mudanças"}
-                                </button>
+                                  {isExpanded
+                                    ? "Ocultar mudanças"
+                                    : "Ver mudanças"}
+                                </Button>
                               </div>
                             </div>
 
                             {/* Accordion Diff View */}
-                            {isExpanded && <DiffViewer diffText={diffText} isLoading={isLoadingDiff} />}
+                            {isExpanded && (
+                              <DiffViewer
+                                diffText={diffText}
+                                isLoading={isLoadingDiff}
+                              />
+                            )}
                           </div>
                         );
                       })}
@@ -891,12 +1043,25 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
                     className="ui-card__title"
                     style={{ marginBottom: "14px" }}
                   >
-                    <span className="material-symbols-outlined" style={{ fontSize: "18px", color: "var(--color-text-muted)" }}>
+                    <span
+                      className="material-symbols-outlined"
+                      style={{
+                        fontSize: "18px",
+                        color: "var(--color-text-muted)",
+                      }}
+                    >
                       history
                     </span>
-                    Publicações e Marcos Trazidos pela Atualização ({whatsNewCommits.length})
+                    Publicações e Marcos Trazidos pela Atualização (
+                    {whatsNewCommits.length})
                   </h4>
-                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "8px",
+                    }}
+                  >
                     {whatsNewCommits.map((item, idx) => (
                       <div
                         key={idx}
@@ -917,17 +1082,29 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
                               fontWeight: 600,
                               padding: "2px 6px",
                               borderRadius: "4px",
-                              background: "var(--color-surface-subtle, #e2e8f0)",
+                              background:
+                                "var(--color-surface-subtle, #e2e8f0)",
                               color: "var(--color-text-secondary, #334155)",
                             }}
                           >
-                            #{item?.shortHash || item?.hash?.slice(0, 7) || "v-atual"}
+                            #
+                            {item?.shortHash ||
+                              item?.hash?.slice(0, 7) ||
+                              "v-atual"}
                           </span>
-                          <span style={{ fontWeight: 500, color: "var(--color-text-primary, #1e293b)" }}>
+                          <span
+                            style={{
+                              fontWeight: 500,
+                              color: "var(--color-text-primary, #1e293b)",
+                            }}
+                          >
                             {item?.message || "Atualização de documentação"}
                           </span>
                         </div>
-                        <span className="ui-text-muted" style={{ fontSize: "12px" }}>
+                        <span
+                          className="ui-text-muted"
+                          style={{ fontSize: "12px" }}
+                        >
                           {item?.author || "Equipe"} &bull; {item?.date || ""}
                         </span>
                       </div>
@@ -944,32 +1121,50 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
               {/* Changed Files List */}
               <Card variant="elevated" padding="none">
                 <div className="ui-card__header">
-                  <strong style={{ fontSize: "14px", color: "var(--color-text-primary, #0f172a)" }}>
+                  <strong
+                    style={{
+                      fontSize: "14px",
+                      color: "var(--color-text-primary, #0f172a)",
+                    }}
+                  >
                     Meus Documentos em Edição Local ({allDraftFiles.length})
                   </strong>
                 </div>
 
                 {allDraftFiles.length === 0 ? (
                   <div className="ui-empty-state" style={{ padding: "40px" }}>
-                    <span className="material-symbols-outlined" style={{ fontSize: "32px", color: "var(--color-success, #16a34a)", display: "block", marginBottom: "8px" }}>
+                    <span
+                      className="material-symbols-outlined"
+                      style={{
+                        fontSize: "32px",
+                        color: "var(--color-success, #16a34a)",
+                        display: "block",
+                        marginBottom: "8px",
+                      }}
+                    >
                       check_circle
                     </span>
-                    Todos os seus documentos estão consolidados e salvos no disco.
+                    Todos os seus documentos estão consolidados e salvos no
+                    disco.
                   </div>
                 ) : (
                   <div style={{ display: "flex", flexDirection: "column" }}>
                     {allDraftFiles.map((file, idx) => {
                       if (!file?.path) return null;
                       const isExpanded = !!expandedDraftFiles[file.path];
-                      const { diffText, additions, deletions } = getDraftDiffInfo(file.path);
+                      const { diffText, additions, deletions } =
+                        getDraftDiffInfo(file.path);
                       const isLoadingDiff = !!loadingDraftDiffs[file.path];
 
                       return (
                         <div
                           key={file.path || idx}
                           style={{
-                            borderBottom: "1px solid var(--color-border-subtle, #e2e8f0)",
-                            background: isExpanded ? "var(--color-surface-subtle, #f8fafc)" : "transparent",
+                            borderBottom:
+                              "1px solid var(--color-border-subtle, #e2e8f0)",
+                            background: isExpanded
+                              ? "var(--color-surface-subtle, #f8fafc)"
+                              : "transparent",
                           }}
                         >
                           <div
@@ -980,21 +1175,34 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
                               padding: "14px 20px",
                               cursor: "pointer",
                               userSelect: "none",
-                              background: isExpanded ? "var(--color-primary-subtle, #f1f5f9)" : "transparent",
+                              background: isExpanded
+                                ? "var(--color-primary-subtle, #f1f5f9)"
+                                : "transparent",
                               transition: "background 0.15s ease",
                             }}
                           >
                             <div
                               onClick={() => toggleDraftFile(file.path)}
-                              style={{ display: "flex", alignItems: "center", gap: "10px", minWidth: 0, flex: 1, paddingRight: "16px" }}
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "10px",
+                                minWidth: 0,
+                                flex: 1,
+                                paddingRight: "16px",
+                              }}
                             >
                               <span
                                 className="material-symbols-outlined"
                                 style={{
                                   fontSize: "20px",
-                                  color: isExpanded ? "var(--color-primary, #1a73e8)" : "var(--color-text-muted, #94a3b8)",
+                                  color: isExpanded
+                                    ? "var(--color-primary, #1a73e8)"
+                                    : "var(--color-text-muted, #94a3b8)",
                                   transition: "transform 0.2s ease",
-                                  transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)",
+                                  transform: isExpanded
+                                    ? "rotate(90deg)"
+                                    : "rotate(0deg)",
                                 }}
                               >
                                 chevron_right
@@ -1007,14 +1215,19 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
                                   color:
                                     file.status === "M"
                                       ? "var(--color-warning, #d97706)"
-                                      : file.status === "A" || file.status === "??"
+                                      : file.status === "A" ||
+                                          file.status === "??"
                                         ? "var(--color-success, #16a34a)"
                                         : file.status === "D"
                                           ? "var(--color-danger, #dc2626)"
                                           : "var(--color-text-muted, #64748b)",
                                 }}
                               >
-                                {file.status === "D" ? "delete_outline" : file.status === "A" || file.status === "??" ? "note_add" : "description"}
+                                {file.status === "D"
+                                  ? "delete_outline"
+                                  : file.status === "A" || file.status === "??"
+                                    ? "note_add"
+                                    : "description"}
                               </span>
 
                               <span
@@ -1033,7 +1246,16 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
                               </span>
 
                               <Badge
-                                variant={file.status === "M" ? "warning" : file.status === "A" || file.status === "??" ? "success" : file.status === "D" ? "danger" : "neutral"}
+                                variant={
+                                  file.status === "M"
+                                    ? "warning"
+                                    : file.status === "A" ||
+                                        file.status === "??"
+                                      ? "success"
+                                      : file.status === "D"
+                                        ? "danger"
+                                        : "neutral"
+                                }
                                 size="sm"
                               >
                                 {file.status === "??"
@@ -1048,16 +1270,36 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
                               </Badge>
                             </div>
 
-                            <div className="ui-row ui-row--align-center ui-row--sm" style={{ flexShrink: 0 }}>
+                            <div
+                              className="ui-row ui-row--align-center ui-row--sm"
+                              style={{ flexShrink: 0 }}
+                            >
                               {(additions > 0 || deletions > 0) && (
-                                <div className="ui-row ui-row--xs" style={{ fontFamily: "var(--font-family-mono)", fontSize: "12px", marginRight: "8px" }}>
+                                <div
+                                  className="ui-row ui-row--xs"
+                                  style={{
+                                    fontFamily: "var(--font-family-mono)",
+                                    fontSize: "12px",
+                                    marginRight: "8px",
+                                  }}
+                                >
                                   {additions > 0 && (
-                                    <span style={{ color: "var(--color-success, #16a34a)", fontWeight: 600 }}>
+                                    <span
+                                      style={{
+                                        color: "var(--color-success, #16a34a)",
+                                        fontWeight: 600,
+                                      }}
+                                    >
                                       +{additions}
                                     </span>
                                   )}
                                   {deletions > 0 && (
-                                    <span style={{ color: "var(--color-danger, #dc2626)", fontWeight: 600 }}>
+                                    <span
+                                      style={{
+                                        color: "var(--color-danger, #dc2626)",
+                                        fontWeight: 600,
+                                      }}
+                                    >
                                       -{deletions}
                                     </span>
                                   )}
@@ -1072,36 +1314,40 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
                                   handleOpenFileClick(file.path);
                                 }}
                                 title="Abrir este documento no editor"
-                                icon={<span className="material-symbols-outlined" style={{ fontSize: "15px" }}>open_in_new</span>}
+                                icon={
+                                  <span
+                                    className="material-symbols-outlined"
+                                    style={{ fontSize: "15px" }}
+                                  >
+                                    open_in_new
+                                  </span>
+                                }
                               >
                                 Abrir Documento
                               </Button>
 
-                              <button
+                              <Button
                                 type="button"
+                                size="xs"
+                                variant="danger"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   handleDiscard(file.path);
                                 }}
                                 title="Descartar modificações deste documento"
-                                style={{
-                                  color: "var(--color-danger, #dc2626)",
-                                  fontSize: "12px",
-                                  padding: "5px 10px",
-                                  borderRadius: "6px",
-                                  background: "transparent",
-                                  border: "none",
-                                  cursor: "pointer",
-                                  fontWeight: 500,
-                                }}
                               >
                                 Descartar
-                              </button>
+                              </Button>
                             </div>
                           </div>
 
                           {/* Accordion Diff View */}
-                          {isExpanded && <DiffViewer diffText={diffText} isLoading={isLoadingDiff} />}
+                          {isExpanded && (
+                            <DiffViewer
+                              diffText={diffText}
+                              isLoading={isLoadingDiff}
+                            />
+                          )}
                         </div>
                       );
                     })}
@@ -1111,10 +1357,27 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
 
               {/* Version Milestone Proposal Form */}
               <Card variant="elevated" className="ui-card--p-lg">
-                <form onSubmit={handleCreateProposal} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-                  <Row justify="between" align="center" style={{ width: "100%", marginBottom: "4px" }}>
+                <form
+                  onSubmit={handleCreateProposal}
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "16px",
+                  }}
+                >
+                  <Row
+                    justify="between"
+                    align="center"
+                    style={{ width: "100%", marginBottom: "4px" }}
+                  >
                     <div className="ui-row ui-row--align-center ui-row--xs">
-                      <span className="material-symbols-outlined" style={{ fontSize: "20px", color: "var(--color-primary, #1a73e8)" }}>
+                      <span
+                        className="material-symbols-outlined"
+                        style={{
+                          fontSize: "20px",
+                          color: "var(--color-primary, #1a73e8)",
+                        }}
+                      >
                         alt_route
                       </span>
                       <h3 className="ui-card__title" style={{ margin: 0 }}>
@@ -1133,19 +1396,29 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
                           className="material-symbols-outlined"
                           style={{
                             fontSize: "15px",
-                            animation: isGeneratingAI ? "spin 1s linear infinite" : "none",
+                            animation: isGeneratingAI
+                              ? "spin 1s linear infinite"
+                              : "none",
                           }}
                         >
-                          {isGeneratingAI ? "progress_activity" : "auto_fix_high"}
+                          {isGeneratingAI
+                            ? "progress_activity"
+                            : "auto_fix_high"}
                         </span>
                       }
                       title="Preencher título e descrição automaticamente a partir dos arquivos alterados"
                     >
-                      {isGeneratingAI ? "Gerando resumo..." : "Gerar Resumo Automático"}
+                      {isGeneratingAI
+                        ? "Gerando resumo..."
+                        : "Gerar Resumo Automático"}
                     </Button>
                   </Row>
 
-                  <FormField label="Título da Proposta" required helperText="Resumo objetivo das alterações para o registro de versão">
+                  <FormField
+                    label="Título da Proposta"
+                    required
+                    helperText="Resumo objetivo das alterações para o registro de versão"
+                  >
                     <Input
                       id="draft-pr-title"
                       placeholder="Ex: docs: atualização de especificações e termos de governança"
@@ -1155,7 +1428,10 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
                     />
                   </FormField>
 
-                  <FormField label="Descrição & Justificativa" helperText="Opcional: detalhe os motivos das alterações, impactos e itens adicionados">
+                  <FormField
+                    label="Descrição & Justificativa"
+                    helperText="Opcional: detalhe os motivos das alterações, impactos e itens adicionados"
+                  >
                     <Textarea
                       id="draft-pr-description"
                       rows={3}
@@ -1175,22 +1451,43 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
                         border: "1px solid var(--color-border-subtle, #bbf7d0)",
                       }}
                     >
-                      <span style={{ fontSize: "13px", color: "var(--color-success, #166534)", fontWeight: 500 }}>
+                      <span
+                        style={{
+                          fontSize: "13px",
+                          color: "var(--color-success, #166534)",
+                          fontWeight: 500,
+                        }}
+                      >
                         🎉 Proposta criada com sucesso!
                       </span>
                     </div>
                   )}
 
-                  <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "4px" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "flex-end",
+                      marginTop: "4px",
+                    }}
+                  >
                     <Button
                       type="submit"
                       variant="primary"
                       size="md"
                       disabled={isCreatingPR || isClean || !prTitle.trim()}
                       isLoading={isCreatingPR}
-                      icon={<span className="material-symbols-outlined" style={{ fontSize: "18px" }}>call_split</span>}
+                      icon={
+                        <span
+                          className="material-symbols-outlined"
+                          style={{ fontSize: "18px" }}
+                        >
+                          call_split
+                        </span>
+                      }
                     >
-                      {isCreatingPR ? "Criando Proposta..." : "Propor Alteração"}
+                      {isCreatingPR
+                        ? "Criando Proposta..."
+                        : "Propor Alteração"}
                     </Button>
                   </div>
                 </form>
@@ -1202,21 +1499,48 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
           {activeTab === "system" && (
             <div className="ui-stack ui-stack--lg">
               {allSystemDraftFiles.length === 0 ? (
-                <Card variant="elevated" padding="xl" style={{ textAlign: "center" }}>
-                  <span className="material-symbols-outlined" style={{ fontSize: "44px", color: "var(--color-success, #16a34a)", marginBottom: "12px" }}>
+                <Card
+                  variant="elevated"
+                  padding="xl"
+                  style={{ textAlign: "center" }}
+                >
+                  <span
+                    className="material-symbols-outlined"
+                    style={{
+                      fontSize: "44px",
+                      color: "var(--color-success, #16a34a)",
+                      marginBottom: "12px",
+                    }}
+                  >
                     check_circle
                   </span>
                   <h4 className="ui-heading-3" style={{ margin: 0 }}>
                     Nenhuma Alteração de Sistema Pendente
                   </h4>
-                  <p className="ui-text-muted" style={{ margin: "8px auto 0 auto", fontSize: "13.5px", maxWidth: "480px", lineHeight: "1.5" }}>
-                    Todos os templates (<code>.templates.json</code>), termos do dicionário (<code>.dictionary.json</code>) e arquivos de configuração do projeto estão sincronizados.
+                  <p
+                    className="ui-text-muted"
+                    style={{
+                      margin: "8px auto 0 auto",
+                      fontSize: "13.5px",
+                      maxWidth: "480px",
+                      lineHeight: "1.5",
+                    }}
+                  >
+                    Todos os templates (<code>.templates.json</code>), termos do
+                    dicionário (<code>.dictionary.json</code>) e arquivos de
+                    configuração do projeto estão sincronizados.
                   </p>
                 </Card>
               ) : (
                 <>
                   {/* System Files List */}
-                  <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "12px",
+                    }}
+                  >
                     {allSystemDraftFiles.map((f) => {
                       const isExpanded = !!expandedSystemFiles[f.path];
                       const diffText = systemDiffs[f.path] || "";
@@ -1230,14 +1554,23 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
                               alignItems: "center",
                               justifyContent: "space-between",
                               padding: "14px 20px",
-                              background: "var(--color-surface-subtle, #f8fafc)",
-                              borderBottom: isExpanded ? "1px solid var(--color-border-subtle, #e2e8f0)" : "none",
+                              background:
+                                "var(--color-surface-subtle, #f8fafc)",
+                              borderBottom: isExpanded
+                                ? "1px solid var(--color-border-subtle, #e2e8f0)"
+                                : "none",
                               flexWrap: "wrap",
                               gap: "10px",
                             }}
                           >
                             <div className="ui-row ui-row--align-center ui-row--sm">
-                              <span className="material-symbols-outlined" style={{ fontSize: "22px", color: "var(--color-primary, #3b82f6)" }}>
+                              <span
+                                className="material-symbols-outlined"
+                                style={{
+                                  fontSize: "22px",
+                                  color: "var(--color-primary, #3b82f6)",
+                                }}
+                              >
                                 {f.path.includes("template")
                                   ? "dashboard_customize"
                                   : f.path.includes("dictionary")
@@ -1247,10 +1580,23 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
                                       : "settings"}
                               </span>
                               <div>
-                                <div style={{ fontSize: "14px", fontWeight: 700, color: "var(--color-text-primary, #0f172a)" }}>
+                                <div
+                                  style={{
+                                    fontSize: "14px",
+                                    fontWeight: 700,
+                                    color: "var(--color-text-primary, #0f172a)",
+                                  }}
+                                >
                                   {f.friendlyName}
                                 </div>
-                                <div className="ui-text-muted" style={{ fontSize: "12px", fontFamily: "var(--font-family-mono, monospace)" }}>
+                                <div
+                                  className="ui-text-muted"
+                                  style={{
+                                    fontSize: "12px",
+                                    fontFamily:
+                                      "var(--font-family-mono, monospace)",
+                                  }}
+                                >
                                   {f.path}
                                 </div>
                               </div>
@@ -1258,10 +1604,20 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
 
                             <div className="ui-row ui-row--align-center ui-row--xs">
                               <Badge
-                                variant={f.type === "ADDED" ? "success" : f.type === "DELETED" ? "danger" : "info"}
+                                variant={
+                                  f.type === "ADDED"
+                                    ? "success"
+                                    : f.type === "DELETED"
+                                      ? "danger"
+                                      : "info"
+                                }
                                 size="sm"
                               >
-                                {f.type === "ADDED" ? "NOVO" : f.type === "DELETED" ? "REMOVIDO" : "MODIFICADO"}
+                                {f.type === "ADDED"
+                                  ? "NOVO"
+                                  : f.type === "DELETED"
+                                    ? "REMOVIDO"
+                                    : "MODIFICADO"}
                               </Badge>
 
                               <Button
@@ -1269,21 +1625,35 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
                                 size="sm"
                                 onClick={() => toggleSystemFile(f.path)}
                                 icon={
-                                  <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>
+                                  <span
+                                    className="material-symbols-outlined"
+                                    style={{ fontSize: "16px" }}
+                                  >
                                     {isExpanded ? "expand_less" : "expand_more"}
                                   </span>
                                 }
                               >
-                                {isExpanded ? "Ocultar Diferenças" : "Ver Diferenças (Diff)"}
+                                {isExpanded
+                                  ? "Ocultar Diferenças"
+                                  : "Ver Diferenças (Diff)"}
                               </Button>
 
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                style={{ color: "var(--color-danger, #dc2626)" }}
+                                style={{
+                                  color: "var(--color-danger, #dc2626)",
+                                }}
                                 onClick={() => handleDiscard(f.path)}
                                 title="Descartar alterações neste arquivo de sistema"
-                                icon={<span className="material-symbols-outlined" style={{ fontSize: "15px" }}>delete</span>}
+                                icon={
+                                  <span
+                                    className="material-symbols-outlined"
+                                    style={{ fontSize: "15px" }}
+                                  >
+                                    delete
+                                  </span>
+                                }
                               >
                                 Descartar
                               </Button>
@@ -1291,7 +1661,12 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
                           </div>
 
                           {/* Diff Viewer Body */}
-                          {isExpanded && <DiffViewer diffText={diffText} isLoading={isLoading} />}
+                          {isExpanded && (
+                            <DiffViewer
+                              diffText={diffText}
+                              isLoading={isLoading}
+                            />
+                          )}
                         </Card>
                       );
                     })}
@@ -1299,10 +1674,27 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
 
                   {/* Proposal Form for System changes */}
                   <Card variant="elevated" className="ui-card--p-lg">
-                    <form onSubmit={handleCreateProposal} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-                      <Row justify="between" align="center" style={{ width: "100%", marginBottom: "4px" }}>
+                    <form
+                      onSubmit={handleCreateProposal}
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "16px",
+                      }}
+                    >
+                      <Row
+                        justify="between"
+                        align="center"
+                        style={{ width: "100%", marginBottom: "4px" }}
+                      >
                         <div className="ui-row ui-row--align-center ui-row--xs">
-                          <span className="material-symbols-outlined" style={{ fontSize: "20px", color: "var(--color-primary, #1a73e8)" }}>
+                          <span
+                            className="material-symbols-outlined"
+                            style={{
+                              fontSize: "20px",
+                              color: "var(--color-primary, #1a73e8)",
+                            }}
+                          >
                             alt_route
                           </span>
                           <h3 className="ui-card__title" style={{ margin: 0 }}>
@@ -1315,28 +1707,45 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
                           variant="secondary"
                           size="sm"
                           onClick={handleGenerateSummaryAI}
-                          disabled={isGeneratingAI || allSystemDraftFiles.length === 0}
+                          disabled={
+                            isGeneratingAI || allSystemDraftFiles.length === 0
+                          }
                           icon={
                             <span
                               className="material-symbols-outlined"
                               style={{
                                 fontSize: "15px",
-                                animation: isGeneratingAI ? "spin 1s linear infinite" : "none",
+                                animation: isGeneratingAI
+                                  ? "spin 1s linear infinite"
+                                  : "none",
                               }}
                             >
-                              {isGeneratingAI ? "progress_activity" : "auto_fix_high"}
+                              {isGeneratingAI
+                                ? "progress_activity"
+                                : "auto_fix_high"}
                             </span>
                           }
                         >
-                          {isGeneratingAI ? "Gerando resumo..." : "Gerar Resumo com IA"}
+                          {isGeneratingAI
+                            ? "Gerando resumo..."
+                            : "Gerar Resumo com IA"}
                         </Button>
                       </Row>
 
-                      <p className="ui-text-muted" style={{ fontSize: "12.5px", margin: 0 }}>
-                        Ao criar a proposta, uma revisão será aberta para que os novos templates e configurações sejam compartilhados e replicados para toda a equipe.
+                      <p
+                        className="ui-text-muted"
+                        style={{ fontSize: "12.5px", margin: 0 }}
+                      >
+                        Ao criar a proposta, uma revisão será aberta para que os
+                        novos templates e configurações sejam compartilhados e
+                        replicados para toda a equipe.
                       </p>
 
-                      <FormField label="Título da Proposta de Sistema" required helperText="Ex: chore(templates): atualizar modelos canônicos de especificação">
+                      <FormField
+                        label="Título da Proposta de Sistema"
+                        required
+                        helperText="Ex: chore(templates): atualizar modelos canônicos de especificação"
+                      >
                         <Input
                           id="system-pr-title"
                           placeholder="Ex: chore(templates): atualizar modelos canônicos de especificação"
@@ -1346,7 +1755,10 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
                         />
                       </FormField>
 
-                      <FormField label="Descrição das Modificações" helperText="Opcional: detalhe o que foi alterado nos templates ou configurações">
+                      <FormField
+                        label="Descrição das Modificações"
+                        helperText="Opcional: detalhe o que foi alterado nos templates ou configurações"
+                      >
                         <Textarea
                           id="system-pr-description"
                           rows={3}
@@ -1357,16 +1769,31 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
                         />
                       </FormField>
 
-                      <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "4px" }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "flex-end",
+                          marginTop: "4px",
+                        }}
+                      >
                         <Button
                           type="submit"
                           variant="primary"
                           size="md"
                           disabled={isCreatingPR || !prTitle.trim()}
                           isLoading={isCreatingPR}
-                          icon={<span className="material-symbols-outlined" style={{ fontSize: "18px" }}>publish</span>}
+                          icon={
+                            <span
+                              className="material-symbols-outlined"
+                              style={{ fontSize: "18px" }}
+                            >
+                              publish
+                            </span>
+                          }
                         >
-                          {isCreatingPR ? "Criando Proposta..." : "Criar Proposta de Evolução"}
+                          {isCreatingPR
+                            ? "Criando Proposta..."
+                            : "Criar Proposta de Evolução"}
                         </Button>
                       </div>
                     </form>

@@ -9,6 +9,7 @@ import { RagSearchModal } from "./RagSearchModal";
 import { useCopilotStore } from "../../stores/copilotStore";
 import { API } from "../../services/api";
 import type { TreeNode } from "../../types";
+import { Button, IconButton, Chip } from "../ui";
 
 interface AICopilotPanelProps {
   isOpen: boolean;
@@ -548,7 +549,9 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
     return s?.title || s?.name || id;
   };
 
-  const extraActiveSkills = activeSkillIds.filter((id) => !templateSkills.includes(id));
+  const extraActiveSkills = activeSkillIds.filter(
+    (id) => !templateSkills.includes(id),
+  );
 
   return (
     <>
@@ -847,76 +850,47 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
           }}
         >
           {/* New Chat Session Button */}
-          <button
-            className="ai-copilot-new-chat-btn"
+          <Button
+            size="xs"
+            variant="subtle"
             title="Iniciar nova conversa (arquiva a anterior no histórico)"
-            type="button"
-            onClick={() => {
-              newChatSession();
-            }}
+            onClick={newChatSession}
+            icon={
+              <span
+                className="material-symbols-outlined"
+                style={{ fontSize: "14px" }}
+              >
+                add_comment
+              </span>
+            }
           >
-            <span
-              className="material-symbols-outlined"
-              style={{ fontSize: "14px" }}
-            >
-              add_comment
-            </span>
-            <span>Novo Chat</span>
-          </button>
+            Novo Chat
+          </Button>
 
-          <button
-            className="ai-copilot-raw-btn"
+          <Button
+            size="xs"
+            variant="ghost"
             title="Inspetor RAW (Ver Prompts, Memória e Payloads)"
-            type="button"
             onClick={onOpenRaw}
-            style={{
-              height: "28px",
-              padding: "4px 8px",
-              borderRadius: "6px",
-              boxSizing: "border-box",
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
           >
             RAW
-          </button>
-          <button
-            className="btn-icon ai-copilot-history-btn"
+          </Button>
+
+          <IconButton
+            size="sm"
+            variant="ghost"
             title="Linha de Raciocínio & Histórico de Sessões"
-            type="button"
             onClick={onOpenHistory}
-            style={{
-              height: "28px",
-              width: "28px",
-              padding: 0,
-              borderRadius: "6px",
-              boxSizing: "border-box",
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <span className="material-symbols-outlined icon-sm">history</span>
-          </button>
-          <button
-            className="btn-icon ai-copilot-close-btn"
+            icon={<span className="material-symbols-outlined icon-sm">history</span>}
+          />
+
+          <IconButton
+            size="sm"
+            variant="ghost"
             title="Recolher Assistente"
-            type="button"
             onClick={onClose}
-            style={{
-              height: "28px",
-              width: "28px",
-              padding: 0,
-              borderRadius: "6px",
-              boxSizing: "border-box",
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <span className="material-symbols-outlined icon-sm">close</span>
-          </button>
+            icon={<span className="material-symbols-outlined icon-sm">close</span>}
+          />
         </div>
       </div>
 
@@ -1091,7 +1065,6 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
                   : ""}
             </span>
           </button>
-
         </div>
       </div>
 
@@ -1193,103 +1166,50 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
             const label = docPath.split("/").pop() || docPath;
 
             return (
-              <div
+              <Chip
                 key={docPath}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "4px",
-                  padding: "2px 6px 2px 8px",
-                  borderRadius: "12px",
-                  background: isDir
-                    ? "var(--color-tertiary-container, #f3e8ff)"
-                    : "var(--color-primary-container, #eff6ff)",
-                  border: isDir
-                    ? "1px solid var(--color-tertiary, #c084fc)"
-                    : "1px solid var(--color-primary, #3b82f6)",
-                  fontSize: "10.5px",
-                  color: isDir
-                    ? "#6b21a8"
-                    : "var(--color-on-primary-container, #1e40af)",
-                  fontWeight: 500,
-                  maxWidth: "180px",
-                }}
-                title={isDir ? `Pasta: ${docPath}` : `Arquivo: ${docPath}`}
-              >
-                <span
-                  className="material-symbols-outlined"
-                  style={{
-                    fontSize: "12px",
-                    color: isDir ? "#9333ea" : "var(--color-primary, #2563eb)",
-                  }}
-                >
-                  {isDir ? "folder" : "description"}
-                </span>
-                <span
-                  style={{
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {label}
-                  {isDir ? "/" : ""}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => removeReferencedDoc(docPath)}
-                  style={{
-                    background: "none",
-                    border: "none",
-                    cursor: "pointer",
-                    padding: "0 2px",
-                    color: isDir ? "#6b21a8" : "#64748b",
-                    display: "flex",
-                    alignItems: "center",
-                  }}
-                  title="Remover referência deste item"
-                >
+                size="xs"
+                variant="outlined"
+                icon={
                   <span
                     className="material-symbols-outlined"
-                    style={{ fontSize: "12px" }}
+                    style={{
+                      fontSize: "13px",
+                      color: isDir ? "#9333ea" : "var(--color-primary, #2563eb)",
+                    }}
                   >
-                    close
+                    {isDir ? "folder" : "description"}
                   </span>
-                </button>
-              </div>
+                }
+                onRemove={() => removeReferencedDoc(docPath)}
+                title={isDir ? `Pasta: ${docPath}` : `Arquivo: ${docPath}`}
+                style={{ maxWidth: "180px" }}
+              >
+                {label}{isDir ? "/" : ""}
+              </Chip>
             );
           })
         )}
 
         {/* Action: Open Advanced Context Selector Modal */}
         {!isTemplateEditorMode && (
-          <button
+          <Button
             type="button"
+            size="xs"
+            variant="outline"
             onClick={() => setIsContextModalOpen(true)}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "3px",
-              padding: "2px 7px",
-              borderRadius: "12px",
-              background: "transparent",
-              border: "1px dashed var(--color-outline-variant, #94a3b8)",
-              color: "var(--color-primary, #2563eb)",
-              fontSize: "10.5px",
-              fontWeight: 600,
-              cursor: "pointer",
-              transition: "all 0.15s ease",
-            }}
+            icon={
+              <span
+                className="material-symbols-outlined"
+                style={{ fontSize: "13px" }}
+              >
+                add
+              </span>
+            }
             title="Abrir Seletor de Contexto (múltiplos arquivos ou pastas inteiras)"
           >
-            <span
-              className="material-symbols-outlined"
-              style={{ fontSize: "13px" }}
-            >
-              add
-            </span>
             {referencedDocs.length === 0 ? "Anexar Contexto" : "Gerenciar"}
-          </button>
+          </Button>
         )}
 
         {/* Action: Switch to Global Scope Button if has references */}
@@ -1338,7 +1258,14 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
         }}
       >
         {/* Left: Context Prompts Section */}
-        <div style={{ display: "flex", alignItems: "center", gap: "5px", flexWrap: "wrap" }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "5px",
+            flexWrap: "wrap",
+          }}
+        >
           <div
             style={{
               display: "inline-flex",
@@ -1351,7 +1278,10 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
           >
             <span
               className="material-symbols-outlined"
-              style={{ fontSize: "14px", color: "var(--color-primary, #2563eb)" }}
+              style={{
+                fontSize: "14px",
+                color: "var(--color-primary, #2563eb)",
+              }}
             >
               tune
             </span>
@@ -1398,7 +1328,9 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
                   flexShrink: 0,
                 }}
               >
-                {isTemplatePromptEnabled ? "check_circle" : "radio_button_unchecked"}
+                {isTemplatePromptEnabled
+                  ? "check_circle"
+                  : "radio_button_unchecked"}
               </span>
               <span
                 style={{
@@ -1529,7 +1461,10 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
           >
             <span
               className="material-symbols-outlined"
-              style={{ fontSize: "14px", color: "var(--color-primary, #2563eb)" }}
+              style={{
+                fontSize: "14px",
+                color: "var(--color-primary, #2563eb)",
+              }}
             >
               auto_awesome
             </span>
@@ -1738,14 +1673,17 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
                     fontSize: "9.5px",
                     padding: "1px 5px",
                     borderRadius: "4px",
-                    background: activeSkillIds.length > 0
-                      ? "rgba(16,185,129,0.12)"
-                      : "#f1f5f9",
+                    background:
+                      activeSkillIds.length > 0
+                        ? "rgba(16,185,129,0.12)"
+                        : "#f1f5f9",
                     color: activeSkillIds.length > 0 ? "#059669" : "#64748b",
                     fontWeight: 700,
                   }}
                 >
-                  {activeSkillIds.length > 0 ? `${activeSkillIds.length} ATIVA(S)` : "DESATIVADAS"}
+                  {activeSkillIds.length > 0
+                    ? `${activeSkillIds.length} ATIVA(S)`
+                    : "DESATIVADAS"}
                 </span>
               </div>
 
@@ -1771,11 +1709,22 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
                     transition: "background 0.12s ease",
                   }}
                 >
-                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                    <span className="material-symbols-outlined" style={{ fontSize: "14px", color: "#dc2626" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                    }}
+                  >
+                    <span
+                      className="material-symbols-outlined"
+                      style={{ fontSize: "14px", color: "#dc2626" }}
+                    >
                       block
                     </span>
-                    <span style={{ fontWeight: 600 }}>Desativar Todas as Skills</span>
+                    <span style={{ fontWeight: 600 }}>
+                      Desativar Todas as Skills
+                    </span>
                   </div>
                 </button>
               )}
@@ -1841,7 +1790,9 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
                               flexShrink: 0,
                             }}
                           >
-                            {isSelected ? "check_circle" : "radio_button_unchecked"}
+                            {isSelected
+                              ? "check_circle"
+                              : "radio_button_unchecked"}
                           </span>
                           <span style={{ fontWeight: isSelected ? 600 : 500 }}>
                             {skillName}
@@ -1924,9 +1875,7 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
                           flexShrink: 0,
                         }}
                       >
-                        {isSelected
-                          ? "check_circle"
-                          : "radio_button_unchecked"}
+                        {isSelected ? "check_circle" : "radio_button_unchecked"}
                       </span>
                       <div
                         style={{
@@ -1984,10 +1933,8 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
                     gap: "6px",
                     padding: "6px 8px",
                     borderRadius: "6px",
-                    background:
-                      "var(--color-surface-container-high, #f8fafc)",
-                    border:
-                      "1px solid var(--color-outline-variant, #cbd5e1)",
+                    background: "var(--color-surface-container-high, #f8fafc)",
+                    border: "1px solid var(--color-outline-variant, #cbd5e1)",
                     color: "var(--color-primary, #2563eb)",
                     fontSize: "11px",
                     fontWeight: 600,
@@ -2303,7 +2250,6 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
                 >
                   stop_circle
                 </span>
-                Parar
               </button>
             </div>
           </div>
@@ -2403,7 +2349,10 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
                 gap: "2px",
               }}
             >
-              <span className="material-symbols-outlined" style={{ fontSize: "12px" }}>
+              <span
+                className="material-symbols-outlined"
+                style={{ fontSize: "12px" }}
+              >
                 attachment
               </span>
               RAG ({ragReferences.length}):
@@ -2463,63 +2412,63 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
         />
 
         <div className="ai-input-bottom-bar">
-          <button
-            className={`ai-target-btn ${isInspectorActive ? "active" : ""}`}
+          <Button
+            size="xs"
+            variant={isInspectorActive ? "primary" : "subtle"}
+            active={isInspectorActive}
             type="button"
             onClick={toggleInspector}
+            icon={
+              <span
+                className="material-symbols-outlined"
+                style={{ fontSize: "16px" }}
+              >
+                ads_click
+              </span>
+            }
             title={
               isInspectorActive
                 ? "Desativar seleção de blocos (ESC)"
                 : "Alvo: Selecionar trechos na tela para colar no chat"
             }
           >
-            <span
-              className="material-symbols-outlined"
-              style={{ fontSize: "17px" }}
-            >
-              ads_click
-            </span>
-            <span className="ai-target-label">
-              {isInspectorActive ? "Alvo Ativo" : "Capturar"}
-            </span>
-          </button>
+            {isInspectorActive ? "Alvo Ativo" : "Capturar"}
+          </Button>
 
           <div className="ai-input-actions-right">
             {!isThinking && <span className="ai-input-hint">Enter ↵</span>}
             {isThinking ? (
-              <button
-                className="ai-send-icon-btn"
+              <IconButton
+                size="sm"
+                variant="danger"
                 type="button"
                 onClick={stopGeneration}
-                style={{
-                  backgroundColor: "#ef4444",
-                  color: "#ffffff",
-                  cursor: "pointer",
-                  borderColor: "#dc2626",
-                }}
                 title="Parar execução atual"
-              >
-                <span
-                  className="material-symbols-outlined"
-                  style={{ fontSize: "18px" }}
-                >
-                  stop
-                </span>
-              </button>
+                icon={
+                  <span
+                    className="material-symbols-outlined"
+                    style={{ fontSize: "18px" }}
+                  >
+                    stop
+                  </span>
+                }
+              />
             ) : (
-              <button
-                className="ai-send-icon-btn"
+              <IconButton
+                size="sm"
+                variant="primary"
                 type="submit"
                 disabled={!inputText.trim()}
                 title="Enviar mensagem (Enter)"
-              >
-                <span
-                  className="material-symbols-outlined"
-                  style={{ fontSize: "18px" }}
-                >
-                  arrow_upward
-                </span>
-              </button>
+                icon={
+                  <span
+                    className="material-symbols-outlined"
+                    style={{ fontSize: "18px" }}
+                  >
+                    arrow_upward
+                  </span>
+                }
+              />
             )}
           </div>
         </div>

@@ -454,8 +454,10 @@ export class WorkspaceService {
         const defaultTitle = item.name.replace(/\.[^/.]+$/, "");
         const metaPayload = {
           title: defaultTitle,
-          status: "draft",
-          categories: "geral",
+          status: "",
+          categories: "",
+          tags: [],
+          approvers: [],
           ...(item.meta && typeof item.meta === "object" ? item.meta : {}),
           links: extractedLinks,
         };

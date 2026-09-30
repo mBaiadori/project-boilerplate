@@ -376,30 +376,9 @@ export const WikiSubView: React.FC = () => {
         >
           <button
             type="button"
-            className={`wiki-nav-btn ${activeCategory === "all" ? "active" : ""}`}
+            className={`ui-nav-item ${activeCategory === "all" ? "ui-nav-item--active" : ""}`}
             data-cat="all"
             onClick={() => setActiveCategory("all")}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              padding: "7px 10px",
-              borderRadius: "var(--radius-md, 6px)",
-              border: "none",
-              background:
-                activeCategory === "all"
-                  ? "var(--color-primary-container)"
-                  : "transparent",
-              color:
-                activeCategory === "all"
-                  ? "var(--color-primary)"
-                  : "var(--color-on-surface-variant)",
-              fontSize: "12.5px",
-              fontWeight: activeCategory === "all" ? 600 : 500,
-              cursor: "pointer",
-              textAlign: "left",
-              transition: "all 0.15s ease",
-            }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
               <Library size={15} />
@@ -415,28 +394,9 @@ export const WikiSubView: React.FC = () => {
               <button
                 key={catKey}
                 type="button"
-                className={`wiki-nav-btn ${isActive ? "active" : ""}`}
+                className={`ui-nav-item ${isActive ? "ui-nav-item--active" : ""}`}
                 data-cat={catKey}
                 onClick={() => setActiveCategory(catKey)}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  padding: "6px 10px",
-                  borderRadius: "var(--radius-md, 6px)",
-                  border: "none",
-                  background: isActive
-                    ? "var(--color-primary-container)"
-                    : "transparent",
-                  color: isActive
-                    ? "var(--color-primary)"
-                    : "var(--color-on-surface-variant)",
-                  fontSize: "12px",
-                  fontWeight: isActive ? 600 : 500,
-                  cursor: "pointer",
-                  textAlign: "left",
-                  transition: "all 0.15s ease",
-                }}
               >
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                   <span style={{ color: meta.color }}>{meta.icon}</span>

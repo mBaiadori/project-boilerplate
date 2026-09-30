@@ -946,8 +946,8 @@ export const FileTree: React.FC<FileTreeProps> = ({
         meta: !isFolder
           ? {
               title: docTitle,
-              status: "draft",
-              categories: "geral",
+              status: "",
+              categories: "",
               tags: [],
               approvers: [],
               links: [],

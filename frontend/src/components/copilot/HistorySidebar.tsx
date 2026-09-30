@@ -3,7 +3,7 @@ import { API } from '../../services/api';
 import { useAI } from '../../context/AIContext';
 import { useWorkspace } from '../../context/WorkspaceContext';
 import { useCopilotStore } from '../../stores/copilotStore';
-import { Badge, Button } from '../ui';
+import { Badge, Button, IconButton } from '../ui';
 
 interface HistorySidebarProps {
   isOpen: boolean;
@@ -242,22 +242,20 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
           >
             Novo
           </Button>
-          <button
-            className="btn-icon"
-            type="button"
+          <IconButton
+            size="sm"
+            variant="ghost"
             title="Recarregar histórico"
             onClick={loadHistory}
-          >
-            <span className="material-symbols-outlined icon-xs">refresh</span>
-          </button>
-          <button
-            className="btn-icon"
-            type="button"
+            icon={<span className="material-symbols-outlined icon-xs">refresh</span>}
+          />
+          <IconButton
+            size="sm"
+            variant="ghost"
             title="Fechar painel de histórico"
             onClick={onClose}
-          >
-            <span className="material-symbols-outlined icon-sm">close</span>
-          </button>
+            icon={<span className="material-symbols-outlined icon-sm">close</span>}
+          />
         </div>
       </div>
 
@@ -312,17 +310,17 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
                 >
                   Restaurar no Chat
                 </Button>
-                <button
-                  type="button"
-                  className="btn-icon"
-                  style={{ color: 'var(--color-danger, #ef4444)' }}
+                <IconButton
+                  size="sm"
+                  variant="danger"
                   title="Excluir sessão"
                   onClick={() => handleDeleteSession(selectedSession.session_id)}
-                >
-                  <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>
-                    delete
-                  </span>
-                </button>
+                  icon={
+                    <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>
+                      delete
+                    </span>
+                  }
+                />
               </div>
             </div>
 
@@ -399,24 +397,23 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
                           <span className="ui-text-muted" style={{ fontSize: '10px' }}>
                             {ev.timestamp ? new Date(ev.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
                           </span>
-                          <button
-                            type="button"
+                          <IconButton
+                            size="xs"
+                            variant="ghost"
                             onClick={() => handleCopyMessage(ev.text || ev.content || '', i)}
-                            style={{
-                              background: 'none',
-                              border: 'none',
-                              cursor: 'pointer',
-                              padding: '2px',
-                              color: copiedIndex === i ? 'var(--color-success, #10b981)' : 'var(--color-text-muted, #94a3b8)',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                            }}
                             title="Copiar mensagem"
-                          >
-                            <span className="material-symbols-outlined" style={{ fontSize: '13px' }}>
-                              {copiedIndex === i ? 'check' : 'content_copy'}
-                            </span>
-                          </button>
+                            icon={
+                              <span
+                                className="material-symbols-outlined"
+                                style={{
+                                  fontSize: '13px',
+                                  color: copiedIndex === i ? 'var(--color-success, #10b981)' : undefined,
+                                }}
+                              >
+                                {copiedIndex === i ? 'check' : 'content_copy'}
+                              </span>
+                            }
+                          />
                         </div>
                       </div>
                       <div style={{ whiteSpace: 'pre-wrap', color: 'var(--color-text-primary, #1e293b)', wordBreak: 'break-word' }}>
@@ -506,17 +503,17 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
                       {isConsolidating ? 'Consolidando...' : 'Consolidar Memória'}
                     </Button>
                     {briefing && (
-                      <button
-                        type="button"
-                        className="btn-icon"
-                        style={{ color: 'var(--color-danger, #ef4444)' }}
+                      <IconButton
+                        size="sm"
+                        variant="danger"
                         onClick={handleResetMemory}
                         title="Limpar memória"
-                      >
-                        <span className="material-symbols-outlined" style={{ fontSize: '13px' }}>
-                          delete_sweep
-                        </span>
-                      </button>
+                        icon={
+                          <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>
+                            delete_sweep
+                          </span>
+                        }
+                      />
                     )}
                   </div>
                 </div>
@@ -640,24 +637,17 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
                           <span className="ui-text-muted" style={{ fontSize: '10px' }} title={s.updated_at ? new Date(s.updated_at).toLocaleString('pt-BR') : ''}>
                             {formattedTime}
                           </span>
-                          <button
-                            type="button"
+                          <IconButton
+                            size="xs"
+                            variant="ghost"
                             onClick={(e) => handleDeleteSession(s.session_id, e)}
-                            style={{
-                              background: 'none',
-                              border: 'none',
-                              cursor: 'pointer',
-                              padding: '2px',
-                              color: 'var(--color-text-muted, #94a3b8)',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                            }}
                             title="Excluir sessão"
-                          >
-                            <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>
-                              close
-                            </span>
-                          </button>
+                            icon={
+                              <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>
+                                close
+                              </span>
+                            }
+                          />
                         </div>
                       </div>
 

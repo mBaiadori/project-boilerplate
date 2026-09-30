@@ -30,6 +30,7 @@ import {
   Spinner,
   StatCard,
   Textarea,
+  Chip,
 } from "../../components/ui";
 import { useAI } from "../../context/AIContext";
 import { API } from "../../services/api";
@@ -585,70 +586,26 @@ export const DictionarySubView: React.FC = () => {
                   border: "1px solid var(--color-outline-variant, #e2e8f0)",
                 }}
               >
-                <button
+                <Button
                   type="button"
                   id="btn-view-mode-table"
+                  size="sm"
+                  variant={viewMode === "table" ? "secondary" : "ghost"}
                   onClick={() => setViewMode("table")}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "6px",
-                    padding: "6px 12px",
-                    borderRadius: "6px",
-                    border: "none",
-                    background:
-                      viewMode === "table"
-                        ? "var(--color-surface, #ffffff)"
-                        : "transparent",
-                    color:
-                      viewMode === "table"
-                        ? "var(--color-primary, #1a73e8)"
-                        : "var(--color-on-surface-variant, #64748b)",
-                    boxShadow:
-                      viewMode === "table"
-                        ? "0 1px 3px rgba(0,0,0,0.08)"
-                        : "none",
-                    fontSize: "12.5px",
-                    fontWeight: 600,
-                    cursor: "pointer",
-                    transition: "all 0.15s ease",
-                  }}
+                  icon={<List size={15} />}
                 >
-                  <List size={15} />
                   Tabela
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
                   id="btn-view-mode-grid"
+                  size="sm"
+                  variant={viewMode === "grid" ? "secondary" : "ghost"}
                   onClick={() => setViewMode("grid")}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "6px",
-                    padding: "6px 12px",
-                    borderRadius: "6px",
-                    border: "none",
-                    background:
-                      viewMode === "grid"
-                        ? "var(--color-surface, #ffffff)"
-                        : "transparent",
-                    color:
-                      viewMode === "grid"
-                        ? "var(--color-primary, #1a73e8)"
-                        : "var(--color-on-surface-variant, #64748b)",
-                    boxShadow:
-                      viewMode === "grid"
-                        ? "0 1px 3px rgba(0,0,0,0.08)"
-                        : "none",
-                    fontSize: "12.5px",
-                    fontWeight: 600,
-                    cursor: "pointer",
-                    transition: "all 0.15s ease",
-                  }}
+                  icon={<LayoutGrid size={15} />}
                 >
-                  <LayoutGrid size={15} />
                   Cards
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -677,58 +634,23 @@ export const DictionarySubView: React.FC = () => {
               >
                 Letra:
               </span>
-              <button
-                type="button"
+              <Chip
+                size="xs"
+                active={selectedLetter === "ALL"}
                 onClick={() => setSelectedLetter("ALL")}
-                style={{
-                  padding: "4px 8px",
-                  borderRadius: "4px",
-                  border: "none",
-                  background:
-                    selectedLetter === "ALL"
-                      ? "var(--color-primary, #1a73e8)"
-                      : "transparent",
-                  color:
-                    selectedLetter === "ALL"
-                      ? "#ffffff"
-                      : "var(--color-on-surface-variant, #64748b)",
-                  fontSize: "12px",
-                  fontWeight: selectedLetter === "ALL" ? 700 : 500,
-                  cursor: "pointer",
-                  transition: "all 0.12s ease",
-                }}
               >
                 Todos ({terms.length})
-              </button>
+              </Chip>
               {availableLetters.map((ltr) => (
-                <button
+                <Chip
                   key={ltr}
-                  type="button"
+                  size="xs"
+                  active={selectedLetter === ltr}
                   onClick={() => setSelectedLetter(ltr)}
-                  style={{
-                    minWidth: "26px",
-                    height: "26px",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    borderRadius: "4px",
-                    border: "none",
-                    background:
-                      selectedLetter === ltr
-                        ? "var(--color-primary, #1a73e8)"
-                        : "transparent",
-                    color:
-                      selectedLetter === ltr
-                        ? "#ffffff"
-                        : "var(--color-on-surface, #334155)",
-                    fontSize: "12px",
-                    fontWeight: selectedLetter === ltr ? 700 : 500,
-                    cursor: "pointer",
-                    transition: "all 0.12s ease",
-                  }}
+                  style={{ minWidth: 26, justifyContent: "center" }}
                 >
                   {ltr}
-                </button>
+                </Chip>
               ))}
             </div>
           )}
@@ -1135,30 +1057,21 @@ export const DictionarySubView: React.FC = () => {
                         >
                           {t.codename}
                         </code>
-                        <button
-                          type="button"
+                        <IconButton
+                          size="xs"
+                          variant="ghost"
                           onClick={() =>
                             copyToClipboard(t.codename, "code", t.codename)
                           }
-                          style={{
-                            background: "transparent",
-                            border: "none",
-                            padding: "2px",
-                            cursor: "pointer",
-                            color: isCodeCopied
-                              ? "var(--color-success, #16a34a)"
-                              : "var(--color-on-surface-variant, #64748b)",
-                            display: "flex",
-                            alignItems: "center",
-                          }}
                           title={isCodeCopied ? "Copiado!" : "Copiar Code Name"}
-                        >
-                          {isCodeCopied ? (
-                            <Check size={12} />
-                          ) : (
-                            <Copy size={12} />
-                          )}
-                        </button>
+                          icon={
+                            isCodeCopied ? (
+                              <Check size={12} style={{ color: "var(--color-success, #16a34a)" }} />
+                            ) : (
+                              <Copy size={12} />
+                            )
+                          }
+                        />
                       </div>
                     )}
 

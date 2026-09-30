@@ -119,12 +119,7 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
 
   // Opções do projeto
   const statusOptions = useMemo<StatusItem[]>(() => {
-    const raw = projectMetaOptions?.statuses || [
-      { name: "draft", color: "#fdba74" },
-      { name: "in-review", color: "#67e8f9" },
-      { name: "approved", color: "#86efac" },
-      { name: "deprecated", color: "#fca5a5" },
-    ];
+    const raw = projectMetaOptions?.statuses || [];
     return raw.map((s: any) => {
       const name = String(s.name || s.key || s.label || "").toLowerCase().replace(/\s+/g, "-");
       const label = s.label || name.toUpperCase().replace(/-/g, " ");
@@ -135,24 +130,14 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
   }, [projectMetaOptions?.statuses]);
 
   const categoryOptions = useMemo<TaxonomyItem[]>(() => {
-    const raw = projectMetaOptions?.categories || [
-      "geral",
-      "arquitetura",
-      "engenharia",
-      "produto",
-      "segurança",
-      "infraestrutura",
-      "dados",
-    ];
+    const raw = projectMetaOptions?.categories || [];
     return raw.map((c: any) =>
       typeof c === "string" ? { name: c, color: "#3b82f6" } : { name: c.name || "", color: c.color || "#3b82f6" }
     );
   }, [projectMetaOptions?.categories]);
 
   const availableTags = useMemo<TaxonomyItem[]>(() => {
-    const raw = projectMetaOptions?.tags || [
-      "backend", "frontend", "api", "database", "security", "core", "auth", "mobile", "spec"
-    ];
+    const raw = projectMetaOptions?.tags || [];
     return raw.map((t: any) =>
       typeof t === "string" ? { name: t, color: "#6366f1" } : { name: t.name || "", color: t.color || "#6366f1" }
     );

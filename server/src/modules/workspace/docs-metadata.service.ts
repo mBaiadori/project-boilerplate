@@ -117,42 +117,11 @@ export class DocsMetadataService {
 
   getProjectMetadataOptions(repoName: string): ProjectMetadataOptions {
     const config = this.getProjectConfig(repoName);
-    const defaultStatuses = [
-      { key: 'draft', name: 'draft', label: 'Rascunho (DRAFT)', badge: 'badge-neutral', color: '#f97316' },
-      { key: 'proposed', name: 'proposed', label: 'Proposto (PROPOSED)', badge: 'badge-warning', color: '#eab308' },
-      { key: 'review', name: 'review', label: 'Em Revisão (REVIEW)', badge: 'badge-info', color: '#06b6d4' },
-      { key: 'approved', name: 'approved', label: 'Aprovado (APPROVED)', badge: 'badge-success', color: '#22c55e' },
-      { key: 'superseded', name: 'superseded', label: 'Substituído (SUPERSEDED)', badge: 'badge-secondary', color: '#a855f7' },
-      { key: 'deprecated', name: 'deprecated', label: 'Obsoleto (DEPRECATED)', badge: 'badge-danger', color: '#ef4444' },
-    ];
-    const defaultCategories = ['geral', 'arquitetura', 'engenharia', 'produto', 'segurança', 'infraestrutura', 'dados'];
-    const defaultTags = ['backend', 'frontend', 'api', 'database', 'security', 'core', 'auth', 'mobile', 'spec'];
-    const defaultBadges = [
-      { name: 'RFC', color: '#a855f7', description: 'Request for Comments' },
-      { name: 'ADR', color: '#3b82f6', description: 'Architecture Decision Record' },
-      { name: 'PRD', color: '#f97316', description: 'Product Requirements Document' },
-      { name: 'DOC', color: '#22c55e', description: 'Documentação Técnica' },
-      { name: 'API', color: '#06b6d4', description: 'Especificação de API' },
-      { name: 'SPEC', color: '#6366f1', description: 'Especificação de Funcionalidade' },
-      { name: 'GUIDE', color: '#ec4899', description: 'Guia e Manual' },
-      { name: 'TEST', color: '#eab308', description: 'Plano de Testes' },
-    ];
 
-    const statuses = Array.isArray(config.statuses) && config.statuses.length > 0
-      ? config.statuses
-      : defaultStatuses;
-
-    const categories = Array.isArray(config.categories) && config.categories.length > 0
-      ? config.categories
-      : defaultCategories;
-
-    const tags = Array.isArray(config.tags) && config.tags.length > 0
-      ? config.tags
-      : defaultTags;
-
-    const badges = Array.isArray(config.badges) && config.badges.length > 0
-      ? config.badges
-      : defaultBadges;
+    const statuses = Array.isArray(config.statuses) ? config.statuses : [];
+    const categories = Array.isArray(config.categories) ? config.categories : [];
+    const tags = Array.isArray(config.tags) ? config.tags : [];
+    const badges = Array.isArray(config.badges) ? config.badges : [];
 
     return { statuses, categories, tags, badges };
   }
