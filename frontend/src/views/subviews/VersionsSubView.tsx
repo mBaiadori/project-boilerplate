@@ -133,6 +133,10 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
     Record<string, boolean>
   >({});
 
+  // Collapsible cards state
+  const [isWhatsNewProposalsExpanded, setIsWhatsNewProposalsExpanded] = useState(true);
+  const [isWhatsNewCommitsExpanded, setIsWhatsNewCommitsExpanded] = useState(false);
+
   // Reset local state when active repo changes
   useEffect(() => {
     setExpandedDraftFiles({});
@@ -329,6 +333,45 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
     if (isNowExpanded) {
       fetchSystemDiff(filePath);
     }
+  };
+
+  const toggleAllWhatsNewFiles = () => {
+    const areAllExpanded =
+      filteredWhatsNewFiles.length > 0 &&
+      filteredWhatsNewFiles.every((f) => !!expandedWhatsNewFiles[f.path]);
+    const nextState = !areAllExpanded;
+    const nextMap: Record<string, boolean> = {};
+    filteredWhatsNewFiles.forEach((f) => {
+      nextMap[f.path] = nextState;
+      if (nextState) fetchWhatsNewDiff(f.path);
+    });
+    setExpandedWhatsNewFiles(nextMap);
+  };
+
+  const toggleAllDraftFiles = () => {
+    const areAllExpanded =
+      allDraftFiles.length > 0 &&
+      allDraftFiles.every((f) => !!expandedDraftFiles[f.path]);
+    const nextState = !areAllExpanded;
+    const nextMap: Record<string, boolean> = {};
+    allDraftFiles.forEach((f) => {
+      nextMap[f.path] = nextState;
+      if (nextState) fetchDraftDiff(f.path);
+    });
+    setExpandedDraftFiles(nextMap);
+  };
+
+  const toggleAllSystemFiles = () => {
+    const areAllExpanded =
+      allSystemDraftFiles.length > 0 &&
+      allSystemDraftFiles.every((f) => !!expandedSystemFiles[f.path]);
+    const nextState = !areAllExpanded;
+    const nextMap: Record<string, boolean> = {};
+    allSystemDraftFiles.forEach((f) => {
+      nextMap[f.path] = nextState;
+      if (nextState) fetchSystemDiff(f.path);
+    });
+    setExpandedSystemFiles(nextMap);
   };
 
   const handleSync = async () => {
@@ -743,8 +786,20 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
               {/* Integrated Proposals Section */}
               {(whatsNewFilter === "all" || whatsNewFilter === "proposals") &&
                 whatsNewProposals.length > 0 && (
-                  <Card variant="elevated" padding="none">
-                    <div className="ui-card__header">
+                  <Card variant="elevated" padding="none" style={{ overflow: "hidden" }}>
+                    <div
+                      className="ui-card__header"
+                      onClick={() => setIsWhatsNewProposalsExpanded(!isWhatsNewProposalsExpanded)}
+                      style={{
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        padding: "12px 18px",
+                        userSelect: "none",
+                        background: isWhatsNewProposalsExpanded ? "var(--color-surface-subtle, #f8fafc)" : "transparent",
+                      }}
+                    >
                       <div className="ui-row ui-row--align-center ui-row--xs">
                         <span
                           className="material-symbols-outlined"
@@ -758,67 +813,143 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
                             color: "var(--color-text-primary, #0f172a)",
                           }}
                         >
-                          Propostas de Especificação Aprovadas e Integradas
+                          Propostas Aprovadas e Integradas ({whatsNewProposals.length})
                         </strong>
                       </div>
+
+                      <Button
+                        type="button"
+                        size="xs"
+                        variant="ghost"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setIsWhatsNewProposalsExpanded(!isWhatsNewProposalsExpanded);
+                        }}
+                        icon={
+                          <span
+                            className="material-symbols-outlined"
+                            style={{
+                              fontSize: "18px",
+                              transition: "transform 0.2s ease",
+                              transform: isWhatsNewProposalsExpanded ? "rotate(180deg)" : "rotate(0deg)",
+                            }}
+                          >
+                            expand_more
+                          </span>
+                        }
+                      >
+                        {isWhatsNewProposalsExpanded ? "Recolher" : "Ver Propostas"}
+                      </Button>
                     </div>
-                    <div
-                      className="ui-card__content"
-                      style={{
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: "10px",
-                      }}
-                    >
-                      {whatsNewProposals.map((pr, idx) => (
-                        <div
-                          key={idx}
-                          className="ui-card ui-card--flat"
-                          style={{
-                            padding: "14px 18px",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "space-between",
-                          }}
-                        >
-                          <div className="ui-row ui-row--align-center ui-row--sm">
-                            <Badge variant="primary" size="sm">
-                              Proposta #{pr.id}
-                            </Badge>
-                            <span
-                              style={{
-                                fontSize: "13.5px",
-                                fontWeight: 600,
-                                color: "var(--color-text-primary, #1e293b)",
-                              }}
-                            >
-                              {pr.title}
-                            </span>
-                          </div>
-                          {pr.author && (
-                            <span
-                              className="ui-text-muted"
-                              style={{ fontSize: "12.5px" }}
-                            >
-                              Autor:{" "}
-                              <strong
+
+                    {isWhatsNewProposalsExpanded && (
+                      <div
+                        className="ui-card__content"
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "8px",
+                          padding: "14px 18px",
+                        }}
+                      >
+                        {whatsNewProposals.map((pr, idx) => (
+                          <div
+                            key={idx}
+                            className="ui-card ui-card--flat"
+                            style={{
+                              padding: "12px 16px",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                            }}
+                          >
+                            <div className="ui-row ui-row--align-center ui-row--sm">
+                              <Badge variant="primary" size="sm">
+                                Proposta #{pr.id}
+                              </Badge>
+                              <span
                                 style={{
+                                  fontSize: "13.5px",
+                                  fontWeight: 600,
                                   color: "var(--color-text-primary, #1e293b)",
                                 }}
                               >
-                                {pr.author}
-                              </strong>
-                            </span>
-                          )}
-                        </div>
-                      ))}
-                    </div>
+                                {pr.title}
+                              </span>
+                            </div>
+                            {pr.author && (
+                              <span
+                                className="ui-text-muted"
+                                style={{ fontSize: "12.5px" }}
+                              >
+                                Autor:{" "}
+                                <strong
+                                  style={{
+                                    color: "var(--color-text-primary, #1e293b)",
+                                  }}
+                                >
+                                  {pr.author}
+                                </strong>
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </Card>
                 )}
 
               {/* Changed Files Received from Team */}
               {whatsNewFilter !== "proposals" && (
                 <Card variant="elevated" padding="none">
+                  <div
+                    className="ui-card__header"
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "12px 18px",
+                      borderBottom: "1px solid var(--color-border-subtle, #e2e8f0)",
+                    }}
+                  >
+                    <div className="ui-row ui-row--align-center ui-row--xs">
+                      <span
+                        className="material-symbols-outlined"
+                        style={{ fontSize: "20px", color: "var(--color-primary, #3b82f6)" }}
+                      >
+                        difference
+                      </span>
+                      <strong
+                        style={{
+                          fontSize: "14px",
+                          color: "var(--color-text-primary, #0f172a)",
+                        }}
+                      >
+                        Documentos Atualizados da Equipe ({filteredWhatsNewFiles.length})
+                      </strong>
+                    </div>
+
+                    {filteredWhatsNewFiles.length > 0 && (
+                      <Button
+                        type="button"
+                        size="xs"
+                        variant="ghost"
+                        onClick={toggleAllWhatsNewFiles}
+                        icon={
+                          <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>
+                            {filteredWhatsNewFiles.every((f) => !!expandedWhatsNewFiles[f.path])
+                              ? "unfold_less"
+                              : "unfold_more"}
+                          </span>
+                        }
+                      >
+                        {filteredWhatsNewFiles.every((f) => !!expandedWhatsNewFiles[f.path])
+                          ? "Recolher Todos"
+                          : "Expandir Todos"}
+                      </Button>
+                    )}
+                  </div>
+
                   {filteredWhatsNewFiles.length === 0 ? (
                     <div className="ui-empty-state" style={{ padding: "40px" }}>
                       <span
@@ -1038,78 +1169,118 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
 
               {/* Commits List */}
               {whatsNewCommits.length > 0 && (
-                <Card variant="elevated" padding="lg">
-                  <h4
-                    className="ui-card__title"
-                    style={{ marginBottom: "14px" }}
-                  >
-                    <span
-                      className="material-symbols-outlined"
-                      style={{
-                        fontSize: "18px",
-                        color: "var(--color-text-muted)",
-                      }}
-                    >
-                      history
-                    </span>
-                    Publicações e Marcos Trazidos pela Atualização (
-                    {whatsNewCommits.length})
-                  </h4>
+                <Card variant="elevated" padding="none" style={{ overflow: "hidden" }}>
                   <div
+                    className="ui-card__header"
+                    onClick={() => setIsWhatsNewCommitsExpanded(!isWhatsNewCommitsExpanded)}
                     style={{
+                      cursor: "pointer",
                       display: "flex",
-                      flexDirection: "column",
-                      gap: "8px",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "12px 18px",
+                      userSelect: "none",
+                      background: isWhatsNewCommitsExpanded ? "var(--color-surface-subtle, #f8fafc)" : "transparent",
                     }}
                   >
-                    {whatsNewCommits.map((item, idx) => (
-                      <div
-                        key={idx}
-                        className="ui-card ui-card--flat"
+                    <div className="ui-row ui-row--align-center ui-row--xs">
+                      <span
+                        className="material-symbols-outlined"
                         style={{
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                          padding: "10px 14px",
-                          fontSize: "13px",
+                          fontSize: "18px",
+                          color: "var(--color-text-muted)",
                         }}
                       >
-                        <div className="ui-row ui-row--align-center ui-row--xs">
+                        history
+                      </span>
+                      <strong style={{ fontSize: "14px", color: "var(--color-text-primary, #0f172a)" }}>
+                        Publicações e Marcos Trazidos pela Atualização ({whatsNewCommits.length})
+                      </strong>
+                    </div>
+
+                    <Button
+                      type="button"
+                      size="xs"
+                      variant="ghost"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setIsWhatsNewCommitsExpanded(!isWhatsNewCommitsExpanded);
+                      }}
+                      icon={
+                        <span
+                          className="material-symbols-outlined"
+                          style={{
+                            fontSize: "18px",
+                            transition: "transform 0.2s ease",
+                            transform: isWhatsNewCommitsExpanded ? "rotate(180deg)" : "rotate(0deg)",
+                          }}
+                        >
+                          expand_more
+                        </span>
+                      }
+                    >
+                      {isWhatsNewCommitsExpanded ? "Recolher" : "Ver Marcos"}
+                    </Button>
+                  </div>
+
+                  {isWhatsNewCommitsExpanded && (
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "8px",
+                        padding: "14px 18px",
+                      }}
+                    >
+                      {whatsNewCommits.map((item, idx) => (
+                        <div
+                          key={idx}
+                          className="ui-card ui-card--flat"
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            padding: "10px 14px",
+                            fontSize: "13px",
+                          }}
+                        >
+                          <div className="ui-row ui-row--align-center ui-row--xs">
+                            <span
+                              style={{
+                                fontFamily: "var(--font-family-mono)",
+                                fontSize: "11px",
+                                fontWeight: 600,
+                                padding: "2px 6px",
+                                borderRadius: "4px",
+                                background:
+                                  "var(--color-surface-subtle, #e2e8f0)",
+                                color: "var(--color-text-secondary, #334155)",
+                              }}
+                            >
+                              #
+                              {item?.shortHash ||
+                                item?.hash?.slice(0, 7) ||
+                                "v-atual"}
+                            </span>
+                            <span
+                              style={{
+                                fontWeight: 500,
+                                color: "var(--color-text-primary, #1e293b)",
+                              }}
+                            >
+                              {item?.message || "Atualização de documentação"}
+                            </span>
+                          </div>
                           <span
-                            style={{
-                              fontFamily: "var(--font-family-mono)",
-                              fontSize: "11px",
-                              fontWeight: 600,
-                              padding: "2px 6px",
-                              borderRadius: "4px",
-                              background:
-                                "var(--color-surface-subtle, #e2e8f0)",
-                              color: "var(--color-text-secondary, #334155)",
-                            }}
+                            className="ui-text-muted"
+                            style={{ fontSize: "12px" }}
                           >
-                            #
-                            {item?.shortHash ||
-                              item?.hash?.slice(0, 7) ||
-                              "v-atual"}
-                          </span>
-                          <span
-                            style={{
-                              fontWeight: 500,
-                              color: "var(--color-text-primary, #1e293b)",
-                            }}
-                          >
-                            {item?.message || "Atualização de documentação"}
+                            {item?.author || "Equipe"} &bull; {item?.date || ""}
                           </span>
                         </div>
-                        <span
-                          className="ui-text-muted"
-                          style={{ fontSize: "12px" }}
-                        >
-                          {item?.author || "Equipe"} &bull; {item?.date || ""}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )}
                 </Card>
               )}
             </div>
@@ -1120,15 +1291,51 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
             <div className="ui-stack ui-stack--lg">
               {/* Changed Files List */}
               <Card variant="elevated" padding="none">
-                <div className="ui-card__header">
-                  <strong
-                    style={{
-                      fontSize: "14px",
-                      color: "var(--color-text-primary, #0f172a)",
-                    }}
-                  >
-                    Meus Documentos em Edição Local ({allDraftFiles.length})
-                  </strong>
+                <div
+                  className="ui-card__header"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "12px 18px",
+                  }}
+                >
+                  <div className="ui-row ui-row--align-center ui-row--xs">
+                    <span
+                      className="material-symbols-outlined"
+                      style={{ fontSize: "20px", color: "var(--color-primary, #3b82f6)" }}
+                    >
+                      edit_note
+                    </span>
+                    <strong
+                      style={{
+                        fontSize: "14px",
+                        color: "var(--color-text-primary, #0f172a)",
+                      }}
+                    >
+                      Meus Documentos em Edição Local ({allDraftFiles.length})
+                    </strong>
+                  </div>
+
+                  {allDraftFiles.length > 0 && (
+                    <Button
+                      type="button"
+                      size="xs"
+                      variant="ghost"
+                      onClick={toggleAllDraftFiles}
+                      icon={
+                        <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>
+                          {allDraftFiles.every((f) => !!expandedDraftFiles[f.path])
+                            ? "unfold_less"
+                            : "unfold_more"}
+                        </span>
+                      }
+                    >
+                      {allDraftFiles.every((f) => !!expandedDraftFiles[f.path])
+                        ? "Recolher Todos"
+                        : "Expandir Todos"}
+                    </Button>
+                  )}
                 </div>
 
                 {allDraftFiles.length === 0 ? (
@@ -1534,6 +1741,38 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
               ) : (
                 <>
                   {/* System Files List */}
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "0 4px",
+                      marginBottom: "-4px",
+                    }}
+                  >
+                    <strong style={{ fontSize: "14px", color: "var(--color-text-primary, #0f172a)" }}>
+                      Arquivos de Configuração & Sistema ({allSystemDraftFiles.length})
+                    </strong>
+
+                    <Button
+                      type="button"
+                      size="xs"
+                      variant="ghost"
+                      onClick={toggleAllSystemFiles}
+                      icon={
+                        <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>
+                          {allSystemDraftFiles.every((f) => !!expandedSystemFiles[f.path])
+                            ? "unfold_less"
+                            : "unfold_more"}
+                        </span>
+                      }
+                    >
+                      {allSystemDraftFiles.every((f) => !!expandedSystemFiles[f.path])
+                        ? "Recolher Todos"
+                        : "Expandir Todos"}
+                    </Button>
+                  </div>
+
                   <div
                     style={{
                       display: "flex",

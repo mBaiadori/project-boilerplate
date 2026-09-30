@@ -397,16 +397,47 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
           </div>
         }
         actions={
-          <Button
-            id="btn-refresh-prs"
-            variant="secondary"
-            size="sm"
-            title={`Recarregar revisões de ${repoName}`}
-            icon={<RefreshCw size={14} />}
-            onClick={() => loadPRs()}
-          >
-            Atualizar
-          </Button>
+          <Row gap="xs">
+            <Button
+              id="btn-toggle-all-prs"
+              variant="ghost"
+              size="sm"
+              icon={
+                <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>
+                  {filteredPRs.length > 0 && filteredPRs.every((p) => !!expandedPRs[p.id])
+                    ? "unfold_less"
+                    : "unfold_more"}
+                </span>
+              }
+              onClick={() => {
+                const areAllExpanded =
+                  filteredPRs.length > 0 &&
+                  filteredPRs.every((p) => !!expandedPRs[p.id]);
+                const nextState = !areAllExpanded;
+                const nextMap: Record<number | string, boolean> = {};
+                filteredPRs.forEach((p) => {
+                  nextMap[p.id] = nextState;
+                });
+                setExpandedPRs(nextMap);
+              }}
+              title="Expandir ou recolher todas as revisões da lista"
+            >
+              {filteredPRs.length > 0 && filteredPRs.every((p) => !!expandedPRs[p.id])
+                ? "Recolher Todos"
+                : "Expandir Todos"}
+            </Button>
+
+            <Button
+              id="btn-refresh-prs"
+              variant="secondary"
+              size="sm"
+              title={`Recarregar revisões de ${repoName}`}
+              icon={<RefreshCw size={14} />}
+              onClick={() => loadPRs()}
+            >
+              Atualizar
+            </Button>
+          </Row>
         }
       >
         {/* Filter Bar & Search */}
@@ -485,460 +516,567 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
 
               const revisionId = pr.short_id || (pr.commit_hash ? pr.commit_hash.slice(0, 7) : pr.id);
 
+              const currentUserHandle = user?.login ? `@${user.login}` : "@tech-lead";
+              const isAuthor = (pr.author || "").replace(/^@/, "").toLowerCase() === currentUserHandle.replace(/^@/, "").toLowerCase();
+              const minApprovals = pr.min_approvals || (projectConfig?.governance_rules?.min_approvals_default ?? 1);
+              const approvalsList = Array.isArray(pr.approvals) ? pr.approvals : [];
+              const validApprovals = approvalsList.filter((app: any) => {
+                const u = typeof app === "string" ? app : app.user;
+                return (u || "").replace(/^@/, "").toLowerCase() !== (pr.author || "").replace(/^@/, "").toLowerCase();
+              });
+              const hasCurrentUserApproved = approvalsList.some((app: any) => {
+                const u = typeof app === "string" ? app : app.user;
+                return (u || "").replace(/^@/, "").toLowerCase() === currentUserHandle.replace(/^@/, "").toLowerCase();
+              });
+              const quorumMet = validApprovals.length >= minApprovals;
+
               return (
-                <Card key={pr.id} variant="elevated" padding="lg" style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-                  {/* Top Bar */}
-                  <div className="ui-row ui-row--between ui-row--align-start" style={{ gap: "12px" }}>
-                    <div className="ui-row ui-row--align-start ui-row--md">
-                      <span
-                        className="material-symbols-outlined"
+                <Card
+                  key={pr.id}
+                  variant="elevated"
+                  padding="none"
+                  style={{
+                    overflow: "hidden",
+                    border: isExpanded
+                      ? "1px solid var(--md-sys-color-primary, #3b82f6)"
+                      : "1px solid var(--md-sys-color-outline-variant, #dadce0)",
+                    transition: "border-color 0.2s ease, box-shadow 0.2s ease",
+                  }}
+                >
+                  {/* Collapsed / Summary Header (Always Visible & Interactive) */}
+                  <div
+                    onClick={() => toggleExpand(pr.id, pr)}
+                    style={{
+                      padding: "16px 20px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: "14px",
+                      cursor: "pointer",
+                      userSelect: "none",
+                      background: isExpanded
+                        ? "var(--md-sys-color-surface-container-low, #f8f9fa)"
+                        : "transparent",
+                      borderBottom: isExpanded
+                        ? "1px solid var(--md-sys-color-outline-variant, #dadce0)"
+                        : "none",
+                      transition: "background-color 0.15s ease",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: "14px", minWidth: 0, flex: 1 }}>
+                      {/* Status Icon */}
+                      <div
                         style={{
-                          color: isDirectCommit || isMerged
-                            ? "var(--md-sys-color-primary, #3b82f6)"
+                          width: "38px",
+                          height: "38px",
+                          borderRadius: "10px",
+                          flexShrink: 0,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          background: isDirectCommit || isMerged
+                            ? "var(--color-primary-subtle, #e0f2fe)"
                             : isClosed
-                              ? "var(--color-danger, #ef4444)"
-                              : "var(--color-success, #16a34a)",
-                          fontSize: "26px",
-                          marginTop: "2px",
+                            ? "var(--color-danger-subtle, #fef2f2)"
+                            : "var(--color-success-subtle, #f0fdf4)",
+                          color: isDirectCommit || isMerged
+                            ? "var(--md-sys-color-primary, #0284c7)"
+                            : isClosed
+                            ? "var(--color-danger, #ef4444)"
+                            : "var(--color-success, #16a34a)",
                         }}
                       >
-                        {isDirectCommit || isMerged ? "check_circle" : isClosed ? "cancel" : "rate_review"}
-                      </span>
-                      <div>
-                        <div className="ui-row ui-row--align-center ui-row--xs" style={{ flexWrap: "wrap" }}>
-                          <strong style={{ fontSize: "16px", color: "var(--color-text-primary, #0f172a)", fontWeight: 600 }}>
+                        <span className="material-symbols-outlined" style={{ fontSize: "22px" }}>
+                          {isDirectCommit || isMerged ? "check_circle" : isClosed ? "cancel" : "rate_review"}
+                        </span>
+                      </div>
+
+                      {/* Title & Metadata */}
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                          <span
+                            style={{
+                              fontSize: "15px",
+                              fontWeight: 600,
+                              color: "var(--color-text-primary, #0f172a)",
+                              letterSpacing: "-0.01em",
+                            }}
+                          >
                             Revisão #{revisionId}: {pr.title}
-                          </strong>
+                          </span>
                           {pr.github_number && (
-                            <Badge variant="neutral" size="sm" title="Sincronizado remotamente">
+                            <Badge variant="neutral" size="sm" title="Sincronizado com GitHub">
                               GitHub #{pr.github_number}
                             </Badge>
                           )}
                         </div>
-                        <div className="ui-text-muted" style={{ fontSize: "12.5px", marginTop: "4px" }}>
-                          Autor: <strong style={{ color: "var(--md-sys-color-on-surface, #0f172a)" }}>{pr.author}</strong> &bull; Data: {formatPRDate(pr.created_at)}
-                        </div>
-                      </div>
-                    </div>
 
-                    <Badge
-                      variant={isMerged || isDirectCommit ? "info" : isClosed ? "danger" : "success"}
-                      size="md"
-                    >
-                      {statusBadgeText}
-                    </Badge>
-                  </div>
-
-                  {/* PR Description with Rich Markdown Rendering */}
-                  {pr.description && (
-                    <div
-                      style={{
-                        margin: 0,
-                        background: "var(--md-sys-color-surface-container-low, #f8f9fa)",
-                        padding: "14px 16px",
-                        borderRadius: "10px",
-                        border: "1px solid var(--md-sys-color-outline-variant, #dadce0)",
-                      }}
-                    >
-                      {renderMarkdownDescription(pr.description)}
-                    </div>
-                  )}
-
-                  {/* Quorum & Approvals Section */}
-                  {(() => {
-                    const currentUserHandle = user?.login ? `@${user.login}` : "@tech-lead";
-                    const isAuthor = (pr.author || "").replace(/^@/, "").toLowerCase() === currentUserHandle.replace(/^@/, "").toLowerCase();
-                    const minApprovals = pr.min_approvals || (projectConfig?.governance_rules?.min_approvals_default ?? 1);
-                    const approvalsList = Array.isArray(pr.approvals) ? pr.approvals : [];
-                    const validApprovals = approvalsList.filter((app: any) => {
-                      const u = typeof app === "string" ? app : app.user;
-                      return (u || "").replace(/^@/, "").toLowerCase() !== (pr.author || "").replace(/^@/, "").toLowerCase();
-                    });
-                    const hasCurrentUserApproved = approvalsList.some((app: any) => {
-                      const u = typeof app === "string" ? app : app.user;
-                      return (u || "").replace(/^@/, "").toLowerCase() === currentUserHandle.replace(/^@/, "").toLowerCase();
-                    });
-                    const quorumMet = validApprovals.length >= minApprovals;
-
-                    return (
-                      <>
-                        <div
-                          style={{
-                            display: "flex",
-                            flexDirection: "column",
-                            gap: "10px",
-                            background: "var(--md-sys-color-surface-container-lowest, #f8f9fa)",
-                            padding: "12px 14px",
-                            borderRadius: "8px",
-                            border: "1px solid var(--md-sys-color-outline-variant, #e8eaed)",
-                          }}
-                        >
-                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "8px" }}>
-                            <span
-                              style={{
-                                color: "var(--md-sys-color-on-surface, #0f172a)",
-                                fontWeight: 600,
-                                display: "inline-flex",
-                                alignItems: "center",
-                                gap: "6px",
-                                fontSize: "13px",
-                              }}
-                            >
-                              <span className="material-symbols-outlined" style={{ fontSize: "17px", color: "var(--md-sys-color-primary, #1a73e8)" }}>
-                                verified_user
-                              </span>
-                              Trilha de Auditoria & Aprovações:
-                            </span>
-
-                            {isOpen && (
-                              <Badge variant={quorumMet ? "success" : "warning"} size="sm">
-                                <span className="material-symbols-outlined" style={{ fontSize: "14px", marginRight: "3px" }}>
-                                  {quorumMet ? "verified" : "pending_actions"}
-                                </span>
-                                {quorumMet
-                                  ? `✓ Quórum Atingido (${validApprovals.length}/${minApprovals}) • Liberado para Publicação`
-                                  : `Quórum Pendente (${validApprovals.length}/${minApprovals} aprovações necessárias)`}
-                              </Badge>
-                            )}
-                          </div>
-
-                          <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-                            {approvalsList.length > 0 ? (
-                              approvalsList.map((app: any, idx: number) => {
-                                const appUser = typeof app === "string" ? app : app.user;
-                                const appRole = typeof app === "object" ? app.role : null;
-                                const appHash = typeof app === "object" && app.commit_hash ? app.commit_hash.slice(0, 7) : null;
-                                const appDate = typeof app === "object" && app.timestamp ? formatPRDate(app.timestamp) : null;
-                                const appComment = typeof app === "object" ? app.comment : null;
-
-                                return (
-                                  <div
-                                    key={idx}
-                                    style={{
-                                      display: "inline-flex",
-                                      alignItems: "center",
-                                      gap: "6px",
-                                      padding: "4px 10px",
-                                      borderRadius: "6px",
-                                      background: "var(--color-success-subtle, #f0fdf4)",
-                                      border: "1px solid var(--color-border-subtle, #bbf7d0)",
-                                      color: "var(--color-success, #166534)",
-                                      fontSize: "12px",
-                                    }}
-                                    title={appComment ? `Comentário de Auditoria: "${appComment}"` : undefined}
-                                  >
-                                    <span className="material-symbols-outlined" style={{ fontSize: "15px", color: "var(--color-success, #16a34a)" }}>
-                                      check_circle
-                                    </span>
-                                    <strong>{appUser}</strong>
-                                    {appRole && <span style={{ opacity: 0.85, fontSize: "11px" }}>({appRole})</span>}
-                                    {appHash && (
-                                      <span style={{ fontFamily: "var(--font-family-mono)", fontSize: "10.5px", background: "rgba(0,0,0,0.06)", padding: "1px 4px", borderRadius: "3px" }}>
-                                        #{appHash}
-                                      </span>
-                                    )}
-                                    {appDate && <span style={{ opacity: 0.7, fontSize: "10.5px" }}>&bull; {appDate}</span>}
-                                  </div>
-                                );
-                              })
-                            ) : isMerged || isDirectCommit ? (
-                              <Badge variant="success" size="sm">
-                                <span className="material-symbols-outlined" style={{ fontSize: "14px", marginRight: "3px" }}>
-                                  verified
-                                </span>
-                                Aprovado e integrado na versão oficial
-                              </Badge>
-                            ) : (
-                              <Badge variant="neutral" size="sm">
-                                <span className="material-symbols-outlined" style={{ fontSize: "14px", marginRight: "3px" }}>
-                                  hourglass_top
-                                </span>
-                                Aguardando aprovação de revisores (0/{minApprovals})
-                              </Badge>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Feedback Message */}
-                        {actionFeedback && actionFeedback.id === pr.id && (
-                          <div
-                            style={{
-                              padding: "10px 14px",
-                              borderRadius: "6px",
-                              fontSize: "13px",
-                              background: actionFeedback.type === "success" ? "var(--color-success-subtle, #f0fdf4)" : "var(--color-danger-subtle, #fef2f2)",
-                              color: actionFeedback.type === "success" ? "var(--color-success, #166534)" : "var(--color-danger, #991b1b)",
-                              border: `1px solid ${actionFeedback.type === "success" ? "var(--color-border-subtle, #bbf7d0)" : "var(--color-border-subtle, #fecaca)"}`,
-                            }}
-                          >
-                            {actionFeedback.message}
-                          </div>
-                        )}
-
-                        {/* Files & Diffs Accordion */}
-                        {prFiles.length > 0 && (
-                          <div style={{ borderTop: "1px solid var(--color-border-subtle, #e2e8f0)", paddingTop: "10px" }}>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => toggleExpand(pr.id, pr)}
-                              icon={
-                                <span className="material-symbols-outlined icon-xs">
-                                  {isExpanded ? "expand_less" : "expand_more"}
-                                </span>
-                              }
-                            >
-                              {isExpanded ? "Ocultar alterações dos documentos" : `Visualizar ${prFiles.length} documento(s) alterados`}
-                            </Button>
-
-                            {isExpanded && (
-                              <div style={{ marginTop: "10px", display: "flex", flexDirection: "column", gap: "10px" }}>
-                                {prFiles.map((f: any, fIdx: number) => {
-                                  const fileKey = `${pr.id}-${f.path || fIdx}`;
-                                  const isVisual = prViewModes[fileKey] !== "raw";
-                                  const fileDiff = f.diff_text || fileDiffsCache[fileKey] || "";
-                                  const isLoadingDiff = loadingDiffs[fileKey];
-
-                                  return (
-                                    <Card key={fIdx} variant="flat" style={{ padding: 0, overflow: "hidden" }}>
-                                      <div
-                                        style={{
-                                          padding: "8px 12px",
-                                          background: "var(--color-surface-subtle, #f8fafc)",
-                                          display: "flex",
-                                          justifyContent: "space-between",
-                                          alignItems: "center",
-                                          fontFamily: "var(--font-family-mono)",
-                                          flexWrap: "wrap",
-                                          gap: "8px",
-                                        }}
-                                      >
-                                        <div className="ui-row ui-row--align-center ui-row--xs">
-                                          <span className="material-symbols-outlined icon-xs" style={{ color: "var(--md-sys-color-primary, #1a73e8)" }}>
-                                            description
-                                          </span>
-                                          <strong>{f.path}</strong>
-                                          {(f.additions > 0 || f.deletions > 0) && (
-                                            <>
-                                              <span style={{ color: "var(--color-success, #16a34a)", fontWeight: 600 }}>
-                                                +{f.additions || 0}
-                                              </span>
-                                              <span style={{ color: "var(--color-danger, #dc2626)", fontWeight: 600 }}>
-                                                -{f.deletions || 0}
-                                              </span>
-                                            </>
-                                          )}
-                                        </div>
-
-                                        <div className="ui-row ui-row--align-center ui-row--xs">
-                                          {isOpen && (
-                                            <Button
-                                              type="button"
-                                              size="xs"
-                                              variant="tonal"
-                                              onClick={() => handleEditDocumentInPR(pr, f.path)}
-                                              title={`Abrir e editar "${f.path}" diretamente na branch deste PR (${pr.branch})`}
-                                              icon={
-                                                <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>
-                                                  edit_note
-                                                </span>
-                                              }
-                                            >
-                                              Editar Documento
-                                            </Button>
-                                          )}
-
-                                          <div className="ui-btn-group" style={{ background: "var(--color-border-subtle, #e2e8f0)", padding: "2px", borderRadius: "6px" }}>
-                                            <Button
-                                              type="button"
-                                              size="xs"
-                                              variant={isVisual ? "secondary" : "ghost"}
-                                              onClick={() => setPrViewModes((prev) => ({ ...prev, [fileKey]: "visual" }))}
-                                            >
-                                              Visualização Formatada
-                                            </Button>
-                                            <Button
-                                              type="button"
-                                              size="xs"
-                                              variant={!isVisual ? "secondary" : "ghost"}
-                                              onClick={() => setPrViewModes((prev) => ({ ...prev, [fileKey]: "raw" }))}
-                                            >
-                                              Modo RAW (Diff)
-                                            </Button>
-                                          </div>
-                                        </div>
-                                      </div>
-
-                                      {isLoadingDiff ? (
-                                        <div style={{ padding: "14px", textAlign: "center", color: "var(--color-text-muted)" }}>
-                                          Carregando diferenças da versão...
-                                        </div>
-                                      ) : isVisual && (f.old_content || f.new_content) ? (
-                                        <div style={{ maxHeight: "380px", overflowY: "auto" }}>
-                                          <VisualMarkdownDiff
-                                            oldContent={f.old_content || ""}
-                                            newContent={f.new_content || ""}
-                                            fileName={f.path}
-                                          />
-                                        </div>
-                                      ) : (
-                                        fileDiff && (
-                                          <pre
-                                            style={{
-                                              margin: 0,
-                                              padding: "10px 12px",
-                                              fontSize: "11.5px",
-                                              background: "#0d1117",
-                                              color: "#f8fafc",
-                                              overflowX: "auto",
-                                              fontFamily: "var(--font-family-mono)",
-                                            }}
-                                          >
-                                            {fileDiff}
-                                          </pre>
-                                        )
-                                      )}
-                                    </Card>
-                                  );
-                                })}
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        {/* Actions Footer */}
                         <div
                           style={{
                             display: "flex",
                             alignItems: "center",
-                            justifyContent: "space-between",
-                            borderTop: "1px solid var(--md-sys-color-outline-variant, #dadce0)",
-                            paddingTop: "12px",
-                            marginTop: "2px",
-                            flexWrap: "wrap",
                             gap: "10px",
+                            marginTop: "4px",
+                            fontSize: "12.5px",
+                            color: "var(--md-sys-color-on-surface-variant, #64748b)",
+                            flexWrap: "wrap",
                           }}
                         >
-                          <div>
-                            {pr.html_url ? (
-                              <a
-                                href={pr.html_url}
-                                target="_blank"
-                                rel="noreferrer"
-                                style={{
-                                  fontSize: "12.5px",
-                                  fontWeight: 500,
-                                  color: "var(--md-sys-color-primary, #1a73e8)",
-                                  textDecoration: "none",
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  gap: "4px",
-                                }}
-                              >
-                                Ver no GitHub
-                                <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>
-                                  open_in_new
+                          <span>
+                            Autor: <strong style={{ color: "var(--md-sys-color-on-surface, #0f172a)" }}>{pr.author || "Equipe"}</strong>
+                          </span>
+                          <span>&bull;</span>
+                          <span>{formatPRDate(pr.created_at)}</span>
+                          <span>&bull;</span>
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                            <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>description</span>
+                            {prFiles.length} {prFiles.length === 1 ? "arquivo" : "arquivos"}
+                          </span>
+
+                          {/* Quorum indicator only for active/open reviews */}
+                          {isOpen && (
+                            <>
+                              <span>&bull;</span>
+                              <Badge variant={quorumMet ? "success" : "warning"} size="sm">
+                                <span className="material-symbols-outlined" style={{ fontSize: "13px", marginRight: "3px" }}>
+                                  {quorumMet ? "verified" : "pending_actions"}
                                 </span>
-                              </a>
-                            ) : (
-                              <span className="ui-text-muted" style={{ fontSize: "12.5px" }}>
-                                Versão Canônica Registrada
+                                {quorumMet
+                                  ? `Quórum Atingido (${validApprovals.length}/${minApprovals})`
+                                  : `Aprovações (${validApprovals.length}/${minApprovals})`}
+                              </Badge>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Right Side: Status Badge & Chevron / Details Button */}
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px", flexShrink: 0 }}>
+                      <Badge
+                        variant={isMerged || isDirectCommit ? "info" : isClosed ? "danger" : "success"}
+                        size="md"
+                      >
+                        {statusBadgeText}
+                      </Badge>
+
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleExpand(pr.id, pr);
+                        }}
+                        icon={
+                          <span
+                            className="material-symbols-outlined"
+                            style={{
+                              fontSize: "18px",
+                              transition: "transform 0.2s ease",
+                              transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)",
+                            }}
+                          >
+                            expand_more
+                          </span>
+                        }
+                      >
+                        {isExpanded ? "Recolher" : "Detalhes"}
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Expanded Details Body */}
+                  {isExpanded && (
+                    <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "16px" }}>
+                      {/* PR Description with Rich Markdown Rendering */}
+                      {pr.description && (
+                        <div>
+                          <div style={{ fontSize: "12px", fontWeight: 600, color: "var(--color-text-secondary, #475569)", marginBottom: "6px" }}>
+                            Descrição da Proposta:
+                          </div>
+                          <div
+                            style={{
+                              background: "var(--md-sys-color-surface-container-low, #f8f9fa)",
+                              padding: "14px 16px",
+                              borderRadius: "10px",
+                              border: "1px solid var(--md-sys-color-outline-variant, #dadce0)",
+                            }}
+                          >
+                            {renderMarkdownDescription(pr.description)}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Quorum & Approvals Section */}
+                      <div
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "10px",
+                          background: "var(--md-sys-color-surface-container-lowest, #f8f9fa)",
+                          padding: "12px 14px",
+                          borderRadius: "8px",
+                          border: "1px solid var(--md-sys-color-outline-variant, #e8eaed)",
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "8px" }}>
+                          <span
+                            style={{
+                              color: "var(--md-sys-color-on-surface, #0f172a)",
+                              fontWeight: 600,
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "6px",
+                              fontSize: "13px",
+                            }}
+                          >
+                            <span className="material-symbols-outlined" style={{ fontSize: "17px", color: "var(--md-sys-color-primary, #1a73e8)" }}>
+                              verified_user
+                            </span>
+                            Trilha de Auditoria & Pareceres:
+                          </span>
+
+                          {isOpen && (
+                            <Badge variant={quorumMet ? "success" : "warning"} size="sm">
+                              <span className="material-symbols-outlined" style={{ fontSize: "14px", marginRight: "3px" }}>
+                                {quorumMet ? "verified" : "pending_actions"}
                               </span>
-                            )}
+                              {quorumMet
+                                ? `✓ Quórum Atingido (${validApprovals.length}/${minApprovals}) • Liberado para Publicação`
+                                : `Quórum Pendente (${validApprovals.length}/${minApprovals} aprovações necessárias)`}
+                            </Badge>
+                          )}
+                        </div>
+
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                          {approvalsList.length > 0 ? (
+                            approvalsList.map((app: any, idx: number) => {
+                              const appUser = typeof app === "string" ? app : app.user;
+                              const appRole = typeof app === "object" ? app.role : null;
+                              const appHash = typeof app === "object" && app.commit_hash ? app.commit_hash.slice(0, 7) : null;
+                              const appDate = typeof app === "object" && app.timestamp ? formatPRDate(app.timestamp) : null;
+                              const appComment = typeof app === "object" ? app.comment : null;
+
+                              return (
+                                <div
+                                  key={idx}
+                                  style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "6px",
+                                    padding: "4px 10px",
+                                    borderRadius: "6px",
+                                    background: "var(--color-success-subtle, #f0fdf4)",
+                                    border: "1px solid var(--color-border-subtle, #bbf7d0)",
+                                    color: "var(--color-success, #166534)",
+                                    fontSize: "12px",
+                                  }}
+                                  title={appComment ? `Comentário de Auditoria: "${appComment}"` : undefined}
+                                >
+                                  <span className="material-symbols-outlined" style={{ fontSize: "15px", color: "var(--color-success, #16a34a)" }}>
+                                    check_circle
+                                  </span>
+                                  <strong>{appUser}</strong>
+                                  {appRole && <span style={{ opacity: 0.85, fontSize: "11px" }}>({appRole})</span>}
+                                  {appHash && (
+                                    <span style={{ fontFamily: "var(--font-family-mono)", fontSize: "10.5px", background: "rgba(0,0,0,0.06)", padding: "1px 4px", borderRadius: "3px" }}>
+                                      #{appHash}
+                                    </span>
+                                  )}
+                                  {appDate && <span style={{ opacity: 0.7, fontSize: "10.5px" }}>&bull; {appDate}</span>}
+                                </div>
+                              );
+                            })
+                          ) : isMerged || isDirectCommit ? (
+                            <Badge variant="success" size="sm">
+                              <span className="material-symbols-outlined" style={{ fontSize: "14px", marginRight: "3px" }}>
+                                verified
+                              </span>
+                              Aprovado e integrado na versão oficial
+                            </Badge>
+                          ) : (
+                            <Badge variant="neutral" size="sm">
+                              <span className="material-symbols-outlined" style={{ fontSize: "14px", marginRight: "3px" }}>
+                                hourglass_top
+                              </span>
+                              Aguardando aprovação de revisores (0/{minApprovals})
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Feedback Message */}
+                      {actionFeedback && actionFeedback.id === pr.id && (
+                        <div
+                          style={{
+                            padding: "10px 14px",
+                            borderRadius: "6px",
+                            fontSize: "13px",
+                            background: actionFeedback.type === "success" ? "var(--color-success-subtle, #f0fdf4)" : "var(--color-danger-subtle, #fef2f2)",
+                            color: actionFeedback.type === "success" ? "var(--color-success, #166534)" : "var(--color-danger, #991b1b)",
+                            border: `1px solid ${actionFeedback.type === "success" ? "var(--color-border-subtle, #bbf7d0)" : "var(--color-border-subtle, #fecaca)"}`,
+                          }}
+                        >
+                          {actionFeedback.message}
+                        </div>
+                      )}
+
+                      {/* Files & Diffs */}
+                      {prFiles.length > 0 && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                          <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary, #0f172a)", display: "flex", alignItems: "center", gap: "6px" }}>
+                            <span className="material-symbols-outlined" style={{ fontSize: "16px", color: "var(--md-sys-color-primary, #1a73e8)" }}>
+                              difference
+                            </span>
+                            Documentos Alterados ({prFiles.length}):
                           </div>
 
-                          <div className="ui-row ui-row--align-center ui-row--xs">
-                            {/* Rollback button on Merged/Published versions */}
-                            {(isMerged || isDirectCommit) && (
+                          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                            {prFiles.map((f: any, fIdx: number) => {
+                              const fileKey = `${pr.id}-${f.path || fIdx}`;
+                              const isVisual = prViewModes[fileKey] !== "raw";
+                              const fileDiff = f.diff_text || fileDiffsCache[fileKey] || "";
+                              const isLoadingDiff = loadingDiffs[fileKey];
+
+                              return (
+                                <Card key={fIdx} variant="flat" style={{ padding: 0, overflow: "hidden", border: "1px solid var(--color-border-subtle, #e2e8f0)" }}>
+                                  <div
+                                    style={{
+                                      padding: "8px 12px",
+                                      background: "var(--color-surface-subtle, #f8fafc)",
+                                      display: "flex",
+                                      justifyContent: "space-between",
+                                      alignItems: "center",
+                                      fontFamily: "var(--font-family-mono)",
+                                      flexWrap: "wrap",
+                                      gap: "8px",
+                                    }}
+                                  >
+                                    <div className="ui-row ui-row--align-center ui-row--xs">
+                                      <span className="material-symbols-outlined icon-xs" style={{ color: "var(--md-sys-color-primary, #1a73e8)" }}>
+                                        description
+                                      </span>
+                                      <strong>{f.path}</strong>
+                                      {(f.additions > 0 || f.deletions > 0) && (
+                                        <>
+                                          <span style={{ color: "var(--color-success, #16a34a)", fontWeight: 600 }}>
+                                            +{f.additions || 0}
+                                          </span>
+                                          <span style={{ color: "var(--color-danger, #dc2626)", fontWeight: 600 }}>
+                                            -{f.deletions || 0}
+                                          </span>
+                                        </>
+                                      )}
+                                    </div>
+
+                                    <div className="ui-row ui-row--align-center ui-row--xs">
+                                      {isOpen && (
+                                        <Button
+                                          type="button"
+                                          size="xs"
+                                          variant="tonal"
+                                          onClick={() => handleEditDocumentInPR(pr, f.path)}
+                                          title={`Abrir e editar "${f.path}" diretamente na branch deste PR (${pr.branch})`}
+                                          icon={
+                                            <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>
+                                              edit_note
+                                            </span>
+                                          }
+                                        >
+                                          Editar Documento
+                                        </Button>
+                                      )}
+
+                                      <div className="ui-btn-group" style={{ background: "var(--color-border-subtle, #e2e8f0)", padding: "2px", borderRadius: "6px" }}>
+                                        <Button
+                                          type="button"
+                                          size="xs"
+                                          variant={isVisual ? "secondary" : "ghost"}
+                                          onClick={() => setPrViewModes((prev) => ({ ...prev, [fileKey]: "visual" }))}
+                                        >
+                                          Visualização Formatada
+                                        </Button>
+                                        <Button
+                                          type="button"
+                                          size="xs"
+                                          variant={!isVisual ? "secondary" : "ghost"}
+                                          onClick={() => setPrViewModes((prev) => ({ ...prev, [fileKey]: "raw" }))}
+                                        >
+                                          Modo RAW (Diff)
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {isLoadingDiff ? (
+                                    <div style={{ padding: "14px", textAlign: "center", color: "var(--color-text-muted)" }}>
+                                      Carregando diferenças da versão...
+                                    </div>
+                                  ) : isVisual && (f.old_content || f.new_content) ? (
+                                    <div style={{ maxHeight: "380px", overflowY: "auto" }}>
+                                      <VisualMarkdownDiff
+                                        oldContent={f.old_content || ""}
+                                        newContent={f.new_content || ""}
+                                        fileName={f.path}
+                                      />
+                                    </div>
+                                  ) : (
+                                    fileDiff && (
+                                      <pre
+                                        style={{
+                                          margin: 0,
+                                          padding: "10px 12px",
+                                          fontSize: "11.5px",
+                                          background: "#0d1117",
+                                          color: "#f8fafc",
+                                          overflowX: "auto",
+                                          fontFamily: "var(--font-family-mono)",
+                                        }}
+                                      >
+                                        {fileDiff}
+                                      </pre>
+                                    )
+                                  )}
+                                </Card>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Actions Footer */}
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          borderTop: "1px solid var(--md-sys-color-outline-variant, #dadce0)",
+                          paddingTop: "14px",
+                          marginTop: "4px",
+                          flexWrap: "wrap",
+                          gap: "10px",
+                        }}
+                      >
+                        <div>
+                          {pr.html_url ? (
+                            <a
+                              href={pr.html_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              style={{
+                                fontSize: "12.5px",
+                                fontWeight: 500,
+                                color: "var(--md-sys-color-primary, #1a73e8)",
+                                textDecoration: "none",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "4px",
+                              }}
+                            >
+                              Ver no GitHub
+                              <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>
+                                open_in_new
+                              </span>
+                            </a>
+                          ) : (
+                            <span className="ui-text-muted" style={{ fontSize: "12.5px" }}>
+                              Versão Canônica Registrada
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="ui-row ui-row--align-center ui-row--xs">
+                          {/* Rollback button on Merged/Published versions */}
+                          {(isMerged || isDirectCommit) && (
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => setRollbackTarget(pr)}
+                              disabled={actionLoading?.id === pr.id}
+                              icon={<span className="material-symbols-outlined icon-xs">history</span>}
+                              title="Restaurar o estado desta revisão como a versão ativa atual"
+                            >
+                              Restaurar esta Versão (Rollback)
+                            </Button>
+                          )}
+
+                          {/* Open PR actions */}
+                          {isOpen && (
+                            <>
                               <Button
                                 variant="secondary"
                                 size="sm"
-                                onClick={() => setRollbackTarget(pr)}
+                                style={{ color: "var(--color-danger, #ef4444)" }}
+                                onClick={() => handleReject(pr.id)}
                                 disabled={actionLoading?.id === pr.id}
-                                icon={<span className="material-symbols-outlined icon-xs">history</span>}
-                                title="Restaurar o estado desta revisão como a versão ativa atual"
+                                icon={
+                                  <span className="material-symbols-outlined icon-xs">
+                                    {actionLoading?.id === pr.id && actionLoading.action === "reject" ? "progress_activity" : "close"}
+                                  </span>
+                                }
+                                title="Rejeitar e arquivar esta proposta"
                               >
-                                Restaurar esta Versão (Rollback)
+                                {actionLoading?.id === pr.id && actionLoading.action === "reject" ? "Rejeitando..." : "Rejeitar"}
                               </Button>
-                            )}
 
-                            {/* Open PR actions */}
-                            {isOpen && (
-                              <>
-                                <Button
-                                  variant="secondary"
-                                  size="sm"
-                                  style={{ color: "var(--color-danger, #ef4444)" }}
-                                  onClick={() => handleReject(pr.id)}
-                                  disabled={actionLoading?.id === pr.id}
-                                  icon={
-                                    <span className="material-symbols-outlined icon-xs">
-                                      {actionLoading?.id === pr.id && actionLoading.action === "reject" ? "progress_activity" : "close"}
-                                    </span>
-                                  }
-                                  title="Rejeitar e arquivar esta proposta"
-                                >
-                                  {actionLoading?.id === pr.id && actionLoading.action === "reject" ? "Rejeitando..." : "Rejeitar"}
-                                </Button>
-
-                                <Button
-                                  variant="secondary"
-                                  size="sm"
-                                  onClick={() => handleOpenApproveModal(pr)}
-                                  disabled={actionLoading?.id === pr.id || isAuthor}
-                                  icon={
-                                    <span className="material-symbols-outlined icon-xs">
-                                      {actionLoading?.id === pr.id && actionLoading.action === "approve"
-                                        ? "progress_activity"
-                                        : hasCurrentUserApproved
-                                        ? "verified"
-                                        : "thumb_up"}
-                                    </span>
-                                  }
-                                  title={
-                                    isAuthor
-                                      ? "O autor da proposta não pode aprovar o seu próprio PR."
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => handleOpenApproveModal(pr)}
+                                disabled={actionLoading?.id === pr.id || isAuthor}
+                                icon={
+                                  <span className="material-symbols-outlined icon-xs">
+                                    {actionLoading?.id === pr.id && actionLoading.action === "approve"
+                                      ? "progress_activity"
                                       : hasCurrentUserApproved
-                                      ? "Você já registrou aprovação nesta proposta. Clique para atualizar seu comentário ou papel."
-                                      : "Registrar parecer e aprovação oficial nesta revisão"
-                                  }
-                                >
-                                  {actionLoading?.id === pr.id && actionLoading.action === "approve"
-                                    ? "Aprovando..."
+                                      ? "verified"
+                                      : "thumb_up"}
+                                  </span>
+                                }
+                                title={
+                                  isAuthor
+                                    ? "O autor da proposta não pode aprovar o seu próprio PR."
                                     : hasCurrentUserApproved
-                                    ? `✓ Aprovado por você (${validApprovals.length}/${minApprovals})`
-                                    : `Aprovar Revisão (${validApprovals.length}/${minApprovals})`}
-                                </Button>
+                                    ? "Você já registrou aprovação nesta proposta. Clique para atualizar seu comentário ou papel."
+                                    : "Registrar parecer e aprovação oficial nesta revisão"
+                                }
+                              >
+                                {actionLoading?.id === pr.id && actionLoading.action === "approve"
+                                  ? "Aprovando..."
+                                  : hasCurrentUserApproved
+                                  ? `✓ Aprovado por você (${validApprovals.length}/${minApprovals})`
+                                  : `Aprovar Revisão (${validApprovals.length}/${minApprovals})`}
+                              </Button>
 
-                                <Button
-                                  variant="primary"
-                                  size="sm"
-                                  onClick={() => handleMerge(pr.id)}
-                                  disabled={actionLoading?.id === pr.id || !quorumMet}
-                                  icon={
-                                    <span className="material-symbols-outlined icon-xs">
-                                      {actionLoading?.id === pr.id && actionLoading.action === "merge" ? "progress_activity" : "publish"}
-                                    </span>
-                                  }
-                                  title={
-                                    !quorumMet
-                                      ? `Quórum pendente: requer pelo menos ${minApprovals} aprovações válidas de revisores independentes antes de realizar o merge (atual: ${validApprovals.length}).`
-                                      : "Quórum atingido! Integrar e publicar alterações na versão oficial."
-                                  }
-                                >
-                                  {actionLoading?.id === pr.id && actionLoading.action === "merge"
-                                    ? "Publicando..."
-                                    : quorumMet
-                                    ? "Publicar Versão Oficial"
-                                    : `Publicar (${validApprovals.length}/${minApprovals})`}
-                                </Button>
-                              </>
-                            )}
-                          </div>
+                              <Button
+                                variant="primary"
+                                size="sm"
+                                onClick={() => handleMerge(pr.id)}
+                                disabled={actionLoading?.id === pr.id || !quorumMet}
+                                icon={
+                                  <span className="material-symbols-outlined icon-xs">
+                                    {actionLoading?.id === pr.id && actionLoading.action === "merge" ? "progress_activity" : "publish"}
+                                  </span>
+                                }
+                                title={
+                                  !quorumMet
+                                    ? `Quórum pendente: requer pelo menos ${minApprovals} aprovações válidas de revisores independentes antes de realizar o merge (atual: ${validApprovals.length}).`
+                                    : "Quórum atingido! Integrar e publicar alterações na versão oficial."
+                                }
+                              >
+                                {actionLoading?.id === pr.id && actionLoading.action === "merge"
+                                  ? "Publicando..."
+                                  : quorumMet
+                                  ? "Publicar Versão Oficial"
+                                  : `Publicar (${validApprovals.length}/${minApprovals})`}
+                              </Button>
+                            </>
+                          )}
                         </div>
-                      </>
-                    );
-                  })()}
+                      </div>
+                    </div>
+                  )}
                 </Card>
               );
             })
