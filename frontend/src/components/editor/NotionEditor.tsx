@@ -21,6 +21,10 @@ import {
   type FragmentStatusInfo,
 } from "./notion-editor-engine";
 import { VisualMarkdownDiff } from "./VisualMarkdownDiff";
+import { LanguageSelectorDropdown } from "./LanguageSelectorDropdown";
+import { TranslationBanner } from "./TranslationBanner";
+import { SyncTranslationModal } from "../modals/SyncTranslationModal";
+import type { SupportedLanguage, SyncToMainPreview } from "../../types";
 
 interface NotionEditorProps {
   content: string;
@@ -100,6 +104,15 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
     null,
   );
 
+  // Translation & SSOT State
+  const [activeLanguage, setActiveLanguage] = useState<string>("pt-BR");
+  const [defaultLanguage, setDefaultLanguage] = useState<string>("pt-BR");
+  const [supportedLanguages, setSupportedLanguages] = useState<SupportedLanguage[]>([]);
+  const [isTranslationOutdated, setIsTranslationOutdated] = useState(false);
+  const [syncPreview, setSyncPreview] = useState<SyncToMainPreview | null>(null);
+  const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
+  const [isSyncingToMain, setIsSyncingToMain] = useState(false);
+
   // Link Insertion Modal State
   const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
   const [linkModalInitialText, setLinkModalInitialText] = useState("");
@@ -143,16 +156,30 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
   const titleTextareaRef = useRef<HTMLTextAreaElement>(null);
   const isInternalChangeRef = useRef(false);
 
+  const activeLanguageRef = useRef(activeLanguage);
+  activeLanguageRef.current = activeLanguage;
+
+  const defaultLanguageRef = useRef(defaultLanguage);
+  defaultLanguageRef.current = defaultLanguage;
+
   const parsed = parseFrontmatter(content || "");
   const docBody = parsed.body || content || "";
   const effectivePrompt =
     promptContent !== undefined ? promptContent : fileMetadata?.prompt || "";
 
+  // Armazena com segurança o conteúdo íntegro do Documento Oficial (SSOT)
+  const officialContentRef = useRef(content || "");
+  if (activeLanguage.toLowerCase() === defaultLanguage.toLowerCase()) {
+    officialContentRef.current = content || "";
+  }
+
   const editorTabRef = useRef(editorTab);
   editorTabRef.current = editorTab;
 
   const docBodyRef = useRef(docBody);
-  docBodyRef.current = docBody;
+  if (activeLanguage.toLowerCase() === defaultLanguage.toLowerCase()) {
+    docBodyRef.current = docBody;
+  }
 
   const effectivePromptRef = useRef(effectivePrompt);
   effectivePromptRef.current = effectivePrompt;
@@ -176,11 +203,17 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
     if (engineRef.current) {
       const currentMd = engineRef.current.getMarkdown();
       if (editorTab === "document") {
-        const newContent = parsedRef.current.hasFrontmatter
-          ? serializeFrontmatter(parsedRef.current.metadata, currentMd)
-          : currentMd;
-        onChangeRef.current(newContent);
         docBodyRef.current = currentMd;
+        // Se estiver no documento oficial, propaga a alteração para o buffer pai
+        if (
+          activeLanguageRef.current.toLowerCase() ===
+          defaultLanguageRef.current.toLowerCase()
+        ) {
+          const newContent = parsedRef.current.hasFrontmatter
+            ? serializeFrontmatter(parsedRef.current.metadata, currentMd)
+            : currentMd;
+          onChangeRef.current(newContent);
+        }
       } else {
         if (onPromptChangeRef.current) {
           onPromptChangeRef.current(currentMd);
@@ -244,6 +277,8 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
     setFragmentAlert(null);
   }, [filePath, activeRepo]);
 
+  const [isUpdatingFromMain, setIsUpdatingFromMain] = useState(false);
+
   // Sincronizar o título local com os metadados do documento ou customTitle
   useEffect(() => {
     if (isTemplateMode) {
@@ -269,6 +304,11 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
     setTitleValue(newVal);
     if (isTemplateMode) {
       if (onCustomTitleChange) onCustomTitleChange(newVal);
+      return;
+    }
+    // Metadados pertencem exclusivamente ao Documento Oficial.
+    // Não altera metadados do documento oficial se estiver visualizando/editando uma tradução.
+    if (activeLanguage.toLowerCase() !== defaultLanguage.toLowerCase()) {
       return;
     }
     if (titleDebounceTimerRef.current) {
@@ -310,6 +350,231 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
       });
   }, [selectedCommit, filePath]);
 
+  // Carregar dados de tradução e idiomas suportados quando o arquivo ativo muda
+  useEffect(() => {
+    if (!filePath || isTemplateMode) return;
+    API.listTranslations(filePath)
+      .then((res) => {
+        if (res.ok && res.data) {
+          const defLang = res.data.defaultLanguage || "pt-BR";
+          setDefaultLanguage(defLang);
+          setActiveLanguage(defLang);
+          setSupportedLanguages(res.data.supportedLanguages || []);
+        }
+      })
+      .catch(() => {});
+  }, [filePath, isTemplateMode]);
+
+  // Alternar entre Documento Oficial e Versões Traduzidas
+  const handleSelectLanguage = async (lang: string) => {
+    if (!filePath) return;
+    const isTargetMain =
+      lang.toLowerCase() === defaultLanguageRef.current.toLowerCase();
+
+    // Se estiver saindo de uma tradução, grava rascunho de tradução pendente no arquivo oculto
+    if (
+      activeLanguageRef.current.toLowerCase() !==
+      defaultLanguageRef.current.toLowerCase()
+    ) {
+      const currentTransMd = engineRef.current
+        ? engineRef.current.getMarkdown()
+        : docBodyRef.current;
+      if (currentTransMd && currentTransMd.trim()) {
+        API.saveTranslation({
+          path: filePath,
+          lang: activeLanguageRef.current,
+          content: currentTransMd.trim(),
+        }).catch(() => {});
+      }
+    }
+
+    if (isTargetMain) {
+      setActiveLanguage(defaultLanguageRef.current);
+      setIsTranslationOutdated(false);
+
+      // Restaura o corpo e o título oficial no editor a partir do buffer oficial intacto
+      const rawOfficial = officialContentRef.current || content || "";
+      const mainParsed = parseFrontmatter(rawOfficial);
+      const metaTitle =
+        fileMetadata?.title !== undefined
+          ? fileMetadata.title
+          : docMetadata?.title || mainParsed.metadata?.title || "";
+      setTitleValue(metaTitle);
+      parsedRef.current = mainParsed;
+      docBodyRef.current = mainParsed.body;
+
+      if (engineRef.current) {
+        isInternalChangeRef.current = true;
+        engineRef.current.setMarkdown(mainParsed.body || "");
+      }
+      if (onReload) onReload();
+      return;
+    }
+
+    try {
+      const res = await API.getTranslationFile(filePath, lang);
+      if (res.ok && res.data) {
+        setActiveLanguage(lang);
+        setIsTranslationOutdated(res.data.isOutdated);
+
+        // Traduções são puro Markdown para leitura/edição na língua de preferência
+        const parsedTrans = parseFrontmatter(res.data.content);
+        const transBody = parsedTrans.body || res.data.content;
+        docBodyRef.current = transBody;
+        if (engineRef.current) {
+          isInternalChangeRef.current = true;
+          engineRef.current.setMarkdown(transBody);
+        }
+      }
+    } catch (err: any) {
+      setEditorToast({
+        text:
+          err?.message ||
+          `Não foi possível carregar a tradução (${lang.toUpperCase()}).`,
+        type: "warning",
+      });
+      setTimeout(() => setEditorToast(null), 3000);
+    }
+  };
+
+  // Atualizar tradução existente que esteja desatualizada em relação ao documento oficial
+  const handleUpdateFromMain = async () => {
+    if (
+      !filePath ||
+      activeLanguageRef.current.toLowerCase() ===
+        defaultLanguageRef.current.toLowerCase()
+    )
+      return;
+    setIsUpdatingFromMain(true);
+    try {
+      const res = await API.translateDocument({
+        path: filePath,
+        targetLang: activeLanguageRef.current,
+      });
+
+      if (res.ok && res.data) {
+        setIsTranslationOutdated(false);
+        const parsedTrans = parseFrontmatter(res.data.content);
+        const transBody = parsedTrans.body || res.data.content;
+        docBodyRef.current = transBody;
+        if (engineRef.current) {
+          isInternalChangeRef.current = true;
+          engineRef.current.setMarkdown(transBody);
+        }
+        setEditorToast({
+          text: `Tradução (${activeLanguageRef.current.toUpperCase()}) atualizada com sucesso a partir do documento oficial!`,
+          type: "success",
+        });
+        setTimeout(() => setEditorToast(null), 3000);
+      } else {
+        setEditorToast({
+          text:
+            (res.data as any)?.error ||
+            "Erro ao atualizar tradução do documento oficial.",
+          type: "warning",
+        });
+        setTimeout(() => setEditorToast(null), 3000);
+      }
+    } catch (err: any) {
+      setEditorToast({
+        text: err?.message || "Falha na comunicação ao atualizar tradução.",
+        type: "warning",
+      });
+      setTimeout(() => setEditorToast(null), 3000);
+    } finally {
+      setIsUpdatingFromMain(false);
+    }
+  };
+
+  // Preparar Sincronização Bidirecional da versão traduzida para o Documento Oficial
+  const handleSyncToMain = async () => {
+    if (!filePath) return;
+    setIsSyncingToMain(true);
+    try {
+      const currentMd = engineRef.current
+        ? engineRef.current.getMarkdown()
+        : docBodyRef.current;
+
+      const res = await API.syncTranslationToMain({
+        path: filePath,
+        translatedContent: currentMd,
+        fromLang: activeLanguageRef.current,
+      });
+
+      if (res.ok && res.data) {
+        setSyncPreview(res.data);
+        setIsSyncModalOpen(true);
+      } else {
+        setEditorToast({
+          text:
+            (res.data as any)?.error ||
+            "Erro ao preparar sincronização para o documento oficial.",
+          type: "warning",
+        });
+        setTimeout(() => setEditorToast(null), 3000);
+      }
+    } catch (err: any) {
+      setEditorToast({
+        text: err?.message || "Falha na comunicação ao sincronizar tradução.",
+        type: "warning",
+      });
+      setTimeout(() => setEditorToast(null), 3000);
+    } finally {
+      setIsSyncingToMain(false);
+    }
+  };
+
+  // Confirmar Aplicação no Documento Oficial
+  const handleConfirmApplyToMain = async (newMainContent: string) => {
+    if (!filePath) return;
+    const res = await API.applyTranslationToMain({
+      path: filePath,
+      content: newMainContent,
+    });
+    if (res.ok) {
+      setEditorToast({
+        text: "Documento oficial atualizado com sucesso a partir da tradução!",
+        type: "success",
+      });
+      setTimeout(() => setEditorToast(null), 3500);
+
+      // 1. Atualiza o buffer de conteúdo oficial para a nova versão consolidada
+      officialContentRef.current = newMainContent;
+
+      // 2. Alterna o estado ativo de volta para o idioma oficial
+      setActiveLanguage(defaultLanguageRef.current);
+      setIsTranslationOutdated(false);
+
+      // 3. Extrai metadados e corpo do novo documento oficial
+      const mainParsed = parseFrontmatter(newMainContent);
+      const metaTitle =
+        fileMetadata?.title !== undefined
+          ? fileMetadata.title
+          : docMetadata?.title || mainParsed.metadata?.title || "";
+      setTitleValue(metaTitle);
+      parsedRef.current = mainParsed;
+      docBodyRef.current = mainParsed.body;
+
+      // 4. Atualiza o canvas do NotionEditor imediatamente sem necessidade de refresh
+      if (engineRef.current) {
+        isInternalChangeRef.current = true;
+        engineRef.current.setMarkdown(mainParsed.body);
+      }
+
+      // 5. Propaga o novo conteúdo oficial completo para o buffer do workspace pai
+      onChangeRef.current(newMainContent);
+
+      // 6. Recarrega árvores e referências
+      if (onReload) onReload();
+    } else {
+      setEditorToast({
+        text: (res.data as any)?.error || "Erro ao atualizar documento oficial.",
+        type: "warning",
+      });
+      setTimeout(() => setEditorToast(null), 3000);
+    }
+  };
+
   // Manual save trigger (Ctrl+S ou clique) que faz o flush imediato
   const handleSave = useCallback(async () => {
     if (engineRef.current) {
@@ -330,6 +595,35 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
       return;
     }
     if (!filePath) return;
+
+    // Se estiver em modo tradução, salva apenas o corpo traduzido no arquivo oculto de tradução
+    if (
+      activeLanguageRef.current.toLowerCase() !==
+      defaultLanguageRef.current.toLowerCase()
+    ) {
+      const currentMd = engineRef.current
+        ? engineRef.current.getMarkdown()
+        : docBodyRef.current;
+
+      const res = await API.saveTranslation({
+        path: filePath,
+        lang: activeLanguageRef.current,
+        content: currentMd.trim(),
+      });
+
+      if (res.ok) {
+        if (engineRef.current) {
+          engineRef.current.applyDictionaryHighlights();
+        }
+        setEditorToast({
+          text: `Tradução (${activeLanguageRef.current.toUpperCase()}) gravada no disco!`,
+          type: "success",
+        });
+        setTimeout(() => setEditorToast(null), 2500);
+      }
+      return;
+    }
+
     const res = await saveCurrentFile();
     if (res?.success) {
       if (engineRef.current) {
@@ -342,6 +636,9 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
       setTimeout(() => setEditorToast(null), 2500);
     }
   }, [filePath, saveCurrentFile, onCustomSave]);
+
+  const handleSaveRef = useRef(handleSave);
+  handleSaveRef.current = handleSave;
 
   // Initialize & Mount NotionEditorEngine
   useEffect(() => {
@@ -361,6 +658,13 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
         isInternalChangeRef.current = true;
         if (editorTabRef.current === "document") {
           docBodyRef.current = currentMd;
+          // Se estiver em modo tradução, NUNCA muta o buffer do documento oficial!
+          if (
+            activeLanguageRef.current.toLowerCase() !==
+            defaultLanguageRef.current.toLowerCase()
+          ) {
+            return;
+          }
           const newContent = parsedRef.current.hasFrontmatter
             ? serializeFrontmatter(parsedRef.current.metadata, currentMd)
             : currentMd;
@@ -375,7 +679,9 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
         }
       },
       onSave: () => {
-        handleSave();
+        if (handleSaveRef.current) {
+          handleSaveRef.current();
+        }
       },
       onSendSelectionToCopilot: (text) => {
         if (onSendSelectionToCopilot) {
@@ -492,6 +798,13 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
       isInternalChangeRef.current = false;
       return;
     }
+    // Se estiver em modo tradução, NÃO sobrescreve o canvas com o documento oficial externo!
+    if (
+      activeLanguageRef.current.toLowerCase() !==
+      defaultLanguageRef.current.toLowerCase()
+    ) {
+      return;
+    }
     if (engineRef.current) {
       const currentEngineMd = engineRef.current.getMarkdown();
       const targetText = editorTab === "document" ? docBody : effectivePrompt;
@@ -512,12 +825,14 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && (e.key === "s" || e.key === "S")) {
         e.preventDefault();
-        handleSave();
+        if (handleSaveRef.current) {
+          handleSaveRef.current();
+        }
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [handleSave]);
+  }, []);
 
   // Listener para erros de abertura de documentos inexistentes no workspace
   useEffect(() => {
@@ -823,6 +1138,31 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
           </div>
 
           <div className="editor-actions-right">
+            {/* Seletor de Idiomas & SSOT */}
+            {!isTemplateMode && filePath && (
+              <LanguageSelectorDropdown
+                filePath={filePath}
+                activeLanguage={activeLanguage}
+                onSelectLanguage={handleSelectLanguage}
+                onTranslationCreated={(lang, transContent) => {
+                  setActiveLanguage(lang);
+                  const parsedTrans = parseFrontmatter(transContent);
+                  const bodyContent = parsedTrans.body || transContent;
+                  docBodyRef.current = bodyContent;
+                  setTitleValue(parsedTrans.metadata?.title || "");
+                  if (engineRef.current) {
+                    isInternalChangeRef.current = true;
+                    engineRef.current.setMarkdown(bodyContent);
+                  }
+                  setEditorToast({
+                    text: `Tradução para ${lang.toUpperCase()} criada com sucesso!`,
+                    type: "success",
+                  });
+                  setTimeout(() => setEditorToast(null), 2500);
+                }}
+              />
+            )}
+
             <div className="doc-icon-actions">
               <button
                 id="btn-copy-doc-full"
@@ -1029,6 +1369,21 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
           />
         )}
 
+        {/* Translation Mode Banner */}
+        {!isTemplateMode && activeLanguage.toLowerCase() !== defaultLanguage.toLowerCase() && (
+          <TranslationBanner
+            currentLanguage={activeLanguage}
+            defaultLanguage={defaultLanguage}
+            supportedLanguages={supportedLanguages}
+            isOutdated={isTranslationOutdated}
+            onSyncToMain={handleSyncToMain}
+            onBackToMain={() => handleSelectLanguage(defaultLanguage)}
+            onUpdateFromMain={handleUpdateFromMain}
+            isSyncing={isSyncingToMain}
+            isUpdating={isUpdatingFromMain}
+          />
+        )}
+
         {/* Fragment Not Found / Snippet Alert Banner */}
         {fragmentAlert && fragmentAlert.type === "not_found" && (
           <div
@@ -1141,6 +1496,7 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
                         rows={1}
                         placeholder="Sem título..."
                         value={titleValue}
+                        disabled={activeLanguage.toLowerCase() !== defaultLanguage.toLowerCase()}
                         onChange={(e) => {
                           handleTitleChange(e.target.value);
                           e.target.style.height = "auto";
@@ -1158,8 +1514,29 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
                             }
                           }
                         }}
-                        title="Título principal do documento (.docs.metadata.json)"
+                        title={
+                          activeLanguage.toLowerCase() !== defaultLanguage.toLowerCase()
+                            ? `Título Oficial (${defaultLanguage.toUpperCase()}) - Metadados são editados no Documento Oficial`
+                            : "Título principal do documento (.docs.metadata.json)"
+                        }
                       />
+                      {activeLanguage.toLowerCase() !== defaultLanguage.toLowerCase() && (
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px", marginLeft: "12px" }}>
+                          <span
+                            style={{
+                              fontSize: "11px",
+                              padding: "2px 8px",
+                              borderRadius: "12px",
+                              background: "rgba(16, 185, 129, 0.12)",
+                              color: "#059669",
+                              fontWeight: 600,
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            Versão Traduzida ({activeLanguage.toUpperCase()})
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -1415,6 +1792,14 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
       <DictionaryPopover
         data={dictionaryPopoverData}
         onClose={() => setDictionaryPopoverData(null)}
+      />
+
+      {/* Sync Translation to Main Modal */}
+      <SyncTranslationModal
+        isOpen={isSyncModalOpen}
+        onClose={() => setIsSyncModalOpen(false)}
+        preview={syncPreview}
+        onConfirmApply={handleConfirmApplyToMain}
       />
     </div>
   );

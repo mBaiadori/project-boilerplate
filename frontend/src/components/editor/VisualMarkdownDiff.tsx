@@ -1,6 +1,11 @@
 import React, { useState, useMemo } from 'react';
 import { marked } from 'marked';
-import { generateVisualMarkdownDiffHtml, computeVisualDiffStats } from '../../utils/rich-diff';
+import {
+  generateVisualMarkdownDiffHtml,
+  computeVisualDiffStats,
+  computeLineDiff,
+  type DiffLineItem,
+} from '../../utils/rich-diff';
 
 interface VisualMarkdownDiffProps {
   oldContent: string;
@@ -8,6 +13,7 @@ interface VisualMarkdownDiffProps {
   oldTitle?: string;
   newTitle?: string;
   fileName?: string;
+  initialViewMode?: 'split' | 'lines' | 'inline';
   blameData?: Array<{ line: number; author: string; date: string; commit: string; content: string }>;
   showAuthorship?: boolean;
   onRestoreOldVersion?: () => void;
@@ -20,15 +26,20 @@ export const VisualMarkdownDiff: React.FC<VisualMarkdownDiffProps> = ({
   oldTitle = 'Versão Base Publicada',
   newTitle = 'Rascunho Atual (Em Edição)',
   fileName,
+  initialViewMode = 'split',
   blameData,
   showAuthorship = false,
   onRestoreOldVersion,
   onClose,
 }) => {
-  const [viewMode, setViewMode] = useState<'inline' | 'split'>('inline');
+  const [viewMode, setViewMode] = useState<'split' | 'lines' | 'inline'>(initialViewMode);
 
   const stats = useMemo(() => {
     return computeVisualDiffStats(oldContent, newContent);
+  }, [oldContent, newContent]);
+
+  const lineDiffItems = useMemo<DiffLineItem[]>(() => {
+    return computeLineDiff(oldContent, newContent);
   }, [oldContent, newContent]);
 
   const inlineDiffHtml = useMemo(() => {
@@ -44,45 +55,53 @@ export const VisualMarkdownDiff: React.FC<VisualMarkdownDiffProps> = ({
   }, [newContent]);
 
   return (
-    <div className="visual-markdown-diff-container" style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--bg-surface, #ffffff)', overflow: 'hidden' }}>
-      
+    <div
+      className="visual-markdown-diff-container"
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        background: 'var(--bg-surface, #ffffff)',
+        overflow: 'hidden',
+      }}
+    >
       {/* Top Controls & Metrics Bar */}
       <div
         style={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          padding: '10px 16px',
+          padding: '8px 16px',
           borderBottom: '1px solid var(--border-color, #e2e8f0)',
           background: 'var(--bg-surface-secondary, #f8fafc)',
           gap: '12px',
-          flexWrap: 'wrap'
+          flexWrap: 'wrap',
         }}
       >
         {/* Left: File name & Diff Summary */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <span className="material-symbols-outlined" style={{ color: 'var(--primary, #3b82f6)', fontSize: '20px' }}>
+          <span className="material-symbols-outlined" style={{ color: 'var(--primary, #2563eb)', fontSize: '20px' }}>
             compare
           </span>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <strong style={{ fontSize: '13.5px', color: 'var(--text-heading, #0f172a)' }}>
-                {fileName || 'Comparação Visual do Documento'}
+              <strong style={{ fontSize: '13px', color: 'var(--text-heading, #0f172a)' }}>
+                {fileName || 'Comparação de Alterações'}
               </strong>
               {stats.hasChanges ? (
-                <div style={{ display: 'flex', gap: '6px', fontSize: '11.5px', fontFamily: 'var(--font-mono)' }}>
+                <div style={{ display: 'flex', gap: '6px', fontSize: '11px', fontFamily: 'var(--font-mono)' }}>
                   <span style={{ color: '#16a34a', background: '#dcfce7', padding: '1px 6px', borderRadius: '4px', fontWeight: 600 }}>
-                    +{stats.addedWords} palavras (+{stats.addedLines} linhas)
+                    +{stats.addedWords} palavras (+{stats.addedLines} lin)
                   </span>
                   <span style={{ color: '#dc2626', background: '#fee2e2', padding: '1px 6px', borderRadius: '4px', fontWeight: 600 }}>
-                    -{stats.removedWords} palavras (-{stats.removedLines} linhas)
+                    -{stats.removedWords} palavras (-{stats.removedLines} lin)
                   </span>
                 </div>
               ) : (
                 <span className="badge badge-neutral" style={{ fontSize: '11px' }}>Idêntico (Sem alterações)</span>
               )}
             </div>
-            <span style={{ fontSize: '11.5px', color: 'var(--text-muted, #64748b)', display: 'block', marginTop: '2px' }}>
+            <span style={{ fontSize: '11px', color: 'var(--text-muted, #64748b)', display: 'block', marginTop: '1px' }}>
               Comparando <strong>{oldTitle}</strong> com <strong>{newTitle}</strong>
             </span>
           </div>
@@ -94,33 +113,12 @@ export const VisualMarkdownDiff: React.FC<VisualMarkdownDiffProps> = ({
           <div style={{ display: 'inline-flex', background: 'var(--border-color, #e2e8f0)', padding: '2px', borderRadius: '6px' }}>
             <button
               type="button"
-              onClick={() => setViewMode('inline')}
-              style={{
-                padding: '4px 10px',
-                border: 'none',
-                borderRadius: '4px',
-                fontSize: '12px',
-                fontWeight: 600,
-                cursor: 'pointer',
-                background: viewMode === 'inline' ? '#ffffff' : 'transparent',
-                color: viewMode === 'inline' ? 'var(--primary, #2563eb)' : 'var(--text-muted, #64748b)',
-                boxShadow: viewMode === 'inline' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px'
-              }}
-            >
-              <span className="material-symbols-outlined icon-xs">view_stream</span>
-              Unificado (Inline)
-            </button>
-            <button
-              type="button"
               onClick={() => setViewMode('split')}
               style={{
-                padding: '4px 10px',
+                padding: '4px 9px',
                 border: 'none',
                 borderRadius: '4px',
-                fontSize: '12px',
+                fontSize: '11.5px',
                 fontWeight: 600,
                 cursor: 'pointer',
                 background: viewMode === 'split' ? '#ffffff' : 'transparent',
@@ -128,11 +126,53 @@ export const VisualMarkdownDiff: React.FC<VisualMarkdownDiffProps> = ({
                 boxShadow: viewMode === 'split' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '4px'
+                gap: '4px',
               }}
             >
               <span className="material-symbols-outlined icon-xs">vertical_split</span>
-              Lado a Lado (Split)
+              Lado a Lado
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('lines')}
+              style={{
+                padding: '4px 9px',
+                border: 'none',
+                borderRadius: '4px',
+                fontSize: '11.5px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                background: viewMode === 'lines' ? '#ffffff' : 'transparent',
+                color: viewMode === 'lines' ? 'var(--primary, #2563eb)' : 'var(--text-muted, #64748b)',
+                boxShadow: viewMode === 'lines' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+              }}
+            >
+              <span className="material-symbols-outlined icon-xs">format_list_numbered</span>
+              Linhas (Código)
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('inline')}
+              style={{
+                padding: '4px 9px',
+                border: 'none',
+                borderRadius: '4px',
+                fontSize: '11.5px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                background: viewMode === 'inline' ? '#ffffff' : 'transparent',
+                color: viewMode === 'inline' ? 'var(--primary, #2563eb)' : 'var(--text-muted, #64748b)',
+                boxShadow: viewMode === 'inline' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+              }}
+            >
+              <span className="material-symbols-outlined icon-xs">view_stream</span>
+              Unificado
             </button>
           </div>
 
@@ -145,7 +185,7 @@ export const VisualMarkdownDiff: React.FC<VisualMarkdownDiffProps> = ({
               style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
             >
               <span className="material-symbols-outlined icon-xs">history_toggle_off</span>
-              Restaurar Esta Versão
+              Restaurar
             </button>
           )}
 
@@ -163,46 +203,164 @@ export const VisualMarkdownDiff: React.FC<VisualMarkdownDiffProps> = ({
       </div>
 
       {/* Main Diff Render Canvas */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '24px 32px' }}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', minHeight: 0 }}>
         
-        {/* INLINE VIEW */}
-        {viewMode === 'inline' && (
-          <div
-            className="prose markdown-rendered rich-visual-diff-body"
-            style={{ maxWidth: '840px', margin: '0 auto', lineHeight: '1.7', fontSize: '14.5px' }}
-            dangerouslySetInnerHTML={{ __html: inlineDiffHtml }}
-          />
-        )}
-
-        {/* SPLIT VIEW (LADO A LADO) */}
+        {/* SPLIT VIEW (LADO A LADO - PADRÃO) */}
         {viewMode === 'split' && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', maxWidth: '1280px', margin: '0 auto', height: '100%' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', height: '100%', minHeight: '380px' }}>
             {/* Left Column: Old Version */}
-            <div style={{ border: '1px solid var(--border-color, #e2e8f0)', borderRadius: '8px', overflow: 'hidden', background: 'var(--bg-surface, #ffffff)', display: 'flex', flexDirection: 'column' }}>
-              <div style={{ padding: '8px 14px', background: '#fef2f2', borderBottom: '1px solid #fecaca', color: '#991b1b', fontWeight: 600, fontSize: '12.5px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span className="material-symbols-outlined icon-xs">remove_circle_outline</span>
-                {oldTitle}
+            <div
+              style={{
+                border: '1px solid var(--border-color, #e2e8f0)',
+                borderRadius: '8px',
+                overflow: 'hidden',
+                background: 'var(--bg-surface, #ffffff)',
+                display: 'flex',
+                flexDirection: 'column',
+              }}
+            >
+              <div
+                style={{
+                  padding: '8px 14px',
+                  background: '#fef2f2',
+                  borderBottom: '1px solid #fecaca',
+                  color: '#991b1b',
+                  fontWeight: 600,
+                  fontSize: '12px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span className="material-symbols-outlined icon-xs">history</span>
+                  <span>{oldTitle}</span>
+                </div>
+                <span style={{ fontSize: '10px', background: '#fee2e2', padding: '1px 6px', borderRadius: '4px' }}>
+                  OFICIAL ATUAL
+                </span>
               </div>
               <div
                 className="prose markdown-rendered"
-                style={{ padding: '20px', overflowY: 'auto', flex: 1, fontSize: '14px', opacity: 0.85 }}
-                dangerouslySetInnerHTML={{ __html: oldRenderedHtml || '<p style="color:#64748b;font-style:italic">Documento vazio na versão base.</p>' }}
+                style={{ padding: '16px', overflowY: 'auto', flex: 1, fontSize: '13.5px', opacity: 0.9, lineHeight: 1.6 }}
+                dangerouslySetInnerHTML={{
+                  __html: oldRenderedHtml || '<p style="color:#64748b;font-style:italic">Documento vazio na versão oficial.</p>',
+                }}
               />
             </div>
 
             {/* Right Column: New Version */}
-            <div style={{ border: '1px solid var(--border-color, #e2e8f0)', borderRadius: '8px', overflow: 'hidden', background: 'var(--bg-surface, #ffffff)', display: 'flex', flexDirection: 'column' }}>
-              <div style={{ padding: '8px 14px', background: '#f0fdf4', borderBottom: '1px solid #bbf7d0', color: '#166534', fontWeight: 600, fontSize: '12.5px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span className="material-symbols-outlined icon-xs">add_circle_outline</span>
-                {newTitle}
+            <div
+              style={{
+                border: '1px solid var(--border-color, #e2e8f0)',
+                borderRadius: '8px',
+                overflow: 'hidden',
+                background: 'var(--bg-surface, #ffffff)',
+                display: 'flex',
+                flexDirection: 'column',
+              }}
+            >
+              <div
+                style={{
+                  padding: '8px 14px',
+                  background: '#f0fdf4',
+                  borderBottom: '1px solid #bbf7d0',
+                  color: '#166534',
+                  fontWeight: 600,
+                  fontSize: '12px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span className="material-symbols-outlined icon-xs">check_circle</span>
+                  <span>{newTitle}</span>
+                </div>
+                <span style={{ fontSize: '10px', background: '#dcfce7', padding: '1px 6px', borderRadius: '4px' }}>
+                  NOVA PROPOSTA
+                </span>
               </div>
               <div
                 className="prose markdown-rendered"
-                style={{ padding: '20px', overflowY: 'auto', flex: 1, fontSize: '14px' }}
-                dangerouslySetInnerHTML={{ __html: newRenderedHtml || '<p style="color:#64748b;font-style:italic">Documento vazio na versão atual.</p>' }}
+                style={{ padding: '16px', overflowY: 'auto', flex: 1, fontSize: '13.5px', lineHeight: 1.6 }}
+                dangerouslySetInnerHTML={{
+                  __html: newRenderedHtml || '<p style="color:#64748b;font-style:italic">Documento vazio na versão traduzida.</p>',
+                }}
               />
             </div>
           </div>
+        )}
+
+        {/* LINES VIEW (ESTILO PR / CODE DIFF) */}
+        {viewMode === 'lines' && (
+          <div
+            style={{
+              border: '1px solid var(--border-color, #e2e8f0)',
+              borderRadius: '8px',
+              overflow: 'hidden',
+              background: '#0d1117',
+              color: '#c9d1d9',
+              fontFamily: 'var(--font-mono, monospace)',
+              fontSize: '12px',
+              lineHeight: '1.5',
+            }}
+          >
+            <div
+              style={{
+                padding: '8px 14px',
+                background: '#161b22',
+                borderBottom: '1px solid #30363d',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+              }}
+            >
+              <span style={{ color: '#8b949e', fontWeight: 600 }}>Diff Linha por Linha (Markdown Source)</span>
+              <span style={{ color: '#8b949e' }}>{lineDiffItems.length} linhas analisadas</span>
+            </div>
+            <div style={{ overflowX: 'auto', padding: '6px 0' }}>
+              {lineDiffItems.map((item, idx) => {
+                const isAdded = item.type === 'added';
+                const isRemoved = item.type === 'removed';
+                const bg = isAdded ? 'rgba(46, 160, 67, 0.18)' : isRemoved ? 'rgba(248, 81, 73, 0.18)' : 'transparent';
+                const textColor = isAdded ? '#7ee787' : isRemoved ? '#ff7b72' : '#c9d1d9';
+                const symbol = isAdded ? '+' : isRemoved ? '-' : ' ';
+
+                return (
+                  <div
+                    key={idx}
+                    style={{
+                      display: 'flex',
+                      background: bg,
+                      color: textColor,
+                      padding: '1px 8px',
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-all',
+                    }}
+                  >
+                    <span style={{ width: '40px', color: '#484f58', textAlign: 'right', paddingRight: '8px', userSelect: 'none' }}>
+                      {item.oldLineNumber || ''}
+                    </span>
+                    <span style={{ width: '40px', color: '#484f58', textAlign: 'right', paddingRight: '12px', userSelect: 'none' }}>
+                      {item.newLineNumber || ''}
+                    </span>
+                    <span style={{ width: '16px', userSelect: 'none', fontWeight: 700 }}>{symbol}</span>
+                    <span style={{ flex: 1 }}>{item.content || ' '}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* INLINE VIEW */}
+        {viewMode === 'inline' && (
+          <div
+            className="prose markdown-rendered rich-visual-diff-body"
+            style={{ maxWidth: '900px', margin: '0 auto', lineHeight: '1.7', fontSize: '14px' }}
+            dangerouslySetInnerHTML={{ __html: inlineDiffHtml }}
+          />
         )}
 
         {/* Authorship & Contributors Overlay */}
@@ -227,52 +385,6 @@ export const VisualMarkdownDiff: React.FC<VisualMarkdownDiffProps> = ({
           </div>
         )}
       </div>
-
-      {/* Scoped Visual Diff Styles */}
-      <style>{`
-        .rich-visual-diff-body .rich-diff-ins,
-        .rich-visual-diff-body ins {
-          background-color: #dcfce7 !important;
-          color: #166534 !important;
-          text-decoration: none !important;
-          padding: 1px 4px !important;
-          border-radius: 3px !important;
-          border-bottom: 2px solid #86efac !important;
-          font-weight: 500 !important;
-        }
-
-        .rich-visual-diff-body .rich-diff-del,
-        .rich-visual-diff-body del {
-          background-color: #fee2e2 !important;
-          color: #991b1b !important;
-          text-decoration: line-through !important;
-          padding: 1px 4px !important;
-          border-radius: 3px !important;
-          opacity: 0.75 !important;
-          margin-right: 4px !important;
-        }
-
-        .rich-visual-diff-body .rich-diff-added {
-          background-color: rgba(220, 252, 231, 0.3) !important;
-          border-left: 3px solid #22c55e !important;
-          padding-left: 10px !important;
-          margin: 6px 0 !important;
-          border-radius: 0 4px 4px 0 !important;
-        }
-
-        .rich-visual-diff-body .rich-diff-removed {
-          background-color: rgba(254, 226, 226, 0.3) !important;
-          border-left: 3px solid #ef4444 !important;
-          padding-left: 10px !important;
-          margin: 6px 0 !important;
-          border-radius: 0 4px 4px 0 !important;
-        }
-
-        .rich-visual-diff-body .rich-diff-modified {
-          padding: 4px 0 !important;
-          margin: 4px 0 !important;
-        }
-      `}</style>
     </div>
   );
 };

@@ -43,9 +43,55 @@ import {
   Zap,
   Sparkles,
   Copy,
+  Globe,
 } from "lucide-react";
 import { FirstRunWizard } from "../../components/onboarding/FirstRunWizard";
-import type { TaxonomyItem, DocumentMetadataItem } from "../../types";
+import type {
+  TaxonomyItem,
+  DocumentMetadataItem,
+  SupportedLanguage,
+} from "../../types";
+
+export const ENGINE_CATALOG_LANGUAGES: SupportedLanguage[] = [
+  { code: "pt-BR", label: "Português (Brasil)", flag: "🇧🇷" },
+  { code: "pt", label: "Português (Portugal)", flag: "🇵🇹" },
+  { code: "en", label: "Inglês (English)", flag: "🇺🇸" },
+  { code: "es", label: "Espanhol (Español)", flag: "🇪🇸" },
+  { code: "fr", label: "Francês (Français)", flag: "🇫🇷" },
+  { code: "de", label: "Alemão (Deutsch)", flag: "🇩🇪" },
+  { code: "it", label: "Italiano", flag: "🇮🇹" },
+  { code: "zh-CN", label: "Chinês Simplificado (简体中文)", flag: "🇨🇳" },
+  { code: "zh-TW", label: "Chinês Tradicional (繁體中文)", flag: "🇹🇼" },
+  { code: "ja", label: "Japonês (日本語)", flag: "🇯🇵" },
+  { code: "ko", label: "Coreano (한국어)", flag: "🇰🇷" },
+  { code: "ru", label: "Russo (Русский)", flag: "🇷🇺" },
+  { code: "nl", label: "Holandês (Nederlands)", flag: "🇳🇱" },
+  { code: "pl", label: "Polonês (Polski)", flag: "🇵🇱" },
+  { code: "sv", label: "Sueco (Svenska)", flag: "🇸🇪" },
+  { code: "da", label: "Dinamarquês (Dansk)", flag: "🇩🇰" },
+  { code: "no", label: "Norueguês (Norsk)", flag: "🇳🇴" },
+  { code: "fi", label: "Finlandês (Suomi)", flag: "🇫🇮" },
+  { code: "cs", label: "Tcheco (Čeština)", flag: "🇨🇿" },
+  { code: "el", label: "Grego (Ελληνικά)", flag: "🇬🇷" },
+  { code: "he", label: "Hebraico (עברית)", flag: "🇮🇱" },
+  { code: "ar", label: "Árabe (العربية)", flag: "🇸🇦" },
+  { code: "hi", label: "Hindi (हिन्दी)", flag: "🇮🇳" },
+  { code: "tr", label: "Turco (Türkçe)", flag: "🇹🇷" },
+  { code: "id", label: "Indonésio (Bahasa Indonesia)", flag: "🇮🇩" },
+  { code: "vi", label: "Vietnamita (Tiếng Việt)", flag: "🇻🇳" },
+  { code: "th", label: "Tailandês (ไทย)", flag: "🇹🇭" },
+  { code: "uk", label: "Ucraniano (Українська)", flag: "🇺🇦" },
+  { code: "ro", label: "Romeno (Română)", flag: "🇷🇴" },
+  { code: "hu", label: "Húngaro (Magyar)", flag: "🇭🇺" },
+  { code: "bg", label: "Búlgaro (Български)", flag: "🇧🇬" },
+  { code: "sk", label: "Eslovaco (Slovenčina)", flag: "🇸🇰" },
+  { code: "hr", label: "Croata (Hrvatski)", flag: "🇭🇷" },
+  { code: "ca", label: "Catalão (Català)", flag: "🇪🇸" },
+  { code: "ms", label: "Malaio (Bahasa Melayu)", flag: "🇲🇾" },
+  { code: "tl", label: "Filipino / Tagalog", flag: "🇵🇭" },
+  { code: "bn", label: "Bengali (বাংলা)", flag: "🇧🇩" },
+  { code: "fa", label: "Persa / Farsi (فارسی)", flag: "🇮🇷" },
+];
 
 export const ALL_28_COLORS = RAINBOW_28_HUES.flatMap((h) => h.colors);
 
@@ -143,6 +189,26 @@ export const SettingsSubView: React.FC = () => {
     useState<string>("");
   const [minApprovals, setMinApprovals] = useState<number>(1);
 
+  // Language & SSOT Translation Governance State
+  const [defaultLanguage, setDefaultLanguage] = useState<string>("pt-BR");
+  const [supportedLanguages, setSupportedLanguages] = useState<
+    SupportedLanguage[]
+  >([
+    { code: "pt-BR", label: "Português (Brasil)", flag: "🇧🇷" },
+    { code: "en", label: "English", flag: "🇺🇸" },
+    { code: "es", label: "Español", flag: "🇪🇸" },
+  ]);
+  const [translationEngine, setTranslationEngine] =
+    useState<string>("lightweight-local");
+  const [languageChangeDialog, setLanguageChangeDialog] = useState<{
+    isOpen: boolean;
+    targetLang: string;
+  }>({ isOpen: false, targetLang: "" });
+
+  // Modal para adicionar novo idioma a partir do catálogo do motor
+  const [isAddLanguageModalOpen, setIsAddLanguageModalOpen] = useState(false);
+  const [languageSearchFilter, setLanguageSearchFilter] = useState("");
+
   // Connected Agent Harness State (Antigravity CLI / Claude Code / Direct API)
   const [harnessProvider, setHarnessProvider] = useState<string>("antigravity");
   const [antigravityCliPath, setAntigravityCliPath] = useState<string>("");
@@ -192,8 +258,11 @@ export const SettingsSubView: React.FC = () => {
   // Status feedback
   const [saveStatus, setSaveStatus] = useState<string | null>(null);
   const [isSavingAll, setIsSavingAll] = useState<boolean>(false);
-  const [showOnboardingModal, setShowOnboardingModal] = useState<boolean>(false);
-  const [diagnosticsFeedback, setDiagnosticsFeedback] = useState<string | null>(null);
+  const [showOnboardingModal, setShowOnboardingModal] =
+    useState<boolean>(false);
+  const [diagnosticsFeedback, setDiagnosticsFeedback] = useState<string | null>(
+    null,
+  );
 
   const handleCopyDiagnostics = async () => {
     try {
@@ -201,7 +270,9 @@ export const SettingsSubView: React.FC = () => {
       if (res.ok && res.data) {
         const json = JSON.stringify(res.data, null, 2);
         await navigator.clipboard.writeText(json);
-        setDiagnosticsFeedback("Diagnóstico sanitizado copiado para a área de transferência!");
+        setDiagnosticsFeedback(
+          "Diagnóstico sanitizado copiado para a área de transferência!",
+        );
         setTimeout(() => setDiagnosticsFeedback(null), 4000);
       }
     } catch {
@@ -459,6 +530,21 @@ export const SettingsSubView: React.FC = () => {
 
         if (pCfg.governance_rules?.min_approvals_default !== undefined) {
           setMinApprovals(pCfg.governance_rules.min_approvals_default);
+        }
+
+        if (pCfg.default_language) {
+          setDefaultLanguage(pCfg.default_language);
+        }
+
+        if (
+          Array.isArray(pCfg.supported_languages) &&
+          pCfg.supported_languages.length > 0
+        ) {
+          setSupportedLanguages(pCfg.supported_languages);
+        }
+
+        if (pCfg.translation_engine) {
+          setTranslationEngine(pCfg.translation_engine);
         }
       }
 
@@ -864,6 +950,9 @@ export const SettingsSubView: React.FC = () => {
         governance_rules: {
           min_approvals_default: minApprovals,
         },
+        default_language: defaultLanguage,
+        supported_languages: supportedLanguages,
+        translation_engine: translationEngine,
       });
       await checkHarnessProviders();
 
@@ -1093,6 +1182,450 @@ export const SettingsSubView: React.FC = () => {
                   </Stack>
                 </Stack>
               </CardContent>
+            </Card>
+          </section>
+
+          {/* 1.5 SEÇÃO: GOVERNANÇA LINGUÍSTICA & IDIOMAS DO PROJETO */}
+          <section
+            id="languages-governance"
+            style={{ scrollMarginTop: "72px" }}
+          >
+            <Card variant="elevated">
+              <CardHeader
+                title={
+                  <div className="ui-row ui-row--align-center ui-row--sm">
+                    <Globe size={17} style={{ color: "#0ea5e9" }} />
+                    <span>Governança Linguística & Idiomas do Projeto</span>
+                  </div>
+                }
+                subtitle="Configure o idioma oficial do projeto, os idiomas disponíveis para tradução sob demanda e o motor de tradução."
+                actions={
+                  <Badge variant="primary">
+                    OFICIAL: {defaultLanguage.toUpperCase()}
+                  </Badge>
+                }
+              />
+
+              <CardContent>
+                <Stack gap="lg">
+                  {/* Linha 1: Idioma Oficial - Seleciona apenas entre os idiomas suportados habilitados */}
+                  <Stack gap="xs">
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                      }}
+                    >
+                      <div>
+                        <span className="ui-text-subtitle ui-text-bold">
+                          Idioma Oficial do Projeto
+                        </span>
+                        <div className="ui-text-body-sm ui-text-muted">
+                          Este é o idioma oficial aceito na documentação do
+                          projeto. Apenas os idiomas habilitados abaixo aparecem
+                          nesta lista.
+                        </div>
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns:
+                          "repeat(auto-fill, minmax(200px, 1fr))",
+                        gap: "8px",
+                        marginTop: "6px",
+                      }}
+                    >
+                      {supportedLanguages.map((lang) => {
+                        const isSelected =
+                          defaultLanguage.toLowerCase() ===
+                          lang.code.toLowerCase();
+                        return (
+                          <button
+                            key={lang.code}
+                            type="button"
+                            onClick={() => {
+                              if (lang.code === defaultLanguage) return;
+                              if (docMetadataList.length > 0) {
+                                setLanguageChangeDialog({
+                                  isOpen: true,
+                                  targetLang: lang.code,
+                                });
+                              } else {
+                                setDefaultLanguage(lang.code);
+                              }
+                            }}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              padding: "8px 12px",
+                              borderRadius: "8px",
+                              border: isSelected
+                                ? "2px solid #0ea5e9"
+                                : "1px solid var(--color-outline-variant, #e2e8f0)",
+                              background: isSelected
+                                ? "rgba(14, 165, 233, 0.08)"
+                                : "var(--color-surface, #ffffff)",
+                              color: "var(--color-on-surface, #1e293b)",
+                              cursor: "pointer",
+                              textAlign: "left",
+                              transition: "all 0.15s ease",
+                            }}
+                          >
+                            <div
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "8px",
+                              }}
+                            >
+                              <span style={{ fontSize: "18px" }}>
+                                {lang.flag}
+                              </span>
+                              <div>
+                                <div
+                                  style={{
+                                    fontSize: "12.5px",
+                                    fontWeight: isSelected ? 700 : 500,
+                                  }}
+                                >
+                                  {lang.label}
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: "10.5px",
+                                    color: "var(--color-outline, #64748b)",
+                                  }}
+                                >
+                                  {lang.code.toUpperCase()}
+                                </div>
+                              </div>
+                            </div>
+                            {isSelected && (
+                              <Badge variant="primary" size="sm">
+                                OFICIAL
+                              </Badge>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </Stack>
+
+                  <Divider />
+
+                  {/* Linha 2: Idiomas Habilitados para Tradução Sob Demanda */}
+                  <Stack gap="xs">
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                      }}
+                    >
+                      <div>
+                        <span className="ui-text-subtitle ui-text-bold">
+                          Idiomas Habilitados para Tradução Sob Demanda
+                        </span>
+                        <div className="ui-text-body-sm ui-text-muted">
+                          Idiomas disponíveis para os membros da equipe
+                          traduzirem documentos no editor.
+                        </div>
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        display: "flex",
+                        flexWrap: "wrap",
+                        alignItems: "center",
+                        gap: "8px",
+                        marginTop: "6px",
+                      }}
+                    >
+                      {supportedLanguages.map((lang) => {
+                        const isDefault =
+                          lang.code.toLowerCase() ===
+                          defaultLanguage.toLowerCase();
+
+                        return (
+                          <div
+                            key={lang.code}
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "8px",
+                              padding: "6px 12px",
+                              borderRadius: "20px",
+                              border: isDefault
+                                ? "1.5px solid #0ea5e9"
+                                : "1px solid var(--color-outline-variant, #cbd5e1)",
+                              background: isDefault
+                                ? "rgba(14, 165, 233, 0.08)"
+                                : "var(--color-surface-container-low, #f8fafc)",
+                              color: "var(--color-on-surface, #1e293b)",
+                              fontSize: "12.5px",
+                              fontWeight: 500,
+                            }}
+                          >
+                            <span style={{ fontSize: "15px" }}>
+                              {lang.flag}
+                            </span>
+                            <span>
+                              {lang.label} ({lang.code.toUpperCase()})
+                            </span>
+
+                            {isDefault ? (
+                              <span
+                                style={{
+                                  fontSize: "10px",
+                                  padding: "1px 5px",
+                                  borderRadius: "4px",
+                                  background: "#0ea5e9",
+                                  color: "#ffffff",
+                                  fontWeight: 600,
+                                }}
+                              >
+                                OFICIAL
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                title={`Desabilitar e remover ${lang.label} do projeto`}
+                                onClick={() => {
+                                  const updated = supportedLanguages.filter(
+                                    (l) =>
+                                      l.code.toLowerCase() !==
+                                      lang.code.toLowerCase(),
+                                  );
+                                  setSupportedLanguages(updated);
+                                  if (
+                                    defaultLanguage.toLowerCase() ===
+                                      lang.code.toLowerCase() &&
+                                    updated.length > 0
+                                  ) {
+                                    setDefaultLanguage(updated[0].code);
+                                  }
+                                }}
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  background: "transparent",
+                                  border: "none",
+                                  padding: "2px",
+                                  cursor: "pointer",
+                                  color: "var(--color-outline, #64748b)",
+                                  borderRadius: "50%",
+                                  transition: "color 0.15s ease",
+                                }}
+                                onMouseEnter={(e) =>
+                                  (e.currentTarget.style.color = "#ef4444")
+                                }
+                                onMouseLeave={(e) =>
+                                  (e.currentTarget.style.color =
+                                    "var(--color-outline, #64748b)")
+                                }
+                              >
+                                <span
+                                  className="material-symbols-outlined"
+                                  style={{ fontSize: "15px" }}
+                                >
+                                  close
+                                </span>
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+
+                      {/* Botão + inline para adicionar idioma aceito pelo motor */}
+                      <button
+                        type="button"
+                        id="btn-add-language-inline"
+                        onClick={() => {
+                          setLanguageSearchFilter("");
+                          setIsAddLanguageModalOpen(true);
+                        }}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "6px",
+                          padding: "6px 12px",
+                          borderRadius: "20px",
+                          border: "1.5px dashed var(--primary, #0ea5e9)",
+                          background: "rgba(14, 165, 233, 0.05)",
+                          color: "var(--primary, #0ea5e9)",
+                          fontSize: "12.5px",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                          transition: "all 0.15s ease",
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background =
+                            "rgba(14, 165, 233, 0.12)";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background =
+                            "rgba(14, 165, 233, 0.05)";
+                        }}
+                      >
+                        <span
+                          className="material-symbols-outlined"
+                          style={{ fontSize: "16px" }}
+                        >
+                          add
+                        </span>
+                        <span>Adicionar Idioma</span>
+                      </button>
+                    </div>
+                  </Stack>
+
+                  <Divider />
+
+                  {/* Linha 3: Motor de Tradução Padrão */}
+                  <Stack gap="xs">
+                    <div>
+                      <span className="ui-text-subtitle ui-text-bold">
+                        Motor de Tradução Padrão
+                      </span>
+                      <div className="ui-text-body-sm ui-text-muted">
+                        Escolha o motor utilizado por padrão ao solicitar
+                        traduções sob demanda.
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "1fr 1fr",
+                        gap: "12px",
+                        marginTop: "6px",
+                      }}
+                    >
+                      <div
+                        onClick={() =>
+                          setTranslationEngine("lightweight-local")
+                        }
+                        style={{
+                          padding: "12px",
+                          borderRadius: "8px",
+                          border:
+                            translationEngine === "lightweight-local"
+                              ? "2px solid #0ea5e9"
+                              : "1px solid var(--color-outline-variant, #e2e8f0)",
+                          background:
+                            translationEngine === "lightweight-local"
+                              ? "rgba(14, 165, 233, 0.08)"
+                              : "var(--color-surface, #ffffff)",
+                          cursor: "pointer",
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
+                            marginBottom: "4px",
+                          }}
+                        >
+                          <Zap size={16} style={{ color: "#0ea5e9" }} />
+                          <strong style={{ fontSize: "13px" }}>
+                            Motor Leve de Servidor
+                          </strong>
+                        </div>
+                        <p
+                          style={{
+                            fontSize: "11.5px",
+                            color: "var(--color-outline, #64748b)",
+                            margin: 0,
+                          }}
+                        >
+                          Execução rápida no servidor. Não consome tokens de IA
+                          e mantém diagramas e frontmatter preservados.
+                        </p>
+                      </div>
+
+                      <div
+                        onClick={() => setTranslationEngine("ai-contextual")}
+                        style={{
+                          padding: "12px",
+                          borderRadius: "8px",
+                          border:
+                            translationEngine === "ai-contextual"
+                              ? "2px solid #8b5cf6"
+                              : "1px solid var(--color-outline-variant, #e2e8f0)",
+                          background:
+                            translationEngine === "ai-contextual"
+                              ? "rgba(139, 92, 246, 0.08)"
+                              : "var(--color-surface, #ffffff)",
+                          cursor: "pointer",
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
+                            marginBottom: "4px",
+                          }}
+                        >
+                          <Sparkles size={16} style={{ color: "#8b5cf6" }} />
+                          <strong style={{ fontSize: "13px" }}>
+                            IA Contextual & Semântica (LLM)
+                          </strong>
+                        </div>
+                        <p
+                          style={{
+                            fontSize: "11.5px",
+                            color: "var(--color-outline, #64748b)",
+                            margin: 0,
+                          }}
+                        >
+                          Tradução adaptada ao contexto do projeto com
+                          alinhamento terminológico fino do Dicionário.
+                        </p>
+                      </div>
+                    </div>
+                  </Stack>
+                </Stack>
+              </CardContent>
+
+              <CardFooter>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  leftIcon={<Save size={13} />}
+                  onClick={async () => {
+                    try {
+                      await saveProjectConfig({
+                        categories,
+                        badges,
+                        tags,
+                        statuses,
+                        ai_template_prompt: projectTemplatePrompt,
+                        governance_rules: {
+                          min_approvals_default: minApprovals,
+                        },
+                        default_language: defaultLanguage,
+                        supported_languages: supportedLanguages,
+                        translation_engine: translationEngine,
+                      });
+                      setSaveStatus(
+                        "Configurações de Idiomas & Governança salvas com sucesso!",
+                      );
+                      setTimeout(() => setSaveStatus(null), 3500);
+                    } catch {
+                      setSaveStatus("Erro ao salvar configurações de idiomas.");
+                    }
+                  }}
+                >
+                  Salvar Idiomas & Governança
+                </Button>
+              </CardFooter>
             </Card>
           </section>
 
@@ -1590,6 +2123,258 @@ export const SettingsSubView: React.FC = () => {
             Ao confirmar, este item será removido das opções e os documentos
             acima serão atualizados automaticamente.
           </span>
+        </div>
+      </Modal>
+
+      {/* Modal de Governança: Alerta de Alteração de Idioma Oficial */}
+      <Modal
+        isOpen={languageChangeDialog.isOpen}
+        onClose={() =>
+          setLanguageChangeDialog({ isOpen: false, targetLang: "" })
+        }
+        title="Alerta de Governança: Alteração de Idioma Oficial"
+        icon={<AlertTriangle size={18} style={{ color: "#f59e0b" }} />}
+        size="md"
+        footer={
+          <div
+            style={{
+              display: "flex",
+              gap: "8px",
+              justifyContent: "flex-end",
+              width: "100%",
+            }}
+          >
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() =>
+                setLanguageChangeDialog({ isOpen: false, targetLang: "" })
+              }
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => {
+                const target = languageChangeDialog.targetLang;
+                if (target) {
+                  setDefaultLanguage(target);
+                }
+                setLanguageChangeDialog({ isOpen: false, targetLang: "" });
+              }}
+            >
+              Confirmar Alteração de Idioma
+            </Button>
+          </div>
+        }
+      >
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "12px",
+            fontSize: "13px",
+          }}
+        >
+          <p
+            style={{
+              margin: 0,
+              color: "var(--color-on-surface, #1e293b)",
+              lineHeight: "1.5",
+            }}
+          >
+            Você está alterando o <strong>Idioma Oficial do Projeto</strong> de{" "}
+            <span style={{ fontWeight: 700, color: "#0ea5e9" }}>
+              {supportedLanguages.find((l) => l.code === defaultLanguage)
+                ?.label || defaultLanguage}
+            </span>{" "}
+            para{" "}
+            <span style={{ fontWeight: 700, color: "#10b981" }}>
+              {supportedLanguages.find(
+                (l) => l.code === languageChangeDialog.targetLang,
+              )?.label || languageChangeDialog.targetLang}
+            </span>
+            .
+          </p>
+
+          <div
+            style={{
+              padding: "10px 12px",
+              borderRadius: "6px",
+              background: "rgba(245, 158, 11, 0.1)",
+              border: "1px solid rgba(245, 158, 11, 0.3)",
+              color: "#92400e",
+              fontSize: "12px",
+              lineHeight: "1.4",
+            }}
+          >
+            <strong>Impacto nos Documentos Existentes:</strong>
+            <ul style={{ margin: "6px 0 0 16px", padding: 0 }}>
+              <li>
+                Os arquivos existentes na árvore principal passam a ser
+                considerados a verdade oficial no novo idioma padrão.
+              </li>
+              <li>
+                Traduções já geradas continuarão armazenadas e acessíveis na
+                pasta oculta <code>.translations/</code>.
+              </li>
+              <li>
+                Novas solicitações de tradução passarão a utilizar o novo idioma
+                selecionado como origem.
+              </li>
+            </ul>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal para Adicionar Idioma do Catálogo do Motor */}
+      <Modal
+        isOpen={isAddLanguageModalOpen}
+        onClose={() => setIsAddLanguageModalOpen(false)}
+        title="Adicionar Idioma ao Projeto"
+        icon={<Globe size={18} style={{ color: "#0ea5e9" }} />}
+        size="md"
+        footer={
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setIsAddLanguageModalOpen(false)}
+          >
+            Fechar
+          </Button>
+        }
+      >
+        <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+          <FormField label="Buscar idioma:">
+            <Input
+              placeholder="Digite o nome do idioma ou código (ex: Inglês, Espanhol, Alemão, ja, it...)"
+              value={languageSearchFilter}
+              onChange={(e) => setLanguageSearchFilter(e.target.value)}
+              autoFocus
+            />
+          </FormField>
+
+          {/* Grid de idiomas disponíveis no catálogo */}
+          <div
+            style={{
+              maxHeight: "320px",
+              overflowY: "auto",
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: "8px",
+              paddingRight: "4px",
+            }}
+          >
+            {ENGINE_CATALOG_LANGUAGES.filter(
+              (lang) =>
+                !supportedLanguages.some(
+                  (l) => l.code.toLowerCase() === lang.code.toLowerCase(),
+                ) &&
+                (lang.label
+                  .toLowerCase()
+                  .includes(languageSearchFilter.toLowerCase()) ||
+                  lang.code
+                    .toLowerCase()
+                    .includes(languageSearchFilter.toLowerCase())),
+            ).map((lang) => (
+              <button
+                key={lang.code}
+                type="button"
+                onClick={() => {
+                  setSupportedLanguages([...supportedLanguages, lang]);
+                  setIsAddLanguageModalOpen(false);
+                }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "9px 12px",
+                  borderRadius: "8px",
+                  border: "1px solid var(--color-outline-variant, #e2e8f0)",
+                  background: "var(--color-surface, #ffffff)",
+                  cursor: "pointer",
+                  textAlign: "left",
+                  transition: "all 0.15s ease",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = "#0ea5e9";
+                  e.currentTarget.style.background = "rgba(14, 165, 233, 0.05)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor =
+                    "var(--color-outline-variant, #e2e8f0)";
+                  e.currentTarget.style.background =
+                    "var(--color-surface, #ffffff)";
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "10px",
+                    minWidth: 0,
+                  }}
+                >
+                  <span style={{ fontSize: "20px", flexShrink: 0 }}>
+                    {lang.flag}
+                  </span>
+                  <div style={{ minWidth: 0, overflow: "hidden" }}>
+                    <div
+                      style={{
+                        fontSize: "12.5px",
+                        fontWeight: 600,
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        color: "var(--color-on-surface, #1e293b)",
+                      }}
+                    >
+                      {lang.label}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: "10.5px",
+                        color: "var(--color-outline, #64748b)",
+                      }}
+                    >
+                      {lang.code.toUpperCase()}
+                    </div>
+                  </div>
+                </div>
+                <span
+                  className="material-symbols-outlined"
+                  style={{ fontSize: "16px", color: "#0ea5e9", flexShrink: 0 }}
+                >
+                  add_circle
+                </span>
+              </button>
+            ))}
+          </div>
+
+          {ENGINE_CATALOG_LANGUAGES.filter(
+            (lang) =>
+              !supportedLanguages.some(
+                (l) => l.code.toLowerCase() === lang.code.toLowerCase(),
+              ) &&
+              (lang.label
+                .toLowerCase()
+                .includes(languageSearchFilter.toLowerCase()) ||
+                lang.code
+                  .toLowerCase()
+                  .includes(languageSearchFilter.toLowerCase())),
+          ).length === 0 && (
+            <div
+              style={{
+                textAlign: "center",
+                padding: "24px 16px",
+                color: "var(--color-outline, #64748b)",
+                fontSize: "12.5px",
+              }}
+            >
+              Nenhum idioma pendente encontrado para a busca.
+            </div>
+          )}
         </div>
       </Modal>
 

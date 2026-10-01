@@ -1,0 +1,344 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { PROJECTS_DIR } from '../../config/constants.js';
+import { loadConfig } from '../../config/storage.js';
+import { dictionaryService } from '../dictionary/dictionary.service.js';
+import { translationProviderManager } from './providers/TranslationProviderManager.js';
+import {
+  SupportedLanguage,
+  DocumentTranslationItem,
+  SyncToMainPreview,
+} from './translation.types.js';
+
+export const DEFAULT_SUPPORTED_LANGUAGES: SupportedLanguage[] = [
+  { code: 'pt-BR', label: 'Português (Brasil)', flag: '🇧🇷' },
+  { code: 'en', label: 'English', flag: '🇺🇸' },
+  { code: 'es', label: 'Español', flag: '🇪🇸' },
+  { code: 'fr', label: 'Français', flag: '🇫🇷' },
+  { code: 'de', label: 'Deutsch', flag: '🇩🇪' },
+  { code: 'zh', label: '中文 (Mandarin)', flag: '🇨🇳' },
+  { code: 'ja', label: '日本語 (Japanese)', flag: '🇯🇵' },
+];
+
+export class TranslationsService {
+  private getRepoDir(repoName?: string): string {
+    const cfg = loadConfig();
+    const active = repoName || cfg.active_repo?.name || 'local';
+    return path.join(PROJECTS_DIR, active);
+  }
+
+  getProjectLanguageConfig(repoName?: string): {
+    defaultLanguage: string;
+    supportedLanguages: SupportedLanguage[];
+    translationEngine: string;
+  } {
+    const repoDir = this.getRepoDir(repoName);
+    const configPath = path.join(repoDir, '.project.config.json');
+
+    let defaultLanguage = 'pt-BR';
+    let supportedLanguages = DEFAULT_SUPPORTED_LANGUAGES;
+    let translationEngine = 'lightweight-local';
+
+    if (fs.existsSync(configPath)) {
+      try {
+        const data = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+        if (data.default_language && typeof data.default_language === 'string') {
+          defaultLanguage = data.default_language;
+        }
+        if (Array.isArray(data.supported_languages) && data.supported_languages.length > 0) {
+          supportedLanguages = data.supported_languages;
+        }
+        if (data.translation_engine && typeof data.translation_engine === 'string') {
+          translationEngine = data.translation_engine;
+        }
+      } catch (err) {
+        console.warn(`[TranslationsService] Erro ao ler .project.config.json em ${repoDir}:`, err);
+      }
+    }
+
+    return {
+      defaultLanguage,
+      supportedLanguages,
+      translationEngine,
+    };
+  }
+
+  listTranslations(repoName: string, filePath: string): {
+    defaultLanguage: string;
+    supportedLanguages: SupportedLanguage[];
+    translations: DocumentTranslationItem[];
+  } {
+    const repoDir = this.getRepoDir(repoName);
+    const cleanPath = (filePath || '').trim().replace(/^\/+/, '');
+    const mainFileFullPath = path.join(repoDir, cleanPath);
+
+    const { defaultLanguage, supportedLanguages } = this.getProjectLanguageConfig(repoName);
+
+    let sourceMtime = 0;
+    if (fs.existsSync(mainFileFullPath)) {
+      sourceMtime = fs.statSync(mainFileFullPath).mtimeMs;
+    }
+
+    const translations: DocumentTranslationItem[] = [];
+
+    for (const lang of supportedLanguages) {
+      const isMain = lang.code.toLowerCase() === defaultLanguage.toLowerCase();
+      const translationRelPath = isMain
+        ? cleanPath
+        : path.join('.translations', lang.code, cleanPath).replace(/\\/g, '/');
+      const translationFullPath = path.join(repoDir, translationRelPath);
+
+      const exists = fs.existsSync(translationFullPath);
+      if (exists) {
+        const stat = fs.statSync(translationFullPath);
+        const transMtime = stat.mtimeMs;
+        const isOutdated = !isMain && sourceMtime > transMtime + 2000; // tolerância de 2s
+
+        translations.push({
+          lang: lang.code,
+          langLabel: lang.label,
+          langFlag: lang.flag,
+          filePath: cleanPath,
+          translationPath: translationRelPath,
+          lastModified: transMtime,
+          sourceLastModified: sourceMtime,
+          isOutdated,
+          isMain,
+        });
+      }
+    }
+
+    return {
+      defaultLanguage,
+      supportedLanguages,
+      translations,
+    };
+  }
+
+  getTranslation(repoName: string, lang: string, filePath: string): {
+    path: string;
+    lang: string;
+    content: string;
+    isMain: boolean;
+    isOutdated: boolean;
+    lastModified: number;
+  } {
+    const repoDir = this.getRepoDir(repoName);
+    const cleanPath = (filePath || '').trim().replace(/^\/+/, '');
+    const { defaultLanguage } = this.getProjectLanguageConfig(repoName);
+
+    const isMain = !lang || lang.toLowerCase() === defaultLanguage.toLowerCase();
+    const relPath = isMain
+      ? cleanPath
+      : path.join('.translations', lang, cleanPath).replace(/\\/g, '/');
+    const fullPath = path.join(repoDir, relPath);
+
+    if (!fs.existsSync(fullPath)) {
+      throw new Error(`Tradução para idioma '${lang}' no arquivo '${cleanPath}' não encontrada.`);
+    }
+
+    const content = fs.readFileSync(fullPath, 'utf-8');
+    const stat = fs.statSync(fullPath);
+
+    let isOutdated = false;
+    if (!isMain) {
+      const mainFullPath = path.join(repoDir, cleanPath);
+      if (fs.existsSync(mainFullPath)) {
+        const mainStat = fs.statSync(mainFullPath);
+        isOutdated = mainStat.mtimeMs > stat.mtimeMs + 2000;
+      }
+    }
+
+    return {
+      path: relPath,
+      lang: isMain ? defaultLanguage : lang,
+      content,
+      isMain,
+      isOutdated,
+      lastModified: stat.mtimeMs,
+    };
+  }
+
+  saveTranslation(repoName: string, lang: string, filePath: string, content: string) {
+    const repoDir = this.getRepoDir(repoName);
+    const cleanPath = (filePath || '').trim().replace(/^\/+/, '');
+    const { defaultLanguage } = this.getProjectLanguageConfig(repoName);
+
+    const isMain = !lang || lang.toLowerCase() === defaultLanguage.toLowerCase();
+    const relPath = isMain
+      ? cleanPath
+      : path.join('.translations', lang, cleanPath).replace(/\\/g, '/');
+    const fullPath = path.join(repoDir, relPath);
+
+    const dir = path.dirname(fullPath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+
+    fs.writeFileSync(fullPath, content, 'utf-8');
+
+    return {
+      success: true,
+      path: relPath,
+      lang: isMain ? defaultLanguage : lang,
+      isMain,
+    };
+  }
+
+  deleteTranslation(repoName: string, lang: string, filePath: string) {
+    const repoDir = this.getRepoDir(repoName);
+    const cleanPath = (filePath || '').trim().replace(/^\/+/, '');
+    const { defaultLanguage } = this.getProjectLanguageConfig(repoName);
+
+    if (lang.toLowerCase() === defaultLanguage.toLowerCase()) {
+      throw new Error('Não é permitido deletar o documento no idioma oficial via API de tradução.');
+    }
+
+    const relPath = path.join('.translations', lang, cleanPath).replace(/\\/g, '/');
+    const fullPath = path.join(repoDir, relPath);
+
+    if (fs.existsSync(fullPath)) {
+      fs.unlinkSync(fullPath);
+    }
+
+    return { success: true };
+  }
+
+  async translateDocument(
+    repoName: string,
+    filePath: string,
+    targetLang: string,
+    engineId?: string
+  ): Promise<{
+    filePath: string;
+    targetLang: string;
+    translationPath: string;
+    content: string;
+    engineUsed: string;
+  }> {
+    const repoDir = this.getRepoDir(repoName);
+    const cleanPath = (filePath || '').trim().replace(/^\/+/, '');
+    const mainFullPath = path.join(repoDir, cleanPath);
+
+    if (!fs.existsSync(mainFullPath)) {
+      throw new Error(`Documento principal '${cleanPath}' não encontrado.`);
+    }
+
+    const mainContent = fs.readFileSync(mainFullPath, 'utf-8');
+    const { defaultLanguage, translationEngine } = this.getProjectLanguageConfig(repoName);
+
+    const selectedEngineId = engineId || translationEngine;
+    const provider = translationProviderManager.getProvider(selectedEngineId);
+
+    // Carregar termos do dicionário para montar glossário
+    const dictData = dictionaryService.getDictionary(repoName);
+    const dictionaryTerms = Array.isArray(dictData?.terms) ? dictData.terms : [];
+    const glossary: Record<string, string> = {};
+    for (const item of dictionaryTerms) {
+      if (item.term && item.definition) {
+        glossary[item.term] = item.definition;
+      }
+    }
+
+    const translatedContent = await provider.translate(mainContent, {
+      sourceLang: defaultLanguage,
+      targetLang,
+      glossary,
+      preserveFrontmatter: false, // Traduções sob demanda NÃO contêm metadados Frontmatter
+    });
+
+    // Salvar arquivo traduzido (apenas corpo puro traduzido)
+    const translationRelPath = path.join('.translations', targetLang, cleanPath).replace(/\\/g, '/');
+    const translationFullPath = path.join(repoDir, translationRelPath);
+    const dir = path.dirname(translationFullPath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+
+    fs.writeFileSync(translationFullPath, translatedContent.trim(), 'utf-8');
+
+    return {
+      filePath: cleanPath,
+      targetLang,
+      translationPath: translationRelPath,
+      content: translatedContent.trim(),
+      engineUsed: provider.name,
+    };
+  }
+
+  async translateBackToMain(
+    repoName: string,
+    filePath: string,
+    translatedContent: string,
+    fromLang: string,
+    engineId?: string
+  ): Promise<SyncToMainPreview> {
+    const repoDir = this.getRepoDir(repoName);
+    const cleanPath = (filePath || '').trim().replace(/^\/+/, '');
+    const mainFullPath = path.join(repoDir, cleanPath);
+
+    const originalMainContent = fs.existsSync(mainFullPath)
+      ? fs.readFileSync(mainFullPath, 'utf-8')
+      : '';
+
+    const { defaultLanguage, translationEngine } = this.getProjectLanguageConfig(repoName);
+    const selectedEngineId = engineId || translationEngine;
+    const provider = translationProviderManager.getProvider(selectedEngineId);
+
+    const dictData = dictionaryService.getDictionary(repoName);
+    const dictionaryTerms = Array.isArray(dictData?.terms) ? dictData.terms : [];
+    const glossary: Record<string, string> = {};
+    for (const item of dictionaryTerms) {
+      if (item.term && item.definition) {
+        glossary[item.term] = item.definition;
+      }
+    }
+
+    // 1. Traduz o corpo do idioma de preferência para o idioma oficial padrão
+    const translatedBody = await provider.translate(translatedContent, {
+      sourceLang: fromLang,
+      targetLang: defaultLanguage,
+      glossary,
+      preserveFrontmatter: false,
+    });
+
+    // 2. Extrai o Frontmatter ORIGINAL do documento oficial para preservar 100% dos metadados
+    const frontmatterMatch = originalMainContent.match(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/);
+    const originalFrontmatter = frontmatterMatch ? frontmatterMatch[0].trim() : '';
+
+    // 3. Monta o conteúdo final do documento oficial: Frontmatter original intacto + novo corpo traduzido
+    const translatedToMainContent = originalFrontmatter
+      ? `${originalFrontmatter}\n\n${translatedBody.trim()}`
+      : translatedBody.trim();
+
+    return {
+      filePath: cleanPath,
+      targetLang: defaultLanguage,
+      sourceLang: fromLang,
+      originalMainContent,
+      translatedToMainContent,
+      summary: `Tradução reversa gerada de ${fromLang.toUpperCase()} para o idioma oficial ${defaultLanguage.toUpperCase()} via ${provider.name} com metadados oficiais preservados.`,
+    };
+  }
+
+  applyToMain(repoName: string, filePath: string, content: string) {
+    const repoDir = this.getRepoDir(repoName);
+    const cleanPath = (filePath || '').trim().replace(/^\/+/, '');
+    const mainFullPath = path.join(repoDir, cleanPath);
+
+    const dir = path.dirname(mainFullPath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+
+    fs.writeFileSync(mainFullPath, content, 'utf-8');
+
+    return {
+      success: true,
+      filePath: cleanPath,
+      message: 'Documento oficial atualizado com sucesso.',
+    };
+  }
+}
+
+export const translationsService = new TranslationsService();

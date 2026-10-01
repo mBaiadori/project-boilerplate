@@ -489,6 +489,57 @@ export interface CommunityToolItem {
   command_snippet?: string;
 }
 
+// Translations & SSOT Types
+export interface SupportedLanguage {
+  code: string;
+  label: string;
+  flag: string;
+}
+
+export interface DocumentTranslationItem {
+  lang: string;
+  langLabel: string;
+  langFlag: string;
+  filePath: string;
+  translationPath: string;
+  lastModified: number;
+  sourceLastModified: number;
+  isOutdated: boolean;
+  isMain: boolean;
+}
+
+export interface TranslationEngineInfo {
+  id: string;
+  name: string;
+  description: string;
+  isLocal: boolean;
+}
+
+export interface DocumentTranslationsResponse {
+  defaultLanguage: string;
+  supportedLanguages: SupportedLanguage[];
+  translations: DocumentTranslationItem[];
+}
+
+export interface DocumentTranslationFileResponse {
+  path: string;
+  lang: string;
+  content: string;
+  isMain: boolean;
+  isOutdated: boolean;
+  lastModified: number;
+}
+
+export interface SyncToMainPreview {
+  filePath: string;
+  targetLang: string;
+  sourceLang: string;
+  originalMainContent: string;
+  translatedToMainContent: string;
+  summary: string;
+}
+
+
 
 
 

@@ -14,6 +14,7 @@ export const DEFAULT_HIDDEN_FILES = [
   ".tools",
   ".mcp.json",
   ".hidden_files.json",
+  ".translations",
 ];
 
 export function isPathHidden(filePath: string, customHiddenList?: string[]): boolean {
@@ -72,6 +73,7 @@ export const KNOWN_SYSTEM_FILES = [
   ".agents",
   ".tools",
   ".gitignore",
+  ".translations",
 ];
 
 export function isSystemPath(filePath: string): boolean {
@@ -117,6 +119,10 @@ export function getSystemFileFriendlyName(filePath: string): string {
   if (cleanPath === ".hidden_files.json") return "Regras de Arquivos do Sistema";
   if (cleanPath === ".mcp.json") return "Configuração de Servidores MCP";
   if (cleanPath === ".gitignore") return "Configuração Gitignore";
+  if (cleanPath.startsWith(".translations")) {
+    const parts = cleanPath.split("/");
+    return `Arquivo de Tradução (${parts[parts.length - 1]})`;
+  }
   if (cleanPath.startsWith(".skills")) {
     const parts = cleanPath.split("/");
     return `Habilidade do Projeto (${parts[parts.length - 1]})`;
