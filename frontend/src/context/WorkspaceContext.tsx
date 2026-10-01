@@ -15,6 +15,7 @@ import type {
   DocumentMetadataItem,
   ProjectMetadataOptions,
   WhatsNewSummary,
+  DictionaryTerm,
 } from "../types";
 import { API } from "../services/api";
 import { DraftStore } from "../services/draft-store";
@@ -86,6 +87,18 @@ interface WorkspaceContextType {
   saveProjectConfig: (
     configData: any,
   ) => Promise<{ success: boolean; error?: string }>;
+  dictionaryTerms: DictionaryTerm[];
+  loadDictionaryTerms: () => Promise<DictionaryTerm[]>;
+  saveDictionaryTerms: (
+    terms: DictionaryTerm[],
+  ) => Promise<{ success: boolean; error?: string }>;
+  addDictionaryTerm: (
+    term: DictionaryTerm,
+  ) => Promise<{ success: boolean; error?: string }>;
+  addDictionarySynonym: (
+    termIdOrCodename: string,
+    synonym: string,
+  ) => Promise<{ success: boolean; error?: string }>;
   saveCurrentFile: (
     meta?: Record<string, any>,
   ) => Promise<{ success: boolean; error?: string }>;
@@ -138,6 +151,11 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
   const [projectMetaOptions, setProjectMetaOptions] =
     useState<ProjectMetadataOptions | null>(null);
   const [projectConfig, setProjectConfig] = useState<any>(null);
+  const [dictionaryTerms, setDictionaryTerms] = useState<DictionaryTerm[]>([]);
+  const dictionaryTermsRef = useRef<DictionaryTerm[]>([]);
+  useEffect(() => {
+    dictionaryTermsRef.current = dictionaryTerms;
+  }, [dictionaryTerms]);
 
   const activeFileRef = useRef<string>("");
   const fileContentRef = useRef<string>("");
@@ -560,6 +578,126 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
     [loadProjectMetadataOptions],
   );
 
+  const loadDictionaryTerms = useCallback(async (): Promise<DictionaryTerm[]> => {
+    try {
+      const res = await API.getDictionary();
+      if (res.ok && res.data && Array.isArray(res.data.terms)) {
+        setDictionaryTerms(res.data.terms);
+        return res.data.terms;
+      }
+    } catch (err) {
+      console.warn("[WorkspaceContext] Erro ao carregar dicionário:", err);
+    }
+    return [];
+  }, []);
+
+  const saveDictionaryTerms = useCallback(
+    async (
+      termsToSave: DictionaryTerm[],
+    ): Promise<{ success: boolean; error?: string }> => {
+      try {
+        const res = await API.saveDictionary(termsToSave);
+        if (res.ok) {
+          setDictionaryTerms(termsToSave);
+          return { success: true };
+        }
+        return {
+          success: false,
+          error: res.data?.error || "Erro ao salvar dicionário",
+        };
+      } catch (err: any) {
+        return {
+          success: false,
+          error: err.message || "Erro de rede ao salvar dicionário",
+        };
+      }
+    },
+    [],
+  );
+
+  const addDictionaryTerm = useCallback(
+    async (
+      newTerm: DictionaryTerm,
+    ): Promise<{ success: boolean; error?: string }> => {
+      const current = dictionaryTermsRef.current;
+      const normalizedCodename = (
+        newTerm.codename ||
+        newTerm.code_name ||
+        newTerm.term
+      )
+        .toUpperCase()
+        .replace(/[\s-]+/g, "_")
+        .replace(/[^A-Z0-9_]/g, "");
+
+      const normalizedTerm: DictionaryTerm = {
+        ...newTerm,
+        id:
+          newTerm.id ||
+          normalizedCodename.toLowerCase().replace(/_/g, "-"),
+        codename: normalizedCodename,
+        definition: (newTerm.definition || "").trim() || "Sem definição registrada.",
+        synonyms: Array.from(
+          new Set(
+            [...(newTerm.synonyms || []), ...(newTerm.aliases || [])].filter(
+              Boolean,
+            ),
+          ),
+        ),
+      };
+
+      const updated = [
+        ...current.filter(
+          (t) =>
+            t.codename !== normalizedTerm.codename &&
+            t.term.toLowerCase() !== normalizedTerm.term.toLowerCase(),
+        ),
+        normalizedTerm,
+      ];
+      return await saveDictionaryTerms(updated);
+    },
+    [saveDictionaryTerms],
+  );
+
+  const addDictionarySynonym = useCallback(
+    async (
+      termIdOrCodename: string,
+      synonym: string,
+    ): Promise<{ success: boolean; error?: string }> => {
+      const cleanSyn = synonym.trim();
+      if (!cleanSyn) return { success: false, error: "Sinônimo vazio" };
+      const current = dictionaryTermsRef.current;
+      const termIdx = current.findIndex(
+        (t) =>
+          (t.id && t.id === termIdOrCodename) ||
+          t.codename.toLowerCase() === termIdOrCodename.toLowerCase() ||
+          t.term.toLowerCase() === termIdOrCodename.toLowerCase(),
+      );
+      if (termIdx === -1) {
+        return { success: false, error: "Termo não encontrado no dicionário" };
+      }
+      const targetTerm = current[termIdx];
+      const existingSyns = Array.from(
+        new Set([
+          ...(targetTerm.synonyms || []),
+          ...(targetTerm.aliases || []),
+        ]),
+      );
+      if (
+        !existingSyns.some((s) => s.toLowerCase() === cleanSyn.toLowerCase())
+      ) {
+        existingSyns.push(cleanSyn);
+      }
+      const updatedTerm: DictionaryTerm = {
+        ...targetTerm,
+        synonyms: existingSyns,
+      };
+      const updated = [...current];
+      updated[termIdx] = updatedTerm;
+      return await saveDictionaryTerms(updated);
+    },
+    [saveDictionaryTerms],
+  );
+
   const updateFileMetadata = useCallback(
     async (partialMeta: Partial<DocumentMetadataItem>) => {
       const currentFile = activeFileRef.current;
@@ -688,6 +826,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
         Promise.allSettled([
           loadProjectMetadataOptions(),
           loadProjectConfig(),
+          loadDictionaryTerms(),
           refreshPendingChanges(),
           refreshGitStatus(),
           refreshGitLog(15),
@@ -703,6 +842,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
       flushPendingSave,
       loadProjectMetadataOptions,
       loadProjectConfig,
+      loadDictionaryTerms,
       refreshPendingChanges,
       refreshGitStatus,
       refreshGitLog,
@@ -943,6 +1083,11 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
         projectConfig,
         loadProjectConfig,
         saveProjectConfig,
+        dictionaryTerms,
+        loadDictionaryTerms,
+        saveDictionaryTerms,
+        addDictionaryTerm,
+        addDictionarySynonym,
         saveCurrentFile,
         flushPendingSave,
         refreshPendingChanges,

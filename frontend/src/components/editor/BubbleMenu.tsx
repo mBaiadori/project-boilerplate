@@ -5,9 +5,18 @@ interface BubbleMenuProps {
   position: { top: number; left: number };
   onFormat: (prefix: string, suffix?: string) => void;
   onAskAI?: () => void;
+  onAddDictionaryTerm?: () => void;
+  onLinkSynonym?: () => void;
 }
 
-export const BubbleMenu: React.FC<BubbleMenuProps> = ({ isOpen, position, onFormat, onAskAI }) => {
+export const BubbleMenu: React.FC<BubbleMenuProps> = ({
+  isOpen,
+  position,
+  onFormat,
+  onAskAI,
+  onAddDictionaryTerm,
+  onLinkSynonym,
+}) => {
   if (!isOpen) return null;
 
   return (
@@ -77,6 +86,30 @@ export const BubbleMenu: React.FC<BubbleMenuProps> = ({ isOpen, position, onForm
         <span className="material-symbols-outlined icon-xs">ink_highlighter</span>
       </button>
 
+      {onAddDictionaryTerm && (
+        <button
+          type="button"
+          className="btn btn-ghost btn-xs"
+          onClick={onAddDictionaryTerm}
+          title="Cadastrar no Dicionário Ubíquo"
+          style={{ color: 'var(--color-primary, #2563eb)' }}
+        >
+          <span className="material-symbols-outlined icon-xs">library_add</span>
+        </button>
+      )}
+
+      {onLinkSynonym && (
+        <button
+          type="button"
+          className="btn btn-ghost btn-xs"
+          onClick={onLinkSynonym}
+          title="Vincular como Sinônimo"
+          style={{ color: '#7c3aed' }}
+        >
+          <span className="material-symbols-outlined icon-xs">bookmarks</span>
+        </button>
+      )}
+
       {onAskAI && (
         <button
           type="button"
@@ -91,3 +124,4 @@ export const BubbleMenu: React.FC<BubbleMenuProps> = ({ isOpen, position, onForm
     </div>
   );
 };
+

@@ -86,6 +86,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = ({
 
   const extensions = useMemo(() => {
     const exts = [lightEditorTheme];
+
     if (['ts', 'tsx'].includes(ext)) {
       exts.push(javascript({ typescript: true, jsx: ext === 'tsx' }));
     } else if (['js', 'jsx', 'mjs', 'cjs'].includes(ext)) {

@@ -171,9 +171,13 @@ export interface DictionaryTerm {
   id?: string;
   term: string;
   codename: string;
+  code_name?: string;
   definition: string;
-  context: string;
+  domain?: string;
+  category?: string;
+  context?: string;
   synonyms?: string[];
+  aliases?: string[];
 }
 
 export interface AIProviderMeta {

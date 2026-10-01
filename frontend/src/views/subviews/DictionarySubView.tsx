@@ -2,12 +2,12 @@ import {
   AlertCircle,
   ArrowUpDown,
   BookA,
-  BookOpen,
   Check,
-  Code2,
   Copy,
   Download,
   Edit3,
+  Filter,
+  Layers,
   LayoutGrid,
   List,
   Plus,
@@ -17,6 +17,7 @@ import {
   Upload,
 } from "lucide-react";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   Button,
   Card,
@@ -28,22 +29,35 @@ import {
   Modal,
   SearchInput,
   Spinner,
-  StatCard,
   Textarea,
-  Chip,
 } from "../../components/ui";
 import { useAI } from "../../context/AIContext";
-import { API } from "../../services/api";
+import { useWorkspace } from "../../context/WorkspaceContext";
 import type { DictionaryTerm } from "../../types";
 
-type SortOption = "name-asc" | "name-desc" | "code-asc";
+type SortOption = "name-asc" | "name-desc" | "code-asc" | "domain-asc";
 type ViewMode = "table" | "grid";
+
+const DDD_CATEGORIES = [
+  { id: "Entity", label: "Entity", desc: "Entidade com identidade única", color: "#2563eb" },
+  { id: "Value Object", label: "Value Object", desc: "Objeto de valor imutável", color: "#0891b2" },
+  { id: "Aggregate", label: "Aggregate", desc: "Raiz de agregação", color: "#7c3aed" },
+  { id: "Domain Event", label: "Domain Event", desc: "Fato relevante ocorrido", color: "#ea580c" },
+  { id: "Service", label: "Service", desc: "Serviço de domínio puro", color: "#059669" },
+  { id: "Process", label: "Process", desc: "Fluxo ou processo de negócio", color: "#d97706" },
+  { id: "Rule / Policy", label: "Rule / Policy", desc: "Regra / política de negócio", color: "#dc2626" },
+  { id: "Metric", label: "Metric", desc: "Métrica / KPI de monitoramento", color: "#4f46e5" },
+];
 
 export const DictionarySubView: React.FC = () => {
   const { setDynamicContext } = useAI();
-  const [terms, setTerms] = useState<DictionaryTerm[]>([]);
-  const [searchTerm, setSearchTerm] = useState("");
+  const { projectMetaOptions, projectConfig, dictionaryTerms, loadDictionaryTerms, saveDictionaryTerms } = useWorkspace();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [terms, setTerms] = useState<DictionaryTerm[]>(dictionaryTerms || []);
+  const [searchTerm, setSearchTerm] = useState(() => searchParams.get("search") || "");
   const [selectedLetter, setSelectedLetter] = useState<string>("ALL");
+  const [selectedDomainFilter, setSelectedDomainFilter] = useState<string>("ALL");
+  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>("ALL");
   const [sortOption, setSortOption] = useState<SortOption>("name-asc");
   const [viewMode, setViewMode] = useState<ViewMode>("table");
   const [isLoading, setIsLoading] = useState(false);
@@ -52,29 +66,70 @@ export const DictionarySubView: React.FC = () => {
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [importJsonText, setImportJsonText] = useState("");
   const [importError, setImportError] = useState("");
+  const [formError, setFormError] = useState("");
   const [copiedGeneral, setCopiedGeneral] = useState<string | null>(null);
   const [copiedCodeId, setCopiedCodeId] = useState<string | null>(null);
+
+  // Sincroniza termos com o WorkspaceContext
+  useEffect(() => {
+    if (dictionaryTerms && dictionaryTerms.length > 0) {
+      setTerms(dictionaryTerms);
+    }
+  }, [dictionaryTerms]);
+
+  // Sincroniza com parâmetros de busca da URL
+  useEffect(() => {
+    const q = searchParams.get("search");
+    if (q !== null && q !== searchTerm) {
+      setSearchTerm(q);
+    }
+  }, [searchParams]);
+
+  const handleSearchChange = (val: string) => {
+    setSearchTerm(val);
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (val.trim()) {
+          next.set("search", val);
+        } else {
+          next.delete("search");
+        }
+        return next;
+      },
+      { replace: true }
+    );
+  };
+
+  // Dynamic Categories from .project.config.json
+  const categories = useMemo(() => {
+    const cats = projectMetaOptions?.categories || projectConfig?.categories || [];
+    return cats.length > 0 ? cats : [{ name: "geral", label: "Geral", color: "#3b82f6" }];
+  }, [projectMetaOptions, projectConfig]);
 
   // Form State
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [inputTerm, setInputTerm] = useState("");
   const [inputCodename, setInputCodename] = useState("");
-  const [inputAliases, setInputAliases] = useState("");
+  const [inputDomain, setInputDomain] = useState("geral");
+  const [inputCategory, setInputCategory] = useState("Entity");
+  const [inputContext, setInputContext] = useState("");
+  const [inputSynonyms, setInputSynonyms] = useState("");
   const [inputDefinition, setInputDefinition] = useState("");
 
   const loadDictionary = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const res = await API.getDictionary();
-      if (res.ok && res.data && Array.isArray(res.data.terms)) {
-        setTerms(res.data.terms);
+    if (dictionaryTerms.length === 0) {
+      setIsLoading(true);
+      try {
+        const fetched = await loadDictionaryTerms();
+        setTerms(fetched);
+      } catch (err) {
+        console.error("[DictionarySubView] Erro ao buscar dicionário:", err);
+      } finally {
+        setIsLoading(false);
       }
-    } catch (err) {
-      console.error("[DictionarySubView] Erro ao buscar dicionário:", err);
-    } finally {
-      setIsLoading(false);
     }
-  }, []);
+  }, [dictionaryTerms.length, loadDictionaryTerms]);
 
   useEffect(() => {
     loadDictionary();
@@ -99,8 +154,12 @@ export const DictionarySubView: React.FC = () => {
     setEditingIndex(null);
     setInputTerm("");
     setInputCodename("");
-    setInputAliases("");
+    setInputDomain(categories[0]?.name || "geral");
+    setInputCategory("Entity");
+    setInputContext("");
+    setInputSynonyms("");
     setInputDefinition("");
+    setFormError("");
     setIsModalOpen(true);
   };
 
@@ -108,9 +167,14 @@ export const DictionarySubView: React.FC = () => {
   const handleEditTerm = (t: DictionaryTerm, idx: number) => {
     setEditingIndex(idx);
     setInputTerm(t.term || "");
-    setInputCodename(t.codename || "");
-    setInputAliases(t.context || "");
+    setInputCodename(t.codename || t.code_name || "");
+    setInputDomain(t.domain || categories[0]?.name || "geral");
+    setInputCategory(t.category || "Entity");
+    setInputContext(t.context || "");
+    const syns = t.synonyms || t.aliases || [];
+    setInputSynonyms(syns.join(", "));
     setInputDefinition(t.definition || "");
+    setFormError("");
     setIsModalOpen(true);
   };
 
@@ -127,8 +191,12 @@ export const DictionarySubView: React.FC = () => {
     const updated = terms.filter((_, i) => i !== idx);
     try {
       setIsSaving(true);
-      await API.saveDictionary(updated);
-      setTerms(updated);
+      const res = await saveDictionaryTerms(updated);
+      if (res.success) {
+        setTerms(updated);
+      } else {
+        alert(res.error || "Erro ao remover termo do dicionário.");
+      }
     } catch (err) {
       console.error("Erro ao deletar termo:", err);
     } finally {
@@ -138,18 +206,37 @@ export const DictionarySubView: React.FC = () => {
 
   // Handle Saving Term
   const handleSaveTerm = async () => {
-    if (!inputTerm.trim()) return;
+    if (!inputTerm.trim()) {
+      setFormError("O nome do termo é obrigatório.");
+      return;
+    }
+    if (!inputDefinition.trim()) {
+      setFormError("A definição do termo é obrigatória para manter a precisão conceitual.");
+      return;
+    }
+
+    const syns = inputSynonyms
+      .split(/[,;\n]/)
+      .map((s) => s.trim())
+      .filter((s) => s && s.toLowerCase() !== inputTerm.trim().toLowerCase());
+
     const termItem: DictionaryTerm = {
+      id: editingIndex !== null ? terms[editingIndex].id : undefined,
       term: inputTerm.trim(),
       codename:
         inputCodename.trim() ||
         inputTerm
           .trim()
           .toUpperCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
           .replace(/[\s-]+/g, "_")
           .replace(/[^A-Z0-9_]/g, ""),
+      domain: inputDomain.trim() || "geral",
+      category: inputCategory.trim() || "Entity",
+      context: inputContext.trim() || undefined,
       definition: inputDefinition.trim(),
-      context: inputAliases.trim(),
+      synonyms: Array.from(new Set(syns)),
     };
 
     let updated: DictionaryTerm[];
@@ -162,11 +249,17 @@ export const DictionarySubView: React.FC = () => {
 
     try {
       setIsSaving(true);
-      await API.saveDictionary(updated);
-      setTerms(updated);
-      setIsModalOpen(false);
-    } catch (err) {
+      setFormError("");
+      const res = await saveDictionaryTerms(updated);
+      if (res.success) {
+        setTerms(updated);
+        setIsModalOpen(false);
+      } else {
+        setFormError(res.error || "Erro ao salvar termo no dicionário.");
+      }
+    } catch (err: any) {
       console.error("[DictionarySubView] Erro ao salvar termo:", err);
+      setFormError(err.message || "Erro inesperado ao salvar.");
     } finally {
       setIsSaving(false);
     }
@@ -187,10 +280,11 @@ export const DictionarySubView: React.FC = () => {
   // Export Markdown table
   const handleExportMarkdown = () => {
     let md = "# 📚 Dicionário Ubíquo & Vocabulário Oficial\n\n";
-    md += "| Termo | Code Name | Definição | Aliases / Contexto |\n";
-    md += "| :--- | :--- | :--- | :--- |\n";
+    md += "| Termo | Code Name | Domínio | Categoria DDD | Contexto | Sinônimos | Definição |\n";
+    md += "| :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n";
     terms.forEach((t) => {
-      md += `| **${t.term.replace(/\|/g, "\\|")}** | \`${t.codename}\` | ${t.definition.replace(/\|/g, "\\|")} | ${t.context || "-"} |\n`;
+      const syns = (t.synonyms || t.aliases || []).join(", ") || "-";
+      md += `| **${t.term.replace(/\|/g, "\\|")}** | \`${t.codename || t.code_name || "-"}\` | ${t.domain || "-"} | ${t.category || "-"} | ${t.context || "-"} | ${syns} | ${t.definition.replace(/\|/g, "\\|")} |\n`;
     });
 
     const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
@@ -207,7 +301,7 @@ export const DictionarySubView: React.FC = () => {
     setImportError("");
     try {
       const parsed = JSON.parse(importJsonText);
-      let incomingTerms: DictionaryTerm[] = [];
+      let incomingTerms: any[] = [];
       if (Array.isArray(parsed)) {
         incomingTerms = parsed;
       } else if (parsed && Array.isArray(parsed.terms)) {
@@ -218,25 +312,75 @@ export const DictionarySubView: React.FC = () => {
         );
       }
 
-      // Validate structure
-      const valid = incomingTerms.filter(
-        (t) => t && typeof t.term === "string",
-      );
+      // Validate and normalize structure
+      const valid: DictionaryTerm[] = incomingTerms
+        .filter((t) => t && typeof t.term === "string" && t.term.trim().length > 0)
+        .map((t) => ({
+          id: t.id || undefined,
+          term: t.term.trim(),
+          codename:
+            t.codename ||
+            t.code_name ||
+            t.term
+              .trim()
+              .toUpperCase()
+              .normalize("NFD")
+              .replace(/[\u0300-\u036f]/g, "")
+              .replace(/[\s-]+/g, "_")
+              .replace(/[^A-Z0-9_]/g, ""),
+          domain: t.domain || "geral",
+          category: t.category || "Entity",
+          context: t.context || undefined,
+          definition: t.definition ? String(t.definition).trim() : "Definição não informada.",
+          synonyms: Array.isArray(t.synonyms)
+            ? t.synonyms
+            : Array.isArray(t.aliases)
+              ? t.aliases
+              : typeof t.synonyms === "string"
+                ? t.synonyms.split(",").map((s: string) => s.trim()).filter(Boolean)
+                : [],
+        }));
+
       if (valid.length === 0) {
         throw new Error("Nenhum termo válido encontrado no JSON.");
       }
 
       setIsSaving(true);
-      await API.saveDictionary(valid);
-      setTerms(valid);
-      setIsImportModalOpen(false);
-      setImportJsonText("");
+      const res = await saveDictionaryTerms(valid);
+      if (res.success) {
+        setTerms(valid);
+        setIsImportModalOpen(false);
+        setImportJsonText("");
+      } else {
+        setImportError(res.error || "Falha ao gravar termos importados.");
+      }
     } catch (err: any) {
       setImportError(err.message || "Erro ao processar JSON.");
     } finally {
       setIsSaving(false);
     }
   };
+
+  // Helper to get domain color
+  const getDomainColor = useCallback(
+    (domainName?: string) => {
+      if (!domainName) return "#64748b";
+      const cat = categories.find(
+        (c: any) => (c.name || "").toLowerCase() === domainName.toLowerCase() || (c.label || "").toLowerCase() === domainName.toLowerCase(),
+      );
+      return cat?.color || "#3b82f6";
+    },
+    [categories],
+  );
+
+  // Helper to get DDD category info
+  const getDddCategoryInfo = useCallback((catName?: string) => {
+    if (!catName) return { label: "Entity", color: "#2563eb" };
+    const found = DDD_CATEGORIES.find(
+      (c) => c.id.toLowerCase() === catName.toLowerCase(),
+    );
+    return found || { label: catName, color: "#6366f1" };
+  }, []);
 
   // Available Alphabet Letters for fast filtering
   const availableLetters = useMemo(() => {
@@ -259,14 +403,35 @@ export const DictionarySubView: React.FC = () => {
     return terms
       .filter((t) => {
         // Search Filter
+        const synsText = (t.synonyms || t.aliases || []).join(" ").toLowerCase();
         const matchesSearch =
           !q ||
           t.term.toLowerCase().includes(q) ||
           (t.codename && t.codename.toLowerCase().includes(q)) ||
+          (t.code_name && t.code_name.toLowerCase().includes(q)) ||
           (t.definition && t.definition.toLowerCase().includes(q)) ||
-          (t.context && t.context.toLowerCase().includes(q));
+          (t.context && t.context.toLowerCase().includes(q)) ||
+          (t.domain && t.domain.toLowerCase().includes(q)) ||
+          (t.category && t.category.toLowerCase().includes(q)) ||
+          synsText.includes(q);
 
         if (!matchesSearch) return false;
+
+        // Domain Filter
+        if (
+          selectedDomainFilter !== "ALL" &&
+          (t.domain || "geral").toLowerCase() !== selectedDomainFilter.toLowerCase()
+        ) {
+          return false;
+        }
+
+        // Category DDD Filter
+        if (
+          selectedCategoryFilter !== "ALL" &&
+          (t.category || "Entity").toLowerCase() !== selectedCategoryFilter.toLowerCase()
+        ) {
+          return false;
+        }
 
         // Letter Filter
         if (selectedLetter !== "ALL") {
@@ -287,21 +452,20 @@ export const DictionarySubView: React.FC = () => {
           return b.term.localeCompare(a.term, "pt", { sensitivity: "base" });
         }
         if (sortOption === "code-asc") {
-          return (a.codename || "").localeCompare(b.codename || "");
+          return (a.codename || a.code_name || "").localeCompare(b.codename || b.code_name || "");
+        }
+        if (sortOption === "domain-asc") {
+          return (a.domain || "").localeCompare(b.domain || "");
         }
         return 0;
       });
-  }, [terms, searchTerm, selectedLetter, sortOption]);
+  }, [terms, searchTerm, selectedLetter, selectedDomainFilter, selectedCategoryFilter, sortOption]);
 
-  // Statistics
-  const totalCodenames = useMemo(
-    () => terms.filter((t) => Boolean(t.codename?.trim())).length,
-    [terms],
-  );
-  const totalWithAliases = useMemo(
-    () => terms.filter((t) => Boolean(t.context?.trim())).length,
-    [terms],
-  );
+  const hasActiveFilters =
+    searchTerm.trim() !== "" ||
+    selectedLetter !== "ALL" ||
+    selectedDomainFilter !== "ALL" ||
+    selectedCategoryFilter !== "ALL";
 
   return (
     <div
@@ -327,81 +491,71 @@ export const DictionarySubView: React.FC = () => {
           boxSizing: "border-box",
         }}
       >
-        {/* Header Ribbon */}
+        {/* Header Minimalista */}
         <div
           style={{
             display: "flex",
-            alignItems: "flex-start",
+            alignItems: "center",
             justifyContent: "space-between",
-            marginBottom: "24px",
+            marginBottom: "20px",
             flexWrap: "wrap",
             gap: "16px",
           }}
         >
-          <div>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
             <div
               style={{
+                width: "36px",
+                height: "36px",
+                borderRadius: "8px",
+                background: "var(--color-surface-container, #f1f5f9)",
+                color: "var(--color-primary, #1a73e8)",
                 display: "flex",
                 alignItems: "center",
-                gap: "12px",
-                flexWrap: "wrap",
+                justifyContent: "center",
               }}
             >
-              <div
-                style={{
-                  width: "40px",
-                  height: "40px",
-                  borderRadius: "10px",
-                  background: "var(--md-sys-color-primary-container, #d2e3fc)",
-                  color: "var(--md-sys-color-primary, #1a73e8)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <BookA size={22} />
-              </div>
-              <div>
+              <BookA size={20} />
+            </div>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                 <h1
                   style={{
                     margin: 0,
-                    fontSize: "24px",
+                    fontSize: "20px",
                     fontWeight: 700,
-                    color: "var(--color-on-surface, #1e293b)",
-                    letterSpacing: "-0.02em",
+                    color: "var(--color-on-surface, #0f172a)",
+                    letterSpacing: "-0.01em",
                   }}
                 >
-                  Dicionário Ubíquo & Vocabulário Oficial
+                  Dicionário Ubíquo
                 </h1>
-                <p
+                <span
                   style={{
-                    margin: "4px 0 0 0",
-                    fontSize: "13.5px",
+                    fontSize: "12px",
+                    fontWeight: 600,
                     color: "var(--color-on-surface-variant, #64748b)",
+                    background: "var(--color-surface-container, #f1f5f9)",
+                    padding: "2px 8px",
+                    borderRadius: "12px",
                   }}
                 >
-                  Vocabulário canônico consumido em tempo real pelo Copilot e
-                  Agentes Autônomos. Persistido em{" "}
-                  <code
-                    style={{
-                      fontFamily: "var(--font-mono, monospace)",
-                      background:
-                        "var(--color-surface-container-high, #e2e8f0)",
-                      padding: "2px 6px",
-                      borderRadius: "4px",
-                      fontSize: "12px",
-                      color: "var(--color-primary, #1a73e8)",
-                      fontWeight: 600,
-                    }}
-                  >
-                    .dictionary.json
-                  </code>
-                </p>
+                  {terms.length} {terms.length === 1 ? "termo" : "termos"}
+                </span>
               </div>
+              <p
+                style={{
+                  margin: "2px 0 0 0",
+                  fontSize: "12.5px",
+                  color: "var(--color-on-surface-variant, #64748b)",
+                }}
+              >
+                Vocabulário canônico consumido pelo Copilot, editores e agentes em tempo real.
+              </p>
             </div>
           </div>
 
-          {/* Global Action Buttons */}
+          {/* Action Buttons */}
           <div
             style={{
               display: "flex",
@@ -413,30 +567,30 @@ export const DictionarySubView: React.FC = () => {
             <Button
               id="btn-copy-dict-json"
               variant="secondary"
-              size="md"
+              size="sm"
               onClick={() =>
                 copyToClipboard(JSON.stringify(terms, null, 2), "json")
               }
               icon={
                 copiedGeneral === "json" ? (
                   <Check
-                    size={16}
+                    size={14}
                     style={{ color: "var(--color-success, #16a34a)" }}
                   />
                 ) : (
-                  <Copy size={16} />
+                  <Copy size={14} />
                 )
               }
             >
-              {copiedGeneral === "json" ? "JSON Copiado!" : "Copiar JSON"}
+              {copiedGeneral === "json" ? "Copiado!" : "Copiar JSON"}
             </Button>
 
             <Button
               id="btn-export-markdown"
               variant="secondary"
-              size="md"
+              size="sm"
               onClick={handleExportMarkdown}
-              icon={<Download size={16} />}
+              icon={<Download size={14} />}
               title="Baixar dicionário formatado em Markdown"
             >
               Exportar MD
@@ -445,13 +599,13 @@ export const DictionarySubView: React.FC = () => {
             <Button
               id="btn-import-json"
               variant="secondary"
-              size="md"
+              size="sm"
               onClick={() => {
                 setImportJsonText("");
                 setImportError("");
                 setIsImportModalOpen(true);
               }}
-              icon={<Upload size={16} />}
+              icon={<Upload size={14} />}
             >
               Importar
             </Button>
@@ -459,119 +613,164 @@ export const DictionarySubView: React.FC = () => {
             <Button
               id="btn-open-new-term"
               variant="primary"
-              size="md"
+              size="sm"
               onClick={handleOpenNewTerm}
-              icon={<Plus size={16} />}
+              icon={<Plus size={15} />}
             >
               Novo Termo
             </Button>
           </div>
         </div>
 
-        {/* Stats Metrics Grid */}
+        {/* Toolbar Minimalista e Integrada */}
         <div
           style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-            gap: "16px",
-            marginBottom: "24px",
+            background: "var(--color-surface, #ffffff)",
+            borderRadius: "10px",
+            border: "1px solid var(--color-outline-variant, #e2e8f0)",
+            padding: "10px 14px",
+            marginBottom: "16px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "10px",
           }}
         >
-          <StatCard
-            title="Total de Termos"
-            value={terms.length}
-            subtitle="Conceitos cadastrados no projeto"
-            icon={<BookOpen size={20} />}
-            iconBgColor="rgba(26, 115, 232, 0.12)"
-            iconColor="var(--color-primary, #1a73e8)"
-          />
-
-          <StatCard
-            title="Codenames Oficiais"
-            value={totalCodenames}
-            subtitle="Identificadores vinculados ao código"
-            icon={<Code2 size={20} />}
-            iconBgColor="rgba(16, 185, 129, 0.12)"
-            iconColor="#10b981"
-          />
-
-          <StatCard
-            title="Com Aliases / Sinônimos"
-            value={totalWithAliases}
-            subtitle="Mapeamentos de termos alternativos"
-            icon={<Tag size={20} />}
-            iconBgColor="rgba(245, 158, 11, 0.12)"
-            iconColor="#f59e0b"
-          />
-
-          <StatCard
-            title="Sincronização com IA"
-            value="Ativo"
-            subtitle="Injetado no contexto dinâmico"
-            icon={<Sparkles size={20} />}
-            iconBgColor="rgba(139, 92, 246, 0.12)"
-            iconColor="#8b5cf6"
-          />
-        </div>
-
-        {/* Search, Filter & Controls Toolbar */}
-        <Card style={{ marginBottom: "20px" }}>
+          {/* Main Controls Row */}
           <div
             style={{
-              padding: "16px 20px",
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
               flexWrap: "wrap",
-              gap: "16px",
+              gap: "10px",
             }}
           >
             {/* Search Input */}
-            <div style={{ flex: "1 1 320px", maxWidth: "500px" }}>
+            <div style={{ flex: "1 1 260px", maxWidth: "440px" }}>
               <SearchInput
                 id="dict-search-input"
-                placeholder="Buscar por termo, codename, sinônimo ou definição..."
+                placeholder="Buscar termo, codename, sinônimo..."
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                onClear={() => setSearchTerm("")}
+                onChange={(e) => handleSearchChange(e.target.value)}
+                onClear={() => handleSearchChange("")}
               />
             </div>
 
-            {/* View Switcher, Sort & Filters */}
+            {/* Filter Selectors & View Mode */}
             <div
               style={{
                 display: "flex",
                 alignItems: "center",
-                gap: "12px",
+                gap: "8px",
                 flexWrap: "wrap",
               }}
             >
+              {/* Domain Filter */}
+              <div
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  background: "var(--color-surface-container, #f8fafc)",
+                  border: "1px solid var(--color-outline-variant, #e2e8f0)",
+                  borderRadius: "6px",
+                  padding: "0 8px",
+                  height: "32px",
+                }}
+              >
+                <Filter size={13} style={{ color: "var(--color-on-surface-variant, #64748b)", marginRight: "5px" }} />
+                <select
+                  id="dict-domain-filter"
+                  value={selectedDomainFilter}
+                  onChange={(e) => setSelectedDomainFilter(e.target.value)}
+                  style={{
+                    border: "none",
+                    background: "transparent",
+                    color: "var(--color-on-surface, #1e293b)",
+                    fontSize: "12.5px",
+                    fontWeight: 500,
+                    cursor: "pointer",
+                    outline: "none",
+                    padding: "4px 0",
+                  }}
+                >
+                  <option value="ALL">Todos os Domínios</option>
+                  {categories.map((cat: any) => (
+                    <option key={cat.name} value={cat.name}>
+                      {cat.label || cat.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* DDD Category Filter */}
+              <div
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  background: "var(--color-surface-container, #f8fafc)",
+                  border: "1px solid var(--color-outline-variant, #e2e8f0)",
+                  borderRadius: "6px",
+                  padding: "0 8px",
+                  height: "32px",
+                }}
+              >
+                <Layers size={13} style={{ color: "var(--color-on-surface-variant, #64748b)", marginRight: "5px" }} />
+                <select
+                  id="dict-category-filter"
+                  value={selectedCategoryFilter}
+                  onChange={(e) => setSelectedCategoryFilter(e.target.value)}
+                  style={{
+                    border: "none",
+                    background: "transparent",
+                    color: "var(--color-on-surface, #1e293b)",
+                    fontSize: "12.5px",
+                    fontWeight: 500,
+                    cursor: "pointer",
+                    outline: "none",
+                    padding: "4px 0",
+                  }}
+                >
+                  <option value="ALL">Todos os Tipos (DDD)</option>
+                  {DDD_CATEGORIES.map((cat) => (
+                    <option key={cat.id} value={cat.id}>
+                      {cat.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               {/* Sort selector */}
               <div
-                style={{ display: "flex", alignItems: "center", gap: "6px" }}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  background: "var(--color-surface-container, #f8fafc)",
+                  border: "1px solid var(--color-outline-variant, #e2e8f0)",
+                  borderRadius: "6px",
+                  padding: "0 8px",
+                  height: "32px",
+                }}
               >
-                <ArrowUpDown
-                  size={15}
-                  style={{ color: "var(--color-on-surface-variant, #64748b)" }}
-                />
+                <ArrowUpDown size={13} style={{ color: "var(--color-on-surface-variant, #64748b)", marginRight: "5px" }} />
                 <select
                   id="dict-sort-select"
                   value={sortOption}
                   onChange={(e) => setSortOption(e.target.value as SortOption)}
                   style={{
-                    padding: "6px 10px",
-                    borderRadius: "6px",
-                    border: "1px solid var(--color-outline-variant, #cbd5e1)",
-                    background: "var(--color-surface, #ffffff)",
+                    border: "none",
+                    background: "transparent",
                     color: "var(--color-on-surface, #1e293b)",
-                    fontSize: "13px",
+                    fontSize: "12.5px",
+                    fontWeight: 500,
                     cursor: "pointer",
                     outline: "none",
+                    padding: "4px 0",
                   }}
                 >
-                  <option value="name-asc">Ordem Alfabética (A-Z)</option>
-                  <option value="name-desc">Ordem Inversa (Z-A)</option>
-                  <option value="code-asc">Por Code Name</option>
+                  <option value="name-asc">Ordem (A-Z)</option>
+                  <option value="name-desc">Ordem (Z-A)</option>
+                  <option value="code-asc">Por Codename</option>
+                  <option value="domain-asc">Por Domínio</option>
                 </select>
               </div>
 
@@ -581,118 +780,185 @@ export const DictionarySubView: React.FC = () => {
                   display: "flex",
                   alignItems: "center",
                   background: "var(--color-surface-container, #f1f5f9)",
-                  padding: "3px",
-                  borderRadius: "8px",
+                  padding: "2px",
+                  borderRadius: "6px",
                   border: "1px solid var(--color-outline-variant, #e2e8f0)",
+                  height: "28px",
                 }}
               >
-                <Button
+                <button
                   type="button"
                   id="btn-view-mode-table"
-                  size="sm"
-                  variant={viewMode === "table" ? "secondary" : "ghost"}
                   onClick={() => setViewMode("table")}
-                  icon={<List size={15} />}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "4px",
+                    padding: "3px 8px",
+                    borderRadius: "4px",
+                    border: "none",
+                    fontSize: "12px",
+                    fontWeight: viewMode === "table" ? 600 : 500,
+                    cursor: "pointer",
+                    background: viewMode === "table" ? "var(--color-surface, #ffffff)" : "transparent",
+                    color: viewMode === "table" ? "var(--color-on-surface, #0f172a)" : "var(--color-on-surface-variant, #64748b)",
+                    boxShadow: viewMode === "table" ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
+                    transition: "all 0.15s ease",
+                  }}
                 >
-                  Tabela
-                </Button>
-                <Button
+                  <List size={13} />
+                  <span>Tabela</span>
+                </button>
+                <button
                   type="button"
                   id="btn-view-mode-grid"
-                  size="sm"
-                  variant={viewMode === "grid" ? "secondary" : "ghost"}
                   onClick={() => setViewMode("grid")}
-                  icon={<LayoutGrid size={15} />}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "4px",
+                    padding: "3px 8px",
+                    borderRadius: "4px",
+                    border: "none",
+                    fontSize: "12px",
+                    fontWeight: viewMode === "grid" ? 600 : 500,
+                    cursor: "pointer",
+                    background: viewMode === "grid" ? "var(--color-surface, #ffffff)" : "transparent",
+                    color: viewMode === "grid" ? "var(--color-on-surface, #0f172a)" : "var(--color-on-surface-variant, #64748b)",
+                    boxShadow: viewMode === "grid" ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
+                    transition: "all 0.15s ease",
+                  }}
                 >
-                  Cards
-                </Button>
+                  <LayoutGrid size={13} />
+                  <span>Cards</span>
+                </button>
               </div>
             </div>
           </div>
 
-          {/* Quick Alphabet Filter Ribbon */}
+          {/* Quick Alphabet Jump Strip */}
           {terms.length > 5 && (
             <div
               style={{
-                padding: "8px 20px 14px",
-                borderTop: "1px solid var(--color-outline-variant, #f1f5f9)",
                 display: "flex",
                 alignItems: "center",
-                gap: "4px",
+                gap: "3px",
                 overflowX: "auto",
+                paddingTop: "6px",
+                borderTop: "1px solid var(--color-outline-variant, #f1f5f9)",
               }}
             >
-              <span
+              <button
+                type="button"
+                onClick={() => setSelectedLetter("ALL")}
                 style={{
-                  fontSize: "11.5px",
-                  fontWeight: 600,
-                  color: "var(--color-on-surface-variant, #94a3b8)",
-                  marginRight: "8px",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.05em",
+                  padding: "2px 8px",
+                  borderRadius: "4px",
+                  border: "none",
+                  fontSize: "11px",
+                  fontWeight: selectedLetter === "ALL" ? 600 : 500,
+                  cursor: "pointer",
+                  background: selectedLetter === "ALL" ? "var(--color-primary, #1a73e8)" : "transparent",
+                  color: selectedLetter === "ALL" ? "#ffffff" : "var(--color-on-surface-variant, #64748b)",
+                  transition: "all 0.15s ease",
                 }}
               >
-                Letra:
-              </span>
-              <Chip
-                size="xs"
-                active={selectedLetter === "ALL"}
-                onClick={() => setSelectedLetter("ALL")}
-              >
                 Todos ({terms.length})
-              </Chip>
-              {availableLetters.map((ltr) => (
-                <Chip
-                  key={ltr}
-                  size="xs"
-                  active={selectedLetter === ltr}
-                  onClick={() => setSelectedLetter(ltr)}
-                  style={{ minWidth: 26, justifyContent: "center" }}
+              </button>
+              {availableLetters.map((ltr) => {
+                const isActive = selectedLetter === ltr;
+                return (
+                  <button
+                    key={ltr}
+                    type="button"
+                    onClick={() => setSelectedLetter(ltr)}
+                    style={{
+                      minWidth: "22px",
+                      height: "22px",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      borderRadius: "4px",
+                      border: "none",
+                      fontSize: "11px",
+                      fontWeight: isActive ? 600 : 500,
+                      cursor: "pointer",
+                      background: isActive ? "var(--color-primary, #1a73e8)" : "transparent",
+                      color: isActive ? "#ffffff" : "var(--color-on-surface-variant, #64748b)",
+                      transition: "all 0.15s ease",
+                    }}
+                  >
+                    {ltr}
+                  </button>
+                );
+              })}
+
+              {hasActiveFilters && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleSearchChange("");
+                    setSelectedLetter("ALL");
+                    setSelectedDomainFilter("ALL");
+                    setSelectedCategoryFilter("ALL");
+                  }}
+                  style={{
+                    marginLeft: "auto",
+                    padding: "2px 6px",
+                    background: "transparent",
+                    border: "none",
+                    fontSize: "11px",
+                    color: "var(--color-primary, #1a73e8)",
+                    cursor: "pointer",
+                    textDecoration: "underline",
+                  }}
                 >
-                  {ltr}
-                </Chip>
-              ))}
+                  Limpar Filtros
+                </button>
+              )}
             </div>
           )}
-        </Card>
+        </div>
 
         {/* Content Section: Table or Grid */}
         {isLoading ? (
           <div
             style={{
-              padding: "64px 0",
+              padding: "48px 0",
               display: "flex",
               justifyContent: "center",
               alignItems: "center",
             }}
           >
-            <Spinner size="lg" message="Carregando dicionário ubíquo..." />
+            <Spinner size="md" message="Carregando dicionário ubíquo..." />
           </div>
         ) : filteredTerms.length === 0 ? (
           <Card>
-            <CardContent style={{ padding: "48px 24px" }}>
+            <CardContent style={{ padding: "40px 24px" }}>
               <EmptyState
-                icon={<BookA size={44} />}
+                icon={<BookA size={38} />}
                 title={
-                  searchTerm || selectedLetter !== "ALL"
+                  hasActiveFilters
                     ? "Nenhum termo correspondente"
                     : "Dicionário Vazio"
                 }
                 description={
-                  searchTerm || selectedLetter !== "ALL"
-                    ? `Nenhum termo encontrado para os filtros atuais. Limpe a busca para visualizar todos.`
-                    : "Cadastre termos, codenames e definições canônicas para que a equipe e a IA operem sob o mesmo vocabulário de domínio."
+                  hasActiveFilters
+                    ? `Nenhum termo encontrado para os filtros atuais.`
+                    : "Cadastre termos, codenames, categorias DDD e definições canônicas para unificar o vocabulário de domínio."
                 }
                 actionLabel={
-                  searchTerm || selectedLetter !== "ALL"
+                  hasActiveFilters
                     ? "Limpar Filtros"
                     : "Cadastrar Primeiro Termo"
                 }
                 onAction={
-                  searchTerm || selectedLetter !== "ALL"
+                  hasActiveFilters
                     ? () => {
-                        setSearchTerm("");
+                        handleSearchChange("");
                         setSelectedLetter("ALL");
+                        setSelectedDomainFilter("ALL");
+                        setSelectedCategoryFilter("ALL");
                       }
                     : handleOpenNewTerm
                 }
@@ -708,7 +974,7 @@ export const DictionarySubView: React.FC = () => {
                   width: "100%",
                   borderCollapse: "collapse",
                   textAlign: "left",
-                  fontSize: "13.5px",
+                  fontSize: "13px",
                 }}
               >
                 <thead>
@@ -721,40 +987,50 @@ export const DictionarySubView: React.FC = () => {
                   >
                     <th
                       style={{
-                        padding: "14px 20px",
+                        padding: "12px 18px",
                         fontWeight: 600,
                         color: "var(--color-on-surface, #334155)",
-                        width: "25%",
+                        width: "24%",
                       }}
                     >
-                      Termo / Conceito
+                      Termo & Sinônimos
                     </th>
                     <th
                       style={{
-                        padding: "14px 20px",
+                        padding: "12px 18px",
                         fontWeight: 600,
                         color: "var(--color-on-surface, #334155)",
-                        width: "22%",
+                        width: "18%",
                       }}
                     >
                       Code Name Oficial
                     </th>
                     <th
                       style={{
-                        padding: "14px 20px",
+                        padding: "12px 18px",
                         fontWeight: 600,
                         color: "var(--color-on-surface, #334155)",
-                        width: "41%",
+                        width: "16%",
                       }}
                     >
-                      Definição & Significado
+                      Domínio & Tipo
                     </th>
                     <th
                       style={{
-                        padding: "14px 20px",
+                        padding: "12px 18px",
                         fontWeight: 600,
                         color: "var(--color-on-surface, #334155)",
-                        width: "12%",
+                        width: "32%",
+                      }}
+                    >
+                      Definição & Contexto
+                    </th>
+                    <th
+                      style={{
+                        padding: "12px 18px",
+                        fontWeight: 600,
+                        color: "var(--color-on-surface, #334155)",
+                        width: "10%",
                         textAlign: "right",
                       }}
                     >
@@ -766,13 +1042,18 @@ export const DictionarySubView: React.FC = () => {
                   {filteredTerms.map((t) => {
                     const originalIdx = terms.findIndex(
                       (item) =>
-                        item.term === t.term && item.codename === t.codename,
+                        item.term === t.term &&
+                        (item.codename === t.codename || item.code_name === t.code_name),
                     );
-                    const isCodeCopied = copiedCodeId === t.codename;
+                    const codename = t.codename || t.code_name || "";
+                    const isCodeCopied = copiedCodeId === codename;
+                    const domainColor = getDomainColor(t.domain);
+                    const dddInfo = getDddCategoryInfo(t.category);
+                    const synonyms = t.synonyms || t.aliases || [];
 
                     return (
                       <tr
-                        key={`${t.term}-${t.codename}-${originalIdx}`}
+                        key={`${t.term}-${codename}-${originalIdx}`}
                         style={{
                           borderBottom:
                             "1px solid var(--color-outline-variant, #f1f5f9)",
@@ -786,20 +1067,20 @@ export const DictionarySubView: React.FC = () => {
                           (e.currentTarget.style.background = "transparent")
                         }
                       >
-                        {/* Term & Aliases */}
+                        {/* Term & Synonyms */}
                         <td
-                          style={{ padding: "14px 20px", verticalAlign: "top" }}
+                          style={{ padding: "12px 18px", verticalAlign: "top" }}
                         >
                           <div
                             style={{
                               fontWeight: 600,
                               color: "var(--color-on-surface, #0f172a)",
-                              fontSize: "14px",
+                              fontSize: "13.5px",
                             }}
                           >
                             {t.term}
                           </div>
-                          {t.context && (
+                          {synonyms.length > 0 && (
                             <div
                               style={{
                                 display: "flex",
@@ -809,50 +1090,37 @@ export const DictionarySubView: React.FC = () => {
                                 flexWrap: "wrap",
                               }}
                             >
-                              <span
-                                style={{
-                                  fontSize: "11px",
-                                  color:
-                                    "var(--color-on-surface-variant, #94a3b8)",
-                                }}
-                              >
-                                Aliases:
-                              </span>
-                              {t.context
-                                .split(",")
-                                .map((s) => s.trim())
-                                .filter(Boolean)
-                                .map((alias, aIdx) => (
-                                  <span
-                                    key={aIdx}
-                                    style={{
-                                      fontSize: "11px",
-                                      background:
-                                        "var(--color-surface-container-high, #e2e8f0)",
-                                      color:
-                                        "var(--color-on-surface-variant, #475569)",
-                                      padding: "1px 6px",
-                                      borderRadius: "4px",
-                                      fontFamily: "var(--font-mono, monospace)",
-                                    }}
-                                  >
-                                    {alias}
-                                  </span>
-                                ))}
+                              {synonyms.map((syn, sIdx) => (
+                                <span
+                                  key={sIdx}
+                                  style={{
+                                    fontSize: "10.5px",
+                                    background:
+                                      "var(--color-surface-container-high, #f1f5f9)",
+                                    color:
+                                      "var(--color-on-surface-variant, #475569)",
+                                    padding: "1px 5px",
+                                    borderRadius: "4px",
+                                    border: "1px solid var(--color-outline-variant, #e2e8f0)",
+                                  }}
+                                >
+                                  {syn}
+                                </span>
+                              ))}
                             </div>
                           )}
                         </td>
 
                         {/* Code Name Badge with 1-click Copy */}
                         <td
-                          style={{ padding: "14px 20px", verticalAlign: "top" }}
+                          style={{ padding: "12px 18px", verticalAlign: "top" }}
                         >
-                          {t.codename ? (
+                          {codename ? (
                             <div
                               style={{
                                 display: "inline-flex",
                                 alignItems: "center",
-                                gap: "6px",
+                                gap: "5px",
                               }}
                             >
                               <code
@@ -860,39 +1128,39 @@ export const DictionarySubView: React.FC = () => {
                                   fontFamily: "var(--font-mono, monospace)",
                                   background:
                                     "var(--color-surface-container-high, #e0f2fe)",
-                                  padding: "3px 8px",
-                                  borderRadius: "6px",
-                                  fontSize: "12.5px",
+                                  padding: "2px 7px",
+                                  borderRadius: "4px",
+                                  fontSize: "11.5px",
                                   color: "var(--color-primary, #0284c7)",
                                   fontWeight: 600,
                                   border: "1px solid rgba(2, 132, 199, 0.2)",
                                 }}
                               >
-                                {t.codename}
+                                {codename}
                               </code>
                               <IconButton
                                 icon={
                                   isCodeCopied ? (
                                     <Check
-                                      size={13}
+                                      size={12}
                                       style={{
                                         color: "var(--color-success, #16a34a)",
                                       }}
                                     />
                                   ) : (
-                                    <Copy size={13} />
+                                    <Copy size={12} />
                                   )
                                 }
                                 variant="ghost"
-                                size="sm"
+                                size="xs"
                                 tooltip={
                                   isCodeCopied ? "Copiado!" : "Copiar Code Name"
                                 }
                                 onClick={() =>
                                   copyToClipboard(
-                                    t.codename,
+                                    codename,
                                     "code",
-                                    t.codename,
+                                    codename,
                                   )
                                 }
                               />
@@ -909,39 +1177,109 @@ export const DictionarySubView: React.FC = () => {
                           )}
                         </td>
 
-                        {/* Definition */}
+                        {/* Domain & Category Badges */}
+                        <td
+                          style={{ padding: "12px 18px", verticalAlign: "top" }}
+                        >
+                          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                            {t.domain && (
+                              <span
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: 4,
+                                  width: "fit-content",
+                                  padding: "1px 7px",
+                                  borderRadius: 10,
+                                  backgroundColor: `${domainColor}15`,
+                                  borderColor: `${domainColor}40`,
+                                  borderWidth: 1,
+                                  borderStyle: "solid",
+                                  color: domainColor,
+                                  fontSize: 11,
+                                  fontWeight: 600,
+                                }}
+                              >
+                                <span
+                                  style={{
+                                    width: 5,
+                                    height: 5,
+                                    borderRadius: "50%",
+                                    backgroundColor: domainColor,
+                                  }}
+                                />
+                                {t.domain}
+                              </span>
+                            )}
+                            {t.category && (
+                              <span
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  width: "fit-content",
+                                  padding: "1px 6px",
+                                  borderRadius: 4,
+                                  backgroundColor: `${dddInfo.color}10`,
+                                  color: dddInfo.color,
+                                  border: `1px solid ${dddInfo.color}25`,
+                                  fontSize: 10.5,
+                                  fontWeight: 600,
+                                }}
+                              >
+                                {t.category}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+
+                        {/* Definition & Context */}
                         <td
                           style={{
-                            padding: "14px 20px",
+                            padding: "12px 18px",
                             verticalAlign: "top",
                             color: "var(--color-on-surface-variant, #334155)",
-                            lineHeight: 1.55,
-                            fontSize: "13.5px",
+                            lineHeight: 1.5,
+                            fontSize: "13px",
                           }}
                         >
-                          {t.definition}
+                          <div>{t.definition}</div>
+                          {t.context && (
+                            <div
+                              style={{
+                                marginTop: "4px",
+                                fontSize: "11px",
+                                color: "var(--color-on-surface-variant, #64748b)",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 4,
+                              }}
+                            >
+                              <span style={{ fontWeight: 600 }}>Contexto:</span>
+                              <span>{t.context}</span>
+                            </div>
+                          )}
                         </td>
 
                         {/* Actions */}
                         <td
                           style={{
-                            padding: "14px 20px",
+                            padding: "12px 18px",
                             verticalAlign: "top",
                             textAlign: "right",
                             whiteSpace: "nowrap",
                           }}
                         >
                           <IconButton
-                            icon={<Edit3 size={15} />}
+                            icon={<Edit3 size={14} />}
                             variant="ghost"
-                            size="sm"
+                            size="xs"
                             tooltip="Editar termo"
                             onClick={() => handleEditTerm(t, originalIdx)}
                           />
                           <IconButton
-                            icon={<Trash2 size={15} />}
+                            icon={<Trash2 size={14} />}
                             variant="ghost"
-                            size="sm"
+                            size="xs"
                             tooltip="Remover termo"
                             onClick={() => handleDeleteTerm(originalIdx)}
                             style={{ color: "var(--color-error, #ef4444)" }}
@@ -959,68 +1297,108 @@ export const DictionarySubView: React.FC = () => {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))",
-              gap: "18px",
+              gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))",
+              gap: "14px",
             }}
           >
             {filteredTerms.map((t) => {
               const originalIdx = terms.findIndex(
-                (item) => item.term === t.term && item.codename === t.codename,
+                (item) =>
+                  item.term === t.term &&
+                  (item.codename === t.codename || item.code_name === t.code_name),
               );
-              const isCodeCopied = copiedCodeId === t.codename;
+              const codename = t.codename || t.code_name || "";
+              const isCodeCopied = copiedCodeId === codename;
+              const domainColor = getDomainColor(t.domain);
+              const dddInfo = getDddCategoryInfo(t.category);
+              const synonyms = t.synonyms || t.aliases || [];
 
               return (
                 <Card
-                  key={`${t.term}-${t.codename}-${originalIdx}`}
+                  key={`${t.term}-${codename}-${originalIdx}`}
                   style={{
                     display: "flex",
                     flexDirection: "column",
                     justifyContent: "space-between",
-                    transition: "all 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
+                    transition: "all 0.15s ease",
                     border: "1px solid var(--color-outline-variant, #e2e8f0)",
                   }}
                 >
-                  <CardContent style={{ padding: "20px" }}>
-                    {/* Top row */}
+                  <CardContent style={{ padding: "16px" }}>
+                    {/* Top Row: Domain & Category Badges + Actions */}
                     <div
                       style={{
                         display: "flex",
-                        alignItems: "flex-start",
+                        alignItems: "center",
                         justifyContent: "space-between",
-                        gap: "12px",
+                        gap: "8px",
                         marginBottom: "10px",
                       }}
                     >
-                      <h3
-                        style={{
-                          margin: 0,
-                          fontSize: "16px",
-                          fontWeight: 700,
-                          color: "var(--color-on-surface, #0f172a)",
-                          lineHeight: 1.3,
-                        }}
-                      >
-                        {t.term}
-                      </h3>
+                      <div style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
+                        {t.domain && (
+                          <span
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 4,
+                              padding: "1px 7px",
+                              borderRadius: 10,
+                              backgroundColor: `${domainColor}15`,
+                              borderColor: `${domainColor}40`,
+                              borderWidth: 1,
+                              borderStyle: "solid",
+                              color: domainColor,
+                              fontSize: 10.5,
+                              fontWeight: 600,
+                            }}
+                          >
+                            <span
+                              style={{
+                                width: 5,
+                                height: 5,
+                                borderRadius: "50%",
+                                backgroundColor: domainColor,
+                              }}
+                            />
+                            {t.domain}
+                          </span>
+                        )}
+                        {t.category && (
+                          <span
+                            style={{
+                              padding: "1px 5px",
+                              borderRadius: 4,
+                              backgroundColor: `${dddInfo.color}10`,
+                              color: dddInfo.color,
+                              border: `1px solid ${dddInfo.color}25`,
+                              fontSize: 10,
+                              fontWeight: 600,
+                            }}
+                          >
+                            {t.category}
+                          </span>
+                        )}
+                      </div>
 
                       <div
                         style={{
                           display: "flex",
                           alignItems: "center",
-                          gap: "4px",
+                          gap: "2px",
                         }}
                       >
                         <IconButton
-                          icon={<Edit3 size={14} />}
+                          icon={<Edit3 size={13} />}
                           variant="ghost"
-                          size="sm"
+                          size="xs"
                           tooltip="Editar termo"
                           onClick={() => handleEditTerm(t, originalIdx)}
                         />
                         <IconButton
-                          icon={<Trash2 size={14} />}
+                          icon={<Trash2 size={13} />}
                           variant="ghost"
-                          size="sm"
+                          size="xs"
                           tooltip="Remover termo"
                           onClick={() => handleDeleteTerm(originalIdx)}
                           style={{ color: "var(--color-error, #ef4444)" }}
@@ -1028,47 +1406,56 @@ export const DictionarySubView: React.FC = () => {
                       </div>
                     </div>
 
+                    {/* Title */}
+                    <h3
+                      style={{
+                        margin: "0 0 6px 0",
+                        fontSize: "15px",
+                        fontWeight: 700,
+                        color: "var(--color-on-surface, #0f172a)",
+                        lineHeight: 1.3,
+                      }}
+                    >
+                      {t.term}
+                    </h3>
+
                     {/* Codename Pill */}
-                    {t.codename && (
+                    {codename && (
                       <div
                         style={{
-                          marginBottom: "12px",
+                          marginBottom: "10px",
                           display: "inline-flex",
                           alignItems: "center",
-                          gap: "6px",
+                          gap: "5px",
                           background: "var(--color-surface-container, #f1f5f9)",
-                          padding: "3px 8px",
-                          borderRadius: "6px",
+                          padding: "2px 6px",
+                          borderRadius: "4px",
                           border:
                             "1px solid var(--color-outline-variant, #e2e8f0)",
                         }}
                       >
-                        <Code2
-                          size={13}
-                          style={{ color: "var(--color-primary, #1a73e8)" }}
-                        />
                         <code
                           style={{
                             fontFamily: "var(--font-mono, monospace)",
-                            fontSize: "12px",
+                            fontSize: "11px",
                             fontWeight: 600,
                             color: "var(--color-primary, #1a73e8)",
                           }}
                         >
-                          {t.codename}
+                          {codename}
                         </code>
                         <IconButton
                           size="xs"
                           variant="ghost"
                           onClick={() =>
-                            copyToClipboard(t.codename, "code", t.codename)
+                            copyToClipboard(codename, "code", codename)
                           }
                           title={isCodeCopied ? "Copiado!" : "Copiar Code Name"}
                           icon={
                             isCodeCopied ? (
-                              <Check size={12} style={{ color: "var(--color-success, #16a34a)" }} />
+                              <Check size={11} style={{ color: "var(--color-success, #16a34a)" }} />
                             ) : (
-                              <Copy size={12} />
+                              <Copy size={11} />
                             )
                           }
                         />
@@ -1079,53 +1466,66 @@ export const DictionarySubView: React.FC = () => {
                     <p
                       style={{
                         margin: 0,
-                        fontSize: "13.5px",
-                        lineHeight: 1.55,
+                        fontSize: "12.5px",
+                        lineHeight: 1.5,
                         color: "var(--color-on-surface-variant, #334155)",
                       }}
                     >
                       {t.definition}
                     </p>
 
-                    {/* Aliases Tags */}
-                    {t.context && (
+                    {/* Synonyms Chips */}
+                    {synonyms.length > 0 && (
                       <div
                         style={{
-                          marginTop: "14px",
-                          paddingTop: "12px",
+                          marginTop: "10px",
+                          paddingTop: "8px",
                           borderTop:
                             "1px solid var(--color-outline-variant, #f1f5f9)",
                           display: "flex",
                           alignItems: "center",
-                          gap: "6px",
+                          gap: "4px",
                           flexWrap: "wrap",
                         }}
                       >
                         <Tag
-                          size={12}
+                          size={11}
                           style={{ color: "var(--color-outline, #94a3b8)" }}
                         />
-                        {t.context
-                          .split(",")
-                          .map((s) => s.trim())
-                          .filter(Boolean)
-                          .map((alias, aIdx) => (
-                            <span
-                              key={aIdx}
-                              style={{
-                                fontSize: "11px",
-                                background:
-                                  "var(--color-surface-container-high, #f1f5f9)",
-                                color:
-                                  "var(--color-on-surface-variant, #475569)",
-                                padding: "2px 6px",
-                                borderRadius: "4px",
-                                fontFamily: "var(--font-mono, monospace)",
-                              }}
-                            >
-                              {alias}
-                            </span>
-                          ))}
+                        {synonyms.map((syn, sIdx) => (
+                          <span
+                            key={sIdx}
+                            style={{
+                              fontSize: "10.5px",
+                              background:
+                                "var(--color-surface-container-high, #f1f5f9)",
+                              color:
+                                "var(--color-on-surface-variant, #475569)",
+                              padding: "1px 5px",
+                              borderRadius: "4px",
+                              border: "1px solid var(--color-outline-variant, #e2e8f0)",
+                            }}
+                          >
+                            {syn}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Context Footer */}
+                    {t.context && (
+                      <div
+                        style={{
+                          marginTop: synonyms.length > 0 ? "6px" : "10px",
+                          fontSize: "11px",
+                          color: "var(--color-on-surface-variant, #64748b)",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 4,
+                        }}
+                      >
+                        <span style={{ fontWeight: 600 }}>Contexto:</span>
+                        <span>{t.context}</span>
                       </div>
                     )}
                   </CardContent>
@@ -1173,8 +1573,22 @@ export const DictionarySubView: React.FC = () => {
             e.preventDefault();
             handleSaveTerm();
           }}
-          style={{ display: "flex", flexDirection: "column", gap: "16px" }}
+          style={{ display: "flex", flexDirection: "column", gap: "14px" }}
         >
+          {formError && (
+            <div
+              style={{
+                color: "#ef4444",
+                fontSize: "12.5px",
+                padding: "8px 12px",
+                background: "rgba(239, 68, 68, 0.1)",
+                borderRadius: "6px",
+                border: "1px solid rgba(239, 68, 68, 0.25)",
+              }}
+            >
+              {formError}
+            </div>
+          )}
           <FormField
             label="Nome do Termo / Conceito"
             required
@@ -1215,18 +1629,114 @@ export const DictionarySubView: React.FC = () => {
             />
           </FormField>
 
+          {/* Domínio (Categorias do Projeto com Cores Dinâmicas) */}
           <FormField
-            label="Sinônimos / Aliases / Contexto"
-            helperText="Termos alternativos e variações separados por vírgula (ex: Chave Única, Idempotency Token)."
+            label="Domínio de Negócio (do Projeto)"
+            required
+            helperText="Selecione o domínio/categoria correspondente configurado no projeto."
+          >
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 2 }}>
+              {categories.map((cat: any) => {
+                const isSelected = inputDomain.toLowerCase() === (cat.name || "").toLowerCase();
+                const color = cat.color || "#3b82f6";
+                return (
+                  <button
+                    key={cat.name}
+                    type="button"
+                    onClick={() => setInputDomain(cat.name)}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 5,
+                      padding: "4px 10px",
+                      borderRadius: 16,
+                      border: `1.5px solid ${isSelected ? color : "var(--color-outline-variant, #e2e8f0)"}`,
+                      backgroundColor: isSelected ? `${color}18` : "#ffffff",
+                      color: isSelected ? color : "var(--color-on-surface, #334155)",
+                      fontSize: 11.5,
+                      fontWeight: isSelected ? 600 : 500,
+                      cursor: "pointer",
+                      transition: "all 0.15s ease",
+                    }}
+                  >
+                    <span
+                      style={{
+                        width: 6,
+                        height: 6,
+                        borderRadius: "50%",
+                        backgroundColor: color,
+                      }}
+                    />
+                    <span>{cat.label || cat.name}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </FormField>
+
+          {/* Classificação Conceitual DDD */}
+          <FormField
+            label="Classificação Arquitetural (DDD)"
+            helperText="Padrão conceitual no domínio da aplicação."
+          >
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 2 }}>
+              {DDD_CATEGORIES.map((cat) => {
+                const isSelected = inputCategory.toLowerCase() === cat.id.toLowerCase();
+                return (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => setInputCategory(cat.id)}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 5,
+                      padding: "3px 8px",
+                      borderRadius: 5,
+                      border: `1px solid ${isSelected ? cat.color : "var(--color-outline-variant, #e2e8f0)"}`,
+                      backgroundColor: isSelected ? `${cat.color}18` : "var(--color-surface, #ffffff)",
+                      color: isSelected ? cat.color : "var(--color-on-surface-variant, #475569)",
+                      fontSize: 11,
+                      fontWeight: isSelected ? 600 : 500,
+                      cursor: "pointer",
+                      transition: "all 0.15s ease",
+                    }}
+                    title={cat.desc}
+                  >
+                    {cat.label}
+                  </button>
+                );
+              })}
+            </div>
+          </FormField>
+
+          {/* Contexto Delimitado */}
+          <FormField
+            label="Contexto Delimitado / Escopo de Uso"
+            helperText="Contexto ou módulo onde este termo é empregado (ex: faturamento, dispensação, autenticação)."
           >
             <Input
-              id="dict-input-aliases"
-              placeholder="ex: Idempotency Key, Chave Única"
-              value={inputAliases}
-              onChange={(e) => setInputAliases(e.target.value)}
+              id="dict-input-context"
+              placeholder="ex: faturamento, dispensação, prescrição"
+              value={inputContext}
+              onChange={(e) => setInputContext(e.target.value)}
             />
           </FormField>
 
+          {/* Sinônimos & Aliases */}
+          <FormField
+            label="Sinônimos / Aliases (separados por vírgula)"
+            helperText="Termos alternativos e variações textuais que referenciam este mesmo conceito."
+          >
+            <Input
+              id="dict-input-synonyms"
+              placeholder="ex: Idempotency Key, Chave Única"
+              value={inputSynonyms}
+              onChange={(e) => setInputSynonyms(e.target.value)}
+            />
+          </FormField>
+
+          {/* Definição */}
           <FormField
             label="Definição / Significado Inequívoco"
             required
@@ -1234,80 +1744,12 @@ export const DictionarySubView: React.FC = () => {
           >
             <Textarea
               id="dict-input-definition"
-              rows={4}
+              rows={3}
               placeholder="Descreva o significado exato no contexto da arquitetura e negócio..."
               value={inputDefinition}
               onChange={(e) => setInputDefinition(e.target.value)}
             />
           </FormField>
-
-          {/* Live Preview Card */}
-          {inputTerm.trim() && (
-            <div
-              style={{
-                marginTop: "4px",
-                padding: "12px 14px",
-                borderRadius: "8px",
-                background: "var(--color-surface-container, #f8fafc)",
-                border: "1px dashed var(--color-outline-variant, #cbd5e1)",
-              }}
-            >
-              <div
-                style={{
-                  fontSize: "11px",
-                  fontWeight: 700,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.05em",
-                  color: "var(--color-on-surface-variant, #64748b)",
-                  marginBottom: "6px",
-                }}
-              >
-                Pré-visualização
-              </div>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  flexWrap: "wrap",
-                }}
-              >
-                <span
-                  style={{
-                    fontWeight: 600,
-                    color: "var(--color-on-surface, #0f172a)",
-                  }}
-                >
-                  {inputTerm}
-                </span>
-                {inputCodename && (
-                  <code
-                    style={{
-                      fontSize: "11.5px",
-                      background:
-                        "var(--color-surface-container-high, #e2e8f0)",
-                      color: "var(--color-primary, #1a73e8)",
-                      padding: "2px 6px",
-                      borderRadius: "4px",
-                    }}
-                  >
-                    {inputCodename}
-                  </code>
-                )}
-              </div>
-              {inputDefinition && (
-                <p
-                  style={{
-                    margin: "4px 0 0 0",
-                    fontSize: "12.5px",
-                    color: "var(--color-on-surface-variant, #475569)",
-                  }}
-                >
-                  {inputDefinition}
-                </p>
-              )}
-            </div>
-          )}
         </form>
       </Modal>
 
@@ -1345,12 +1787,12 @@ export const DictionarySubView: React.FC = () => {
           <FormField
             label="Conteúdo JSON"
             required
-            helperText="Formato: [{ 'term': '...', 'codename': '...', 'definition': '...', 'context': '...' }]"
+            helperText="Formato: [{ 'term': '...', 'codename': '...', 'domain': '...', 'category': '...', 'definition': '...', 'context': '...', 'synonyms': [...] }]"
           >
             <Textarea
               id="dict-import-textarea"
               rows={8}
-              placeholder={`[\n  {\n    "term": "Chave de Idempotência",\n    "codename": "IDEMPOTENCY_KEY",\n    "definition": "Identificador exclusivo para evitar duplicidade de operações.",\n    "context": "Idempotency Key"\n  }\n]`}
+              placeholder={`[\n  {\n    "term": "Chave de Idempotência",\n    "codename": "IDEMPOTENCY_KEY",\n    "domain": "arquitetura",\n    "category": "Value Object",\n    "definition": "Identificador exclusivo para evitar duplicidade de operações.",\n    "context": "apis, mensageria",\n    "synonyms": ["Idempotency Key", "Chave Única"]\n  }\n]`}
               value={importJsonText}
               onChange={(e) => {
                 setImportJsonText(e.target.value);

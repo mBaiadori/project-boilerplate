@@ -1,7 +1,4 @@
-// =============================================================================
-// COMPONENT: SLASH COMMAND MENU POPOVER ('/')
-// Menu flutuante acionado ao digitar '/' com atalhos, busca e navegação por teclado.
-// =============================================================================
+import type { DictionaryTerm } from '../../types';
 
 export interface SlashCommand {
   id: string;
@@ -32,6 +29,7 @@ export class SlashMenuEngine {
   filteredItems: SlashCommand[] = [];
   query = '';
   triggerRange: Range | null = null;
+  dictionaryTerms: DictionaryTerm[] = [];
 
   commands: SlashCommand[] = [
     // 1. Títulos & Cabeçalhos
@@ -60,10 +58,10 @@ export class SlashMenuEngine {
       keywords: ['h3', 'topico', 'header', 'pequeno']
     },
 
-    // 2. Links & Referências
+    // 2. Links & Hiperlinks
     {
       id: 'link',
-      category: 'Links & Referências',
+      category: 'Links & Hiperlinks',
       title: 'Inserir Link',
       desc: 'Adicionar hiperlink web, documento do workspace ou trecho',
       icon: '<span class="material-symbols-outlined icon-sm">link</span>',
@@ -185,14 +183,21 @@ export class SlashMenuEngine {
 
   constructor({
     container,
-    onSelectCommand
+    onSelectCommand,
+    dictionaryTerms,
   }: {
     container: HTMLElement;
     onSelectCommand?: (cmdId: string, targetRange: Range | null) => void;
+    dictionaryTerms?: DictionaryTerm[];
   }) {
     this.container = container;
     this.onSelectCommand = onSelectCommand || (() => {});
+    this.dictionaryTerms = dictionaryTerms || [];
     this.init();
+  }
+
+  setDictionaryTerms(terms: DictionaryTerm[]) {
+    this.dictionaryTerms = terms || [];
   }
 
   init() {
@@ -202,7 +207,7 @@ export class SlashMenuEngine {
     this.element.innerHTML = `
       <div class="slash-menu-search">
         <span class="material-symbols-outlined icon-sm" style="color: #64748b;">search</span>
-        <input type="text" placeholder="Filtrar componente..." spellcheck="false" />
+        <input type="text" placeholder="Filtrar componente ou termo..." spellcheck="false" />
       </div>
       <div class="slash-menu-list"></div>
     `;
@@ -325,11 +330,11 @@ export class SlashMenuEngine {
     if (!this.query) {
       this.filteredItems = [...this.commands];
     } else {
-      this.filteredItems = this.commands.filter(cmd => {
+      this.filteredItems = this.commands.filter((cmd) => {
         return (
           cmd.title.toLowerCase().includes(this.query) ||
           cmd.desc.toLowerCase().includes(this.query) ||
-          cmd.keywords.some(k => k.toLowerCase().includes(this.query))
+          cmd.keywords.some((k) => k.toLowerCase().includes(this.query))
         );
       });
     }
@@ -337,7 +342,7 @@ export class SlashMenuEngine {
     if (this.filteredItems.length === 0) {
       this.listContainer.innerHTML = `
         <div style="padding: 16px; text-align: center; color: #94a3b8; font-size: 13px;">
-          Nenhum componente encontrado para "<strong>${escapeHtml(this.query)}</strong>"
+          Nenhum comando encontrado para "<strong>${escapeHtml(this.query)}</strong>"
         </div>
       `;
       this.selectedIndex = 0;

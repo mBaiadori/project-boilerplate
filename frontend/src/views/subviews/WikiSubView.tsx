@@ -28,6 +28,8 @@ import {
   Sparkles,
   Library
 } from "lucide-react";
+import { decorateHtmlWithTerms, findDictionaryTerm } from "../../utils/dictionary-matcher";
+import { DictionaryPopover, type DictionaryPopoverData } from "../../components/dictionary/DictionaryPopover";
 
 interface CategoryMetaItem {
   label: string;
@@ -111,7 +113,7 @@ interface WikiEntry {
 }
 
 export const WikiSubView: React.FC = () => {
-  const { activeRepo } = useWorkspace();
+  const { activeRepo, dictionaryTerms } = useWorkspace();
   const { setDynamicContext } = useAI();
   const [activeCategory, setActiveCategory] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -119,6 +121,7 @@ export const WikiSubView: React.FC = () => {
   const [activeEntry, setActiveEntry] = useState<WikiEntry | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [dictPopoverData, setDictPopoverData] = useState<DictionaryPopoverData | null>(null);
 
   // Edit / Create State
   const [isEditing, setIsEditing] = useState(false);
@@ -126,6 +129,32 @@ export const WikiSubView: React.FC = () => {
   const [editTitle, setEditTitle] = useState("");
   const [editSlug, setEditSlug] = useState("");
   const [editContent, setEditContent] = useState("");
+
+  const renderedHtml = React.useMemo(() => {
+    if (!activeEntry?.content) return "";
+    const rawHtml = marked.parse(activeEntry.content) as string;
+    return decorateHtmlWithTerms(rawHtml, dictionaryTerms || []);
+  }, [activeEntry?.content, dictionaryTerms]);
+
+  const handleArticleMouseMove = (e: React.MouseEvent) => {
+    const target = (e.target as HTMLElement).closest('.dict-term-highlight') as HTMLElement | null;
+    if (target && dictionaryTerms && dictionaryTerms.length > 0) {
+      const termKey = target.getAttribute('data-term-key') || target.textContent || '';
+      const match = findDictionaryTerm(termKey, dictionaryTerms);
+      if (match) {
+        const t = match.term;
+        setDictPopoverData({
+          termId: t.id,
+          term: t.term,
+          codename: t.codename || t.code_name || '',
+          domain: t.domain || t.category || '',
+          definition: t.definition || '',
+          synonyms: Array.isArray(t.synonyms) ? t.synonyms : t.aliases || [],
+          rect: target.getBoundingClientRect()
+        });
+      }
+    }
+  };
 
   const loadWikiEntries = useCallback(async () => {
     if (!activeRepo) return;
@@ -138,16 +167,19 @@ export const WikiSubView: React.FC = () => {
       if (res.ok && res.data) {
         const rawEntries: WikiEntry[] = res.data.entries || res.data.wiki || [];
         setEntries(rawEntries);
-        if (rawEntries.length > 0 && !activeEntry) {
-          setActiveEntry(rawEntries[0]);
-        }
+        setActiveEntry((prev) => {
+          if (prev && rawEntries.some((e) => e.slug === prev.slug)) {
+            return prev;
+          }
+          return rawEntries[0] || null;
+        });
       }
     } catch (err) {
       console.error("[WikiSubView] Erro ao carregar wiki:", err);
     } finally {
       setIsLoading(false);
     }
-  }, [activeRepo, searchQuery, activeEntry]);
+  }, [activeRepo?.name, searchQuery]);
 
   useEffect(() => {
     loadWikiEntries();
@@ -669,8 +701,9 @@ export const WikiSubView: React.FC = () => {
 
             <article
               className="markdown-body"
+              onMouseMove={handleArticleMouseMove}
               dangerouslySetInnerHTML={{
-                __html: marked.parse(activeEntry.content || "") as string,
+                __html: renderedHtml,
               }}
               style={{ fontSize: "14.5px", lineHeight: 1.7 }}
             />
@@ -701,6 +734,11 @@ export const WikiSubView: React.FC = () => {
           </div>
         )}
       </main>
+
+      <DictionaryPopover
+        data={dictPopoverData}
+        onClose={() => setDictPopoverData(null)}
+      />
     </div>
   );
 };

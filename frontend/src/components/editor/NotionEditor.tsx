@@ -8,6 +8,12 @@ import {
 } from "../../services/frontmatter";
 import type { DocumentMetadataItem, GitCommitInfo } from "../../types";
 import { InsertLinkModal } from "../modals/InsertLinkModal";
+import { AddDictionaryTermModal } from "../modals/AddDictionaryTermModal";
+import { LinkSynonymModal } from "../modals/LinkSynonymModal";
+import {
+  DictionaryPopover,
+  type DictionaryPopoverData,
+} from "../dictionary/DictionaryPopover";
 import { DocConnectivityBar } from "./DocConnectivityBar";
 import { DocumentHistoryDrawer } from "./DocumentHistoryDrawer";
 import {
@@ -63,11 +69,14 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
     fileMetadata,
     updateDocumentTitle,
     updateFileMetadata,
+    dictionaryTerms,
   } = useWorkspace();
   const [editorTab, setEditorTab] = useState<"document" | "prompt">("document");
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [importText, setImportText] = useState("");
   const [titleValue, setTitleValue] = useState<string>("");
+  const [dictionaryPopoverData, setDictionaryPopoverData] =
+    useState<DictionaryPopoverData | null>(null);
 
   // Git Mode, Visual Diff & Document History Drawer State
   const [isGitMode, setIsGitMode] = useState(false);
@@ -112,6 +121,22 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
     },
     [],
   );
+
+  // Dictionary Term & Synonym Modal State
+  const [isAddTermModalOpen, setIsAddTermModalOpen] = useState(false);
+  const [addTermInitialText, setAddTermInitialText] = useState("");
+  const [isLinkSynonymModalOpen, setIsLinkSynonymModalOpen] = useState(false);
+  const [linkSynonymInitialText, setLinkSynonymInitialText] = useState("");
+
+  const handleOpenAddTermModal = useCallback((text: string) => {
+    setAddTermInitialText(text);
+    setIsAddTermModalOpen(true);
+  }, []);
+
+  const handleOpenLinkSynonymModal = useCallback((text: string) => {
+    setLinkSynonymInitialText(text);
+    setIsLinkSynonymModalOpen(true);
+  }, []);
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<NotionEditorEngine | null>(null);
@@ -175,7 +200,6 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
       engineRef.current.setMarkdown(targetText);
     }
   };
-
 
   // Auto-resize title textarea to fit content organically like a heading
   useEffect(() => {
@@ -288,9 +312,15 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
 
   // Manual save trigger (Ctrl+S ou clique) que faz o flush imediato
   const handleSave = useCallback(async () => {
+    if (engineRef.current) {
+      engineRef.current.applyDictionaryHighlights();
+    }
     if (onCustomSave) {
       const res = await onCustomSave();
       if ((res as any)?.success !== false) {
+        if (engineRef.current) {
+          engineRef.current.applyDictionaryHighlights();
+        }
         setEditorToast({
           text: (res as any)?.message || "Template salvo com sucesso!",
           type: "success",
@@ -302,6 +332,9 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
     if (!filePath) return;
     const res = await saveCurrentFile();
     if (res?.success) {
+      if (engineRef.current) {
+        engineRef.current.applyDictionaryHighlights();
+      }
       setEditorToast({
         text: "Alterações gravadas no disco!",
         type: "success",
@@ -318,6 +351,10 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
       canvasElement: canvasRef.current,
       filePath: filePath,
       onNavigateFile: onNavigateFile,
+      dictionaryTerms: dictionaryTerms,
+      onShowDictionaryPopover: (data) => {
+        setDictionaryPopoverData(data);
+      },
       onChange: () => {
         if (!engineRef.current) return;
         const currentMd = engineRef.current.getMarkdown();
@@ -350,6 +387,8 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
         setTimeout(() => setEditorToast(null), 3800);
       },
       onOpenLinkModal: handleOpenLinkModal,
+      onAddDictionaryTerm: handleOpenAddTermModal,
+      onLinkSynonym: handleOpenLinkSynonymModal,
       onFragmentStatus: (status) => {
         setFragmentAlert(status);
       },
@@ -375,6 +414,12 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
       engineRef.current = null;
     };
   }, [isGitMode]);
+
+  useEffect(() => {
+    if (engineRef.current) {
+      engineRef.current.setDictionaryTerms(dictionaryTerms);
+    }
+  }, [dictionaryTerms]);
 
   useEffect(() => {
     if (engineRef.current) {
@@ -1024,7 +1069,7 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
                       text: "Texto original copiado!",
                       type: "success",
                     });
-                    setTimeout(() => setEditorToast(null), 3000);
+                    setTimeout(() => setEditorToast(null), 2000);
                   }}
                 >
                   <span className="material-symbols-outlined icon-xs">
@@ -1334,6 +1379,43 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
           </div>
         </div>
       )}
+      {/* Dictionary Modals */}
+      <AddDictionaryTermModal
+        isOpen={isAddTermModalOpen}
+        initialTerm={addTermInitialText}
+        onClose={() => setIsAddTermModalOpen(false)}
+        onTermCreated={() => {
+          if (engineRef.current) {
+            engineRef.current.applyDictionaryHighlights();
+          }
+          setEditorToast({
+            text: "Termo cadastrado com sucesso no Dicionário!",
+            type: "success",
+          });
+          setTimeout(() => setEditorToast(null), 3000);
+        }}
+      />
+
+      <LinkSynonymModal
+        isOpen={isLinkSynonymModalOpen}
+        synonymText={linkSynonymInitialText}
+        onClose={() => setIsLinkSynonymModalOpen(false)}
+        onSynonymLinked={() => {
+          if (engineRef.current) {
+            engineRef.current.applyDictionaryHighlights();
+          }
+          setEditorToast({
+            text: "Sinônimo vinculado com sucesso!",
+            type: "success",
+          });
+          setTimeout(() => setEditorToast(null), 3000);
+        }}
+      />
+
+      <DictionaryPopover
+        data={dictionaryPopoverData}
+        onClose={() => setDictionaryPopoverData(null)}
+      />
     </div>
   );
 };

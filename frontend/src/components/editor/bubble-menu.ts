@@ -15,6 +15,8 @@ export class BubbleMenuEngine {
   getFilePath?: () => string | null;
   onCopyLink?: (url: string) => void;
   onOpenLinkModal?: (defaultText: string, callback: (url: string, text: string) => void, initialUrl?: string) => void;
+  onAddDictionaryTerm?: (text: string) => void;
+  onLinkSynonym?: (text: string) => void;
   element: HTMLElement | null = null;
   colorPicker: HTMLElement | null = null;
   isVisible = false;
@@ -44,6 +46,8 @@ export class BubbleMenuEngine {
     getFilePath,
     onCopyLink,
     onOpenLinkModal,
+    onAddDictionaryTerm,
+    onLinkSynonym,
   }: {
     container: HTMLElement;
     onFormat?: (action: string) => void;
@@ -51,6 +55,8 @@ export class BubbleMenuEngine {
     getFilePath?: () => string | null;
     onCopyLink?: (url: string) => void;
     onOpenLinkModal?: (defaultText: string, callback: (url: string, text: string) => void, initialUrl?: string) => void;
+    onAddDictionaryTerm?: (text: string) => void;
+    onLinkSynonym?: (text: string) => void;
   }) {
     this.container = container;
     this.onFormat = onFormat || (() => {});
@@ -58,6 +64,8 @@ export class BubbleMenuEngine {
     this.getFilePath = getFilePath;
     this.onCopyLink = onCopyLink;
     this.onOpenLinkModal = onOpenLinkModal;
+    this.onAddDictionaryTerm = onAddDictionaryTerm;
+    this.onLinkSynonym = onLinkSynonym;
 
     this.onSelectionChangeHandler = () => this.updatePosition();
     this.onResizeHandler = () => this.updatePosition();
@@ -78,6 +86,15 @@ export class BubbleMenuEngine {
       <button type="button" class="bubble-btn" data-action="code" title="Código inline"><code>&lt;/&gt;</code></button>
       <button type="button" class="bubble-btn" data-action="link" title="Inserir Link (Ctrl+K)"><span class="material-symbols-outlined icon-xs">link</span></button>
       <button type="button" class="bubble-btn" data-action="color" title="Cor & Destaque"><span class="material-symbols-outlined icon-xs">palette</span></button>
+      <div class="bubble-divider"></div>
+      <button type="button" class="bubble-btn dict-btn" data-action="add-dictionary" title="Cadastrar termo no Dicionário Ubíquo" style="display: inline-flex; align-items: center; gap: 3px; font-size: 11.5px; padding: 2px 7px; color: var(--color-primary, #2563eb); font-weight: 500;">
+        <span class="material-symbols-outlined icon-xs">library_add</span>
+        <span>Novo Termo</span>
+      </button>
+      <button type="button" class="bubble-btn syn-btn" data-action="link-synonym" title="Vincular como sinônimo a um termo existente" style="display: inline-flex; align-items: center; gap: 3px; font-size: 11.5px; padding: 2px 7px; color: #7c3aed; font-weight: 500;">
+        <span class="material-symbols-outlined icon-xs">bookmarks</span>
+        <span>Sinônimo</span>
+      </button>
       <div class="bubble-divider"></div>
       <button type="button" class="bubble-btn fragment-btn" data-action="copy-fragment-link" title="Copiar Link Resiliente do Trecho" style="display: inline-flex; align-items: center; gap: 3px; font-size: 11px; padding: 2px 7px;">
         <span class="material-symbols-outlined icon-xs">share_location</span>
@@ -113,6 +130,20 @@ export class BubbleMenuEngine {
           if (this.colorPicker) {
             const isShown = this.colorPicker.style.display === "flex";
             this.colorPicker.style.display = isShown ? "none" : "flex";
+          }
+        } else if (action === "add-dictionary") {
+          const selection = window.getSelection();
+          const text = selection ? selection.toString().trim() : "";
+          this.hide();
+          if (text && this.onAddDictionaryTerm) {
+            this.onAddDictionaryTerm(text);
+          }
+        } else if (action === "link-synonym") {
+          const selection = window.getSelection();
+          const text = selection ? selection.toString().trim() : "";
+          this.hide();
+          if (text && this.onLinkSynonym) {
+            this.onLinkSynonym(text);
           }
         } else if (action === "copy-fragment-link") {
           const selection = window.getSelection();

@@ -12,6 +12,13 @@ import {
   findTextFragmentInElement,
   type TextFragmentQuery
 } from '../../utils/text-fragment';
+import {
+  decorateHtmlWithTerms,
+  stripDictionaryHighlightSpans,
+  findDictionaryTerm
+} from '../../utils/dictionary-matcher';
+import type { DictionaryTerm } from '../../types';
+import type { DictionaryPopoverData } from '../dictionary/DictionaryPopover';
 
 import mermaid from 'mermaid';
 
@@ -54,6 +61,12 @@ export class NotionEditorEngine {
   onToast?: (msg: string, type?: 'info' | 'success' | 'warning') => void;
   onOpenLinkModal?: (defaultText: string, callback: (url: string, text: string) => void, initialUrl?: string) => void;
   onFragmentStatus?: (info: FragmentStatusInfo | null) => void;
+  onShowDictionaryPopover?: (data: DictionaryPopoverData | null) => void;
+  onAddDictionaryTerm?: (text: string) => void;
+  onLinkSynonym?: (text: string) => void;
+  dictionaryTerms: DictionaryTerm[] = [];
+  private dictHoverTimer: any = null;
+  private dictCurrentHoverEl: HTMLElement | null = null;
 
   undoStack: string[] = [];
   redoStack: string[] = [];
@@ -94,7 +107,11 @@ export class NotionEditorEngine {
     onSendSelectionToCopilot,
     onToast,
     onOpenLinkModal,
-    onFragmentStatus
+    onFragmentStatus,
+    onShowDictionaryPopover,
+    onAddDictionaryTerm,
+    onLinkSynonym,
+    dictionaryTerms,
   }: {
     canvasElement: HTMLElement;
     filePath?: string | null;
@@ -105,6 +122,10 @@ export class NotionEditorEngine {
     onToast?: (msg: string, type?: 'info' | 'success' | 'warning') => void;
     onOpenLinkModal?: (defaultText: string, callback: (url: string, text: string) => void, initialUrl?: string) => void;
     onFragmentStatus?: (info: FragmentStatusInfo | null) => void;
+    onShowDictionaryPopover?: (data: DictionaryPopoverData | null) => void;
+    onAddDictionaryTerm?: (text: string) => void;
+    onLinkSynonym?: (text: string) => void;
+    dictionaryTerms?: DictionaryTerm[];
   }) {
     this.canvas = canvasElement;
     this.filePath = filePath || null;
@@ -115,6 +136,10 @@ export class NotionEditorEngine {
     this.onToast = onToast;
     this.onOpenLinkModal = onOpenLinkModal;
     this.onFragmentStatus = onFragmentStatus;
+    this.onShowDictionaryPopover = onShowDictionaryPopover;
+    this.onAddDictionaryTerm = onAddDictionaryTerm;
+    this.onLinkSynonym = onLinkSynonym;
+    this.dictionaryTerms = dictionaryTerms || [];
 
     this.boundOnKeyDown = (e) => this.handleKeyDown(e);
     this.boundOnKeyUp = (e) => this.handleKeyUp(e);
@@ -146,6 +171,7 @@ export class NotionEditorEngine {
     // 1. Menus Flutuantes
     this.slashMenu = new SlashMenuEngine({
       container: this.canvas,
+      dictionaryTerms: this.dictionaryTerms,
       onSelectCommand: (cmdId, targetRange) => this.handleSlashCommand(cmdId, targetRange)
     });
 
@@ -154,6 +180,8 @@ export class NotionEditorEngine {
       getFilePath: () => this.filePath,
       onFormat: () => this.recordChange(),
       onOpenLinkModal: this.onOpenLinkModal,
+      onAddDictionaryTerm: this.onAddDictionaryTerm,
+      onLinkSynonym: this.onLinkSynonym,
       onAskCopilot: (text) => {
         if (this.onSendSelectionToCopilot) {
           this.onSendSelectionToCopilot(text);
@@ -473,6 +501,8 @@ export class NotionEditorEngine {
       this.hideFloatingMenus();
       return;
     }
+
+    // 1. Side Handles
     const block = this.findTopLevelBlock(e.target as Node);
     if (block && block !== this.canvas && this.sideHandle) {
       this.hoveredBlock = block;
@@ -481,9 +511,48 @@ export class NotionEditorEngine {
       this.sideHandle.style.left = `${rect.left - 54}px`;
       this.sideHandle.style.top = `${rect.top + 2}px`;
     }
+
+    // 2. Dictionary Term Hover Popover
+    const dictSpan = (e.target as HTMLElement)?.closest('.dict-term-highlight') as HTMLElement | null;
+    if (dictSpan && this.onShowDictionaryPopover && this.dictionaryTerms && this.dictionaryTerms.length > 0) {
+      if (this.dictCurrentHoverEl !== dictSpan) {
+        this.dictCurrentHoverEl = dictSpan;
+        if (this.dictHoverTimer) clearTimeout(this.dictHoverTimer);
+        this.dictHoverTimer = setTimeout(() => {
+          const termKey = dictSpan.getAttribute('data-term-key') || dictSpan.textContent || '';
+          const match = findDictionaryTerm(termKey, this.dictionaryTerms);
+          if (match) {
+            const t = match.term;
+            this.onShowDictionaryPopover?.({
+              termId: t.id,
+              term: t.term,
+              codename: t.codename || t.code_name || '',
+              domain: t.domain || t.category || '',
+              definition: t.definition || '',
+              synonyms: Array.isArray(t.synonyms) ? t.synonyms : t.aliases || [],
+              rect: dictSpan.getBoundingClientRect(),
+            });
+          }
+        }, 150);
+      }
+    } else {
+      if (this.dictCurrentHoverEl) {
+        this.dictCurrentHoverEl = null;
+        if (this.dictHoverTimer) {
+          clearTimeout(this.dictHoverTimer);
+          this.dictHoverTimer = null;
+        }
+      }
+    }
   }
 
   handleMouseLeave(_e: MouseEvent) {
+    if (this.dictHoverTimer) {
+      clearTimeout(this.dictHoverTimer);
+      this.dictHoverTimer = null;
+    }
+    this.dictCurrentHoverEl = null;
+
     setTimeout(() => {
       const isOverHandle = this.sideHandle && this.sideHandle.matches(':hover');
       const isOverMenu = this.blockMenu && this.blockMenu.matches(':hover');
@@ -959,6 +1028,7 @@ export class NotionEditorEngine {
 
     const lines = markdown.split(/\r?\n/);
     this.canvas.innerHTML = this.parseMarkdownLinesToHtml(lines);
+    this.applyDictionaryHighlights();
     this.renderAllMermaidBlocks();
     this.attachInteractiveListeners();
     this.pushSnapshot(true);
@@ -1112,6 +1182,35 @@ export class NotionEditorEngine {
     return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
   }
 
+  setDictionaryTerms(terms: DictionaryTerm[]) {
+    this.dictionaryTerms = terms || [];
+    if (this.slashMenu) {
+      this.slashMenu.setDictionaryTerms(this.dictionaryTerms);
+    }
+    this.applyDictionaryHighlights();
+  }
+
+  applyDictionaryHighlights() {
+    if (!this.dictionaryTerms || this.dictionaryTerms.length === 0 || !this.canvas) return;
+
+    const targetElements = this.canvas.querySelectorAll<HTMLElement>(
+      'p, h1, h2, h3, h4, h5, h6, blockquote, .notion-todo-text, .notion-callout-content, .notion-toggle-content'
+    );
+
+    targetElements.forEach((el) => {
+      // Ignorar bloco focado para não interromper digitação ou mover o cursor
+      if (document.activeElement === el || el.contains(document.activeElement)) {
+        return;
+      }
+      const currentHtml = el.innerHTML;
+      const cleanHtml = stripDictionaryHighlightSpans(currentHtml);
+      const decorated = decorateHtmlWithTerms(cleanHtml, this.dictionaryTerms);
+      if (decorated !== currentHtml) {
+        el.innerHTML = decorated;
+      }
+    });
+  }
+
   parseInlineMarkdown(text: string): string {
     if (!text) return '<br>';
     return text
@@ -1140,7 +1239,7 @@ export class NotionEditorEngine {
       } else if (child.nodeType === Node.ELEMENT_NODE) {
         const el = child as HTMLElement;
         const tag = el.tagName.toLowerCase();
-        
+
         // Ignorar ícones (Material Symbols / SVG) para nunca serializar o nome do ícone como texto no Markdown
         if (
           el.classList.contains('material-symbols-outlined') || 

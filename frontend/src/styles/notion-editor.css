@@ -969,13 +969,14 @@
   position: absolute;
   z-index: 1000;
   display: none;
-  background: #1e293b;
-  color: #ffffff;
+  background: #ffffff;
+  color: #1e293b;
   border-radius: 8px;
+  border: 1px solid var(--color-outline-variant, #e2e8f0);
   padding: 4px 6px;
   box-shadow:
-    0 10px 15px -3px rgba(0, 0, 0, 0.25),
-    0 4px 6px -4px rgba(0, 0, 0, 0.1);
+    0 10px 25px -5px rgba(0, 0, 0, 0.12),
+    0 8px 10px -6px rgba(0, 0, 0, 0.06);
   align-items: center;
   gap: 2px;
   transform: translate(-50%, -100%);
@@ -997,7 +998,7 @@
 .bubble-btn {
   background: transparent;
   border: none;
-  color: #cbd5e1;
+  color: #475569;
   padding: 5px 8px;
   border-radius: 4px;
   cursor: pointer;
@@ -1010,20 +1011,224 @@
 }
 
 .bubble-btn:hover {
-  background: #334155;
-  color: #ffffff;
+  background: #f1f5f9;
+  color: #0f172a;
 }
 
 .bubble-btn.active {
-  background: #2563eb;
-  color: #ffffff;
+  background: #e0e7ff;
+  color: #1d4ed8;
 }
 
 .bubble-divider {
   width: 1px;
-  height: 14px;
-  background: #475569;
+  height: 16px;
+  background: var(--color-outline-variant, #e2e8f0);
   margin: 0 3px;
+}
+
+/* =============================================================================
+   DICTIONARY HIGHLIGHT & HOVER POPOVER (MATERIAL DESIGN 3)
+   ============================================================================= */
+
+.dict-term-highlight {
+  text-decoration: underline dotted var(--color-outline, #94a3b8);
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1.5px;
+  cursor: help;
+  transition: background-color 0.15s ease, color 0.15s ease, text-decoration-color 0.15s ease;
+  border-radius: 2px;
+}
+
+.dict-term-highlight:hover {
+  background-color: rgba(148, 163, 184, 0.14);
+  text-decoration-color: var(--color-primary, #1a73e8);
+  color: var(--color-primary, #1a73e8);
+}
+
+.dict-popover-card {
+  width: 320px;
+  max-width: calc(100vw - 32px);
+  background: #ffffff;
+  border: 1px solid var(--color-outline-variant, #e2e8f0);
+  border-radius: 12px;
+  box-shadow:
+    0 20px 25px -5px rgba(0, 0, 0, 0.1),
+    0 8px 10px -6px rgba(0, 0, 0, 0.05),
+    0 0 0 1px rgba(0, 0, 0, 0.04);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  animation: popoverFadeIn 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  font-family: var(--font-sans, system-ui, -apple-system, sans-serif);
+}
+
+@keyframes popoverFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.dict-popover-header {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dict-popover-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dict-popover-icon-box {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: rgba(26, 115, 232, 0.1);
+  color: var(--color-primary, #1a73e8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.dict-popover-title {
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--color-on-surface, #0f172a);
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dict-popover-badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.dict-popover-badge-codename {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: var(--color-surface-container-high, #f1f5f9);
+  border: 1px solid var(--color-outline-variant, #cbd5e1);
+  color: #475569;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: default;
+  user-select: text;
+}
+
+.dict-popover-badge-codename code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  cursor: default;
+}
+
+.dict-popover-badge-domain {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: capitalize;
+  cursor: default;
+  user-select: text;
+}
+
+.dict-popover-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  cursor: default;
+}
+
+.dict-popover-def {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--color-on-surface-variant, #475569);
+  max-height: 120px;
+  overflow-y: auto;
+  cursor: default;
+  user-select: text;
+}
+
+.dict-popover-synonyms-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: #f8fafc;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid #f1f5f9;
+  cursor: default;
+}
+
+.dict-popover-syn-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  cursor: default;
+}
+
+.dict-popover-syn-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  cursor: default;
+}
+
+.dict-popover-syn-chip {
+  display: inline-flex;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  font-size: 11px;
+  color: #334155;
+  cursor: default;
+  user-select: text;
+}
+
+.dict-popover-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 6px;
+  border-top: 1px solid var(--color-outline-variant, #f1f5f9);
+}
+
+.dict-popover-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: none;
+  color: var(--color-primary, #1a73e8);
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 4px;
+  transition: background-color 0.1s ease;
+}
+
+.dict-popover-action-btn:hover {
+  background: rgba(26, 115, 232, 0.08);
 }
 
 /* Color Picker Popover from Bubble Menu */
