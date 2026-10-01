@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Users,
   Shield,
@@ -8,6 +8,7 @@ import {
   Unlock,
   UserPlus,
   Trash2,
+  Edit2,
   RefreshCw,
   GitBranch,
   Copy,
@@ -29,8 +30,167 @@ import { Modal } from "../../components/ui/Modal";
 import { FormField } from "../../components/ui/FormField";
 import { Card } from "../../components/ui/Card";
 
+interface FolderTreePickerProps {
+  tree: any[];
+  selectedPaths: string[];
+  onChange: (paths: string[]) => void;
+}
+
+const FolderTreePicker: React.FC<FolderTreePickerProps> = ({
+  tree,
+  selectedPaths,
+  onChange,
+}) => {
+  const folders = useMemo(() => {
+    const list: { path: string; name: string; depth: number }[] = [];
+    const walk = (nodes: any[], depth = 0) => {
+      for (const node of nodes) {
+        if (node.type === "directory" || (node.children && node.children.length > 0)) {
+          const clean = (node.path || "").replace(/^\/+/, "");
+          list.push({ path: clean, name: node.name, depth });
+          if (Array.isArray(node.children)) {
+            walk(node.children, depth + 1);
+          }
+        }
+      }
+    };
+    walk(tree || []);
+    return list;
+  }, [tree]);
+
+  const isGlobal = selectedPaths.includes("*") || selectedPaths.includes("/**");
+
+  const handleToggleGlobal = () => {
+    if (isGlobal) {
+      onChange([]);
+    } else {
+      onChange(["*"]);
+    }
+  };
+
+  const handleToggleFolder = (folderPath: string) => {
+    const clean = folderPath.replace(/\\/g, "/").replace(/^\/+/, "");
+    if (isGlobal) {
+      onChange([clean]);
+      return;
+    }
+    const isSelected = selectedPaths.includes(clean);
+    if (isSelected) {
+      onChange(selectedPaths.filter((p) => p !== clean));
+    } else {
+      onChange([...selectedPaths, clean]);
+    }
+  };
+
+  return (
+    <div
+      style={{
+        border: "1px solid var(--color-outline-variant, rgba(255, 255, 255, 0.12))",
+        borderRadius: "8px",
+        background: "var(--color-surface-container, #181825)",
+        maxHeight: "220px",
+        overflowY: "auto",
+        padding: "8px",
+        display: "flex",
+        flexDirection: "column",
+        gap: "4px",
+      }}
+    >
+      {/* Opção Acesso Global */}
+      <div
+        onClick={handleToggleGlobal}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "8px",
+          padding: "6px 10px",
+          borderRadius: "6px",
+          cursor: "pointer",
+          backgroundColor: isGlobal ? "rgba(139, 92, 246, 0.18)" : "transparent",
+          border: isGlobal ? "1px solid rgba(139, 92, 246, 0.4)" : "1px solid transparent",
+          transition: "background 0.15s ease",
+        }}
+      >
+        <input
+          type="checkbox"
+          checked={isGlobal}
+          onChange={handleToggleGlobal}
+          onClick={(e) => e.stopPropagation()}
+          style={{ cursor: "pointer", accentColor: "#8b5cf6" }}
+        />
+        <span
+          className="material-symbols-outlined"
+          style={{ fontSize: "16px", color: isGlobal ? "#8b5cf6" : "#a6adc8" }}
+        >
+          all_inclusive
+        </span>
+        <span style={{ fontSize: "12px", fontWeight: 600, color: isGlobal ? "#8b5cf6" : "var(--color-on-surface, #cdd6f4)" }}>
+          Todas as Pastas e Documentos (*)
+        </span>
+        <span style={{ fontSize: "11px", color: "var(--color-outline, #a6adc8)", marginLeft: "auto" }}>
+          Acesso Global
+        </span>
+      </div>
+
+      <div style={{ height: "1px", background: "var(--color-outline-variant, rgba(255, 255, 255, 0.08))", margin: "4px 0" }} />
+
+      {/* Lista de Pastas da Tree */}
+      {folders.length === 0 ? (
+        <div style={{ padding: "8px 10px", fontSize: "12px", color: "#a6adc8", fontStyle: "italic" }}>
+          Nenhuma pasta detectada no workspace. O colaborador terá acesso a todas as rotas (*).
+        </div>
+      ) : (
+        folders.map((f) => {
+          const isSelected = isGlobal || selectedPaths.includes(f.path);
+          return (
+            <div
+              key={f.path}
+              onClick={() => handleToggleFolder(f.path)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                padding: "5px 8px",
+                paddingLeft: `${Math.max(f.depth * 16 + 8, 8)}px`,
+                borderRadius: "5px",
+                cursor: "pointer",
+                backgroundColor: isSelected && !isGlobal ? "rgba(99, 102, 241, 0.12)" : "transparent",
+                border: isSelected && !isGlobal ? "1px solid rgba(99, 102, 241, 0.3)" : "1px solid transparent",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={isSelected}
+                disabled={isGlobal}
+                onChange={() => handleToggleFolder(f.path)}
+                onClick={(e) => e.stopPropagation()}
+                style={{ cursor: isGlobal ? "not-allowed" : "pointer", accentColor: "#6366f1" }}
+              />
+              <span
+                className="material-symbols-outlined"
+                style={{
+                  fontSize: "16px",
+                  color: isSelected ? "#6366f1" : "var(--color-outline, #a6adc8)",
+                }}
+              >
+                folder
+              </span>
+              <span style={{ fontSize: "12px", color: isSelected ? "var(--color-on-surface, #cdd6f4)" : "var(--color-outline, #a6adc8)", fontWeight: isSelected ? 600 : 400 }}>
+                {f.name}
+              </span>
+              <span style={{ fontSize: "10.5px", color: "var(--color-outline, #6c7086)", marginLeft: "auto", fontFamily: "monospace" }}>
+                {f.path}
+              </span>
+            </div>
+          );
+        })
+      )}
+    </div>
+  );
+};
+
 export const GovernanceMembersSubView: React.FC = () => {
-  const { activeRepo } = useWorkspace();
+  const { activeRepo, tree } = useWorkspace();
   const currentRepoName = activeRepo?.name;
   const {
     securityLevels,
@@ -58,8 +218,22 @@ export const GovernanceMembersSubView: React.FC = () => {
   const [invitePermission, setInvitePermission] = useState<string>("push");
   const [inviteLevelId, setInviteLevelId] = useState<string>("engineering");
   const [inviteRoleName, setInviteRoleName] = useState<string>("");
+  const [inviteAllowedPaths, setInviteAllowedPaths] = useState<string[]>(["*"]);
   const [isInviting, setIsInviting] = useState<boolean>(false);
   const [inviteFeedback, setInviteFeedback] = useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
+
+  // Edit Collaborator Modal State
+  const [isEditModalOpen, setIsEditModalOpen] = useState<boolean>(false);
+  const [editingCollab, setEditingCollab] = useState<any>(null);
+  const [editRoleName, setEditRoleName] = useState<string>("");
+  const [editPermission, setEditPermission] = useState<string>("push");
+  const [editLevelId, setEditLevelId] = useState<string>("2");
+  const [editAllowedPaths, setEditAllowedPaths] = useState<string[]>(["*"]);
+  const [isSavingEdit, setIsSavingEdit] = useState<boolean>(false);
+  const [editFeedback, setEditFeedback] = useState<{
     type: "success" | "error";
     message: string;
   } | null>(null);
@@ -186,7 +360,10 @@ export const GovernanceMembersSubView: React.FC = () => {
         username: inviteUsername.trim(),
         permission: invitePermission as any,
         security_level: chosenLevel.rank as any,
+        level: chosenLevel.rank as any,
+        role: inviteRoleName.trim() || undefined,
         role_name: inviteRoleName.trim() || undefined,
+        allowed_paths: inviteAllowedPaths,
         repo: currentRepoName,
       });
 
@@ -194,6 +371,7 @@ export const GovernanceMembersSubView: React.FC = () => {
         setInviteFeedback({ type: "success", message: res.data.message });
         setInviteUsername("");
         setInviteRoleName("");
+        setInviteAllowedPaths(["*"]);
         fetchCollaborators();
         fetchAuditLogs();
         setTimeout(() => {
@@ -210,6 +388,62 @@ export const GovernanceMembersSubView: React.FC = () => {
       setInviteFeedback({ type: "error", message: err.message });
     } finally {
       setIsInviting(false);
+    }
+  };
+
+  // Open Edit Collaborator Modal
+  const handleOpenEditModal = (collab: any) => {
+    setEditingCollab(collab);
+    setEditRoleName(collab.role || collab.role_name || "");
+    setEditPermission(collab.permission || "push");
+    const lvl = getLevelDef(collab.security_level_id || collab.security_level);
+    setEditLevelId(lvl.id);
+    const paths = Array.isArray(collab.allowed_paths) && collab.allowed_paths.length > 0
+      ? collab.allowed_paths
+      : (collab.is_owner ? ["*"] : ["*"]);
+    setEditAllowedPaths(paths);
+    setEditFeedback(null);
+    setIsEditModalOpen(true);
+  };
+
+  // Save Edit Collaborator
+  const handleSaveEditCollab = async () => {
+    if (!editingCollab) return;
+    setIsSavingEdit(true);
+    setEditFeedback(null);
+    try {
+      const chosenLevel = getLevelDef(editLevelId);
+      const res = await API.updateCollaboratorClearance({
+        username: editingCollab.login,
+        permission: editPermission,
+        role: editRoleName.trim() || undefined,
+        role_name: editRoleName.trim() || undefined,
+        level: chosenLevel.rank,
+        security_level: chosenLevel.rank,
+        security_level_id: chosenLevel.id,
+        allowed_paths: editAllowedPaths,
+        repo: currentRepoName,
+      });
+
+      if (res.ok && res.data.success) {
+        setEditFeedback({ type: "success", message: res.data.message });
+        await fetchCollaborators();
+        await fetchAuditLogs();
+        setTimeout(() => {
+          setIsEditModalOpen(false);
+          setEditingCollab(null);
+          setEditFeedback(null);
+        }, 1500);
+      } else {
+        setEditFeedback({
+          type: "error",
+          message: (res.data as any)?.error || "Falha ao salvar alterações do colaborador.",
+        });
+      }
+    } catch (err: any) {
+      setEditFeedback({ type: "error", message: err.message });
+    } finally {
+      setIsSavingEdit(false);
     }
   };
 
@@ -230,40 +464,6 @@ export const GovernanceMembersSubView: React.FC = () => {
       }
     } catch (err) {
       console.warn("[GovernanceSubView] Erro ao remover colaborador:", err);
-    }
-  };
-
-  // Handle Update Clearance
-  const handleUpdateClearance = async (
-    username: string,
-    newLevelId: string,
-  ) => {
-    const chosenLevel = getLevelDef(newLevelId);
-    // Optimistic UI update
-    setCollaborators((prev) =>
-      prev.map((c) =>
-        c.login.toLowerCase() === username.toLowerCase()
-          ? {
-              ...c,
-              security_level: chosenLevel.rank,
-              security_level_id: chosenLevel.id,
-            }
-          : c,
-      ),
-    );
-    try {
-      const res = await API.updateCollaboratorClearance({
-        username,
-        security_level: chosenLevel.rank,
-        security_level_id: chosenLevel.id,
-        repo: currentRepoName,
-      });
-      if (res.ok) {
-        await fetchCollaborators();
-        await fetchAuditLogs();
-      }
-    } catch (err) {
-      console.warn("[GovernanceSubView] Erro ao atualizar nível:", err);
     }
   };
 
@@ -643,9 +843,10 @@ export const GovernanceMembersSubView: React.FC = () => {
                   }}
                 >
                   <th style={{ padding: "10px 16px" }}>Colaborador</th>
-                  <th style={{ padding: "10px 16px" }}>Função</th>
+                  <th style={{ padding: "10px 16px" }}>Cargo / Função</th>
                   <th style={{ padding: "10px 16px" }}>Permissão Git</th>
-                  <th style={{ padding: "10px 16px" }}>Nível de Segurança</th>
+                  <th style={{ padding: "10px 16px" }}>Nível</th>
+                  <th style={{ padding: "10px 16px" }}>Rotas / Pastas Permitidas</th>
                   <th style={{ padding: "10px 16px", textAlign: "right" }}>
                     Ações
                   </th>
@@ -732,7 +933,7 @@ export const GovernanceMembersSubView: React.FC = () => {
                             color: "var(--color-on-surface-variant, #bac2de)",
                           }}
                         >
-                          {collab.role_name ||
+                          {collab.role_name || collab.role ||
                             (collab.is_owner ? "Tech Lead" : "Engenheiro")}
                         </span>
                       </td>
@@ -753,65 +954,103 @@ export const GovernanceMembersSubView: React.FC = () => {
                       </td>
 
                       <td style={{ padding: "10px 16px" }}>
-                        <div
+                        <span
                           style={{
-                            display: "flex",
+                            padding: "3px 10px",
+                            borderRadius: "14px",
+                            fontSize: "12px",
+                            fontWeight: 600,
+                            backgroundColor: levelDef.color + "15",
+                            borderColor: levelDef.color + "40",
+                            borderWidth: "1px",
+                            borderStyle: "solid",
+                            color: levelDef.color,
+                            display: "inline-flex",
                             alignItems: "center",
-                            gap: "8px",
+                            gap: "5px",
                           }}
                         >
-                          <select
-                            value={collab.security_level_id || levelDef.id}
-                            onChange={(e) =>
-                              handleUpdateClearance(
-                                collab.login,
-                                e.target.value,
-                              )
-                            }
-                            style={{
-                              padding: "4px 8px",
-                              borderRadius: "14px",
-                              fontSize: "12px",
-                              fontWeight: 600,
-                              backgroundColor: levelDef.color + "15",
-                              borderColor: levelDef.color + "40",
-                              borderWidth: "1px",
-                              borderStyle: "solid",
-                              color: levelDef.color,
-                              cursor: "pointer",
-                              outline: "none",
-                            }}
-                          >
-                            {securityLevels.map((lvl) => (
-                              <option
-                                key={lvl.id}
-                                value={lvl.id}
+                          <Shield size={12} />
+                          {levelDef.name} (Rank {levelDef.rank})
+                        </span>
+                      </td>
+
+                      <td style={{ padding: "10px 16px" }}>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
+                          {collab.allowed_paths && (collab.allowed_paths.includes("*") || collab.allowed_paths.includes("/**")) ? (
+                            <span
+                              style={{
+                                fontSize: "11px",
+                                fontWeight: 600,
+                                padding: "2px 8px",
+                                borderRadius: "12px",
+                                backgroundColor: "rgba(139, 92, 246, 0.15)",
+                                border: "1px solid rgba(139, 92, 246, 0.4)",
+                                color: "#8b5cf6",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "4px",
+                              }}
+                            >
+                              <span className="material-symbols-outlined" style={{ fontSize: "13px" }}>
+                                all_inclusive
+                              </span>
+                              Todas as Pastas (*)
+                            </span>
+                          ) : Array.isArray(collab.allowed_paths) && collab.allowed_paths.length > 0 ? (
+                            collab.allowed_paths.map((route: string) => (
+                              <span
+                                key={route}
                                 style={{
-                                  background: "#1e1e2e",
-                                  color: "#cdd6f4",
+                                  fontSize: "11px",
+                                  fontWeight: 500,
+                                  padding: "2px 8px",
+                                  borderRadius: "12px",
+                                  backgroundColor: "rgba(99, 102, 241, 0.12)",
+                                  border: "1px solid rgba(99, 102, 241, 0.3)",
+                                  color: "#6366f1",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "3px",
                                 }}
                               >
-                                {lvl.name} (Rank {lvl.rank})
-                              </option>
-                            ))}
-                          </select>
+                                <span className="material-symbols-outlined" style={{ fontSize: "12px" }}>
+                                  folder
+                                </span>
+                                {route.replace(/\/\*\*$/, "")}
+                              </span>
+                            ))
+                          ) : (
+                            <span style={{ fontSize: "11px", color: "var(--color-outline, #a6adc8)" }}>Nenhuma</span>
+                          )}
                         </div>
                       </td>
 
                       <td style={{ padding: "10px 16px", textAlign: "right" }}>
-                        {!collab.is_owner && (
+                        <div style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
                           <Button
-                            variant="danger"
+                            variant="ghost"
                             size="xs"
-                            onClick={() =>
-                              handleRemoveCollaborator(collab.login)
-                            }
+                            onClick={() => handleOpenEditModal(collab)}
                             style={{ padding: "4px 8px" }}
-                            title="Remover colaborador"
+                            title="Editar permissões, cargo e rotas do colaborador"
                           >
-                            <Trash2 size={13} />
+                            <Edit2 size={13} />
                           </Button>
-                        )}
+                          {!collab.is_owner && (
+                            <Button
+                              variant="danger"
+                              size="xs"
+                              onClick={() =>
+                                handleRemoveCollaborator(collab.login)
+                              }
+                              style={{ padding: "4px 8px" }}
+                              title="Remover colaborador"
+                            >
+                              <Trash2 size={13} />
+                            </Button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -1600,6 +1839,16 @@ export const GovernanceMembersSubView: React.FC = () => {
               </select>
             </FormField>
 
+            <FormField label="Rotas / Pastas Autorizadas (Escopo de Acesso)">
+              <div style={{ marginTop: "4px" }}>
+                <FolderTreePicker
+                  tree={tree || []}
+                  selectedPaths={inviteAllowedPaths}
+                  onChange={setInviteAllowedPaths}
+                />
+              </div>
+            </FormField>
+
             {inviteFeedback && (
               <div
                 style={{
@@ -1640,6 +1889,175 @@ export const GovernanceMembersSubView: React.FC = () => {
                 disabled={isInviting || !inviteUsername.trim()}
               >
                 {isInviting ? "Enviando..." : "Enviar Convite"}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Edit Collaborator Modal */}
+      {isEditModalOpen && editingCollab && (
+        <Modal
+          isOpen={isEditModalOpen}
+          onClose={() => {
+            setIsEditModalOpen(false);
+            setEditingCollab(null);
+          }}
+          title={`Editar Colaborador @${editingCollab.login}`}
+        >
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "14px",
+              padding: "8px 0",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "12px",
+                padding: "10px",
+                borderRadius: "8px",
+                background: "var(--color-surface-container-high, #1e1e2e)",
+                border: "1px solid var(--color-outline-variant, rgba(255, 255, 255, 0.08))",
+              }}
+            >
+              <img
+                src={editingCollab.avatar_url}
+                alt={editingCollab.login}
+                style={{ width: "36px", height: "36px", borderRadius: "50%", background: "#313244" }}
+              />
+              <div>
+                <div style={{ fontWeight: 600, color: "var(--color-on-surface, #cdd6f4)", fontSize: "14px" }}>
+                  @{editingCollab.login}
+                </div>
+                <div style={{ fontSize: "11px", color: "var(--color-outline, #a6adc8)" }}>
+                  {editingCollab.is_owner ? "Proprietário do Repositório" : "Membro da Governança"}
+                </div>
+              </div>
+            </div>
+
+            <FormField label="Cargo / Função">
+              <input
+                type="text"
+                placeholder="Ex: Tech Lead, Desenvolvedor Backend, CFO"
+                value={editRoleName}
+                onChange={(e) => setEditRoleName(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "6px 10px",
+                  borderRadius: "6px",
+                  background: "var(--color-surface-container-high, #1e1e2e)",
+                  color: "var(--color-on-surface, #cdd6f4)",
+                  border:
+                    "1px solid var(--color-outline-variant, rgba(255, 255, 255, 0.12))",
+                  fontSize: "13px",
+                }}
+              />
+            </FormField>
+
+            <FormField label="Permissão Git no Repositório">
+              <select
+                value={editPermission}
+                onChange={(e) => setEditPermission(e.target.value)}
+                disabled={editingCollab.is_owner}
+                style={{
+                  width: "100%",
+                  padding: "6px 10px",
+                  borderRadius: "6px",
+                  background: "var(--color-surface-container-high, #1e1e2e)",
+                  color: "var(--color-on-surface, #cdd6f4)",
+                  border:
+                    "1px solid var(--color-outline-variant, rgba(255, 255, 255, 0.12))",
+                  fontSize: "13px",
+                }}
+              >
+                <option value="pull">pull (Leitura apenas)</option>
+                <option value="triage">triage (Triagem de Issues e PRs)</option>
+                <option value="push">push (Escrita - Criar branches e PRs)</option>
+                <option value="maintain">maintain (Manutenção)</option>
+                <option value="admin">admin (Administrador pleno)</option>
+              </select>
+            </FormField>
+
+            <FormField label="Nível de Segurança / Clearance">
+              <select
+                value={editLevelId}
+                onChange={(e) => setEditLevelId(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "6px 10px",
+                  borderRadius: "6px",
+                  background: "var(--color-surface-container-high, #1e1e2e)",
+                  color: "var(--color-on-surface, #cdd6f4)",
+                  border:
+                    "1px solid var(--color-outline-variant, rgba(255, 255, 255, 0.12))",
+                  fontSize: "13px",
+                }}
+              >
+                {securityLevels.map((lvl) => (
+                  <option key={lvl.id} value={lvl.id}>
+                    {lvl.name} (Rank {lvl.rank})
+                  </option>
+                ))}
+              </select>
+            </FormField>
+
+            <FormField label="Rotas / Pastas Autorizadas (Escopo de Acesso)">
+              <div style={{ marginTop: "4px" }}>
+                <FolderTreePicker
+                  tree={tree || []}
+                  selectedPaths={editAllowedPaths}
+                  onChange={setEditAllowedPaths}
+                />
+              </div>
+            </FormField>
+
+            {editFeedback && (
+              <div
+                style={{
+                  padding: "8px 12px",
+                  borderRadius: "6px",
+                  background:
+                    editFeedback.type === "success"
+                      ? "rgba(16, 185, 129, 0.15)"
+                      : "rgba(239, 68, 68, 0.15)",
+                  color:
+                    editFeedback.type === "success" ? "#10b981" : "#ef4444",
+                  fontSize: "13px",
+                }}
+              >
+                {editFeedback.message}
+              </div>
+            )}
+
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: "8px",
+                marginTop: "8px",
+              }}
+            >
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setIsEditModalOpen(false);
+                  setEditingCollab(null);
+                }}
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleSaveEditCollab}
+                disabled={isSavingEdit}
+              >
+                {isSavingEdit ? "Salvando..." : "Salvar Alterações"}
               </Button>
             </div>
           </div>

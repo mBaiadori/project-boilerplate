@@ -15,6 +15,8 @@ import {
   DynamicSecurityLevel,
   DEFAULT_DYNAMIC_SECURITY_LEVELS,
   normalizeDynamicSecurityLevel,
+  DepartmentConfig,
+  DEFAULT_DEPARTMENTS,
   SecretScanResult,
   SecretScanViolation,
 } from './governance.types.js';
@@ -169,18 +171,11 @@ export class GovernanceService {
             else if (c.permissions?.pull) perm = 'pull';
 
             const isOwner = login.toLowerCase() === ownerLogin.toLowerCase() || login.toLowerCase() === resolvedFullName.split('/')[0].toLowerCase();
-            const secLevel: SecurityLevelNumber = meta.security_level !== undefined ? Number(meta.security_level) : (isOwner ? 0 : 2);
-            const secLevelId: string =
-              meta.security_level_id ||
-              (secLevel === 0
-                ? 'root'
-                : secLevel === 1
-                ? 'strategic'
-                : secLevel === 2
-                ? 'engineering'
-                : secLevel === 3
-                ? 'operational'
-                : 'public');
+            const secLevel: SecurityLevelNumber = meta.level !== undefined ? Number(meta.level) : (meta.security_level !== undefined ? Number(meta.security_level) : (isOwner ? 0 : 2));
+            const secLevelId: string = meta.security_level_id || String(secLevel);
+            const role = meta.role || meta.role_name || (isOwner ? 'Owner / Tech Lead' : 'Engenheiro / Revisor');
+            const departments: string[] = Array.isArray(meta.departments) && meta.departments.length > 0 ? meta.departments : (isOwner ? ['*'] : ['engineering']);
+            const allowedPaths: string[] = Array.isArray(meta.allowed_paths) && meta.allowed_paths.length > 0 ? meta.allowed_paths : (isOwner ? ['*'] : ['*']);
 
             return {
               login,
@@ -188,9 +183,13 @@ export class GovernanceService {
               avatar_url: c.avatar_url || `https://github.com/${login}.png`,
               html_url: c.html_url || `https://github.com/${login}`,
               permission: perm,
-              role_name: meta.role_name || (isOwner ? 'Owner / Tech Lead' : 'Engenheiro / Revisor'),
+              role,
+              role_name: role,
               security_level: secLevel,
+              level: secLevel,
               security_level_id: secLevelId,
+              departments,
+              allowed_paths: allowedPaths,
               is_owner: isOwner,
               status: 'active',
             };
@@ -219,6 +218,7 @@ export class GovernanceService {
                     permission: (inv.permissions as GitHubPermission) || 'push',
                     role_name: meta.role_name || 'Convidado (Pendente)',
                     security_level: meta.security_level !== undefined ? meta.security_level : 2,
+                    allowed_paths: Array.isArray(meta.allowed_paths) ? meta.allowed_paths : ['*'],
                     is_owner: false,
                     status: 'pending',
                     invited_at: inv.created_at,
@@ -239,15 +239,23 @@ export class GovernanceService {
       const userLogin = cfg.user?.login || 'local-developer';
       const isOwner = true;
       const ownerMeta = findLocalMeta(userLogin);
+      const ownerLevel = ownerMeta.level !== undefined ? Number(ownerMeta.level) : (ownerMeta.security_level !== undefined ? Number(ownerMeta.security_level) : 0);
+      const ownerRole = ownerMeta.role || ownerMeta.role_name || 'Owner / Tech Lead';
+      const ownerDepts = Array.isArray(ownerMeta.departments) && ownerMeta.departments.length > 0 ? ownerMeta.departments : ['*'];
+      const ownerPaths = Array.isArray(ownerMeta.allowed_paths) && ownerMeta.allowed_paths.length > 0 ? ownerMeta.allowed_paths : ['*'];
       collaborators.push({
         login: userLogin,
         id: 1,
         avatar_url: cfg.user?.avatar_url || `https://github.com/${userLogin}.png`,
         html_url: cfg.user?.html_url || `https://github.com/${userLogin}`,
         permission: 'admin',
-        role_name: ownerMeta.role_name || 'Owner / Tech Lead',
-        security_level: ownerMeta.security_level !== undefined ? Number(ownerMeta.security_level) : 0,
-        security_level_id: ownerMeta.security_level_id || 'root',
+        role: ownerRole,
+        role_name: ownerRole,
+        security_level: ownerLevel,
+        level: ownerLevel,
+        security_level_id: String(ownerLevel),
+        departments: ownerDepts,
+        allowed_paths: ownerPaths,
         is_owner: isOwner,
         status: 'active',
       });
@@ -257,27 +265,24 @@ export class GovernanceService {
     for (const [login, meta] of Object.entries(localMemberMeta as Record<string, any>)) {
       const existing = collaborators.find(c => c.login.toLowerCase() === login.toLowerCase());
       if (!existing) {
-        const secLevel = meta.security_level !== undefined ? Number(meta.security_level) : 2;
-        const secLevelId =
-          meta.security_level_id ||
-          (secLevel === 0
-            ? 'root'
-            : secLevel === 1
-            ? 'strategic'
-            : secLevel === 2
-            ? 'engineering'
-            : secLevel === 3
-            ? 'operational'
-            : 'public');
+        const secLevel = meta.level !== undefined ? Number(meta.level) : (meta.security_level !== undefined ? Number(meta.security_level) : 2);
+        const secLevelId = meta.security_level_id || String(secLevel);
+        const memberRole = meta.role || meta.role_name || 'Colaborador';
+        const memberDepts = Array.isArray(meta.departments) && meta.departments.length > 0 ? meta.departments : ['engineering'];
+        const memberPaths = Array.isArray(meta.allowed_paths) && meta.allowed_paths.length > 0 ? meta.allowed_paths : ['*'];
         collaborators.push({
           login,
           id: Math.floor(Math.random() * 1000000),
           avatar_url: `https://github.com/${login}.png`,
           html_url: `https://github.com/${login}`,
           permission: (meta.permission as GitHubPermission) || 'push',
-          role_name: meta.role_name || 'Colaborador',
+          role: memberRole,
+          role_name: memberRole,
           security_level: secLevel,
+          level: secLevel,
           security_level_id: secLevelId,
+          departments: memberDepts,
+          allowed_paths: memberPaths,
           is_owner: false,
           status: meta.status || 'active',
         });
@@ -302,7 +307,11 @@ export class GovernanceService {
     username: string;
     permission: GitHubPermission;
     security_level?: SecurityLevelNumber;
+    level?: SecurityLevelNumber;
+    role?: string;
     role_name?: string;
+    departments?: string[];
+    allowed_paths?: string[];
   }): Promise<{ success: boolean; message: string; collaborator: CollaboratorInfo }> {
     const cfg = loadConfig();
     const targetRepoName = payload.repo || cfg.active_repo?.name || 'local';
@@ -313,8 +322,10 @@ export class GovernanceService {
     }
 
     const permission = payload.permission || 'push';
-    const secLevel = payload.security_level !== undefined ? payload.security_level : 2;
-    const roleName = payload.role_name || (permission === 'admin' ? 'Co-Admin' : 'Engenheiro / Revisor');
+    const secLevel = payload.level !== undefined ? Number(payload.level) : (payload.security_level !== undefined ? Number(payload.security_level) : 2);
+    const roleName = payload.role || payload.role_name || (permission === 'admin' ? 'Co-Admin' : 'Engenheiro / Revisor');
+    const departments = Array.isArray(payload.departments) && payload.departments.length > 0 ? payload.departments : ['engineering'];
+    const allowedPaths = Array.isArray(payload.allowed_paths) && payload.allowed_paths.length > 0 ? payload.allowed_paths : ['*'];
     const resolvedFullName = this.resolveRepoFullName(targetRepoName);
 
     // 1. If remote GitHub repo, send invite via GitHub API
@@ -340,7 +351,12 @@ export class GovernanceService {
     pConfig.governance_collaborators[cleanUsername] = {
       permission,
       security_level: secLevel,
+      level: secLevel,
+      security_level_id: String(secLevel),
+      role: roleName,
       role_name: roleName,
+      departments,
+      allowed_paths: allowedPaths,
       invited_at: new Date().toISOString(),
       status: 'active',
     };
@@ -351,7 +367,7 @@ export class GovernanceService {
       action: 'COLLABORATOR_INVITED',
       actor,
       target: `@${cleanUsername}`,
-      details: `Convidado com permissão Git '${permission}', papel '${roleName}' e Credencial de Segurança Level ${secLevel}.`,
+      details: `Convidado com permissão Git '${permission}', cargo '${roleName}', Level ${secLevel} e rotas: [${allowedPaths.join(', ')}].`,
     });
 
     const colInfo: CollaboratorInfo = {
@@ -360,15 +376,20 @@ export class GovernanceService {
       avatar_url: `https://github.com/${cleanUsername}.png`,
       html_url: `https://github.com/${cleanUsername}`,
       permission,
+      role: roleName,
       role_name: roleName,
       security_level: secLevel,
+      level: secLevel,
+      security_level_id: String(secLevel),
+      departments,
+      allowed_paths: allowedPaths,
       is_owner: false,
       status: 'active',
     };
 
     return {
       success: true,
-      message: `Convite enviado com sucesso para @${cleanUsername} com permissão '${permission}' e Level ${secLevel}!`,
+      message: `Convite enviado com sucesso para @${cleanUsername} com cargo '${roleName}', permissão '${permission}' e Level ${secLevel}!`,
       collaborator: colInfo,
     };
   }
@@ -414,12 +435,18 @@ export class GovernanceService {
   async updateCollaboratorClearance(payload: {
     repo?: string;
     username: string;
-    security_level: SecurityLevelNumber;
+    security_level?: SecurityLevelNumber;
+    level?: SecurityLevelNumber;
     security_level_id?: string;
+    role?: string;
     role_name?: string;
+    permission?: GitHubPermission;
+    departments?: string[];
+    allowed_paths?: string[];
   }): Promise<{ success: boolean; message: string }> {
     const cleanUsername = payload.username.trim().replace(/^@/, '');
     const targetRepoName = payload.repo || 'local';
+    const cfg = loadConfig();
     const pConfig = this.readProjectConfig(targetRepoName);
     if (!pConfig.governance_collaborators) pConfig.governance_collaborators = {};
 
@@ -427,41 +454,133 @@ export class GovernanceService {
       (k) => k.toLowerCase() === cleanUsername.toLowerCase()
     ) || cleanUsername;
 
-    const rankNum = Number(payload.security_level);
-    const secLevelId =
-      payload.security_level_id ||
-      (rankNum === 0
-        ? 'root'
-        : rankNum === 1
-        ? 'strategic'
-        : rankNum === 2
-        ? 'engineering'
-        : rankNum === 3
-        ? 'operational'
-        : 'public');
+    const currentData = pConfig.governance_collaborators[existingKey] || {};
+
+    // Sincroniza permissão no GitHub se fornecida e diferente da atual
+    if (payload.permission && payload.permission !== currentData.permission) {
+      const resolvedFullName = this.resolveRepoFullName(targetRepoName);
+      if (cfg.token && resolvedFullName && !resolvedFullName.startsWith('local/')) {
+        try {
+          await callGitHubAPI(
+            `/repos/${resolvedFullName}/collaborators/${cleanUsername}`,
+            cfg.token,
+            'PUT',
+            { permission: payload.permission }
+          );
+        } catch (err: any) {
+          console.warn(`[GovernanceService] Aviso ao atualizar permissão no GitHub para @${cleanUsername}:`, err);
+        }
+      }
+    }
+
+    const rankNum = payload.level !== undefined ? Number(payload.level) : (payload.security_level !== undefined ? Number(payload.security_level) : (currentData.level ?? currentData.security_level ?? 2));
+    const secLevelId = payload.security_level_id || String(rankNum);
+    const role = payload.role || payload.role_name || currentData.role || currentData.role_name;
+    const permission = payload.permission || currentData.permission || 'push';
+    const allowedPaths = Array.isArray(payload.allowed_paths) ? payload.allowed_paths : currentData.allowed_paths;
 
     pConfig.governance_collaborators[existingKey] = {
-      ...(pConfig.governance_collaborators[existingKey] || {}),
+      ...currentData,
+      permission,
       security_level: rankNum,
+      level: rankNum,
       security_level_id: secLevelId,
+      ...(role ? { role, role_name: role } : {}),
+      ...(Array.isArray(payload.departments) ? { departments: payload.departments } : {}),
+      ...(Array.isArray(allowedPaths) ? { allowed_paths: allowedPaths } : {}),
     };
-    if (payload.role_name) {
-      pConfig.governance_collaborators[existingKey].role_name = payload.role_name;
-    }
     this.writeProjectConfig(targetRepoName, pConfig);
 
-    const cfg = loadConfig();
     const actor = cfg.user?.login ? `@${cfg.user.login}` : 'Tech Lead';
     this.logAudit(targetRepoName, {
       action: 'KEY_ROTATED',
       actor,
       target: `@${cleanUsername}`,
-      details: `Nível de acesso de @${cleanUsername} alterado para ${secLevelId.toUpperCase()} (Rank ${rankNum}).`,
+      details: `Perfil de acesso de @${cleanUsername} atualizado: Level ${rankNum}${role ? `, Cargo '${role}'` : ''}, Permissão '${permission}'${allowedPaths ? `, Rotas: [${allowedPaths.join(', ')}]` : ''}.`,
     });
 
     return {
       success: true,
-      message: `Nível de segurança de @${cleanUsername} atualizado para Level ${rankNum} (${secLevelId}).`,
+      message: `Perfil de segurança de @${cleanUsername} atualizado com sucesso.`,
+    };
+  }
+
+  /**
+   * Sincroniza automaticamente as rotas permitidas dos colaboradores quando uma pasta é renomeada
+   */
+  handleFolderRename(oldFolderPath: string, newFolderPath: string, repoName?: string): void {
+    const targetRepoName = repoName || 'local';
+    const pConfig = this.readProjectConfig(targetRepoName);
+    if (!pConfig.governance_collaborators) return;
+
+    const cleanOld = oldFolderPath.replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, '').toLowerCase();
+    const cleanNew = newFolderPath.replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, '');
+
+    let modified = false;
+    for (const [, meta] of Object.entries(pConfig.governance_collaborators as Record<string, any>)) {
+      if (Array.isArray(meta.allowed_paths)) {
+        const updatedPaths = meta.allowed_paths.map((p: string) => {
+          const cleanP = p.replace(/\\/g, '/').replace(/^\/+/, '');
+          const cleanPLower = cleanP.toLowerCase();
+          if (cleanPLower === cleanOld) {
+            modified = true;
+            return cleanNew;
+          }
+          if (cleanPLower === `${cleanOld}/**` || cleanPLower === `${cleanOld}/*`) {
+            modified = true;
+            return `${cleanNew}/**`;
+          }
+          if (cleanPLower.startsWith(`${cleanOld}/`)) {
+            modified = true;
+            return cleanNew + cleanP.slice(cleanOld.length);
+          }
+          return p;
+        });
+
+        if (modified) {
+          meta.allowed_paths = updatedPaths;
+        }
+      }
+    }
+
+    if (modified) {
+      this.writeProjectConfig(targetRepoName, pConfig);
+      this.logAudit(targetRepoName, {
+        action: 'QUORUM_UPDATED',
+        actor: 'System',
+        details: `Rotas de acesso dos colaboradores atualizadas após renomeio de '${oldFolderPath}' para '${newFolderPath}'.`,
+      });
+    }
+  }
+
+  async getDepartments(repoName?: string): Promise<DepartmentConfig[]> {
+    const targetRepoName = repoName || 'local';
+    const pConfig = this.readProjectConfig(targetRepoName);
+    return Array.isArray(pConfig.departments) && pConfig.departments.length > 0
+      ? pConfig.departments
+      : DEFAULT_DEPARTMENTS;
+  }
+
+  async saveDepartments(
+    departments: DepartmentConfig[],
+    repoName?: string
+  ): Promise<{ success: boolean; departments: DepartmentConfig[] }> {
+    const targetRepoName = repoName || 'local';
+    const pConfig = this.readProjectConfig(targetRepoName);
+    pConfig.departments = departments;
+    this.writeProjectConfig(targetRepoName, pConfig);
+
+    const cfg = loadConfig();
+    const actor = cfg.user?.login ? `@${cfg.user.login}` : 'Tech Lead';
+    this.logAudit(targetRepoName, {
+      action: 'LEVEL_UPDATED',
+      actor,
+      details: `Departamentos da governança atualizados (${departments.length} departamentos configurados).`,
+    });
+
+    return {
+      success: true,
+      departments,
     };
   }
 
@@ -681,14 +800,18 @@ export class GovernanceService {
     const salt = vault.salt || crypto.randomBytes(16).toString('hex');
 
     // Ensure proper rank ordering and default values
-    const cleanLevels: DynamicSecurityLevel[] = levels.map((l, idx) => ({
-      id: l.id || `level-${l.rank ?? idx}`,
-      rank: Number(l.rank ?? idx),
-      name: l.name || `Level ${l.rank ?? idx}`,
-      color: l.color || '#3b82f6',
-      description: l.description || '',
-      updated_at: new Date().toISOString(),
-    })).sort((a, b) => a.rank - b.rank);
+    const cleanLevels: DynamicSecurityLevel[] = levels.map((l, idx) => {
+      const lvlNum = typeof l.level === 'number' ? l.level : (typeof l.rank === 'number' ? l.rank : idx);
+      return {
+        id: l.id || String(lvlNum),
+        level: lvlNum,
+        rank: lvlNum,
+        name: l.name || `Level ${lvlNum}`,
+        color: l.color || '#3b82f6',
+        description: l.description || '',
+        updated_at: new Date().toISOString(),
+      };
+    }).sort((a, b) => a.rank - b.rank);
 
     // Ensure canary probes exist for non-public levels
     if (!vault.canaries) vault.canaries = {};
@@ -1043,6 +1166,7 @@ export class GovernanceService {
     if (!levels.some((l) => l.rank === 999 || l.id === 'public')) {
       levels.push({
         id: 'public',
+        level: 999,
         rank: 999,
         name: 'Público / Geral',
         color: '#10b981',

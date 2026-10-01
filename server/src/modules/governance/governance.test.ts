@@ -3,6 +3,7 @@ import assert from 'node:assert';
 import {
   SECURITY_LEVELS,
   canAccessLevel,
+  canAccessDocument,
   deriveLevelKey,
   encryptDocument,
   decryptDocument,
@@ -51,25 +52,56 @@ describe('Criptografia Hierárquica e Governança de Acesso', () => {
     });
   });
 
+  describe('Controle Multidimensional: Cargo + Nível + Rotas/Pastas (canAccessDocument)', () => {
+    const rootUser = { level: 0, departments: ['*'], allowed_paths: ['*'] };
+    const devLead = { level: 2, allowed_paths: ['docs/engenharia/**', 'docs/geral/**'] };
+    const cfoUser = { level: 1, allowed_paths: ['docs/financeiro/**', 'docs/executivo/**'] };
+
+    it('Root (Level 0 ou wildcard *) deve acessar qualquer rota e nível', () => {
+      assert.strictEqual(canAccessDocument(rootUser, { security_level: 0, path: 'docs/executivo/estrategia.md' }), true);
+      assert.strictEqual(canAccessDocument(rootUser, { security_level: 1, path: 'docs/financeiro/dre.md' }), true);
+      assert.strictEqual(canAccessDocument(rootUser, { security_level: 2, path: 'docs/engenharia/api.md' }), true);
+    });
+
+    it('Dev com acesso a docs/engenharia/** deve acessar arquivos de engenharia, mas ser bloqueado em docs/financeiro/**', () => {
+      assert.strictEqual(canAccessDocument(devLead, { security_level: 2, path: 'docs/engenharia/api.md' }), true);
+      assert.strictEqual(canAccessDocument(devLead, { security_level: 3, path: 'docs/engenharia/subpasta/feature.md' }), true);
+      assert.strictEqual(canAccessDocument(devLead, { security_level: 2, path: 'docs/financeiro/dre.md' }), false);
+      assert.strictEqual(canAccessDocument(devLead, { security_level: 1, path: 'docs/engenharia/arquitetura-lideranca.md' }), false);
+    });
+
+    it('CFO com acesso a docs/financeiro/** deve acessar docs/financeiro/ e ser bloqueada em docs/juridico/**', () => {
+      assert.strictEqual(canAccessDocument(cfoUser, { security_level: 1, path: 'docs/financeiro/dre.md' }), true);
+      assert.strictEqual(canAccessDocument(cfoUser, { security_level: 1, path: 'docs/juridico/contrato.md' }), false);
+    });
+
+    it('Documentos públicos devem ser acessíveis independentemente de rota', () => {
+      assert.strictEqual(canAccessDocument(devLead, { security_level: 999, path: 'docs/juridico/termos.md' }), true);
+    });
+  });
+
   describe('Criptografia e Descriptografia de Envelopes (AES-256-GCM)', () => {
     const confidentialPlaintext = `# Especificação Confidencial de Faturamento
 Esta é uma regra estratégica ultrassecreta de margem de lucro.`;
 
-    it('Deve criptografar documento e produzir envelope válido ilegível', () => {
+    it('Deve criptografar documento e produzir envelope limpo (sem poluição YAML no arquivo)', () => {
       const envelope = encryptDocument(confidentialPlaintext, 0, keyLevel0, {
         title: 'Faturamento Estratégico',
+        department: 'finance',
       });
 
       assert.strictEqual(isEncryptedEnvelope(envelope), true);
       assert.strictEqual(envelope.includes('-----BEGIN CONTEXT ENCRYPTED PAYLOAD-----'), true);
       assert.strictEqual(envelope.includes('-----END CONTEXT ENCRYPTED PAYLOAD-----'), true);
-      assert.strictEqual(envelope.includes('security_level: 0'), true);
+      // Envelope limpo: não deve conter bloco YAML frontmatter (linhas com '---')
+      assert.strictEqual(/^---\s*[\r\n]/.test(envelope), false);
       assert.strictEqual(envelope.includes('ultrassecreta'), false);
 
       const parsed = parseEncryptedEnvelope(envelope);
       assert.strictEqual(parsed.isEncrypted, true);
       assert.strictEqual(parsed.header?.security_level, 0);
       assert.strictEqual(parsed.payloadData?.alg, 'AES-256-GCM');
+      assert.strictEqual(parsed.header?.department, 'finance');
     });
 
     it('Engenheiro Level 0 deve conseguir descriptografar documento de Level 0 com perfeição', () => {

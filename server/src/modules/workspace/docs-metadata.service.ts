@@ -2,7 +2,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { PROJECTS_DIR } from '../../config/constants.js';
 import { validateJsonSchema } from '../../utils/schema.validator.js';
-import { DEFAULT_DYNAMIC_SECURITY_LEVELS, normalizeDynamicSecurityLevel } from '../governance/governance.types.js';
+import {
+  DEFAULT_DYNAMIC_SECURITY_LEVELS,
+  DEFAULT_DEPARTMENTS,
+  DepartmentConfig,
+  normalizeDynamicSecurityLevel,
+} from '../governance/governance.types.js';
 
 export interface DocumentMetadataItem {
   id: string;
@@ -19,7 +24,9 @@ export interface DocumentMetadataItem {
   templateId: string;
   prompt: string;
   security_level?: number;
+  level?: number; // alias direto
   security_level_id?: string;
+  department?: string; // id do departamento (e.g. "engineering", "finance", "legal")
   [key: string]: any;
 }
 
@@ -28,7 +35,8 @@ export interface ProjectMetadataOptions {
   statuses: Array<{ key?: string; name?: string; label: string; badge?: string; color?: string }>;
   tags: Array<string | { name: string; color?: string }>;
   badges?: Array<string | { name: string; color?: string; description?: string }>;
-  security_levels?: Array<{ id: string; rank: number; name: string; color: string; description?: string }>;
+  security_levels?: Array<{ id: string; rank: number; level?: number; name: string; color: string; description?: string }>;
+  departments?: DepartmentConfig[];
 }
 
 export function generateDocId(filePath: string): string {
@@ -197,14 +205,16 @@ export class DocsMetadataService {
   }
 
   saveProjectConfig(repoName: string, configData: any): { success: boolean; config: any } {
+    const existing = this.getProjectConfig(repoName);
+    const merged = { ...existing, ...configData };
     const cfgPath = this.getProjectConfigPath(repoName);
-    const valRes = validateJsonSchema('project.config', configData);
+    const valRes = validateJsonSchema('project.config', merged);
     if (!valRes.valid) {
       console.warn(`[DocsMetadataService] Aviso de validação project.config.json:`, valRes.errors);
     }
     fs.mkdirSync(path.dirname(cfgPath), { recursive: true });
-    fs.writeFileSync(cfgPath, JSON.stringify(configData, null, 2), 'utf-8');
-    return { success: true, config: configData };
+    fs.writeFileSync(cfgPath, JSON.stringify(merged, null, 2), 'utf-8');
+    return { success: true, config: merged };
   }
 
   getProjectMetadataOptions(repoName: string): ProjectMetadataOptions {
@@ -244,7 +254,38 @@ export class DocsMetadataService {
     }
     security_levels.sort((a, b) => a.rank - b.rank);
 
-    return { statuses, categories, tags, badges, security_levels };
+    const departments: DepartmentConfig[] = Array.isArray(config.departments) && config.departments.length > 0
+      ? config.departments
+      : DEFAULT_DEPARTMENTS;
+
+    return { statuses, categories, tags, badges, security_levels, departments };
+  }
+
+  inferDepartmentFromPath(filePath: string, repoName?: string): { department?: string; default_level?: number } {
+    if (!filePath) return {};
+    const clean = filePath.replace(/\\/g, '/').replace(/^\/+/, '');
+    const parts = clean.split('/');
+    const targetFolder = (parts[0] === 'docs' && parts.length > 1 ? parts[1] : parts[0]).toLowerCase();
+
+    let departments: DepartmentConfig[] = DEFAULT_DEPARTMENTS;
+    try {
+      const config = this.getProjectConfig(repoName || 'local');
+      if (Array.isArray(config.departments) && config.departments.length > 0) {
+        departments = config.departments;
+      }
+    } catch {}
+
+    const matched = departments.find(
+      (d) => d.folder.toLowerCase() === targetFolder || d.id.toLowerCase() === targetFolder
+    );
+
+    if (matched) {
+      return {
+        department: matched.id,
+        default_level: matched.default_level,
+      };
+    }
+    return {};
   }
 
   private metaCache = new Map<string, { data: DocumentMetadataItem[]; timestamp: number }>();
@@ -652,7 +693,7 @@ export class DocsMetadataService {
     };
   }
 
-  private sanitizeMetaItem(item: any): DocumentMetadataItem {
+  private sanitizeMetaItem(item: any, repoName?: string): DocumentMetadataItem {
     const cleanItem = { ...item };
     // Remove layer e badge se existirem
     delete cleanItem.layer;
@@ -664,10 +705,17 @@ export class DocsMetadataService {
       delete cleanItem.category;
     }
 
-    const secLevel =
-      cleanItem.security_level !== undefined && cleanItem.security_level !== null && !isNaN(Number(cleanItem.security_level))
-        ? Number(cleanItem.security_level)
-        : 999;
+    const inferred = cleanItem.path ? this.inferDepartmentFromPath(cleanItem.path, repoName) : {};
+    const resolvedDept = cleanItem.department || inferred.department;
+
+    let secLevel = 999;
+    if (cleanItem.security_level !== undefined && cleanItem.security_level !== null && !isNaN(Number(cleanItem.security_level))) {
+      secLevel = Number(cleanItem.security_level);
+    } else if (cleanItem.level !== undefined && cleanItem.level !== null && !isNaN(Number(cleanItem.level))) {
+      secLevel = Number(cleanItem.level);
+    } else if (inferred.default_level !== undefined) {
+      secLevel = inferred.default_level;
+    }
 
     const secLevelId =
       cleanItem.security_level_id ||
@@ -696,7 +744,9 @@ export class DocsMetadataService {
       templateId: cleanItem.templateId || '',
       prompt: cleanItem.prompt || '',
       security_level: secLevel,
+      level: secLevel,
       security_level_id: secLevelId,
+      department: resolvedDept,
     };
   }
 }

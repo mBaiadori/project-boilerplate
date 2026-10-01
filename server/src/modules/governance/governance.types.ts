@@ -2,9 +2,68 @@ export type GitHubPermission = 'pull' | 'triage' | 'push' | 'maintain' | 'admin'
 
 export type SecurityLevelNumber = number;
 
+export interface DepartmentConfig {
+  id: string; // e.g. "engineering", "finance", "legal", "hr", "executive"
+  name: string; // e.g. "Engenharia", "Financeiro", "Jurídico"
+  folder: string; // pasta relativa na raiz ou em docs/ (e.g. "engineering", "finance")
+  color: string;
+  default_level: number; // 0, 1, 2, 3 ou 999
+  icon?: string;
+  description?: string;
+}
+
+export const DEFAULT_DEPARTMENTS: DepartmentConfig[] = [
+  {
+    id: 'engineering',
+    name: 'Engenharia',
+    folder: 'engineering',
+    color: '#6366f1',
+    default_level: 2,
+    icon: 'code',
+    description: 'Arquitetura técnica, features e especificações de software',
+  },
+  {
+    id: 'finance',
+    name: 'Financeiro',
+    folder: 'finance',
+    color: '#10b981',
+    default_level: 1,
+    icon: 'payments',
+    description: 'Orçamentos, DRE, notas fiscais e relatórios financeiros',
+  },
+  {
+    id: 'legal',
+    name: 'Jurídico',
+    folder: 'legal',
+    color: '#a855f7',
+    default_level: 1,
+    icon: 'gavel',
+    description: 'Contratos, termos de uso, compliance e propriedade intelectual',
+  },
+  {
+    id: 'hr',
+    name: 'Recursos Humanos',
+    folder: 'hr',
+    color: '#ec4899',
+    default_level: 2,
+    icon: 'badge',
+    description: 'Pessoas, cargos, salários e cultura organizacional',
+  },
+  {
+    id: 'executive',
+    name: 'Executivo',
+    folder: 'executive',
+    color: '#f43f5e',
+    default_level: 0,
+    icon: 'diamond',
+    description: 'Diretoria executiva, conselho e decisões estratégicas de nível 0',
+  },
+];
+
 export interface DynamicSecurityLevel {
-  id: string; // e.g. "root", "strategic", "engineering", "legal", "public"
-  rank: number; // 0 = highest privilege (Root), 1 = Strategic, 2 = Engineering, 999 = Public
+  id: string; // e.g. "0", "1", "2", "3", "999" ou nomes legados
+  level: number; // 0 = Root, 1 = Estratégico, 2 = Engenharia, 3 = Operacional, 999 = Público
+  rank: number; // alias para level (retrocompatibilidade)
   name: string;
   color: string;
   description?: string;
@@ -15,22 +74,24 @@ export interface DynamicSecurityLevel {
 export function normalizeDynamicSecurityLevel(lvl: any, index = 0): DynamicSecurityLevel {
   if (!lvl || typeof lvl !== 'object') {
     return {
-      id: `level_${index}`,
+      id: String(index),
+      level: index,
       rank: index,
       name: `Level ${index}`,
       color: '#3b82f6',
       description: '',
     };
   }
-  const rank = typeof lvl.rank === 'number' ? lvl.rank : (typeof lvl.level === 'number' ? lvl.level : index);
-  const id = String(lvl.id || (rank === 0 ? 'root' : rank === 1 ? 'strategic' : rank === 2 ? 'engineering' : rank === 3 ? 'operational' : rank === 999 ? 'public' : `level_${rank}`));
-  const name = lvl.name || lvl.label || (rank === 999 ? 'Público / Geral' : `Level ${rank}`);
-  const color = lvl.color || (rank === 0 ? '#ef4444' : rank === 1 ? '#f97316' : rank === 2 ? '#eab308' : rank === 3 ? '#3b82f6' : '#10b981');
-  const description = lvl.description || (rank === 999 ? 'Texto plano sem criptografia, acessível para todos os membros' : '');
+  const levelNum = typeof lvl.level === 'number' ? lvl.level : (typeof lvl.rank === 'number' ? lvl.rank : index);
+  const id = String(lvl.id ?? levelNum);
+  const name = lvl.name || lvl.label || (levelNum === 999 ? 'Público / Geral' : `Level ${levelNum}`);
+  const color = lvl.color || (levelNum === 0 ? '#ef4444' : levelNum === 1 ? '#f97316' : levelNum === 2 ? '#eab308' : levelNum === 3 ? '#3b82f6' : '#10b981');
+  const description = lvl.description || (levelNum === 999 ? 'Texto plano sem criptografia, acessível para todos os membros' : '');
 
   return {
     id,
-    rank,
+    level: levelNum,
+    rank: levelNum,
     name,
     color,
     description,
@@ -41,35 +102,40 @@ export function normalizeDynamicSecurityLevel(lvl: any, index = 0): DynamicSecur
 
 export const DEFAULT_DYNAMIC_SECURITY_LEVELS: DynamicSecurityLevel[] = [
   {
-    id: 'root',
+    id: '0',
+    level: 0,
     rank: 0,
     name: 'Root / Executivo',
     color: '#ef4444',
     description: 'Acesso Irrestrito Supremo (Abre todos os níveis e documentos)',
   },
   {
-    id: 'strategic',
+    id: '1',
+    level: 1,
     rank: 1,
     name: 'Estratégico / Liderança',
     color: '#f97316',
     description: 'Acesso Amplo de Liderança, Arquitetura e Decisões Estratégicas',
   },
   {
-    id: 'engineering',
+    id: '2',
+    level: 2,
     rank: 2,
     name: 'Engenharia / Time Técnico',
     color: '#eab308',
     description: 'Acesso Técnico de Engenharia e Especificações de Features',
   },
   {
-    id: 'operational',
+    id: '3',
+    level: 3,
     rank: 3,
     name: 'Operacional / Restrito Básico',
     color: '#3b82f6',
     description: 'Acesso Básico Operacional para Colaboradores e Prestadores',
   },
   {
-    id: 'public',
+    id: '999',
+    level: 999,
     rank: 999,
     name: 'Público / Geral',
     color: '#10b981',
@@ -99,9 +165,13 @@ export interface CollaboratorInfo {
   avatar_url: string;
   html_url: string;
   permission: GitHubPermission;
-  role_name?: string;
-  security_level: number; // rank or legacy level number
+  role?: string;
+  role_name?: string; // retrocompatibilidade
+  security_level: number; // 0, 1, 2, 3, 999
+  level?: number; // alias direto para security_level
   security_level_id?: string;
+  departments?: string[]; // e.g. ["engineering"], ["finance", "executive"] ou ["*"] (retrocompatibilidade)
+  allowed_paths?: string[]; // Pastas/rotas permitidas (e.g. ["docs/engenharia", "docs/financeiro"] ou ["*"])
   is_owner?: boolean;
   invited_at?: string;
   status?: 'active' | 'pending';

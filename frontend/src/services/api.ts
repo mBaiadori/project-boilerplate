@@ -1143,7 +1143,11 @@ export const API = {
     username: string;
     permission: string;
     security_level?: number;
+    level?: number;
+    role?: string;
     role_name?: string;
+    departments?: string[];
+    allowed_paths?: string[];
     repo?: string;
   }): Promise<ApiResponse<{ success: boolean; message: string; collaborator?: any; error?: string }>> {
     const res = await fetch('/api/governance/invite', {
@@ -1163,9 +1167,14 @@ export const API = {
 
   async updateCollaboratorClearance(payload: {
     username: string;
-    security_level: number;
+    security_level?: number;
+    level?: number;
     security_level_id?: string;
+    role?: string;
     role_name?: string;
+    permission?: string;
+    departments?: string[];
+    allowed_paths?: string[];
     repo?: string;
   }): Promise<ApiResponse<{ success: boolean; message: string }>> {
     const res = await fetch('/api/governance/clearance', {
@@ -1320,6 +1329,20 @@ export const API = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ levels, repo })
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async getDepartments(repo?: string): Promise<ApiResponse<{ departments: any[] }>> {
+    const res = await fetch(`/api/governance/departments${repo ? `?repo=${encodeURIComponent(repo)}` : ''}`);
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async saveDepartments(departments: any[], repo?: string): Promise<ApiResponse<{ success: boolean; departments: any[] }>> {
+    const res = await fetch('/api/governance/departments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ departments, repo })
     });
     return { ok: res.ok, data: await res.json() };
   },

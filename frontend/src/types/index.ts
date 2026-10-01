@@ -79,7 +79,9 @@ export interface DocumentMetadataItem {
   templateId: string;
   prompt?: string;
   security_level?: number;
+  level?: number;
   security_level_id?: string;
+  department?: string;
   [key: string]: any;
 }
 
@@ -107,6 +109,7 @@ export interface BadgeOption {
 
 export interface DynamicSecurityLevel {
   id: string;
+  level?: number;
   rank: number;
   name: string;
   color: string;
@@ -115,12 +118,41 @@ export interface DynamicSecurityLevel {
   updated_at?: string;
 }
 
+export interface DepartmentConfig {
+  id: string;
+  name: string;
+  folder: string;
+  color: string;
+  default_level: number;
+  icon?: string;
+  description?: string;
+}
+
+export interface CollaboratorInfo {
+  login: string;
+  id: number;
+  avatar_url: string;
+  html_url: string;
+  permission: 'pull' | 'triage' | 'push' | 'maintain' | 'admin' | string;
+  role?: string;
+  role_name?: string;
+  security_level: number;
+  level?: number;
+  security_level_id?: string;
+  departments?: string[];
+  allowed_paths?: string[];
+  is_owner?: boolean;
+  invited_at?: string;
+  status?: 'active' | 'pending';
+}
+
 export interface ProjectMetadataOptions {
   categories: CategoryOption[];
   statuses: StatusItem[];
   tags: TagOption[];
   badges?: (BadgeOption | string)[];
   security_levels?: DynamicSecurityLevel[];
+  departments?: DepartmentConfig[];
 }
 
 export interface PRApproval {

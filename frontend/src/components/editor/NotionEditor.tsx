@@ -115,38 +115,43 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
   const [isSyncingToMain, setIsSyncingToMain] = useState(false);
 
   // Security Level & Document Lock Gate State
-  const { securityLevels, isLevelUnlocked, unlockLevel } = useSecurity();
+  const { securityLevels, departments, isLevelUnlocked, canAccessDoc, unlockLevel } = useSecurity();
   const [unlockPassphrase, setUnlockPassphrase] = useState("");
   const [showUnlockPass, setShowUnlockPass] = useState(false);
   const [isUnlocking, setIsUnlocking] = useState(false);
   const [unlockError, setUnlockError] = useState("");
 
   const docSecLevel =
-    fileMetadata?.security_level !== undefined && fileMetadata?.security_level !== null
+    fileMetadata?.level !== undefined && fileMetadata?.level !== null
+      ? Number(fileMetadata.level)
+      : fileMetadata?.security_level !== undefined && fileMetadata?.security_level !== null
       ? Number(fileMetadata.security_level)
       : 999;
   const docSecLevelId =
     fileMetadata?.security_level_id ||
     (docSecLevel === 999
       ? "public"
-      : securityLevels.find((l) => l.rank === docSecLevel)?.id || "public");
+      : securityLevels.find((l) => l.rank === docSecLevel || l.level === docSecLevel)?.id || String(docSecLevel));
 
   const activeSecLevelObj =
     securityLevels.find(
       (l) =>
         (docSecLevelId && l.id === docSecLevelId) ||
-        (docSecLevel !== undefined && l.rank === Number(docSecLevel))
+        (docSecLevel !== undefined && (l.rank === Number(docSecLevel) || l.level === Number(docSecLevel)))
     ) ||
-    securityLevels.find((l) => l.rank === 999) ||
+    securityLevels.find((l) => l.rank === 999 || l.level === 999) ||
     securityLevels.find((l) => l.id === "public");
+
+  const activeDeptObj = departments.find((d) => d.id === fileMetadata?.department);
 
   const isDocumentConfidential =
     docSecLevel !== 999 &&
     docSecLevelId !== "public";
 
+  const isAllowedByDept = canAccessDoc(fileMetadata || {});
   const isDocumentLocked =
     isDocumentConfidential &&
-    !isLevelUnlocked(docSecLevelId || docSecLevel);
+    (!isLevelUnlocked(docSecLevelId || docSecLevel) || !isAllowedByDept);
 
   const handleUnlockDocument = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1573,23 +1578,46 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
               </div>
 
               <div>
-                <div
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "5px",
-                    padding: "3px 10px",
-                    borderRadius: "12px",
-                    backgroundColor: `${activeSecLevelObj?.color || "#ef4444"}15`,
-                    border: `1px solid ${activeSecLevelObj?.color || "#ef4444"}40`,
-                    color: activeSecLevelObj?.color || "#ef4444",
-                    fontSize: "11px",
-                    fontWeight: 700,
-                    marginBottom: "10px",
-                  }}
-                >
-                  <Shield size={12} />
-                  {activeSecLevelObj?.name || `Nível ${docSecLevel}`} &bull; Rank {activeSecLevelObj?.rank ?? docSecLevel}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", marginBottom: "10px" }}>
+                  <div
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "5px",
+                      padding: "3px 10px",
+                      borderRadius: "12px",
+                      backgroundColor: `${activeSecLevelObj?.color || "#ef4444"}15`,
+                      border: `1px solid ${activeSecLevelObj?.color || "#ef4444"}40`,
+                      color: activeSecLevelObj?.color || "#ef4444",
+                      fontSize: "11px",
+                      fontWeight: 700,
+                    }}
+                  >
+                    <Shield size={12} />
+                    {activeSecLevelObj?.name || `Nível ${docSecLevel}`} &bull; Level {activeSecLevelObj?.level ?? activeSecLevelObj?.rank ?? docSecLevel}
+                  </div>
+
+                  {activeDeptObj && (
+                    <div
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "5px",
+                        padding: "3px 10px",
+                        borderRadius: "12px",
+                        backgroundColor: `${activeDeptObj.color}15`,
+                        border: `1px solid ${activeDeptObj.color}40`,
+                        color: activeDeptObj.color,
+                        fontSize: "11px",
+                        fontWeight: 700,
+                      }}
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: "13px" }}>
+                        {activeDeptObj.icon || "folder"}
+                      </span>
+                      {activeDeptObj.name}
+                    </div>
+                  )}
                 </div>
                 <h3
                   style={{

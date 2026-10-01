@@ -2,7 +2,15 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { API } from '../services/api';
 import { useWorkspace } from './WorkspaceContext';
 import { useAuth } from './AuthContext';
-import type { DynamicSecurityLevel } from '../types';
+import type { DynamicSecurityLevel, DepartmentConfig } from '../types';
+
+export const DEFAULT_DEPARTMENTS: DepartmentConfig[] = [
+  { id: 'engineering', name: 'Engenharia', folder: 'engineering', color: '#6366f1', default_level: 2, icon: 'code' },
+  { id: 'finance', name: 'Financeiro', folder: 'finance', color: '#10b981', default_level: 1, icon: 'payments' },
+  { id: 'legal', name: 'Jurídico', folder: 'legal', color: '#a855f7', default_level: 1, icon: 'gavel' },
+  { id: 'hr', name: 'Recursos Humanos', folder: 'hr', color: '#ec4899', default_level: 2, icon: 'badge' },
+  { id: 'executive', name: 'Executivo', folder: 'executive', color: '#f43f5e', default_level: 0, icon: 'diamond' },
+];
 
 export const DEFAULT_SECURITY_LEVELS: DynamicSecurityLevel[] = [
   {
@@ -45,6 +53,7 @@ export const DEFAULT_SECURITY_LEVELS: DynamicSecurityLevel[] = [
 interface SecurityContextType {
   vaultConfig: any | null;
   securityLevels: DynamicSecurityLevel[];
+  departments: DepartmentConfig[];
   unlockedLevels: number[];
   unlockedLevelIds: string[];
   passphrases: Record<string, string>;
@@ -56,6 +65,7 @@ interface SecurityContextType {
   lockLevel: (levelIdOrRank: string | number) => void;
   lockAll: () => void;
   isLevelUnlocked: (levelIdOrRank: string | number) => boolean;
+  canAccessDoc: (doc: { security_level?: number; level?: number; department?: string }) => boolean;
   encryptContent: (content: string, level: number | string, metadata?: any) => Promise<{ success: boolean; envelope?: string; error?: string }>;
   decryptContent: (envelope: string) => Promise<{ success: boolean; content?: string; level: number; error?: string }>;
   generateAIToken: (level?: number, ttlMinutes?: number) => Promise<{ success: boolean; token?: string; error?: string }>;
@@ -139,6 +149,16 @@ export const SecurityProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
     return list.sort((a, b) => a.rank - b.rank);
   }, [projectConfig?.security_levels, projectMetaOptions?.security_levels, vaultConfig?.levels]);
+
+  const departments = useMemo<DepartmentConfig[]>(() => {
+    if (projectConfig?.departments && Array.isArray(projectConfig.departments) && projectConfig.departments.length > 0) {
+      return projectConfig.departments;
+    }
+    if (projectMetaOptions?.departments && Array.isArray(projectMetaOptions.departments) && projectMetaOptions.departments.length > 0) {
+      return projectMetaOptions.departments;
+    }
+    return DEFAULT_DEPARTMENTS;
+  }, [projectConfig?.departments, projectMetaOptions?.departments]);
 
   const refreshVault = useCallback(async () => {
     setIsLoadingVault(true);
@@ -321,6 +341,54 @@ export const SecurityProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     [unlockedLevels, unlockedLevelIds]
   );
 
+  const canAccessDoc = useCallback(
+    (doc: { security_level?: number; level?: number; department?: string; path?: string }): boolean => {
+      const docLevel = doc.security_level !== undefined ? Number(doc.security_level) : (doc.level !== undefined ? Number(doc.level) : 999);
+      if (docLevel === 999 || isNaN(docLevel)) {
+        return true;
+      }
+
+      // Check vertical level unlock
+      const isLevelOk = unlockedLevels.includes(docLevel) || unlockedLevels.some((l) => l <= docLevel);
+      if (!isLevelOk) {
+        return false;
+      }
+
+      const userLogin = user?.login?.toLowerCase();
+      const collabs = projectConfig?.governance_collaborators || {};
+      const userMeta = Object.entries(collabs).find(([k]) => k.toLowerCase() === userLogin)?.[1] as any;
+
+      // Check path / route restriction
+      if (doc.path) {
+        const allowedPaths: string[] = Array.isArray(userMeta?.allowed_paths) ? userMeta.allowed_paths : ['*'];
+        if (!allowedPaths.includes('*') && !allowedPaths.includes('/**')) {
+          const cleanDocPath = doc.path.replace(/\\/g, '/').replace(/^\/+/, '').toLowerCase();
+          const hasPathAccess = allowedPaths.some((pattern) => {
+            const cleanPattern = pattern
+              .replace(/\\/g, '/')
+              .replace(/^\/+/, '')
+              .replace(/\/\*+$/, '')
+              .toLowerCase();
+            return cleanDocPath === cleanPattern || cleanDocPath.startsWith(cleanPattern + '/');
+          });
+          if (!hasPathAccess) {
+            return false;
+          }
+        }
+      }
+
+      // Check horizontal department restriction (retrocompatibilidade)
+      if (doc.department && doc.department !== 'general' && doc.department !== 'public') {
+        const userDepts: string[] = Array.isArray(userMeta?.departments) ? userMeta.departments : ['*'];
+        if (userDepts.includes('*')) return true;
+        return userDepts.includes(doc.department);
+      }
+
+      return true;
+    },
+    [unlockedLevels, user?.login, projectConfig?.governance_collaborators]
+  );
+
   const encryptContent = async (
     content: string,
     level: number | string,
@@ -416,6 +484,7 @@ export const SecurityProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       value={{
         vaultConfig,
         securityLevels,
+        departments,
         unlockedLevels,
         unlockedLevelIds,
         passphrases,
@@ -427,6 +496,7 @@ export const SecurityProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         lockLevel,
         lockAll,
         isLevelUnlocked,
+        canAccessDoc,
         encryptContent,
         decryptContent,
         generateAIToken,

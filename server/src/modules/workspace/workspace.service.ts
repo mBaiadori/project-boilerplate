@@ -17,6 +17,7 @@ import {
   type DocumentMetadataItem,
 } from "./docs-metadata.service.js";
 import { translationsService } from "../translations/translations.service.js";
+import { governanceService } from "../governance/governance.service.js";
 
 export interface TreeNode {
   name: string;
@@ -556,6 +557,9 @@ export class WorkspaceService {
 
     docsMetadataService.renameDocMetadata(repoName, cleanOld, cleanNew);
     translationsService.renameTranslationsForPath(repoName, cleanOld, cleanNew);
+    if (isDir) {
+      governanceService.handleFolderRename(cleanOld, cleanNew, repoName);
+    }
 
     this.invalidateTreeCache(repoName);
     const newTree = (await this.getTree(repoName, true)).tree;

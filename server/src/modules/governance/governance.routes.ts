@@ -139,6 +139,27 @@ export async function governanceRoutes(fastify: FastifyInstance) {
     }
   });
 
+  // 8.1. Governance Departments
+  fastify.get('/api/governance/departments', async (request, reply) => {
+    const query = request.query as { repo?: string };
+    try {
+      const departments = await governanceService.getDepartments(query.repo);
+      return reply.send({ departments });
+    } catch (err: any) {
+      return reply.status(400).send({ error: err.message });
+    }
+  });
+
+  fastify.post('/api/governance/departments', async (request, reply) => {
+    const body = request.body as { departments: any[]; repo?: string };
+    try {
+      const result = await governanceService.saveDepartments(body.departments, body.repo);
+      return reply.send(result);
+    } catch (err: any) {
+      return reply.status(400).send({ error: err.message });
+    }
+  });
+
   fastify.post('/api/governance/levels/migrate', async (request, reply) => {
     const body = request.body as {
       oldLevelId: string;

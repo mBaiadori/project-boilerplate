@@ -17,6 +17,11 @@ export interface EncryptedPayloadData {
   iv: string; // Base64
   authTag: string; // Base64
   payload: string; // Base64 ciphertext
+  security_level?: number;
+  level?: number;
+  department?: string;
+  key_id?: string;
+  [key: string]: any;
 }
 
 export const CANARY_PLAINTEXT_PREFIX = 'CONTEXT_OS_VALID_CANARY_';
@@ -64,6 +69,77 @@ export function canAccessRank(userRank: number, docRank: number): boolean {
 }
 
 export const canAccessLevel = canAccessRank;
+
+/**
+ * Checks multidimensional access clearance for a collaborator against a document's security metadata.
+ * Evaluates:
+ * 1. Root / Wildcard bypass (user.level === 0 or user.departments includes '*')
+ * 2. Public clearance (doc.security_level === 999)
+ * 3. Vertical Level clearance (user.level <= doc.security_level)
+ * 4. Horizontal Department clearance (user.departments includes doc.department)
+ */
+export function canAccessDocument(
+  user: { level?: number; security_level?: number; departments?: string[]; allowed_paths?: string[] },
+  doc: { security_level?: number; level?: number; department?: string; path?: string }
+): boolean {
+  const userLevel =
+    user.level !== undefined
+      ? Number(user.level)
+      : user.security_level !== undefined
+      ? Number(user.security_level)
+      : 999;
+  const docLevel =
+    doc.security_level !== undefined
+      ? Number(doc.security_level)
+      : doc.level !== undefined
+      ? Number(doc.level)
+      : 999;
+
+  // 1. Root or wildcard bypass
+  if (
+    userLevel === 0 ||
+    (Array.isArray(user.departments) && user.departments.includes('*')) ||
+    (Array.isArray(user.allowed_paths) && user.allowed_paths.includes('*'))
+  ) {
+    return true;
+  }
+
+  // 2. Public documents are open to everyone
+  if (docLevel === 999 || isNaN(docLevel)) {
+    return true;
+  }
+
+  // 3. Vertical check: user must have level <= docLevel (lower number = higher clearance)
+  if (isNaN(userLevel) || userLevel > docLevel) {
+    return false;
+  }
+
+  // 4. Path/Route check: if user has allowed_paths configured and doc has a path
+  if (Array.isArray(user.allowed_paths) && user.allowed_paths.length > 0 && doc.path) {
+    const cleanDocPath = doc.path.replace(/\\/g, '/').replace(/^\/+/, '').toLowerCase();
+    const hasPathAccess = user.allowed_paths.some((pattern) => {
+      if (pattern === '*' || pattern === '/**') return true;
+      const cleanPattern = pattern
+        .replace(/\\/g, '/')
+        .replace(/^\/+/, '')
+        .replace(/\/\*+$/, '')
+        .toLowerCase();
+      return cleanDocPath === cleanPattern || cleanDocPath.startsWith(cleanPattern + '/');
+    });
+    if (!hasPathAccess) {
+      return false;
+    }
+  }
+
+  // 5. Horizontal check: department matching (retrocompatibilidade)
+  if (doc.department && doc.department !== 'general' && doc.department !== 'public') {
+    if (Array.isArray(user.departments) && user.departments.length > 0) {
+      return user.departments.includes(doc.department);
+    }
+  }
+
+  return true;
+}
 
 /**
  * Checks if raw file content is an encrypted Context OS envelope.
@@ -191,7 +267,8 @@ export function unlockUserKeySlot(
 }
 
 /**
- * Encapsulates encrypted payload into markdown YAML frontmatter format.
+ * Encapsulates encrypted payload cleanly without markdown YAML frontmatter pollution.
+ * All metadata resides in .docs.metadata.json.
  */
 export function buildEncryptedEnvelope(
   header: EncryptedEnvelopeHeader,
@@ -202,30 +279,28 @@ export function buildEncryptedEnvelope(
     iv: encryptedData.iv,
     authTag: encryptedData.authTag,
     payload: encryptedData.ciphertext,
+    security_level: header.security_level,
+    security_level_id: String(header.security_level),
+    key_id: header.key_id,
+    ...(header.department ? { department: header.department } : {}),
   };
 
   const payloadJsonBase64 = Buffer.from(JSON.stringify(payloadObj)).toString('base64');
 
-  const lines: string[] = ['---'];
-  for (const [k, v] of Object.entries(header)) {
-    if (typeof v === 'string') {
-      lines.push(`${k}: "${v.replace(/"/g, '\\"')}"`);
-    } else {
-      lines.push(`${k}: ${v}`);
-    }
-  }
-  lines.push('---');
-  lines.push('');
-  lines.push(ENVELOPE_BEGIN_TAG);
-  lines.push(payloadJsonBase64);
-  lines.push(ENVELOPE_END_TAG);
-  lines.push('');
+  // Clean Markdown envelope: no YAML frontmatter required
+  const lines: string[] = [
+    ENVELOPE_BEGIN_TAG,
+    payloadJsonBase64,
+    ENVELOPE_END_TAG,
+    '',
+  ];
 
   return lines.join('\n');
 }
 
 /**
- * Parses frontmatter and encrypted payload from an envelope.
+ * Parses encrypted payload from an envelope.
+ * Fully backward-compatible with legacy envelopes containing YAML frontmatter.
  */
 export function parseEncryptedEnvelope(fileContent: string): {
   header: EncryptedEnvelopeHeader | null;
@@ -246,7 +321,7 @@ export function parseEncryptedEnvelope(fileContent: string): {
       if (parts.length >= 2) {
         const key = parts[0].trim();
         const val = parts.slice(1).join(':').trim().replace(/^["']|["']$/g, '');
-        if (key === 'security_level' || key === 'rank') {
+        if (key === 'security_level' || key === 'rank' || key === 'level') {
           parsed[key] = Number(val);
         } else if (key === 'encrypted') {
           parsed[key] = val === 'true';
@@ -271,6 +346,18 @@ export function parseEncryptedEnvelope(fileContent: string): {
   try {
     const jsonStr = Buffer.from(base64Chunk, 'base64').toString('utf-8');
     const payloadData = JSON.parse(jsonStr) as EncryptedPayloadData;
+
+    if (!header) {
+      header = {
+        security_level: payloadData.security_level ?? (payloadData as any).level ?? 2,
+        security_level_id: String(payloadData.security_level ?? 2),
+        encrypted: true,
+        algorithm: 'AES-256-GCM',
+        key_id: payloadData.key_id,
+        department: payloadData.department,
+      };
+    }
+
     return { header, payloadData, isEncrypted: true };
   } catch {
     return { header, payloadData: null, isEncrypted: false };

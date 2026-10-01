@@ -179,7 +179,12 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
     updateFileMetadata({ approvers: updated });
   };
 
-  const { securityLevels } = useSecurity();
+  const { securityLevels, departments } = useSecurity();
+
+  const currentDeptId = fileMetadata?.department || "";
+  const activeDept = departments.find(
+    (d) => d.id === currentDeptId || d.folder.toLowerCase() === currentDeptId.toLowerCase()
+  );
 
   const activeStatusObj = statusOptions.find((s) => s.name === currentStatus || s.key === currentStatus) || {
     name: currentStatus,
@@ -217,7 +222,7 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
         position: "relative",
       }}
     >
-      {/* Left: Status + Categoria + Nível de Segurança + Breadcrumbs */}
+      {/* Left: Status + Categoria + Nível de Segurança + Departamento + Breadcrumbs */}
       <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
         {/* Status Badge */}
         <span
@@ -270,6 +275,34 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
           >
             <Shield size={11} />
             {activeSecLevel.name}
+          </span>
+        )}
+
+        {/* Departamento Badge */}
+        {activeDept && (
+          <span
+            style={{
+              fontSize: "10.5px",
+              padding: "2px 8px",
+              borderRadius: "12px",
+              backgroundColor: activeDept.color + "15",
+              borderColor: activeDept.color + "40",
+              borderWidth: "1px",
+              borderStyle: "solid",
+              color: activeDept.color,
+              fontWeight: 600,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "4px",
+              cursor: "pointer",
+            }}
+            onClick={() => setShowProperties(true)}
+            title={`Departamento: ${activeDept.name} (Pasta padrão: ${activeDept.folder}) - Clique para gerenciar`}
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: "12px" }}>
+              domain
+            </span>
+            {activeDept.name}
           </span>
         )}
 
@@ -413,40 +446,77 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
                 />
               </div>
 
-              {/* Nível de Segurança / Acesso Criptográfico */}
-              <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                <span style={{ fontSize: "11px", fontWeight: 600, color: "var(--color-outline, #64748b)" }}>
-                  Nível de Segurança / Acesso
-                </span>
-                <select
-                  className="form-select"
-                  value={activeSecLevel?.id || "public"}
-                  onChange={(e) => {
-                    const chosen = securityLevels.find((l) => l.id === e.target.value);
-                    if (chosen) {
+              {/* Nível de Segurança & Departamento em linha */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                {/* Nível de Segurança */}
+                <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                  <span style={{ fontSize: "11px", fontWeight: 600, color: "var(--color-outline, #64748b)" }}>
+                    Nível de Segurança
+                  </span>
+                  <select
+                    className="form-select"
+                    value={activeSecLevel?.id || "public"}
+                    onChange={(e) => {
+                      const chosen = securityLevels.find((l) => l.id === e.target.value);
+                      if (chosen) {
+                        updateFileMetadata({
+                          security_level: chosen.rank,
+                          security_level_id: chosen.id,
+                          level: chosen.rank,
+                        });
+                      }
+                    }}
+                    style={{
+                      fontSize: "11.5px",
+                      padding: "5px 8px",
+                      borderRadius: "5px",
+                      border: `1px solid ${activeSecLevel ? activeSecLevel.color + "60" : "var(--color-outline-variant, #cbd5e1)"}`,
+                      background: "#fff",
+                      color: activeSecLevel?.color || "#0f172a",
+                      cursor: "pointer",
+                      fontWeight: 600,
+                    }}
+                  >
+                    {securityLevels.map((lvl) => (
+                      <option key={lvl.id} value={lvl.id} style={{ color: "#0f172a" }}>
+                        {lvl.name} (Rank {lvl.rank})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Departamento */}
+                <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                  <span style={{ fontSize: "11px", fontWeight: 600, color: "var(--color-outline, #64748b)" }}>
+                    Departamento
+                  </span>
+                  <select
+                    className="form-select"
+                    value={currentDeptId}
+                    onChange={(e) => {
                       updateFileMetadata({
-                        security_level: chosen.rank,
-                        security_level_id: chosen.id,
+                        department: e.target.value || undefined,
                       });
-                    }
-                  }}
-                  style={{
-                    fontSize: "11.5px",
-                    padding: "5px 8px",
-                    borderRadius: "5px",
-                    border: `1px solid ${activeSecLevel ? activeSecLevel.color + "60" : "var(--color-outline-variant, #cbd5e1)"}`,
-                    background: "#fff",
-                    color: activeSecLevel?.color || "#0f172a",
-                    cursor: "pointer",
-                    fontWeight: 600,
-                  }}
-                >
-                  {securityLevels.map((lvl) => (
-                    <option key={lvl.id} value={lvl.id} style={{ color: "#0f172a" }}>
-                      {lvl.name} (Rank {lvl.rank})
-                    </option>
-                  ))}
-                </select>
+                    }}
+                    style={{
+                      fontSize: "11.5px",
+                      padding: "5px 8px",
+                      borderRadius: "5px",
+                      border: `1px solid ${activeDept ? activeDept.color + "60" : "var(--color-outline-variant, #cbd5e1)"}`,
+                      background: "#fff",
+                      color: activeDept?.color || "#0f172a",
+                      cursor: "pointer",
+                      fontWeight: 500,
+                    }}
+                  >
+                    <option value="">(Automático / Pasta)</option>
+                    {departments.map((dept) => (
+                      <option key={dept.id} value={dept.id} style={{ color: "#0f172a" }}>
+                        {dept.name} ({dept.folder})
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               {/* Status & Categoria em linha */}
