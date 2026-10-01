@@ -111,7 +111,8 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
       const cfg = loadConfig();
       const repoName = body.repo || cfg.active_repo?.name || 'local';
       const result = docsMetadataService.updateDocMetadataItem(repoName, cleanPath, body.meta || {});
-      const tree = (await workspaceService.getTree(repoName)).tree;
+      workspaceService.invalidateTreeCache(repoName);
+      const tree = (await workspaceService.getTree(repoName, true)).tree;
       return reply.send({
         success: true,
         meta: result.meta,

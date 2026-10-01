@@ -16,6 +16,7 @@
     "package:all": "electron-builder -mwl"
   },
   "dependencies": {
+    "@napi-rs/keyring": "^2.1.0",
     "bytenode": "^1.5.5",
     "electron-updater": "^6.3.9"
   },

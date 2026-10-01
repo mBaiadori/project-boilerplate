@@ -16,6 +16,8 @@ import {
 import { computeDiff } from '../../utils/diff.js';
 import { isPathHidden, loadHiddenFiles, isSystemPath, getSystemFileFriendlyName } from '../../utils/hidden-files.js';
 import { aiService } from '../ai/ai.service.js';
+import { scanContentForSecrets } from '../../utils/crypto.js';
+import { governanceService } from '../governance/governance.service.js';
 
 export interface PRApprovalAudit {
   user: string;
@@ -33,22 +35,36 @@ export class PRsService {
     return path.join(PROJECTS_DIR, activeRepoName);
   }
 
-  private getGovernanceRules(repoName: string): { min_approvals: number } {
+  private getGovernanceRules(repoName: string): { min_approvals: number; is_solo: boolean; anti_self_approval: boolean } {
     const repoDir = this.getRepoDir(repoName);
     const projectConfigPath = path.join(repoDir, '.project.config.json');
+    let minApprovals = 1;
+    let isSolo = true;
+    let antiSelfApproval = false;
+
     if (fs.existsSync(projectConfigPath)) {
       try {
         const parsed = JSON.parse(fs.readFileSync(projectConfigPath, 'utf-8'));
+        const collabs = parsed.governance_collaborators || {};
+        const memberCount = Object.keys(collabs).length;
+        isSolo = memberCount <= 1;
+
         if (parsed.governance_rules?.min_approvals_default !== undefined) {
           const num = Number(parsed.governance_rules.min_approvals_default);
           if (!isNaN(num) && num >= 1) {
-            return { min_approvals: num };
+            minApprovals = num;
           }
         }
+        antiSelfApproval = parsed.governance_rules?.anti_self_approval !== undefined
+          ? parsed.governance_rules.anti_self_approval
+          : !isSolo;
       } catch {}
+    } else {
+      const cfg = loadConfig();
+      minApprovals = cfg.governance?.min_approvals || 1;
     }
-    const cfg = loadConfig();
-    return { min_approvals: cfg.governance?.min_approvals || 1 };
+
+    return { min_approvals: minApprovals, is_solo: isSolo, anti_self_approval: antiSelfApproval };
   }
 
   async getPRs(targetRepoQuery?: string) {
@@ -184,6 +200,7 @@ export class PRsService {
     const combinedList = [...repoPRs, ...commitRevisions].map((p: any) => ({
       ...p,
       min_approvals: p.min_approvals || govRules.min_approvals,
+      is_solo_mode: govRules.is_solo,
     }));
 
     return {
@@ -193,6 +210,8 @@ export class PRsService {
       count: combinedList.length,
       governance: {
         min_approvals: govRules.min_approvals,
+        is_solo_mode: govRules.is_solo,
+        anti_self_approval: govRules.anti_self_approval,
         reviewers: cfg.governance?.reviewers || [],
       },
     };
@@ -467,6 +486,35 @@ Retorne APENAS um JSON válido no formato:
       throw new Error('Não há alterações pendentes para criar um PR.');
     }
 
+    // 0. Pre-PR / Pre-Commit Secret Scanner Guard
+    const violations: Array<{ file: string; rule: string; message: string }> = [];
+    for (const p of allChangedPaths) {
+      const fullPath = path.join(repoDir, p);
+      if (fs.existsSync(fullPath) && !fs.statSync(fullPath).isDirectory()) {
+        try {
+          const fileContent = fs.readFileSync(fullPath, 'utf-8');
+          const scan = scanContentForSecrets(fileContent, p);
+          if (scan.hasSecrets) {
+            violations.push(...scan.violations);
+          }
+        } catch {}
+      }
+    }
+
+    if (violations.length > 0) {
+      const actor = cfg.user?.login ? `@${cfg.user.login}` : 'Dev Local';
+      const violationSummary = violations.map((v) => `${v.file}: ${v.message}`).join('; ');
+      governanceService.logAudit(repoName, {
+        action: 'SECRET_BLOCKED',
+        actor,
+        target: `PR branch '${payload.branch || 'new-pr'}'`,
+        details: `Criação de PR bloqueada por violações de segredos: ${violationSummary}`,
+      });
+      throw new Error(
+        `[Secret Guard] Criação de PR bloqueada! Foram detectados segredos ou documentos confidenciais não criptografados: ${violationSummary}`
+      );
+    }
+
     if (!cfg.prs) cfg.prs = [];
 
     const remoteUrl = activeRepo?.html_url;
@@ -618,13 +666,13 @@ Retorne APENAS um JSON válido no formato:
       approver = `@${approver}`;
     }
 
-    // Anti-Self-Approval check
+    // Anti-Self-Approval check (Enforced in Team Mode)
     const authorHandle = (target.author || '').trim();
     const cleanAuthor = authorHandle.replace(/^@/, '').toLowerCase();
     const cleanApprover = approver.replace(/^@/, '').toLowerCase();
 
-    if (cleanAuthor && cleanAuthor === cleanApprover) {
-      throw new Error(`O autor da proposta (${target.author}) não pode aprovar o seu próprio Pull Request.`);
+    if (!govRules.is_solo && govRules.anti_self_approval && cleanAuthor && cleanAuthor === cleanApprover) {
+      throw new Error(`O autor da proposta (${target.author}) não pode aprovar o seu próprio Pull Request no Modo Equipe. É necessária a revisão de um colaborador independente.`);
     }
 
     // Get current HEAD commit hash of the PR branch for immutable audit trail
@@ -648,7 +696,7 @@ Retorne APENAS um JSON válido no formato:
     // Create structured audit record
     const auditRecord: PRApprovalAudit = {
       user: approver,
-      role: approverRole || 'Tech Lead / Revisor',
+      role: approverRole || (govRules.is_solo ? 'Autor / Desenvolvedor Solo' : 'Tech Lead / Revisor'),
       timestamp: new Date().toISOString(),
       commit_hash: currentCommitHash,
       status: 'APPROVED',
@@ -667,29 +715,51 @@ Retorne APENAS um JSON válido no formato:
       target.approvals.push(auditRecord);
     }
 
-    // Calculate unique valid approvals (excluding author)
+    // Calculate unique valid approvals (excluding author in Team mode)
     const validApprovers = new Set<string>();
     for (const app of target.approvals) {
       const u = typeof app === 'string' ? app : app.user;
       const cleanU = (u || '').replace(/^@/, '').toLowerCase();
-      if (cleanU && cleanU !== cleanAuthor) {
-        validApprovers.add(cleanU);
+      if (govRules.is_solo || cleanU !== cleanAuthor) {
+        if (cleanU) validApprovers.add(cleanU);
       }
     }
     const validCount = validApprovers.size;
-    const quorumReached = validCount >= minApprovals;
+    const quorumReached = govRules.is_solo ? validCount >= 1 : validCount >= minApprovals;
 
     target.status = 'OPEN';
+
+    // Synchronize review officially with GitHub API if authenticated
+    const activeRepo = cfg.active_repo;
+    if (cfg.authenticated && cfg.token && activeRepo?.full_name && target.github_number) {
+      try {
+        await callGitHubAPI(
+          `/repos/${activeRepo.full_name}/pulls/${target.github_number}/reviews`,
+          cfg.token,
+          'POST',
+          {
+            event: 'APPROVE',
+            body: approverComment || `✓ Aprovado via Context OS Governance Platform por ${approver} (${approverRole || 'Revisor'})`,
+          }
+        );
+      } catch (ghReviewErr) {
+        console.warn('[PRsService] Aviso ao sincronizar review no GitHub:', ghReviewErr);
+      }
+    }
+
     saveConfig(cfg);
 
     return {
       success: true,
       quorum_reached: quorumReached,
       approvals_count: validCount,
-      min_approvals: minApprovals,
+      min_approvals: govRules.is_solo ? 1 : minApprovals,
+      is_solo_mode: govRules.is_solo,
       pr: target,
       message: quorumReached
-        ? `🎉 Quórum de aprovação atingido (${validCount}/${minApprovals}) com o voto de ${approver}! O merge está liberado para publicação.`
+        ? govRules.is_solo
+          ? `✓ Aprovação registrada por ${approver} (Modo Solo: merge liberado).`
+          : `🎉 Quórum de aprovação atingido (${validCount}/${minApprovals}) com o voto de ${approver}! O merge está liberado para publicação.`
         : `✓ Aprovação registrada por ${approver} (${validCount}/${minApprovals}). Aguardando quórum para liberação do merge.`,
     };
   }
@@ -715,7 +785,7 @@ Retorne APENAS um JSON válido no formato:
     const govRules = this.getGovernanceRules(repoName);
     const minApprovals = target.min_approvals || govRules.min_approvals || 1;
 
-    // Strict Quorum validation before merge
+    // Strict Quorum validation before merge (Solo mode allows author signoff)
     const authorHandle = (target.author || '').trim();
     const cleanAuthor = authorHandle.replace(/^@/, '').toLowerCase();
 
@@ -724,12 +794,12 @@ Retorne APENAS um JSON válido no formato:
     for (const app of approvalsList) {
       const u = typeof app === 'string' ? app : app.user;
       const cleanU = (u || '').replace(/^@/, '').toLowerCase();
-      if (cleanU && cleanU !== cleanAuthor) {
-        validApprovers.add(cleanU);
+      if (govRules.is_solo || cleanU !== cleanAuthor) {
+        if (cleanU) validApprovers.add(cleanU);
       }
     }
 
-    if (validApprovers.size < minApprovals) {
+    if (!govRules.is_solo && validApprovers.size < minApprovals) {
       throw new Error(
         `Quórum de aprovação não atingido. São necessárias pelo menos ${minApprovals} aprovações de revisores independentes antes de realizar o merge (atual: ${validApprovers.size}).`
       );

@@ -21,6 +21,7 @@ import { skillsRoutes } from './modules/skills/skills.routes.js';
 import { ragRoutes } from './modules/rag/rag.routes.js';
 import { systemRoutes } from './modules/system/system.routes.js';
 import { translationsRoutes } from './modules/translations/translations.routes.js';
+import { governanceRoutes } from './modules/governance/governance.routes.js';
 
 export async function buildApp(): Promise<FastifyInstance> {
   const isDev = process.env.NODE_ENV === 'development';
@@ -65,6 +66,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(ragRoutes);
   await app.register(systemRoutes);
   await app.register(translationsRoutes);
+  await app.register(governanceRoutes);
 
   // 3. Static Assets & SPA Fallback (Serving ui/dist or ui/)
   const staticRoot = resolveUiDistDir();

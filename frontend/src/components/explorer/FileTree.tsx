@@ -20,9 +20,12 @@ import {
   Search,
   Upload,
   Laptop,
+  Shield,
+  Lock,
 } from "lucide-react";
 import type { TreeNode, TemplateItem } from "../../types";
 import { useWorkspace } from "../../context/WorkspaceContext";
+import { useSecurity } from "../../context/SecurityContext";
 import { API } from "../../services/api";
 import { TemplatePickerModal } from "../modals/TemplatePickerModal";
 
@@ -244,6 +247,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
     isLoadingWorkspace,
     isLoadingTree,
   } = useWorkspace();
+  const { securityLevels, isLevelUnlocked } = useSecurity();
   const repoName = activeRepo?.name || "default";
   const isTreeLoading = Boolean(isLoadingWorkspace || isLoadingTree);
   const [searchTerm, setSearchTerm] = useState("");
@@ -1549,6 +1553,27 @@ export const FileTree: React.FC<FileTreeProps> = ({
           : "M"
         : null;
 
+    const docSecLevel =
+      node.security_level !== undefined && node.security_level !== null
+        ? Number(node.security_level)
+        : 999;
+    const docSecLevelId =
+      node.security_level_id ||
+      (docSecLevel === 999
+        ? "public"
+        : securityLevels.find((l) => l.rank === docSecLevel)?.id || "public");
+    const secLevelObj = securityLevels.find(
+      (l) =>
+        (docSecLevelId && l.id === docSecLevelId) ||
+        (docSecLevel !== undefined && l.rank === Number(docSecLevel)),
+    );
+    const hasSecProtection =
+      docSecLevel !== 999 &&
+      docSecLevelId !== "public";
+    const isLocked =
+      hasSecProtection &&
+      !isLevelUnlocked(docSecLevelId || docSecLevel);
+
     return (
       <div
         key={node.path}
@@ -1651,6 +1676,34 @@ export const FileTree: React.FC<FileTreeProps> = ({
             )}
           </div>
           <div className="tree-file-right">
+            {hasSecProtection && secLevelObj && (
+              <span
+                className="tree-badge-security"
+                title={`Nível de Segurança: ${secLevelObj.name} (Rank ${secLevelObj.rank}) - ${isLocked ? "Bloqueado por Chave" : "Desbloqueado"}`}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "3px",
+                  fontSize: "9px",
+                  fontWeight: 700,
+                  padding: "1px 5px",
+                  borderRadius: "10px",
+                  backgroundColor: `${secLevelObj.color}18`,
+                  color: secLevelObj.color,
+                  border: `1px solid ${secLevelObj.color}40`,
+                  marginRight: "4px",
+                  lineHeight: "1.2",
+                  flexShrink: 0,
+                }}
+              >
+                {isLocked ? (
+                  <Lock size={9} style={{ flexShrink: 0 }} />
+                ) : (
+                  <Shield size={9} style={{ flexShrink: 0 }} />
+                )}
+                <span>{secLevelObj.name.split("/")[0].trim()}</span>
+              </span>
+            )}
             {!isMarkdown && fileExt && (
               <span className="tree-badge-unsupported">{fileExt}</span>
             )}

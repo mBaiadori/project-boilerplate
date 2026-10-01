@@ -1113,8 +1113,266 @@ export const API = {
       body: JSON.stringify(payload)
     });
     return { ok: res.ok, data: await res.json() };
+  },
+
+  // --- GOVERNANCE, COLLABORATORS, QUORUM & CRYPTO VAULT ---
+
+  async getGovernanceCollaborators(repo?: string): Promise<ApiResponse<{
+    collaborators: Array<{
+      login: string;
+      id: number;
+      avatar_url: string;
+      html_url: string;
+      permission: string;
+      role_name?: string;
+      security_level: number;
+      is_owner?: boolean;
+      status?: string;
+    }>;
+    isSoloMode: boolean;
+    activeCount: number;
+    owner: string;
+    resolvedFullName?: string;
+    githubAuthError?: string | null;
+  }>> {
+    const res = await fetch(`/api/governance/collaborators${repo ? `?repo=${encodeURIComponent(repo)}` : ''}`);
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async inviteCollaborator(payload: {
+    username: string;
+    permission: string;
+    security_level?: number;
+    role_name?: string;
+    repo?: string;
+  }): Promise<ApiResponse<{ success: boolean; message: string; collaborator?: any; error?: string }>> {
+    const res = await fetch('/api/governance/invite', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async removeCollaborator(username: string, repo?: string): Promise<ApiResponse<{ success: boolean; message: string; error?: string }>> {
+    const res = await fetch(`/api/governance/collaborators/${encodeURIComponent(username)}${repo ? `?repo=${encodeURIComponent(repo)}` : ''}`, {
+      method: 'DELETE'
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async updateCollaboratorClearance(payload: {
+    username: string;
+    security_level: number;
+    security_level_id?: string;
+    role_name?: string;
+    repo?: string;
+  }): Promise<ApiResponse<{ success: boolean; message: string }>> {
+    const res = await fetch('/api/governance/clearance', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async getBranchProtection(repo?: string): Promise<ApiResponse<{
+    enabled: boolean;
+    required_approving_review_count?: number;
+    dismiss_stale_reviews?: boolean;
+    enforce_admins?: boolean;
+    allow_force_pushes?: boolean;
+  }>> {
+    const res = await fetch(`/api/governance/branch-protection${repo ? `?repo=${encodeURIComponent(repo)}` : ''}`);
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async applyBranchProtection(payload: {
+    min_approvals?: number;
+    enforce_admins?: boolean;
+    dismiss_stale_reviews?: boolean;
+    repo?: string;
+  }): Promise<ApiResponse<{ success: boolean; message: string; protection: any; error?: string }>> {
+    const res = await fetch('/api/governance/branch-protection', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async getQuorumRules(repo?: string): Promise<ApiResponse<{
+    rules: {
+      mode: 'auto' | 'manual';
+      min_approvals_default: number;
+      anti_self_approval: boolean;
+      require_review_before_merge: boolean;
+      dismiss_stale_reviews_on_push: boolean;
+      enforce_admins_on_branch: boolean;
+    };
+    isSoloMode: boolean;
+    activeCollaboratorsCount: number;
+    effectiveMinApprovals: number;
+  }>> {
+    const res = await fetch(`/api/governance/quorum${repo ? `?repo=${encodeURIComponent(repo)}` : ''}`);
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async updateQuorumRules(payload: {
+    rules: any;
+    repo?: string;
+  }): Promise<ApiResponse<{ success: boolean; rules: any }>> {
+    const res = await fetch('/api/governance/quorum', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async getSecurityVault(repo?: string): Promise<ApiResponse<{
+    salt: string;
+    levels: Array<{
+      level: number;
+      label: string;
+      description: string;
+      color: string;
+      key_hint?: string;
+    }>;
+    ai_privacy_policy?: {
+      allow_external_ai_for_level_0: boolean;
+      allow_external_ai_for_level_1: boolean;
+      allow_local_ai_only: boolean;
+    };
+  }>> {
+    const res = await fetch(`/api/governance/vault${repo ? `?repo=${encodeURIComponent(repo)}` : ''}`);
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async updateSecurityVault(payload: {
+    vault: any;
+    repo?: string;
+  }): Promise<ApiResponse<{ success: boolean; vault: any }>> {
+    const res = await fetch('/api/governance/vault', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async getGovernanceAuditLogs(repo?: string): Promise<ApiResponse<{ logs: any[] }>> {
+    const res = await fetch(`/api/governance/audit-logs${repo ? `?repo=${encodeURIComponent(repo)}` : ''}`);
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async createSecureAIToken(payload: {
+    user: string;
+    level: number;
+    passphrases: Record<number, string>;
+    repo?: string;
+    ttlMinutes?: number;
+  }): Promise<ApiResponse<{ token: string; expiresAt: string; authorizedLevel: number }>> {
+    const res = await fetch('/api/governance/ai-token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async encryptDoc(payload: {
+    content: string;
+    level: number;
+    passphrase?: string;
+    metadata?: any;
+    repo?: string;
+  }): Promise<ApiResponse<{ success: boolean; envelope: string; error?: string }>> {
+    const res = await fetch('/api/crypto/encrypt', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async decryptDoc(payload: {
+    envelope: string;
+    passphrases: Record<number, string>;
+    repo?: string;
+  }): Promise<ApiResponse<{ success: boolean; content?: string; level: number; error?: string }>> {
+    const res = await fetch('/api/crypto/decrypt', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  // Dynamic Security Levels
+  async getSecurityLevels(repo?: string): Promise<ApiResponse<{ levels: any[] }>> {
+    const res = await fetch(`/api/governance/levels${repo ? `?repo=${encodeURIComponent(repo)}` : ''}`);
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async saveSecurityLevels(levels: any[], repo?: string): Promise<ApiResponse<{ success: boolean; levels: any[] }>> {
+    const res = await fetch('/api/governance/levels', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ levels, repo })
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async migrateSecurityLevels(payload: {
+    oldLevelId: string;
+    oldRank?: number;
+    newLevelId: string;
+    newRank?: number;
+    repo?: string;
+  }): Promise<ApiResponse<{ success: boolean; migratedCount: number; files: string[] }>> {
+    const res = await fetch('/api/governance/levels/migrate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async unlockUserPassphrase(payload: {
+    user: string;
+    passphrase: string;
+    levelId?: string;
+    repo?: string;
+  }): Promise<ApiResponse<{ success: boolean; unlockedLevels: string[]; authorizedRanks: number[]; error?: string }>> {
+    const res = await fetch('/api/governance/vault/unlock-user', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async setUserPassphrase(payload: {
+    user: string;
+    passphrase: string;
+    levelId: string;
+    repo?: string;
+  }): Promise<ApiResponse<{ success: boolean; message: string; error?: string }>> {
+    const res = await fetch('/api/governance/vault/set-user-passphrase', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async scanSecrets(repo?: string): Promise<ApiResponse<{ hasSecrets: boolean; violations: any[] }>> {
+    const res = await fetch(`/api/governance/scan-secrets${repo ? `?repo=${encodeURIComponent(repo)}` : ''}`);
+    return { ok: res.ok, data: await res.json() };
   }
 };
+
 
 
 

@@ -7,6 +7,7 @@ import {
   GitPullRequest,
   BookOpen,
   SpellCheck,
+  ShieldCheck,
   Settings,
   ChevronLeft,
   ChevronRight,
@@ -22,6 +23,7 @@ export type SubViewType =
   | "skills"
   | "aicenter"
   | "prs"
+  | "governance"
   | "settings";
 
 interface SidebarNavProps {
@@ -70,6 +72,12 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
       label: "Revisões",
       icon: <GitPullRequest size={19} />,
       title: "Revisões e Propostas de Evolução da Documentação",
+    },
+    {
+      id: "governance" as SubViewType,
+      label: "Governança",
+      icon: <ShieldCheck size={19} />,
+      title: "Membros, Quórum, Proteção de Branch & Cofre de Segurança",
     },
     {
       id: "wiki" as SubViewType,

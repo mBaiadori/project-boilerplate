@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { PROJECTS_DIR } from '../../config/constants.js';
 import { validateJsonSchema } from '../../utils/schema.validator.js';
+import { DEFAULT_DYNAMIC_SECURITY_LEVELS, normalizeDynamicSecurityLevel } from '../governance/governance.types.js';
 
 export interface DocumentMetadataItem {
   id: string;
@@ -17,6 +18,8 @@ export interface DocumentMetadataItem {
   links: string[];
   templateId: string;
   prompt: string;
+  security_level?: number;
+  security_level_id?: string;
   [key: string]: any;
 }
 
@@ -25,6 +28,7 @@ export interface ProjectMetadataOptions {
   statuses: Array<{ key?: string; name?: string; label: string; badge?: string; color?: string }>;
   tags: Array<string | { name: string; color?: string }>;
   badges?: Array<string | { name: string; color?: string; description?: string }>;
+  security_levels?: Array<{ id: string; rank: number; name: string; color: string; description?: string }>;
 }
 
 export function generateDocId(filePath: string): string {
@@ -33,6 +37,94 @@ export function generateDocId(filePath: string): string {
     .replace(/[\/\\]/g, '-')
     .replace(/\s+/g, '-')
     .toLowerCase();
+}
+
+export function extractFrontmatterMeta(content: string): {
+  title?: string;
+  status?: string;
+  categories?: string;
+  tags?: string[];
+  security_level?: number;
+  security_level_id?: string;
+  [key: string]: any;
+} {
+  if (!content) return {};
+  const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
+  if (!match) return {};
+  const result: Record<string, any> = {};
+  for (const line of match[1].split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const colonIdx = trimmed.indexOf(':');
+    if (colonIdx === -1) continue;
+    const key = trimmed.slice(0, colonIdx).trim();
+    let val = trimmed.slice(colonIdx + 1).trim();
+    if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+      val = val.slice(1, -1);
+    }
+    if (key === 'security_level') {
+      const num = Number(val);
+      if (!isNaN(num)) result.security_level = num;
+    } else if (key === 'security_level_id') {
+      result.security_level_id = val;
+    } else if (key === 'status') {
+      result.status = val;
+    } else if (key === 'title') {
+      result.title = val;
+    } else if (key === 'categories' || key === 'category') {
+      result.categories = val;
+    }
+  }
+  return result;
+}
+
+export function updateFrontmatterInMarkdown(content: string, meta: Record<string, any>): string {
+  if (!content) content = '';
+  const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
+  let existingMeta: Record<string, any> = {};
+  let body = content;
+
+  if (match) {
+    const rawFm = match[1];
+    body = content.slice(match[0].length);
+    for (const line of rawFm.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const colonIdx = trimmed.indexOf(':');
+      if (colonIdx === -1) continue;
+      const k = trimmed.slice(0, colonIdx).trim();
+      let v = trimmed.slice(colonIdx + 1).trim();
+      if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
+        v = v.slice(1, -1);
+      }
+      existingMeta[k] = v;
+    }
+  }
+
+  const merged = { ...existingMeta, ...meta };
+  Object.keys(merged).forEach((k) => {
+    if (merged[k] === undefined || merged[k] === null || merged[k] === '') {
+      delete merged[k];
+    }
+  });
+
+  if (Object.keys(merged).length === 0) {
+    return body;
+  }
+
+  const lines = ['---'];
+  for (const [k, v] of Object.entries(merged)) {
+    if (typeof v === 'number' || typeof v === 'boolean') {
+      lines.push(`${k}: ${v}`);
+    } else if (Array.isArray(v)) {
+      lines.push(`${k}: [${v.map((item) => `"${item}"`).join(', ')}]`);
+    } else {
+      lines.push(`${k}: "${v}"`);
+    }
+  }
+  lines.push('---');
+  lines.push('');
+  return lines.join('\n') + body.replace(/^\r?\n/, '');
 }
 
 export function extractDocLinksFromMarkdown(content: string): string[] {
@@ -123,7 +215,36 @@ export class DocsMetadataService {
     const tags = Array.isArray(config.tags) ? config.tags : [];
     const badges = Array.isArray(config.badges) ? config.badges : [];
 
-    return { statuses, categories, tags, badges };
+    let rawLevels: any[] = [];
+    if (Array.isArray(config.security_levels) && config.security_levels.length > 0) {
+      rawLevels = [...config.security_levels];
+    } else if (Array.isArray(config.governance_security_vault?.levels) && config.governance_security_vault.levels.length > 0) {
+      rawLevels = [...config.governance_security_vault.levels];
+    } else {
+      rawLevels = [...DEFAULT_DYNAMIC_SECURITY_LEVELS];
+    }
+
+    const seenIds = new Set<string>();
+    const security_levels: Array<{ id: string; rank: number; name: string; color: string; description?: string }> = rawLevels
+      .map((l, idx) => normalizeDynamicSecurityLevel(l, idx))
+      .filter((l) => {
+        if (seenIds.has(l.id)) return false;
+        seenIds.add(l.id);
+        return true;
+      });
+
+    if (!security_levels.some((l) => l.rank === 999 || l.id === 'public')) {
+      security_levels.push({
+        id: 'public',
+        rank: 999,
+        name: 'Público / Geral',
+        color: '#10b981',
+        description: 'Texto plano sem criptografia, acessível para todos os membros',
+      });
+    }
+    security_levels.sort((a, b) => a.rank - b.rank);
+
+    return { statuses, categories, tags, badges, security_levels };
   }
 
   private metaCache = new Map<string, { data: DocumentMetadataItem[]; timestamp: number }>();
@@ -240,6 +361,7 @@ export class DocsMetadataService {
           } catch {}
           const extractedLinks = extractDocLinksFromMarkdown(content);
           const extractedTitle = extractDocTitleFromMarkdown(content);
+          const frontmatterMeta = extractFrontmatterMeta(content);
 
           if (existingIdx >= 0) {
             const item = metaList[existingIdx];
@@ -254,6 +376,14 @@ export class DocsMetadataService {
               item.title = extractedTitle;
               itemModified = true;
             }
+            if (frontmatterMeta.security_level !== undefined && item.security_level !== frontmatterMeta.security_level) {
+              item.security_level = frontmatterMeta.security_level;
+              itemModified = true;
+            }
+            if (frontmatterMeta.security_level_id && item.security_level_id !== frontmatterMeta.security_level_id) {
+              item.security_level_id = frontmatterMeta.security_level_id;
+              itemModified = true;
+            }
             if (itemModified) {
               changed = true;
             }
@@ -264,16 +394,18 @@ export class DocsMetadataService {
               this.sanitizeMetaItem({
                 id: generateDocId(relPath),
                 name,
-                title: extractedTitle || name,
+                title: frontmatterMeta.title || extractedTitle || name,
                 ext,
                 path: relPath,
-                status: '',
-                categories: '',
-                tags: [],
+                status: frontmatterMeta.status || '',
+                categories: frontmatterMeta.categories || '',
+                tags: frontmatterMeta.tags || [],
                 updated_at: new Date().toISOString(),
                 approvers: [],
                 links: extractedLinks,
                 templateId: '',
+                security_level: frontmatterMeta.security_level,
+                security_level_id: frontmatterMeta.security_level_id,
               })
             );
             changed = true;
@@ -372,6 +504,7 @@ export class DocsMetadataService {
     }
 
     this.saveDocsMetadata(repoName, metaList);
+
     return { success: true, meta: updatedItem };
   }
 
@@ -531,6 +664,23 @@ export class DocsMetadataService {
       delete cleanItem.category;
     }
 
+    const secLevel =
+      cleanItem.security_level !== undefined && cleanItem.security_level !== null && !isNaN(Number(cleanItem.security_level))
+        ? Number(cleanItem.security_level)
+        : 999;
+
+    const secLevelId =
+      cleanItem.security_level_id ||
+      (secLevel === 0
+        ? 'root'
+        : secLevel === 1
+        ? 'strategic'
+        : secLevel === 2
+        ? 'engineering'
+        : secLevel === 3
+        ? 'operational'
+        : 'public');
+
     return {
       id: cleanItem.id || generateDocId(cleanItem.path || 'doc'),
       name: cleanItem.name || path.basename(cleanItem.path || 'doc', path.extname(cleanItem.path || '')),
@@ -545,6 +695,8 @@ export class DocsMetadataService {
       links: Array.isArray(cleanItem.links) ? cleanItem.links : [],
       templateId: cleanItem.templateId || '',
       prompt: cleanItem.prompt || '',
+      security_level: secLevel,
+      security_level_id: secLevelId,
     };
   }
 }

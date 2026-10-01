@@ -59,6 +59,8 @@ export interface TreeNode {
   status?: string;
   badge?: string;
   desc?: string;
+  security_level?: number;
+  security_level_id?: string;
 }
 
 export interface DocumentMetadataItem {
@@ -76,6 +78,8 @@ export interface DocumentMetadataItem {
   links: string[];
   templateId: string;
   prompt?: string;
+  security_level?: number;
+  security_level_id?: string;
   [key: string]: any;
 }
 
@@ -101,11 +105,22 @@ export interface BadgeOption {
   description?: string;
 }
 
+export interface DynamicSecurityLevel {
+  id: string;
+  rank: number;
+  name: string;
+  color: string;
+  description?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface ProjectMetadataOptions {
   categories: CategoryOption[];
   statuses: StatusItem[];
   tags: TagOption[];
   badges?: (BadgeOption | string)[];
+  security_levels?: DynamicSecurityLevel[];
 }
 
 export interface PRApproval {
@@ -142,6 +157,8 @@ export interface PR {
   status: 'OPEN' | 'MERGED' | 'CLOSED' | 'open' | 'merged' | 'closed' | string;
   approvals: (string | PRApproval)[];
   min_approvals?: number;
+  is_solo_mode?: boolean;
+  clearance_required?: number;
   created_at: string;
   merged_at?: string;
   closed_at?: string;

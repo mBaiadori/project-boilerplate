@@ -22,6 +22,7 @@ import { DictionarySubView } from './subviews/DictionarySubView';
 import { PRsSubView } from './subviews/PRsSubView';
 import { TemplatesSubView } from './subviews/TemplatesSubView';
 import { AICenterSubView } from './subviews/AICenterSubView';
+import { GovernanceMembersSubView } from './subviews/GovernanceMembersSubView';
 import { SettingsSubView } from './subviews/SettingsSubView';
 
 interface DashboardViewProps {
@@ -31,7 +32,7 @@ interface DashboardViewProps {
 const AI_WIDTH_STORAGE_KEY = 'spec_ai_pane_width';
 const DEFAULT_AI_WIDTH = 360;
 
-const VALID_SUBVIEWS: SubViewType[] = ['editor', 'edits', 'versions', 'dictionary', 'wiki', 'templates', 'skills', 'aicenter', 'prs', 'settings'];
+const VALID_SUBVIEWS: SubViewType[] = ['editor', 'edits', 'versions', 'dictionary', 'wiki', 'templates', 'skills', 'aicenter', 'prs', 'governance', 'settings'];
 
 export const DashboardView: React.FC<DashboardViewProps> = ({ onBackToRepos }) => {
   const { repoName, subview } = useParams<{ repoName: string; subview?: string }>();
@@ -224,6 +225,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onBackToRepos }) =
 
           {activeSubView === 'prs' && (
             <PRsSubView onOpenDiffModal={() => setIsDiffModalOpen(true)} />
+          )}
+
+          {activeSubView === 'governance' && (
+            <GovernanceMembersSubView />
           )}
 
           {activeSubView === 'settings' && (

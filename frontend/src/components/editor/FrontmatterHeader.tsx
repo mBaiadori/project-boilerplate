@@ -1,7 +1,8 @@
 import React from "react";
 import type { DocumentMetadata } from "../../services/frontmatter";
 import { Badge, Input } from "../ui";
-import { Tag } from "lucide-react";
+import { Tag, Shield } from "lucide-react";
+import { useSecurity } from "../../context/SecurityContext";
 
 interface FrontmatterHeaderProps {
   metadata: DocumentMetadata;
@@ -12,6 +13,8 @@ export const FrontmatterHeader: React.FC<FrontmatterHeaderProps> = ({
   metadata,
   onChange,
 }) => {
+  const { securityLevels } = useSecurity();
+
   const statusOptions = [
     "draft",
     "proposed",
@@ -26,6 +29,29 @@ export const FrontmatterHeader: React.FC<FrontmatterHeaderProps> = ({
       ...metadata,
       [field]: value,
     });
+  };
+
+  const currentLevelId =
+    metadata.security_level_id ||
+    (metadata.security_level !== undefined
+      ? securityLevels.find((l) => l.rank === Number(metadata.security_level))?.id
+      : "public") ||
+    "public";
+
+  const activeLevel =
+    securityLevels.find((l) => l.id === currentLevelId || l.rank === Number(metadata.security_level)) ||
+    securityLevels.find((l) => l.id === "public") ||
+    securityLevels[securityLevels.length - 1];
+
+  const handleSecurityLevelChange = (levelId: string) => {
+    const chosen = securityLevels.find((l) => l.id === levelId);
+    if (chosen) {
+      onChange({
+        ...metadata,
+        security_level_id: chosen.id,
+        security_level: chosen.rank,
+      });
+    }
   };
 
   const categoryLabel = metadata.categories || metadata.category || "";
@@ -67,11 +93,35 @@ export const FrontmatterHeader: React.FC<FrontmatterHeaderProps> = ({
           Metadados Estruturados (Frontmatter)
         </span>
 
-        {categoryLabel && (
-          <Badge variant="primary" size="sm">
-            {categoryLabel}
-          </Badge>
-        )}
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          {activeLevel && (
+            <span
+              style={{
+                fontSize: "11px",
+                fontWeight: 600,
+                padding: "2px 8px",
+                borderRadius: "12px",
+                backgroundColor: activeLevel.color + "15",
+                borderColor: activeLevel.color + "40",
+                borderWidth: "1px",
+                borderStyle: "solid",
+                color: activeLevel.color,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "4px",
+              }}
+            >
+              <Shield size={11} />
+              {activeLevel.name}
+            </span>
+          )}
+
+          {categoryLabel && (
+            <Badge variant="primary" size="sm">
+              {categoryLabel}
+            </Badge>
+          )}
+        </div>
       </div>
 
       <div
@@ -108,6 +158,33 @@ export const FrontmatterHeader: React.FC<FrontmatterHeaderProps> = ({
           </select>
         </div>
 
+        {/* Nível de Segurança / Acesso */}
+        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+          <span style={{ fontSize: "12px", color: "var(--color-outline)", fontWeight: 600 }}>
+            Segurança:
+          </span>
+          <select
+            value={currentLevelId}
+            onChange={(e) => handleSecurityLevelChange(e.target.value)}
+            style={{
+              fontSize: "12px",
+              padding: "4px 8px",
+              borderRadius: "var(--radius-md, 6px)",
+              border: "1px solid var(--color-outline-variant)",
+              background: "var(--color-surface-container)",
+              color: activeLevel?.color || "var(--color-on-surface)",
+              fontWeight: 500,
+              outline: "none",
+            }}
+          >
+            {securityLevels.map((lvl) => (
+              <option key={lvl.id} value={lvl.id} style={{ color: "var(--color-on-surface)" }}>
+                {lvl.name} (Rank {lvl.rank})
+              </option>
+            ))}
+          </select>
+        </div>
+
         {/* Categoria */}
         <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
           <span style={{ fontSize: "12px", color: "var(--color-outline)", fontWeight: 600 }}>
@@ -126,3 +203,4 @@ export const FrontmatterHeader: React.FC<FrontmatterHeaderProps> = ({
     </div>
   );
 };
+

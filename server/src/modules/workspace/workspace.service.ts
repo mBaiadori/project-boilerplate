@@ -28,12 +28,15 @@ export interface TreeNode {
   category?: string;
   status?: string;
   last_modified?: number;
+  security_level?: number;
+  security_level_id?: string;
 }
 
-export { generateDocId, extractDocLinksFromMarkdown };
+export { generateDocId, extractDocLinksFromMarkdown, extractFrontmatterMeta };
 export type { DocumentMetadataItem };
 export { DEFAULT_HIDDEN_FILES, loadHiddenFiles, isPathHidden, isSystemPath } from "../../utils/hidden-files.js";
 import { DEFAULT_HIDDEN_FILES, loadHiddenFiles, isPathHidden, isSystemPath } from "../../utils/hidden-files.js";
+import { extractFrontmatterMeta } from "./docs-metadata.service.js";
 
 export class WorkspaceService {
   private treeCache = new Map<string, { tree: TreeNode[]; timestamp: number }>();
@@ -110,6 +113,18 @@ export class WorkspaceService {
           categories: docMeta?.categories || "",
           category: docMeta?.categories || "",
           status: docMeta?.status || "",
+          security_level: docMeta?.security_level !== undefined ? docMeta.security_level : 999,
+          security_level_id:
+            docMeta?.security_level_id ||
+            (docMeta?.security_level === 0
+              ? "root"
+              : docMeta?.security_level === 1
+                ? "strategic"
+                : docMeta?.security_level === 2
+                  ? "engineering"
+                  : docMeta?.security_level === 3
+                    ? "operational"
+                    : "public"),
         });
       }
     }
@@ -277,10 +292,12 @@ export class WorkspaceService {
     fs.writeFileSync(fullPath, content, "utf-8");
     recordChange(repoName, cleanPath, changeType, oldContent, content);
 
-    // Extrair links automaticamente do conteúdo markdown para enriquecer o .docs.metadata.json
+    // Extrair links e metadados automaticamente do conteúdo markdown para enriquecer o .docs.metadata.json
     const extractedLinks = extractDocLinksFromMarkdown(content);
+    const frontmatterMeta = extractFrontmatterMeta(content);
 
     const metaUpdatePayload = {
+      ...frontmatterMeta,
       ...(meta && typeof meta === "object" ? meta : {}),
       links: extractedLinks,
     };

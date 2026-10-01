@@ -1,6 +1,7 @@
-import { FileText, FolderTree, Plus } from "lucide-react";
+import { FileText, FolderTree, Plus, Shield, Lock, Unlock, Eye, EyeOff } from "lucide-react";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useWorkspace } from "../../context/WorkspaceContext";
+import { useSecurity } from "../../context/SecurityContext";
 import { API } from "../../services/api";
 import {
   parseFrontmatter,
@@ -112,6 +113,69 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
   const [syncPreview, setSyncPreview] = useState<SyncToMainPreview | null>(null);
   const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
   const [isSyncingToMain, setIsSyncingToMain] = useState(false);
+
+  // Security Level & Document Lock Gate State
+  const { securityLevels, isLevelUnlocked, unlockLevel } = useSecurity();
+  const [unlockPassphrase, setUnlockPassphrase] = useState("");
+  const [showUnlockPass, setShowUnlockPass] = useState(false);
+  const [isUnlocking, setIsUnlocking] = useState(false);
+  const [unlockError, setUnlockError] = useState("");
+
+  const docSecLevel =
+    fileMetadata?.security_level !== undefined && fileMetadata?.security_level !== null
+      ? Number(fileMetadata.security_level)
+      : 999;
+  const docSecLevelId =
+    fileMetadata?.security_level_id ||
+    (docSecLevel === 999
+      ? "public"
+      : securityLevels.find((l) => l.rank === docSecLevel)?.id || "public");
+
+  const activeSecLevelObj =
+    securityLevels.find(
+      (l) =>
+        (docSecLevelId && l.id === docSecLevelId) ||
+        (docSecLevel !== undefined && l.rank === Number(docSecLevel))
+    ) ||
+    securityLevels.find((l) => l.rank === 999) ||
+    securityLevels.find((l) => l.id === "public");
+
+  const isDocumentConfidential =
+    docSecLevel !== 999 &&
+    docSecLevelId !== "public";
+
+  const isDocumentLocked =
+    isDocumentConfidential &&
+    !isLevelUnlocked(docSecLevelId || docSecLevel);
+
+  const handleUnlockDocument = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!unlockPassphrase.trim() || isUnlocking) return;
+    setIsUnlocking(true);
+    setUnlockError("");
+    try {
+      const res = await unlockLevel(
+        docSecLevelId || docSecLevel || "root",
+        unlockPassphrase
+      );
+      if (res.success) {
+        setUnlockPassphrase("");
+        setEditorToast({
+          text: `Nível ${activeSecLevelObj?.name || ""} desbloqueado com sucesso!`,
+          type: "success",
+        });
+        setTimeout(() => setEditorToast(null), 3000);
+      } else {
+        setUnlockError(
+          res.error || "Frase-chave incorreta para este documento."
+        );
+      }
+    } catch (err: any) {
+      setUnlockError(err.message || "Erro ao desbloquear documento.");
+    } finally {
+      setIsUnlocking(false);
+    }
+  };
 
   // Link Insertion Modal State
   const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
@@ -1462,8 +1526,188 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
           </div>
         )}
 
-        {/* 2. Body: Either Visual Markdown Diff (Git Mode) or Notion Live Editor */}
-        {isGitMode ? (
+        {/* 2. Body: Either Document Lock Gate, Visual Markdown Diff (Git Mode) or Notion Live Editor */}
+        {isDocumentLocked ? (
+          <div
+            className="document-security-lock-gate"
+            id="document-security-lock-gate"
+            style={{
+              flex: 1,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "32px 16px",
+              background: "var(--color-surface, #ffffff)",
+              overflowY: "auto",
+            }}
+          >
+            <div
+              style={{
+                maxWidth: "460px",
+                width: "100%",
+                padding: "36px 32px",
+                borderRadius: "16px",
+                border: `1px solid ${activeSecLevelObj?.color || "#ef4444"}35`,
+                background: "var(--color-surface-container-lowest, #ffffff)",
+                boxShadow: "0 14px 36px rgba(0, 0, 0, 0.07)",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                textAlign: "center",
+                gap: "18px",
+              }}
+            >
+              <div
+                style={{
+                  width: "60px",
+                  height: "60px",
+                  borderRadius: "50%",
+                  backgroundColor: `${activeSecLevelObj?.color || "#ef4444"}15`,
+                  color: activeSecLevelObj?.color || "#ef4444",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Lock size={30} />
+              </div>
+
+              <div>
+                <div
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "5px",
+                    padding: "3px 10px",
+                    borderRadius: "12px",
+                    backgroundColor: `${activeSecLevelObj?.color || "#ef4444"}15`,
+                    border: `1px solid ${activeSecLevelObj?.color || "#ef4444"}40`,
+                    color: activeSecLevelObj?.color || "#ef4444",
+                    fontSize: "11px",
+                    fontWeight: 700,
+                    marginBottom: "10px",
+                  }}
+                >
+                  <Shield size={12} />
+                  {activeSecLevelObj?.name || `Nível ${docSecLevel}`} &bull; Rank {activeSecLevelObj?.rank ?? docSecLevel}
+                </div>
+                <h3
+                  style={{
+                    margin: "0 0 8px 0",
+                    fontSize: "18px",
+                    fontWeight: 700,
+                    color: "var(--color-on-surface, #0f172a)",
+                  }}
+                >
+                  Documento Protegido por Chave de Acesso
+                </h3>
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: "13px",
+                    color: "var(--color-outline, #64748b)",
+                    lineHeight: "1.5",
+                  }}
+                >
+                  Este documento confidencial requer a frase-chave de acesso do nível{" "}
+                  <strong style={{ color: activeSecLevelObj?.color || "#ef4444" }}>
+                    {activeSecLevelObj?.name}
+                  </strong>{" "}
+                  ou a Chave-Mestra Root para ser visualizado e editado.
+                </p>
+              </div>
+
+              <form
+                onSubmit={handleUnlockDocument}
+                style={{
+                  width: "100%",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "10px",
+                }}
+              >
+                <div style={{ position: "relative", width: "100%" }}>
+                  <input
+                    type={showUnlockPass ? "text" : "password"}
+                    placeholder="Digite a frase-chave do nível..."
+                    value={unlockPassphrase}
+                    onChange={(e) => setUnlockPassphrase(e.target.value)}
+                    style={{
+                      width: "100%",
+                      padding: "10px 38px 10px 12px",
+                      borderRadius: "8px",
+                      border: "1px solid var(--color-outline-variant, #cbd5e1)",
+                      fontSize: "13px",
+                      background: "#fff",
+                      outline: "none",
+                      boxSizing: "border-box",
+                    }}
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowUnlockPass(!showUnlockPass)}
+                    style={{
+                      position: "absolute",
+                      right: "8px",
+                      top: "50%",
+                      transform: "translateY(-50%)",
+                      background: "transparent",
+                      border: "none",
+                      cursor: "pointer",
+                      color: "#94a3b8",
+                      display: "flex",
+                      alignItems: "center",
+                    }}
+                    title={showUnlockPass ? "Ocultar frase-chave" : "Exibir frase-chave"}
+                  >
+                    {showUnlockPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+
+                {unlockError && (
+                  <div
+                    style={{
+                      fontSize: "12px",
+                      color: "#dc2626",
+                      fontWeight: 500,
+                      textAlign: "left",
+                      background: "rgba(220, 38, 38, 0.08)",
+                      padding: "6px 10px",
+                      borderRadius: "6px",
+                    }}
+                  >
+                    {unlockError}
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={!unlockPassphrase.trim() || isUnlocking}
+                  style={{
+                    padding: "10px 16px",
+                    borderRadius: "8px",
+                    fontWeight: 600,
+                    fontSize: "13px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "8px",
+                    backgroundColor: activeSecLevelObj?.color || "#2563eb",
+                    borderColor: activeSecLevelObj?.color || "#2563eb",
+                    color: "#ffffff",
+                    cursor: !unlockPassphrase.trim() || isUnlocking ? "not-allowed" : "pointer",
+                    opacity: !unlockPassphrase.trim() || isUnlocking ? 0.7 : 1,
+                  }}
+                >
+                  <Unlock size={15} />
+                  {isUnlocking ? "Desbloqueando..." : "Desbloquear Documento"}
+                </button>
+              </form>
+            </div>
+          </div>
+        ) : isGitMode ? (
           <div
             style={{
               flex: 1,

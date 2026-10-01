@@ -1,27 +1,23 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
-import type { PR } from "../../types";
-import { API } from "../../services/api";
-import { useWorkspace } from "../../context/WorkspaceContext";
-import { useAuth } from "../../context/AuthContext";
+import { FolderGit2, GitPullRequest, RefreshCw } from "lucide-react";
+import { marked } from "marked";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { VisualMarkdownDiff } from "../../components/editor/VisualMarkdownDiff";
 import {
-  Button,
   Badge,
+  Button,
   Card,
-  SearchInput,
   FilterChips,
+  PageBody,
   PageContainer,
   PageHeader,
-  PageBody,
   Row,
+  SearchInput,
 } from "../../components/ui";
-import {
-  GitPullRequest,
-  RefreshCw,
-  FolderGit2,
-} from "lucide-react";
-import { marked } from "marked";
+import { useAuth } from "../../context/AuthContext";
+import { useWorkspace } from "../../context/WorkspaceContext";
+import { API } from "../../services/api";
+import type { PR } from "../../types";
 
 interface PRsSubViewProps {
   onOpenDiffModal?: () => void;
@@ -54,7 +50,14 @@ const renderMarkdownDescription = (text: string) => {
       />
     );
   } catch {
-    return <div className="ui-markdown-rendered-desc" style={{ whiteSpace: "pre-wrap" }}>{text}</div>;
+    return (
+      <div
+        className="ui-markdown-rendered-desc"
+        style={{ whiteSpace: "pre-wrap" }}
+      >
+        {text}
+      </div>
+    );
   }
 };
 
@@ -76,9 +79,15 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
     "all" | "open" | "merged" | "closed"
   >("all");
   const [searchQuery, setSearchQuery] = useState("");
-  const [expandedPRs, setExpandedPRs] = useState<Record<number | string, boolean>>({});
-  const [prViewModes, setPrViewModes] = useState<Record<string, "visual" | "raw">>({});
-  const [fileDiffsCache, setFileDiffsCache] = useState<Record<string, string>>({});
+  const [expandedPRs, setExpandedPRs] = useState<
+    Record<number | string, boolean>
+  >({});
+  const [prViewModes, setPrViewModes] = useState<
+    Record<string, "visual" | "raw">
+  >({});
+  const [fileDiffsCache, setFileDiffsCache] = useState<Record<string, string>>(
+    {},
+  );
   const [loadingDiffs, setLoadingDiffs] = useState<Record<string, boolean>>({});
   const [actionFeedback, setActionFeedback] = useState<{
     id: number | string;
@@ -181,7 +190,7 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
       if (res.ok) {
         setActionFeedback({
           id,
-          message: res.data?.message || "Aprovação registrada com sucesso na trilha de auditoria!",
+          message: res.data?.message || "Aprovação registrada com sucesso!",
           type: "success",
         });
         setApprovalModalPR(null);
@@ -215,7 +224,9 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
         console.warn("[PRsSubView] Aviso ao alternar para branch do PR:", e);
       }
     }
-    navigate(`/repo/${encodeURIComponent(repoName)}/editor?file=${encodeURIComponent(filePath)}`);
+    navigate(
+      `/repo/${encodeURIComponent(repoName)}/editor?file=${encodeURIComponent(filePath)}`,
+    );
   };
 
   const handleMerge = async (id: number | string) => {
@@ -227,8 +238,7 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
         setActionFeedback({
           id,
           message:
-            res.data?.message ||
-            "Versão publicada e integrada com sucesso!",
+            res.data?.message || "Versão publicada e integrada com sucesso!",
           type: "success",
         });
         await loadPRs();
@@ -376,7 +386,8 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
               Repositório: <strong>{repoName}</strong>
             </Badge>
             <span className="ui-text-muted" style={{ fontSize: "12.5px" }}>
-              Acompanhe aprovações, revisões ativas e histórico com restauração segura.
+              Acompanhe aprovações, revisões ativas e histórico com restauração
+              segura.
             </span>
           </Row>
         }
@@ -403,8 +414,12 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
               variant="ghost"
               size="sm"
               icon={
-                <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>
-                  {filteredPRs.length > 0 && filteredPRs.every((p) => !!expandedPRs[p.id])
+                <span
+                  className="material-symbols-outlined"
+                  style={{ fontSize: "16px" }}
+                >
+                  {filteredPRs.length > 0 &&
+                  filteredPRs.every((p) => !!expandedPRs[p.id])
                     ? "unfold_less"
                     : "unfold_more"}
                 </span>
@@ -422,7 +437,8 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
               }}
               title="Expandir ou recolher todas as revisões da lista"
             >
-              {filteredPRs.length > 0 && filteredPRs.every((p) => !!expandedPRs[p.id])
+              {filteredPRs.length > 0 &&
+              filteredPRs.every((p) => !!expandedPRs[p.id])
                 ? "Recolher Todos"
                 : "Expandir Todos"}
             </Button>
@@ -441,7 +457,16 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
         }
       >
         {/* Filter Bar & Search */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px", width: "100%" }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: "12px",
+            width: "100%",
+          }}
+        >
           <FilterChips
             items={[
               { id: "all", label: "Todas", count: countAll },
@@ -468,7 +493,16 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
 
       {/* Revisions List */}
       <PageBody>
-        <div style={{ maxWidth: "1200px", width: "100%", margin: "0 auto", display: "flex", flexDirection: "column", gap: "16px" }}>
+        <div
+          style={{
+            maxWidth: "1200px",
+            width: "100%",
+            margin: "0 auto",
+            display: "flex",
+            flexDirection: "column",
+            gap: "16px",
+          }}
+        >
           {isLoading ? (
             <div className="ui-empty-state" style={{ padding: "40px" }}>
               <span
@@ -481,20 +515,51 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
               >
                 progress_activity
               </span>
-              <div style={{ marginTop: "10px", fontSize: "14px", color: "var(--md-sys-color-on-surface-variant)" }}>
+              <div
+                style={{
+                  marginTop: "10px",
+                  fontSize: "14px",
+                  color: "var(--md-sys-color-on-surface-variant)",
+                }}
+              >
                 Carregando histórico de revisões de {repoName}...
               </div>
             </div>
           ) : filteredPRs.length === 0 ? (
-            <Card variant="elevated" style={{ padding: "48px 24px", textAlign: "center" }}>
-              <span className="material-symbols-outlined" style={{ color: "var(--md-sys-color-outline)", marginBottom: "10px", fontSize: "40px" }}>
+            <Card
+              variant="elevated"
+              style={{ padding: "48px 24px", textAlign: "center" }}
+            >
+              <span
+                className="material-symbols-outlined"
+                style={{
+                  color: "var(--md-sys-color-outline)",
+                  marginBottom: "10px",
+                  fontSize: "40px",
+                }}
+              >
                 inbox
               </span>
-              <div style={{ fontWeight: 600, fontSize: "16px", color: "var(--color-text-primary, #0f172a)" }}>
+              <div
+                style={{
+                  fontWeight: 600,
+                  fontSize: "16px",
+                  color: "var(--color-text-primary, #0f172a)",
+                }}
+              >
                 Nenhuma Revisão Encontrada em "{repoName}"
               </div>
-              <p className="ui-text-muted" style={{ fontSize: "13px", margin: "8px auto 0 auto", maxWidth: "460px", lineHeight: "1.5" }}>
-                As revisões e propostas são geradas automaticamente conforme os documentos e especificações são editados e versionados.
+              <p
+                className="ui-text-muted"
+                style={{
+                  fontSize: "13px",
+                  margin: "8px auto 0 auto",
+                  maxWidth: "460px",
+                  lineHeight: "1.5",
+                }}
+              >
+                As revisões e propostas são geradas automaticamente conforme os
+                documentos e especificações são editados e versionados.
               </p>
             </Card>
           ) : (
@@ -514,21 +579,45 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
                     ? "ARQUIVADA"
                     : "EM REVISÃO";
 
-              const revisionId = pr.short_id || (pr.commit_hash ? pr.commit_hash.slice(0, 7) : pr.id);
+              const revisionId =
+                pr.short_id ||
+                (pr.commit_hash ? pr.commit_hash.slice(0, 7) : pr.id);
 
-              const currentUserHandle = user?.login ? `@${user.login}` : "@tech-lead";
-              const isAuthor = (pr.author || "").replace(/^@/, "").toLowerCase() === currentUserHandle.replace(/^@/, "").toLowerCase();
-              const minApprovals = pr.min_approvals || (projectConfig?.governance_rules?.min_approvals_default ?? 1);
-              const approvalsList = Array.isArray(pr.approvals) ? pr.approvals : [];
+              const currentUserHandle = user?.login
+                ? `@${user.login}`
+                : "@tech-lead";
+              const isAuthor =
+                (pr.author || "").replace(/^@/, "").toLowerCase() ===
+                currentUserHandle.replace(/^@/, "").toLowerCase();
+              const isSolo =
+                pr.is_solo_mode !== undefined
+                  ? pr.is_solo_mode
+                  : (projectConfig?.governance_rules?.is_solo ?? true);
+              const minApprovals = isSolo
+                ? 1
+                : pr.min_approvals ||
+                  (projectConfig?.governance_rules?.min_approvals_default ?? 1);
+              const approvalsList = Array.isArray(pr.approvals)
+                ? pr.approvals
+                : [];
               const validApprovals = approvalsList.filter((app: any) => {
                 const u = typeof app === "string" ? app : app.user;
-                return (u || "").replace(/^@/, "").toLowerCase() !== (pr.author || "").replace(/^@/, "").toLowerCase();
+                return (
+                  isSolo ||
+                  (u || "").replace(/^@/, "").toLowerCase() !==
+                    (pr.author || "").replace(/^@/, "").toLowerCase()
+                );
               });
               const hasCurrentUserApproved = approvalsList.some((app: any) => {
                 const u = typeof app === "string" ? app : app.user;
-                return (u || "").replace(/^@/, "").toLowerCase() === currentUserHandle.replace(/^@/, "").toLowerCase();
+                return (
+                  (u || "").replace(/^@/, "").toLowerCase() ===
+                  currentUserHandle.replace(/^@/, "").toLowerCase()
+                );
               });
-              const quorumMet = validApprovals.length >= minApprovals;
+              const quorumMet = isSolo
+                ? approvalsList.length >= 1
+                : validApprovals.length >= minApprovals;
 
               return (
                 <Card
@@ -563,7 +652,15 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
                       transition: "background-color 0.15s ease",
                     }}
                   >
-                    <div style={{ display: "flex", alignItems: "center", gap: "14px", minWidth: 0, flex: 1 }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "14px",
+                        minWidth: 0,
+                        flex: 1,
+                      }}
+                    >
                       {/* Status Icon */}
                       <div
                         style={{
@@ -574,26 +671,42 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
-                          background: isDirectCommit || isMerged
-                            ? "var(--color-primary-subtle, #e0f2fe)"
-                            : isClosed
-                            ? "var(--color-danger-subtle, #fef2f2)"
-                            : "var(--color-success-subtle, #f0fdf4)",
-                          color: isDirectCommit || isMerged
-                            ? "var(--md-sys-color-primary, #0284c7)"
-                            : isClosed
-                            ? "var(--color-danger, #ef4444)"
-                            : "var(--color-success, #16a34a)",
+                          background:
+                            isDirectCommit || isMerged
+                              ? "var(--color-primary-subtle, #e0f2fe)"
+                              : isClosed
+                                ? "var(--color-danger-subtle, #fef2f2)"
+                                : "var(--color-success-subtle, #f0fdf4)",
+                          color:
+                            isDirectCommit || isMerged
+                              ? "var(--md-sys-color-primary, #0284c7)"
+                              : isClosed
+                                ? "var(--color-danger, #ef4444)"
+                                : "var(--color-success, #16a34a)",
                         }}
                       >
-                        <span className="material-symbols-outlined" style={{ fontSize: "22px" }}>
-                          {isDirectCommit || isMerged ? "check_circle" : isClosed ? "cancel" : "rate_review"}
+                        <span
+                          className="material-symbols-outlined"
+                          style={{ fontSize: "22px" }}
+                        >
+                          {isDirectCommit || isMerged
+                            ? "check_circle"
+                            : isClosed
+                              ? "cancel"
+                              : "rate_review"}
                         </span>
                       </div>
 
                       {/* Title & Metadata */}
                       <div style={{ minWidth: 0, flex: 1 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
+                            flexWrap: "wrap",
+                          }}
+                        >
                           <span
                             style={{
                               fontSize: "15px",
@@ -605,7 +718,11 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
                             Revisão #{revisionId}: {pr.title}
                           </span>
                           {pr.github_number && (
-                            <Badge variant="neutral" size="sm" title="Sincronizado com GitHub">
+                            <Badge
+                              variant="neutral"
+                              size="sm"
+                              title="Sincronizado com GitHub"
+                            >
                               GitHub #{pr.github_number}
                             </Badge>
                           )}
@@ -618,27 +735,57 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
                             gap: "10px",
                             marginTop: "4px",
                             fontSize: "12.5px",
-                            color: "var(--md-sys-color-on-surface-variant, #64748b)",
+                            color:
+                              "var(--md-sys-color-on-surface-variant, #64748b)",
                             flexWrap: "wrap",
                           }}
                         >
                           <span>
-                            Autor: <strong style={{ color: "var(--md-sys-color-on-surface, #0f172a)" }}>{pr.author || "Equipe"}</strong>
+                            Autor:{" "}
+                            <strong
+                              style={{
+                                color:
+                                  "var(--md-sys-color-on-surface, #0f172a)",
+                              }}
+                            >
+                              {pr.author || "Equipe"}
+                            </strong>
                           </span>
                           <span>&bull;</span>
                           <span>{formatPRDate(pr.created_at)}</span>
                           <span>&bull;</span>
-                          <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
-                            <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>description</span>
-                            {prFiles.length} {prFiles.length === 1 ? "arquivo" : "arquivos"}
+                          <span
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "4px",
+                            }}
+                          >
+                            <span
+                              className="material-symbols-outlined"
+                              style={{ fontSize: "14px" }}
+                            >
+                              description
+                            </span>
+                            {prFiles.length}{" "}
+                            {prFiles.length === 1 ? "arquivo" : "arquivos"}
                           </span>
 
                           {/* Quorum indicator only for active/open reviews */}
                           {isOpen && (
                             <>
                               <span>&bull;</span>
-                              <Badge variant={quorumMet ? "success" : "warning"} size="sm">
-                                <span className="material-symbols-outlined" style={{ fontSize: "13px", marginRight: "3px" }}>
+                              <Badge
+                                variant={quorumMet ? "success" : "warning"}
+                                size="sm"
+                              >
+                                <span
+                                  className="material-symbols-outlined"
+                                  style={{
+                                    fontSize: "13px",
+                                    marginRight: "3px",
+                                  }}
+                                >
                                   {quorumMet ? "verified" : "pending_actions"}
                                 </span>
                                 {quorumMet
@@ -652,9 +799,22 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
                     </div>
 
                     {/* Right Side: Status Badge & Chevron / Details Button */}
-                    <div style={{ display: "flex", alignItems: "center", gap: "10px", flexShrink: 0 }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "10px",
+                        flexShrink: 0,
+                      }}
+                    >
                       <Badge
-                        variant={isMerged || isDirectCommit ? "info" : isClosed ? "danger" : "success"}
+                        variant={
+                          isMerged || isDirectCommit
+                            ? "info"
+                            : isClosed
+                              ? "danger"
+                              : "success"
+                        }
                         size="md"
                       >
                         {statusBadgeText}
@@ -674,7 +834,9 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
                             style={{
                               fontSize: "18px",
                               transition: "transform 0.2s ease",
-                              transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)",
+                              transform: isExpanded
+                                ? "rotate(180deg)"
+                                : "rotate(0deg)",
                             }}
                           >
                             expand_more
@@ -688,19 +850,35 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
 
                   {/* Expanded Details Body */}
                   {isExpanded && (
-                    <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "16px" }}>
+                    <div
+                      style={{
+                        padding: "20px",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "16px",
+                      }}
+                    >
                       {/* PR Description with Rich Markdown Rendering */}
                       {pr.description && (
                         <div>
-                          <div style={{ fontSize: "12px", fontWeight: 600, color: "var(--color-text-secondary, #475569)", marginBottom: "6px" }}>
+                          <div
+                            style={{
+                              fontSize: "12px",
+                              fontWeight: 600,
+                              color: "var(--color-text-secondary, #475569)",
+                              marginBottom: "6px",
+                            }}
+                          >
                             Descrição da Proposta:
                           </div>
                           <div
                             style={{
-                              background: "var(--md-sys-color-surface-container-low, #f8f9fa)",
+                              background:
+                                "var(--md-sys-color-surface-container-low, #f8f9fa)",
                               padding: "14px 16px",
                               borderRadius: "10px",
-                              border: "1px solid var(--md-sys-color-outline-variant, #dadce0)",
+                              border:
+                                "1px solid var(--md-sys-color-outline-variant, #dadce0)",
                             }}
                           >
                             {renderMarkdownDescription(pr.description)}
@@ -714,13 +892,23 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
                           display: "flex",
                           flexDirection: "column",
                           gap: "10px",
-                          background: "var(--md-sys-color-surface-container-lowest, #f8f9fa)",
+                          background:
+                            "var(--md-sys-color-surface-container-lowest, #f8f9fa)",
                           padding: "12px 14px",
                           borderRadius: "8px",
-                          border: "1px solid var(--md-sys-color-outline-variant, #e8eaed)",
+                          border:
+                            "1px solid var(--md-sys-color-outline-variant, #e8eaed)",
                         }}
                       >
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "8px" }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            flexWrap: "wrap",
+                            gap: "8px",
+                          }}
+                        >
                           <span
                             style={{
                               color: "var(--md-sys-color-on-surface, #0f172a)",
@@ -731,15 +919,27 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
                               fontSize: "13px",
                             }}
                           >
-                            <span className="material-symbols-outlined" style={{ fontSize: "17px", color: "var(--md-sys-color-primary, #1a73e8)" }}>
+                            <span
+                              className="material-symbols-outlined"
+                              style={{
+                                fontSize: "17px",
+                                color: "var(--md-sys-color-primary, #1a73e8)",
+                              }}
+                            >
                               verified_user
                             </span>
                             Trilha de Auditoria & Pareceres:
                           </span>
 
                           {isOpen && (
-                            <Badge variant={quorumMet ? "success" : "warning"} size="sm">
-                              <span className="material-symbols-outlined" style={{ fontSize: "14px", marginRight: "3px" }}>
+                            <Badge
+                              variant={quorumMet ? "success" : "warning"}
+                              size="sm"
+                            >
+                              <span
+                                className="material-symbols-outlined"
+                                style={{ fontSize: "14px", marginRight: "3px" }}
+                              >
                                 {quorumMet ? "verified" : "pending_actions"}
                               </span>
                               {quorumMet
@@ -749,14 +949,30 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
                           )}
                         </div>
 
-                        <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
+                            flexWrap: "wrap",
+                          }}
+                        >
                           {approvalsList.length > 0 ? (
                             approvalsList.map((app: any, idx: number) => {
-                              const appUser = typeof app === "string" ? app : app.user;
-                              const appRole = typeof app === "object" ? app.role : null;
-                              const appHash = typeof app === "object" && app.commit_hash ? app.commit_hash.slice(0, 7) : null;
-                              const appDate = typeof app === "object" && app.timestamp ? formatPRDate(app.timestamp) : null;
-                              const appComment = typeof app === "object" ? app.comment : null;
+                              const appUser =
+                                typeof app === "string" ? app : app.user;
+                              const appRole =
+                                typeof app === "object" ? app.role : null;
+                              const appHash =
+                                typeof app === "object" && app.commit_hash
+                                  ? app.commit_hash.slice(0, 7)
+                                  : null;
+                              const appDate =
+                                typeof app === "object" && app.timestamp
+                                  ? formatPRDate(app.timestamp)
+                                  : null;
+                              const appComment =
+                                typeof app === "object" ? app.comment : null;
 
                               return (
                                 <div
@@ -767,40 +983,85 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
                                     gap: "6px",
                                     padding: "4px 10px",
                                     borderRadius: "6px",
-                                    background: "var(--color-success-subtle, #f0fdf4)",
-                                    border: "1px solid var(--color-border-subtle, #bbf7d0)",
+                                    background:
+                                      "var(--color-success-subtle, #f0fdf4)",
+                                    border:
+                                      "1px solid var(--color-border-subtle, #bbf7d0)",
                                     color: "var(--color-success, #166534)",
                                     fontSize: "12px",
                                   }}
-                                  title={appComment ? `Comentário de Auditoria: "${appComment}"` : undefined}
+                                  title={
+                                    appComment
+                                      ? `Comentário de Auditoria: "${appComment}"`
+                                      : undefined
+                                  }
                                 >
-                                  <span className="material-symbols-outlined" style={{ fontSize: "15px", color: "var(--color-success, #16a34a)" }}>
+                                  <span
+                                    className="material-symbols-outlined"
+                                    style={{
+                                      fontSize: "15px",
+                                      color: "var(--color-success, #16a34a)",
+                                    }}
+                                  >
                                     check_circle
                                   </span>
                                   <strong>{appUser}</strong>
-                                  {appRole && <span style={{ opacity: 0.85, fontSize: "11px" }}>({appRole})</span>}
+                                  {appRole && (
+                                    <span
+                                      style={{
+                                        opacity: 0.85,
+                                        fontSize: "11px",
+                                      }}
+                                    >
+                                      ({appRole})
+                                    </span>
+                                  )}
                                   {appHash && (
-                                    <span style={{ fontFamily: "var(--font-family-mono)", fontSize: "10.5px", background: "rgba(0,0,0,0.06)", padding: "1px 4px", borderRadius: "3px" }}>
+                                    <span
+                                      style={{
+                                        fontFamily: "var(--font-family-mono)",
+                                        fontSize: "10.5px",
+                                        background: "rgba(0,0,0,0.06)",
+                                        padding: "1px 4px",
+                                        borderRadius: "3px",
+                                      }}
+                                    >
                                       #{appHash}
                                     </span>
                                   )}
-                                  {appDate && <span style={{ opacity: 0.7, fontSize: "10.5px" }}>&bull; {appDate}</span>}
+                                  {appDate && (
+                                    <span
+                                      style={{
+                                        opacity: 0.7,
+                                        fontSize: "10.5px",
+                                      }}
+                                    >
+                                      &bull; {appDate}
+                                    </span>
+                                  )}
                                 </div>
                               );
                             })
                           ) : isMerged || isDirectCommit ? (
                             <Badge variant="success" size="sm">
-                              <span className="material-symbols-outlined" style={{ fontSize: "14px", marginRight: "3px" }}>
+                              <span
+                                className="material-symbols-outlined"
+                                style={{ fontSize: "14px", marginRight: "3px" }}
+                              >
                                 verified
                               </span>
                               Aprovado e integrado na versão oficial
                             </Badge>
                           ) : (
                             <Badge variant="neutral" size="sm">
-                              <span className="material-symbols-outlined" style={{ fontSize: "14px", marginRight: "3px" }}>
+                              <span
+                                className="material-symbols-outlined"
+                                style={{ fontSize: "14px", marginRight: "3px" }}
+                              >
                                 hourglass_top
                               </span>
-                              Aguardando aprovação de revisores (0/{minApprovals})
+                              Aguardando aprovação de revisores (0/
+                              {minApprovals})
                             </Badge>
                           )}
                         </div>
@@ -813,8 +1074,14 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
                             padding: "10px 14px",
                             borderRadius: "6px",
                             fontSize: "13px",
-                            background: actionFeedback.type === "success" ? "var(--color-success-subtle, #f0fdf4)" : "var(--color-danger-subtle, #fef2f2)",
-                            color: actionFeedback.type === "success" ? "var(--color-success, #166534)" : "var(--color-danger, #991b1b)",
+                            background:
+                              actionFeedback.type === "success"
+                                ? "var(--color-success-subtle, #f0fdf4)"
+                                : "var(--color-danger-subtle, #fef2f2)",
+                            color:
+                              actionFeedback.type === "success"
+                                ? "var(--color-success, #166534)"
+                                : "var(--color-danger, #991b1b)",
                             border: `1px solid ${actionFeedback.type === "success" ? "var(--color-border-subtle, #bbf7d0)" : "var(--color-border-subtle, #fecaca)"}`,
                           }}
                         >
@@ -824,27 +1091,65 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
 
                       {/* Files & Diffs */}
                       {prFiles.length > 0 && (
-                        <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                          <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary, #0f172a)", display: "flex", alignItems: "center", gap: "6px" }}>
-                            <span className="material-symbols-outlined" style={{ fontSize: "16px", color: "var(--md-sys-color-primary, #1a73e8)" }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: "10px",
+                          }}
+                        >
+                          <div
+                            style={{
+                              fontSize: "13px",
+                              fontWeight: 600,
+                              color: "var(--color-text-primary, #0f172a)",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "6px",
+                            }}
+                          >
+                            <span
+                              className="material-symbols-outlined"
+                              style={{
+                                fontSize: "16px",
+                                color: "var(--md-sys-color-primary, #1a73e8)",
+                              }}
+                            >
                               difference
                             </span>
                             Documentos Alterados ({prFiles.length}):
                           </div>
 
-                          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                          <div
+                            style={{
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: "10px",
+                            }}
+                          >
                             {prFiles.map((f: any, fIdx: number) => {
                               const fileKey = `${pr.id}-${f.path || fIdx}`;
                               const isVisual = prViewModes[fileKey] !== "raw";
-                              const fileDiff = f.diff_text || fileDiffsCache[fileKey] || "";
+                              const fileDiff =
+                                f.diff_text || fileDiffsCache[fileKey] || "";
                               const isLoadingDiff = loadingDiffs[fileKey];
 
                               return (
-                                <Card key={fIdx} variant="flat" style={{ padding: 0, overflow: "hidden", border: "1px solid var(--color-border-subtle, #e2e8f0)" }}>
+                                <Card
+                                  key={fIdx}
+                                  variant="flat"
+                                  style={{
+                                    padding: 0,
+                                    overflow: "hidden",
+                                    border:
+                                      "1px solid var(--color-border-subtle, #e2e8f0)",
+                                  }}
+                                >
                                   <div
                                     style={{
                                       padding: "8px 12px",
-                                      background: "var(--color-surface-subtle, #f8fafc)",
+                                      background:
+                                        "var(--color-surface-subtle, #f8fafc)",
                                       display: "flex",
                                       justifyContent: "space-between",
                                       alignItems: "center",
@@ -854,16 +1159,34 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
                                     }}
                                   >
                                     <div className="ui-row ui-row--align-center ui-row--xs">
-                                      <span className="material-symbols-outlined icon-xs" style={{ color: "var(--md-sys-color-primary, #1a73e8)" }}>
+                                      <span
+                                        className="material-symbols-outlined icon-xs"
+                                        style={{
+                                          color:
+                                            "var(--md-sys-color-primary, #1a73e8)",
+                                        }}
+                                      >
                                         description
                                       </span>
                                       <strong>{f.path}</strong>
                                       {(f.additions > 0 || f.deletions > 0) && (
                                         <>
-                                          <span style={{ color: "var(--color-success, #16a34a)", fontWeight: 600 }}>
+                                          <span
+                                            style={{
+                                              color:
+                                                "var(--color-success, #16a34a)",
+                                              fontWeight: 600,
+                                            }}
+                                          >
                                             +{f.additions || 0}
                                           </span>
-                                          <span style={{ color: "var(--color-danger, #dc2626)", fontWeight: 600 }}>
+                                          <span
+                                            style={{
+                                              color:
+                                                "var(--color-danger, #dc2626)",
+                                              fontWeight: 600,
+                                            }}
+                                          >
                                             -{f.deletions || 0}
                                           </span>
                                         </>
@@ -876,10 +1199,15 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
                                           type="button"
                                           size="xs"
                                           variant="tonal"
-                                          onClick={() => handleEditDocumentInPR(pr, f.path)}
+                                          onClick={() =>
+                                            handleEditDocumentInPR(pr, f.path)
+                                          }
                                           title={`Abrir e editar "${f.path}" diretamente na branch deste PR (${pr.branch})`}
                                           icon={
-                                            <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>
+                                            <span
+                                              className="material-symbols-outlined"
+                                              style={{ fontSize: "14px" }}
+                                            >
                                               edit_note
                                             </span>
                                           }
@@ -888,20 +1216,42 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
                                         </Button>
                                       )}
 
-                                      <div className="ui-btn-group" style={{ background: "var(--color-border-subtle, #e2e8f0)", padding: "2px", borderRadius: "6px" }}>
+                                      <div
+                                        className="ui-btn-group"
+                                        style={{
+                                          background:
+                                            "var(--color-border-subtle, #e2e8f0)",
+                                          padding: "2px",
+                                          borderRadius: "6px",
+                                        }}
+                                      >
                                         <Button
                                           type="button"
                                           size="xs"
-                                          variant={isVisual ? "secondary" : "ghost"}
-                                          onClick={() => setPrViewModes((prev) => ({ ...prev, [fileKey]: "visual" }))}
+                                          variant={
+                                            isVisual ? "secondary" : "ghost"
+                                          }
+                                          onClick={() =>
+                                            setPrViewModes((prev) => ({
+                                              ...prev,
+                                              [fileKey]: "visual",
+                                            }))
+                                          }
                                         >
                                           Visualização Formatada
                                         </Button>
                                         <Button
                                           type="button"
                                           size="xs"
-                                          variant={!isVisual ? "secondary" : "ghost"}
-                                          onClick={() => setPrViewModes((prev) => ({ ...prev, [fileKey]: "raw" }))}
+                                          variant={
+                                            !isVisual ? "secondary" : "ghost"
+                                          }
+                                          onClick={() =>
+                                            setPrViewModes((prev) => ({
+                                              ...prev,
+                                              [fileKey]: "raw",
+                                            }))
+                                          }
                                         >
                                           Modo RAW (Diff)
                                         </Button>
@@ -910,11 +1260,23 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
                                   </div>
 
                                   {isLoadingDiff ? (
-                                    <div style={{ padding: "14px", textAlign: "center", color: "var(--color-text-muted)" }}>
+                                    <div
+                                      style={{
+                                        padding: "14px",
+                                        textAlign: "center",
+                                        color: "var(--color-text-muted)",
+                                      }}
+                                    >
                                       Carregando diferenças da versão...
                                     </div>
-                                  ) : isVisual && (f.old_content || f.new_content) ? (
-                                    <div style={{ maxHeight: "380px", overflowY: "auto" }}>
+                                  ) : isVisual &&
+                                    (f.old_content || f.new_content) ? (
+                                    <div
+                                      style={{
+                                        maxHeight: "380px",
+                                        overflowY: "auto",
+                                      }}
+                                    >
                                       <VisualMarkdownDiff
                                         oldContent={f.old_content || ""}
                                         newContent={f.new_content || ""}
@@ -951,7 +1313,8 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "space-between",
-                          borderTop: "1px solid var(--md-sys-color-outline-variant, #dadce0)",
+                          borderTop:
+                            "1px solid var(--md-sys-color-outline-variant, #dadce0)",
                           paddingTop: "14px",
                           marginTop: "4px",
                           flexWrap: "wrap",
@@ -975,12 +1338,18 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
                               }}
                             >
                               Ver no GitHub
-                              <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>
+                              <span
+                                className="material-symbols-outlined"
+                                style={{ fontSize: "14px" }}
+                              >
                                 open_in_new
                               </span>
                             </a>
                           ) : (
-                            <span className="ui-text-muted" style={{ fontSize: "12.5px" }}>
+                            <span
+                              className="ui-text-muted"
+                              style={{ fontSize: "12.5px" }}
+                            >
                               Versão Canônica Registrada
                             </span>
                           )}
@@ -994,7 +1363,11 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
                               size="sm"
                               onClick={() => setRollbackTarget(pr)}
                               disabled={actionLoading?.id === pr.id}
-                              icon={<span className="material-symbols-outlined icon-xs">history</span>}
+                              icon={
+                                <span className="material-symbols-outlined icon-xs">
+                                  history
+                                </span>
+                              }
                               title="Restaurar o estado desta revisão como a versão ativa atual"
                             >
                               Restaurar esta Versão (Rollback)
@@ -1007,69 +1380,92 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
                               <Button
                                 variant="secondary"
                                 size="sm"
-                                style={{ color: "var(--color-danger, #ef4444)" }}
+                                style={{
+                                  color: "var(--color-danger, #ef4444)",
+                                }}
                                 onClick={() => handleReject(pr.id)}
                                 disabled={actionLoading?.id === pr.id}
                                 icon={
                                   <span className="material-symbols-outlined icon-xs">
-                                    {actionLoading?.id === pr.id && actionLoading.action === "reject" ? "progress_activity" : "close"}
+                                    {actionLoading?.id === pr.id &&
+                                    actionLoading.action === "reject"
+                                      ? "progress_activity"
+                                      : "close"}
                                   </span>
                                 }
                                 title="Rejeitar e arquivar esta proposta"
                               >
-                                {actionLoading?.id === pr.id && actionLoading.action === "reject" ? "Rejeitando..." : "Rejeitar"}
+                                {actionLoading?.id === pr.id &&
+                                actionLoading.action === "reject"
+                                  ? "Rejeitando..."
+                                  : "Rejeitar"}
                               </Button>
 
                               <Button
                                 variant="secondary"
                                 size="sm"
                                 onClick={() => handleOpenApproveModal(pr)}
-                                disabled={actionLoading?.id === pr.id || isAuthor}
+                                disabled={
+                                  actionLoading?.id === pr.id ||
+                                  (!isSolo && isAuthor)
+                                }
                                 icon={
                                   <span className="material-symbols-outlined icon-xs">
-                                    {actionLoading?.id === pr.id && actionLoading.action === "approve"
+                                    {actionLoading?.id === pr.id &&
+                                    actionLoading.action === "approve"
                                       ? "progress_activity"
                                       : hasCurrentUserApproved
-                                      ? "verified"
-                                      : "thumb_up"}
+                                        ? "verified"
+                                        : "thumb_up"}
                                   </span>
                                 }
                                 title={
-                                  isAuthor
-                                    ? "O autor da proposta não pode aprovar o seu próprio PR."
+                                  !isSolo && isAuthor
+                                    ? "O autor da proposta não pode aprovar o seu próprio PR no Modo Equipe."
                                     : hasCurrentUserApproved
-                                    ? "Você já registrou aprovação nesta proposta. Clique para atualizar seu comentário ou papel."
-                                    : "Registrar parecer e aprovação oficial nesta revisão"
+                                      ? "Você já registrou aprovação nesta proposta. Clique para atualizar seu comentário ou papel."
+                                      : isSolo
+                                        ? "Registrar aprovação nesta revisão (Modo Solo ativo)"
+                                        : "Registrar parecer e aprovação oficial nesta revisão"
                                 }
                               >
-                                {actionLoading?.id === pr.id && actionLoading.action === "approve"
+                                {actionLoading?.id === pr.id &&
+                                actionLoading.action === "approve"
                                   ? "Aprovando..."
                                   : hasCurrentUserApproved
-                                  ? `✓ Aprovado por você (${validApprovals.length}/${minApprovals})`
-                                  : `Aprovar Revisão (${validApprovals.length}/${minApprovals})`}
+                                    ? `✓ Aprovado por você (${validApprovals.length}/${minApprovals})`
+                                    : `Aprovar Revisão (${validApprovals.length}/${minApprovals})`}
                               </Button>
 
                               <Button
                                 variant="primary"
                                 size="sm"
                                 onClick={() => handleMerge(pr.id)}
-                                disabled={actionLoading?.id === pr.id || !quorumMet}
+                                disabled={
+                                  actionLoading?.id === pr.id || !quorumMet
+                                }
                                 icon={
                                   <span className="material-symbols-outlined icon-xs">
-                                    {actionLoading?.id === pr.id && actionLoading.action === "merge" ? "progress_activity" : "publish"}
+                                    {actionLoading?.id === pr.id &&
+                                    actionLoading.action === "merge"
+                                      ? "progress_activity"
+                                      : "publish"}
                                   </span>
                                 }
                                 title={
                                   !quorumMet
-                                    ? `Quórum pendente: requer pelo menos ${minApprovals} aprovações válidas de revisores independentes antes de realizar o merge (atual: ${validApprovals.length}).`
+                                    ? isSolo
+                                      ? "Aprovação pendente: registre a aprovação antes de publicar a versão."
+                                      : `Quórum pendente: requer pelo menos ${minApprovals} aprovações válidas de revisores independentes antes de realizar o merge (atual: ${validApprovals.length}).`
                                     : "Quórum atingido! Integrar e publicar alterações na versão oficial."
                                 }
                               >
-                                {actionLoading?.id === pr.id && actionLoading.action === "merge"
+                                {actionLoading?.id === pr.id &&
+                                actionLoading.action === "merge"
                                   ? "Publicando..."
                                   : quorumMet
-                                  ? "Publicar Versão Oficial"
-                                  : `Publicar (${validApprovals.length}/${minApprovals})`}
+                                    ? "Publicar Versão Oficial"
+                                    : `Publicar (${validApprovals.length}/${minApprovals})`}
                               </Button>
                             </>
                           )}
@@ -1116,7 +1512,14 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "10px",
+                marginBottom: "12px",
+              }}
+            >
               <div
                 style={{
                   width: "36px",
@@ -1129,23 +1532,55 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
                   color: "var(--color-success, #16a34a)",
                 }}
               >
-                <span className="material-symbols-outlined" style={{ fontSize: "20px" }}>
+                <span
+                  className="material-symbols-outlined"
+                  style={{ fontSize: "20px" }}
+                >
                   verified_user
                 </span>
               </div>
               <div>
-                <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 600, color: "var(--color-text-primary, #0f172a)" }}>
-                  Aprovar Proposta de Revisão #{approvalModalPR.short_id || approvalModalPR.id}
+                <h3
+                  style={{
+                    margin: 0,
+                    fontSize: "16px",
+                    fontWeight: 600,
+                    color: "var(--color-text-primary, #0f172a)",
+                  }}
+                >
+                  Aprovar Proposta de Revisão #
+                  {approvalModalPR.short_id || approvalModalPR.id}
                 </h3>
-                <p style={{ margin: 0, fontSize: "12px", color: "var(--color-text-muted, #64748b)" }}>
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: "12px",
+                    color: "var(--color-text-muted, #64748b)",
+                  }}
+                >
                   {approvalModalPR.title} &bull; Autor: {approvalModalPR.author}
                 </p>
               </div>
             </div>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: "14px", marginTop: "16px" }}>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "14px",
+                marginTop: "16px",
+              }}
+            >
               <div>
-                <label style={{ display: "block", fontSize: "12.5px", fontWeight: 600, color: "var(--color-text-primary, #0f172a)", marginBottom: "6px" }}>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "12.5px",
+                    fontWeight: 600,
+                    color: "var(--color-text-primary, #0f172a)",
+                    marginBottom: "6px",
+                  }}
+                >
                   Papel / Cargo do Revisor:
                 </label>
                 <select
@@ -1162,15 +1597,29 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
                   }}
                 >
                   <option value="Tech Lead">Tech Lead</option>
-                  <option value="Arquiteto de Software">Arquiteto de Software</option>
+                  <option value="Arquiteto de Software">
+                    Arquiteto de Software
+                  </option>
                   <option value="Engenheiro Revisor">Engenheiro Revisor</option>
-                  <option value="Product Owner / Domain Lead">Product Owner / Domain Lead</option>
-                  <option value="Security / Compliance Auditor">Security / Compliance Auditor</option>
+                  <option value="Product Owner / Domain Lead">
+                    Product Owner / Domain Lead
+                  </option>
+                  <option value="Security / Compliance Auditor">
+                    Security / Compliance Auditor
+                  </option>
                 </select>
               </div>
 
               <div>
-                <label style={{ display: "block", fontSize: "12.5px", fontWeight: 600, color: "var(--color-text-primary, #0f172a)", marginBottom: "6px" }}>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "12.5px",
+                    fontWeight: 600,
+                    color: "var(--color-text-primary, #0f172a)",
+                    marginBottom: "6px",
+                  }}
+                >
                   Parecer / Comentário de Auditoria (Opcional):
                 </label>
                 <textarea
@@ -1196,18 +1645,30 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
                 style={{
                   padding: "10px 12px",
                   borderRadius: "6px",
-                  background: "var(--md-sys-color-surface-container-lowest, #f8f9fa)",
+                  background:
+                    "var(--md-sys-color-surface-container-lowest, #f8f9fa)",
                   border: "1px solid var(--color-border-subtle, #e2e8f0)",
                   fontSize: "12px",
                   color: "var(--color-text-muted, #64748b)",
                   lineHeight: "1.5",
                 }}
               >
-                🔒 <strong>Registro Imutável:</strong> Sua aprovação será carimbada com o usuário <strong>{user?.login ? `@${user.login}` : "@tech-lead"}</strong>, data/hora e o hash da revisão atual para conformidade e rastreabilidade no Git.
+                🔒 <strong>Registro Imutável:</strong> Sua aprovação será
+                carimbada com o usuário{" "}
+                <strong>{user?.login ? `@${user.login}` : "@tech-lead"}</strong>
+                , data/hora e o hash da revisão atual para conformidade e
+                rastreabilidade no Git.
               </div>
             </div>
 
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "20px" }}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: "10px",
+                marginTop: "20px",
+              }}
+            >
               <Button
                 variant="secondary"
                 size="sm"
@@ -1223,11 +1684,15 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
                 disabled={actionLoading?.id === approvalModalPR.id}
                 icon={
                   <span className="material-symbols-outlined icon-xs">
-                    {actionLoading?.id === approvalModalPR.id ? "progress_activity" : "verified"}
+                    {actionLoading?.id === approvalModalPR.id
+                      ? "progress_activity"
+                      : "verified"}
                   </span>
                 }
               >
-                {actionLoading?.id === approvalModalPR.id ? "Registrando Aprovação..." : "Confirmar Aprovação"}
+                {actionLoading?.id === approvalModalPR.id
+                  ? "Registrando Aprovação..."
+                  : "Confirmar Aprovação"}
               </Button>
             </div>
           </div>
@@ -1266,20 +1731,50 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="ui-row ui-row--align-center ui-row--sm" style={{ marginBottom: "16px" }}>
-              <span className="material-symbols-outlined" style={{ fontSize: "28px", color: "var(--color-primary, #3b82f6)" }}>
+            <div
+              className="ui-row ui-row--align-center ui-row--sm"
+              style={{ marginBottom: "16px" }}
+            >
+              <span
+                className="material-symbols-outlined"
+                style={{
+                  fontSize: "28px",
+                  color: "var(--color-primary, #3b82f6)",
+                }}
+              >
                 history
               </span>
-              <h3 style={{ margin: 0, fontSize: "18px", color: "var(--color-text-primary, #0f172a)", fontWeight: 700 }}>
+              <h3
+                style={{
+                  margin: 0,
+                  fontSize: "18px",
+                  color: "var(--color-text-primary, #0f172a)",
+                  fontWeight: 700,
+                }}
+              >
                 Restaurar Versão (Rollback Seguro)
               </h3>
             </div>
 
-            <p style={{ fontSize: "14px", color: "var(--color-text-secondary, #334155)", lineHeight: "1.6", margin: "0 0 16px 0" }}>
+            <p
+              style={{
+                fontSize: "14px",
+                color: "var(--color-text-secondary, #334155)",
+                lineHeight: "1.6",
+                margin: "0 0 16px 0",
+              }}
+            >
               Você está prestes a restaurar o projeto para o estado da revisão:
               <br />
-              <strong style={{ color: "var(--color-text-primary, #0f172a)", display: "block", marginTop: "6px" }}>
-                #{rollbackTarget.short_id || rollbackTarget.id} &bull; {rollbackTarget.title}
+              <strong
+                style={{
+                  color: "var(--color-text-primary, #0f172a)",
+                  display: "block",
+                  marginTop: "6px",
+                }}
+              >
+                #{rollbackTarget.short_id || rollbackTarget.id} &bull;{" "}
+                {rollbackTarget.title}
               </strong>
             </p>
 
@@ -1299,11 +1794,19 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
                 💡 Como funciona a restauração segura:
               </strong>
               <div style={{ marginTop: "4px" }}>
-                O estado desta versão será promovido como a nova versão ativa. <strong>Todo o histórico de revisões anteriores é preservado integralmente</strong>.
+                O estado desta versão será promovido como a nova versão ativa.{" "}
+                <strong>
+                  Todo o histórico de revisões anteriores é preservado
+                  integralmente
+                </strong>
+                .
               </div>
             </div>
 
-            <div className="ui-row ui-row--align-center ui-row--sm" style={{ justifyContent: "flex-end" }}>
+            <div
+              className="ui-row ui-row--align-center ui-row--sm"
+              style={{ justifyContent: "flex-end" }}
+            >
               <Button
                 variant="secondary"
                 onClick={() => setRollbackTarget(null)}
@@ -1316,7 +1819,11 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
                 onClick={handleRollback}
                 disabled={actionLoading?.action === "rollback"}
                 isLoading={actionLoading?.action === "rollback"}
-                icon={<span className="material-symbols-outlined icon-xs">restore</span>}
+                icon={
+                  <span className="material-symbols-outlined icon-xs">
+                    restore
+                  </span>
+                }
               >
                 Confirmar Restauração
               </Button>
