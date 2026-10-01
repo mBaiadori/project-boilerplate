@@ -155,6 +155,7 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
   const engineRef = useRef<NotionEditorEngine | null>(null);
   const titleTextareaRef = useRef<HTMLTextAreaElement>(null);
   const isInternalChangeRef = useRef(false);
+  const lastEmittedMarkdownRef = useRef<string>("");
 
   const activeLanguageRef = useRef(activeLanguage);
   activeLanguageRef.current = activeLanguage;
@@ -655,6 +656,7 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
       onChange: () => {
         if (!engineRef.current) return;
         const currentMd = engineRef.current.getMarkdown();
+        lastEmittedMarkdownRef.current = currentMd;
         isInternalChangeRef.current = true;
         if (editorTabRef.current === "document") {
           docBodyRef.current = currentMd;
@@ -808,7 +810,14 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
     if (engineRef.current) {
       const currentEngineMd = engineRef.current.getMarkdown();
       const targetText = editorTab === "document" ? docBody : effectivePrompt;
-      if (currentEngineMd !== targetText) {
+
+      const normEngine = (currentEngineMd || "").replace(/\r\n/g, "\n").trim();
+      const normTarget = (targetText || "").replace(/\r\n/g, "\n").trim();
+      const normLastEmitted = (lastEmittedMarkdownRef.current || "").replace(/\r\n/g, "\n").trim();
+
+      // Só recarrega o DOM se a mudança for externa real e diferente do que foi digitado
+      if (normEngine !== normTarget && normLastEmitted !== normTarget) {
+        lastEmittedMarkdownRef.current = targetText;
         engineRef.current.setMarkdown(targetText);
         const hash = window.location.hash;
         if (hash && (hash.includes(":~:text=") || hash.startsWith("#"))) {

@@ -62,7 +62,8 @@ export function parseFrontmatter(rawContent = ""): ParsedDocument {
   }
 
   const yamlBlock = match[1];
-  const body = match[2] || "";
+  const rawBody = match[2] || "";
+  const body = rawBody.startsWith("\n") ? rawBody.slice(1) : rawBody.startsWith("\r\n") ? rawBody.slice(2) : rawBody;
 
   try {
     const parsed = yaml.load(yamlBlock) as DocumentMetadata;

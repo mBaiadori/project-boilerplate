@@ -242,6 +242,28 @@
   margin: 8px 0;
 }
 
+.notion-canvas ul ul,
+.notion-canvas ol ul {
+  list-style-type: circle;
+  padding-left: 20px;
+  margin: 4px 0;
+}
+
+.notion-canvas ul ul ul,
+.notion-canvas ol ul ul,
+.notion-canvas ul ol ul,
+.notion-canvas ol ol ul {
+  list-style-type: square;
+  padding-left: 20px;
+  margin: 4px 0;
+}
+
+.notion-canvas ol ol,
+.notion-canvas ul ol {
+  padding-left: 20px;
+  margin: 4px 0;
+}
+
 .notion-canvas li {
   margin: 4px 0;
 }
@@ -685,6 +707,12 @@
   flex: 1;
   outline: none;
 }
+
+.notion-todo-item[data-indent="1"] { margin-left: 24px; }
+.notion-todo-item[data-indent="2"] { margin-left: 48px; }
+.notion-todo-item[data-indent="3"] { margin-left: 72px; }
+.notion-todo-item[data-indent="4"] { margin-left: 96px; }
+.notion-todo-item[data-indent="5"] { margin-left: 120px; }
 
 .notion-todo-item.checked .notion-todo-text {
   text-decoration: line-through;

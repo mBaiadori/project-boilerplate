@@ -842,6 +842,76 @@ export class NotionEditorEngine {
   // MARKDOWN TO DOM (PARSER)
   // ===========================================================================
 
+  parseListBlock(lines: string[], startIndex: number): { html: string; nextIndex: number } {
+    const listLines: { indent: number; type: 'ul' | 'ol'; text: string }[] = [];
+    let i = startIndex;
+
+    while (i < lines.length) {
+      const line = lines[i];
+      // Se for To-Do, encerra o bloco de lista comum
+      if (line.match(/^(\s*)[-*+]\s+\[([ xX])\]\s+/)) {
+        break;
+      }
+      const match = line.match(/^(\s*)([-*+]|\d+\.)\s+(.*)$/);
+      if (!match) {
+        break;
+      }
+      const indent = match[1].length;
+      const marker = match[2];
+      const type: 'ul' | 'ol' = /^\d+\./.test(marker) ? 'ol' : 'ul';
+      const text = match[3];
+      listLines.push({ indent, type, text });
+      i++;
+    }
+
+    if (listLines.length === 0) {
+      return { html: '', nextIndex: startIndex };
+    }
+
+    const stack: { type: 'ul' | 'ol'; indent: number; hasOpenLi: boolean }[] = [];
+    let result = '';
+
+    for (const item of listLines) {
+      if (stack.length === 0) {
+        stack.push({ type: item.type, indent: item.indent, hasOpenLi: true });
+        result += `<${item.type}><li>${this.parseInlineMarkdown(item.text)}`;
+      } else {
+        const top = stack[stack.length - 1];
+
+        if (item.indent > top.indent) {
+          stack.push({ type: item.type, indent: item.indent, hasOpenLi: true });
+          result += `<${item.type}><li>${this.parseInlineMarkdown(item.text)}`;
+        } else if (item.indent < top.indent) {
+          while (stack.length > 1 && stack[stack.length - 1].indent > item.indent) {
+            const popped = stack.pop()!;
+            result += `</li></${popped.type}>`;
+          }
+          const currentTop = stack[stack.length - 1];
+          if (currentTop.hasOpenLi) {
+            result += `</li>`;
+          }
+          currentTop.hasOpenLi = true;
+          result += `<li>${this.parseInlineMarkdown(item.text)}`;
+        } else {
+          if (top.type === item.type) {
+            result += `</li><li>${this.parseInlineMarkdown(item.text)}`;
+          } else {
+            stack.pop();
+            result += `</li></${top.type}><${item.type}><li>${this.parseInlineMarkdown(item.text)}`;
+            stack.push({ type: item.type, indent: item.indent, hasOpenLi: true });
+          }
+        }
+      }
+    }
+
+    while (stack.length > 0) {
+      const popped = stack.pop()!;
+      result += `</li></${popped.type}>`;
+    }
+
+    return { html: result, nextIndex: i };
+  }
+
   parseMarkdownLinesToHtml(lines: string[]): string {
     const htmlFragments: string[] = [];
     let i = 0;
@@ -929,9 +999,11 @@ export class NotionEditorEngine {
       // 6. To-Do Checklist
       const todoMatch = line.match(/^(\s*)[-*+]\s+\[([ xX])\]\s+(.*)$/);
       if (todoMatch) {
+        const indentSpaces = todoMatch[1].length;
+        const indentLevel = Math.floor(indentSpaces / 2);
         const isChecked = todoMatch[2].toLowerCase() === 'x';
         const text = todoMatch[3];
-        htmlFragments.push(this.createTodoItemHtml(text, isChecked));
+        htmlFragments.push(this.createTodoItemHtml(text, isChecked, indentLevel));
         i++;
         continue;
       }
@@ -981,30 +1053,15 @@ export class NotionEditorEngine {
         continue;
       }
 
-      // 10. Bullet List
-      if (line.match(/^[-*+]\s+(.*)$/)) {
-        let listHtml = '<ul>';
-        while (i < lines.length && lines[i].match(/^[-*+]\s+(.*)$/)) {
-          const itemText = lines[i].replace(/^[-*+]\s+/, '');
-          listHtml += `<li>${this.parseInlineMarkdown(itemText)}</li>`;
-          i++;
+      // 10. Listas com Bullets ou Numeradas (suporte a múltiplos níveis de aninhamento)
+      const listMatch = line.match(/^(\s*)([-*+]|\d+\.)\s+(.*)$/);
+      if (listMatch) {
+        const { html, nextIndex } = this.parseListBlock(lines, i);
+        if (html) {
+          htmlFragments.push(html);
+          i = nextIndex;
+          continue;
         }
-        listHtml += '</ul>';
-        htmlFragments.push(listHtml);
-        continue;
-      }
-
-      // 11. Numbered List
-      if (line.match(/^\d+\.\s+(.*)$/)) {
-        let listHtml = '<ol>';
-        while (i < lines.length && lines[i].match(/^\d+\.\s+(.*)$/)) {
-          const itemText = lines[i].replace(/^\d+\.\s+/, '');
-          listHtml += `<li>${this.parseInlineMarkdown(itemText)}</li>`;
-          i++;
-        }
-        listHtml += '</ol>';
-        htmlFragments.push(listHtml);
-        continue;
       }
 
       // 12. Paragraph
@@ -1066,16 +1123,9 @@ export class NotionEditorEngine {
         else if (tag === 'p') {
           const text = this.serializeInline(el).trim();
           lines.push(text ? `> ${text}` : '>');
-        } else if (tag === 'ul') {
-          el.querySelectorAll(':scope > li').forEach((li) => {
-            lines.push(`> * ${this.serializeInline(li as HTMLElement)}`);
-          });
-        } else if (tag === 'ol') {
-          let idx = 1;
-          el.querySelectorAll(':scope > li').forEach((li) => {
-            lines.push(`> ${idx}. ${this.serializeInline(li as HTMLElement)}`);
-            idx++;
-          });
+        } else if (tag === 'ul' || tag === 'ol') {
+          const listLines = this.serializeList(el, 0);
+          listLines.forEach((l) => lines.push(`> ${l}`));
         } else if (tag === 'hr') {
           lines.push('> ---');
         } else if (el.classList.contains('notion-code-block')) {
@@ -1092,6 +1142,47 @@ export class NotionEditorEngine {
     }
 
     return lines.length > 0 ? lines.join('\n') : '> ';
+  }
+
+  serializeList(listEl: HTMLElement, depth = 0): string[] {
+    const lines: string[] = [];
+    const isOrdered = listEl.tagName.toLowerCase() === 'ol';
+    const indent = '  '.repeat(depth);
+    let idx = 1;
+
+    const directLis = Array.from(listEl.children).filter(
+      (c) => c.tagName && c.tagName.toLowerCase() === 'li'
+    ) as HTMLElement[];
+
+    for (const li of directLis) {
+      let liText = '';
+      const childLists: HTMLElement[] = [];
+
+      for (const child of Array.from(li.childNodes)) {
+        if (child.nodeType === Node.TEXT_NODE) {
+          liText += child.textContent || '';
+        } else if (child.nodeType === Node.ELEMENT_NODE) {
+          const el = child as HTMLElement;
+          const tag = el.tagName ? el.tagName.toLowerCase() : '';
+          if (tag === 'ul' || tag === 'ol') {
+            childLists.push(el);
+          } else {
+            liText += this.serializeInline(el);
+          }
+        }
+      }
+
+      const prefix = isOrdered ? `${indent}${idx}. ` : `${indent}- `;
+      lines.push(`${prefix}${liText.trim()}`);
+      idx++;
+
+      for (const childList of childLists) {
+        const subLines = this.serializeList(childList, depth + 1);
+        lines.push(...subLines);
+      }
+    }
+
+    return lines;
   }
 
   getMarkdown(): string {
@@ -1127,17 +1218,9 @@ export class NotionEditorEngine {
       } else if (tag === 'blockquote') {
         lines.push(this.serializeBlockquote(node));
         lines.push('');
-      } else if (tag === 'ul') {
-        node.querySelectorAll('li').forEach(li => {
-          lines.push(`- ${this.serializeInline(li)}`);
-        });
-        lines.push('');
-      } else if (tag === 'ol') {
-        let idx = 1;
-        node.querySelectorAll('li').forEach(li => {
-          lines.push(`${idx}. ${this.serializeInline(li)}`);
-          idx++;
-        });
+      } else if (tag === 'ul' || tag === 'ol') {
+        const listLines = this.serializeList(node, 0);
+        lines.push(...listLines);
         lines.push('');
       } else if (node.classList.contains('notion-table-block') || node.classList.contains('notion-table-wrapper')) {
         lines.push(this.serializeTable(node));
@@ -1153,7 +1236,9 @@ export class NotionEditorEngine {
         const isChecked = chk ? chk.checked : false;
         const textEl = (node.querySelector('.notion-todo-text') || node) as HTMLElement;
         const text = this.serializeInline(textEl).trim();
-        lines.push(`- [${isChecked ? 'x' : ' '}] ${text}`);
+        const indentLevel = parseInt(node.getAttribute('data-indent') || '0', 10);
+        const indent = '  '.repeat(indentLevel);
+        lines.push(`${indent}- [${isChecked ? 'x' : ' '}] ${text}`);
       } else if (node.classList.contains('notion-code-block')) {
         const langEl = node.querySelector('.notion-code-lang');
         const codeEl = (node.querySelector('.notion-code-content') || node.querySelector('code')) as HTMLElement | null;
@@ -1357,9 +1442,10 @@ export class NotionEditorEngine {
     `;
   }
 
-  createTodoItemHtml(text = 'Nova tarefa', isChecked = false): string {
+  createTodoItemHtml(text = 'Nova tarefa', isChecked = false, indent = 0): string {
+    const indentAttr = indent > 0 ? ` data-indent="${indent}" style="margin-left: ${indent * 24}px"` : '';
     return `
-      <div class="notion-todo-item ${isChecked ? 'checked' : ''}" contenteditable="false">
+      <div class="notion-todo-item ${isChecked ? 'checked' : ''}"${indentAttr} contenteditable="false">
         <input type="checkbox" class="notion-todo-checkbox" ${isChecked ? 'checked' : ''} />
         <span class="notion-todo-text" contenteditable="true">${this.parseInlineMarkdown(text)}</span>
       </div>
@@ -1484,6 +1570,206 @@ export class NotionEditorEngine {
     }
   }
 
+  indentListItem(li: HTMLElement): boolean {
+    const prevLi = li.previousElementSibling as HTMLElement | null;
+    if (!prevLi || prevLi.tagName.toLowerCase() !== 'li') {
+      return false;
+    }
+
+    const parentList = li.parentElement;
+    if (!parentList) return false;
+    const parentTag = parentList.tagName.toLowerCase() === 'ol' ? 'ol' : 'ul';
+
+    // Procura se prevLi já possui uma sublista filha correspondente
+    let sublist = prevLi.querySelector(`:scope > ${parentTag}`) as HTMLElement | null;
+    if (!sublist) {
+      sublist = prevLi.querySelector(':scope > ul, :scope > ol') as HTMLElement | null;
+    }
+
+    if (!sublist) {
+      sublist = document.createElement(parentTag);
+      prevLi.appendChild(sublist);
+    }
+
+    sublist.appendChild(li);
+    this.placeCursorIn(li);
+    this.recordChange();
+    return true;
+  }
+
+  outdentListItem(li: HTMLElement): boolean {
+    const currentList = li.parentElement;
+    if (!currentList) return false;
+
+    // Verifica se a lista atual está aninhada dentro de outro li pai
+    const parentLi = currentList.closest('li');
+    const grandparentList = parentLi?.parentElement;
+
+    if (parentLi && grandparentList && (grandparentList.tagName.toLowerCase() === 'ul' || grandparentList.tagName.toLowerCase() === 'ol')) {
+      // Outdent de nível aninhado: move o li para depois do parentLi no grandparentList
+      parentLi.insertAdjacentElement('afterend', li);
+
+      // Se a sublista anterior ficou vazia, remove-a
+      if (currentList.querySelectorAll('li').length === 0) {
+        currentList.remove();
+      }
+
+      this.placeCursorIn(li);
+      this.recordChange();
+      return true;
+    }
+
+    // Outdent do nível raiz: converte o li em parágrafo <p>
+    const topList = currentList;
+    if (topList.parentElement === this.canvas || topList.parentElement?.tagName.toLowerCase() === 'blockquote') {
+      const p = document.createElement('p');
+
+      // Extrai o conteúdo direto do li, preservando links e formatação inline mas separando sublistas
+      let hasContent = false;
+      const childLists: HTMLElement[] = [];
+      for (const child of Array.from(li.childNodes)) {
+        if (child.nodeType === Node.ELEMENT_NODE && ['UL', 'OL'].includes((child as HTMLElement).tagName)) {
+          childLists.push(child as HTMLElement);
+        } else {
+          p.appendChild(child.cloneNode(true));
+          if (child.textContent?.trim()) hasContent = true;
+        }
+      }
+
+      if (!hasContent && !p.innerHTML.trim()) {
+        p.innerHTML = '<br>';
+      }
+
+      const prevSiblings: HTMLElement[] = [];
+      let sib = li.previousElementSibling as HTMLElement | null;
+      while (sib) {
+        prevSiblings.unshift(sib);
+        sib = sib.previousElementSibling as HTMLElement | null;
+      }
+
+      const nextSiblings: HTMLElement[] = [];
+      sib = li.nextElementSibling as HTMLElement | null;
+      while (sib) {
+        nextSiblings.push(sib);
+        sib = sib.nextElementSibling as HTMLElement | null;
+      }
+
+      if (prevSiblings.length > 0 && nextSiblings.length > 0) {
+        // Divide a lista em duas partes
+        const nextList = document.createElement(topList.tagName);
+        for (const nextLi of nextSiblings) {
+          nextList.appendChild(nextLi);
+        }
+        topList.insertAdjacentElement('afterend', p);
+        p.insertAdjacentElement('afterend', nextList);
+        li.remove();
+      } else if (prevSiblings.length > 0) {
+        topList.insertAdjacentElement('afterend', p);
+        li.remove();
+      } else if (nextSiblings.length > 0) {
+        topList.insertAdjacentElement('beforebegin', p);
+        li.remove();
+      } else {
+        topList.replaceWith(p);
+      }
+
+      // Se havia sublistas filhas, insere-as logo após o parágrafo
+      let lastInserted: HTMLElement = p;
+      for (const childList of childLists) {
+        lastInserted.insertAdjacentElement('afterend', childList);
+        lastInserted = childList;
+      }
+
+      this.placeCursorIn(p);
+      this.recordChange();
+      return true;
+    }
+
+    return false;
+  }
+
+  handleEnterInListItem(li: HTMLElement, e: KeyboardEvent): boolean {
+    let liText = '';
+    let hasChildList = false;
+    for (const child of Array.from(li.childNodes)) {
+      if (child.nodeType === Node.ELEMENT_NODE && ['UL', 'OL'].includes((child as HTMLElement).tagName)) {
+        hasChildList = true;
+      } else {
+        liText += child.textContent || '';
+      }
+    }
+
+    if (!liText.trim()) {
+      e.preventDefault();
+      this.outdentListItem(li);
+      return true;
+    }
+
+    if (hasChildList) {
+      const selection = window.getSelection();
+      if (selection && selection.rangeCount > 0) {
+        const range = selection.getRangeAt(0);
+        const sublist = li.querySelector(':scope > ul, :scope > ol') as HTMLElement | null;
+        if (sublist && !sublist.contains(range.startContainer)) {
+          e.preventDefault();
+          const newLi = document.createElement('li');
+          newLi.innerHTML = '<br>';
+          sublist.insertAdjacentElement('beforebegin', newLi);
+          this.placeCursorIn(newLi);
+          this.recordChange();
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  handleBackspaceInListItem(li: HTMLElement, e: KeyboardEvent): boolean {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0 || !selection.isCollapsed) {
+      return false;
+    }
+
+    const range = selection.getRangeAt(0);
+    let isAtStart = false;
+    if (range.startOffset === 0) {
+      let node: Node | null = range.startContainer;
+      isAtStart = true;
+      while (node && node !== li) {
+        if (node.previousSibling) {
+          isAtStart = false;
+          break;
+        }
+        node = node.parentNode;
+      }
+    }
+
+    if (isAtStart) {
+      let liText = '';
+      for (const child of Array.from(li.childNodes)) {
+        if (child.nodeType !== Node.ELEMENT_NODE || !['UL', 'OL'].includes((child as HTMLElement).tagName)) {
+          liText += child.textContent || '';
+        }
+      }
+
+      if (!liText.trim()) {
+        e.preventDefault();
+        this.outdentListItem(li);
+        return true;
+      }
+
+      const parentLi = li.parentElement?.closest('li');
+      if (parentLi) {
+        e.preventDefault();
+        this.outdentListItem(li);
+        return true;
+      }
+    }
+
+    return false;
+  }
+
   // ===========================================================================
   // NOTION INPUT RULES
   // ===========================================================================
@@ -1515,22 +1801,34 @@ export class NotionEditorEngine {
     } else if (text.startsWith('### ')) {
       node.textContent = text.substring(4);
       this.turnBlockInto(parent, 'h3');
-    } else if (text.startsWith('- ') || text.startsWith('* ')) {
-      node.textContent = text.substring(2);
-      const ul = document.createElement('ul');
+    } else if (text.startsWith('- ') || text.startsWith('* ') || text.startsWith('+ ')) {
+      node.textContent = text.replace(/^[-*+]\s/, '');
+      const prevEl = parent.previousElementSibling;
       const li = document.createElement('li');
       li.innerHTML = node.textContent || '<br>';
-      ul.appendChild(li);
-      parent.replaceWith(ul);
+      if (prevEl && prevEl.tagName.toLowerCase() === 'ul') {
+        prevEl.appendChild(li);
+        parent.remove();
+      } else {
+        const ul = document.createElement('ul');
+        ul.appendChild(li);
+        parent.replaceWith(ul);
+      }
       this.placeCursorIn(li);
       this.recordChange();
     } else if (text.startsWith('1. ')) {
       node.textContent = text.substring(3);
-      const ol = document.createElement('ol');
+      const prevEl = parent.previousElementSibling;
       const li = document.createElement('li');
       li.innerHTML = node.textContent || '<br>';
-      ol.appendChild(li);
-      parent.replaceWith(ol);
+      if (prevEl && prevEl.tagName.toLowerCase() === 'ol') {
+        prevEl.appendChild(li);
+        parent.remove();
+      } else {
+        const ol = document.createElement('ol');
+        ol.appendChild(li);
+        parent.replaceWith(ol);
+      }
       this.placeCursorIn(li);
       this.recordChange();
     } else if (text.startsWith('[] ') || text.startsWith('[ ] ')) {
@@ -1637,6 +1935,20 @@ export class NotionEditorEngine {
     // Smart Backspace
     if (e.key === 'Backspace') {
       const selection = window.getSelection();
+      let activeLi: HTMLElement | null = null;
+      if (selection && selection.anchorNode) {
+        const parentEl = selection.anchorNode.nodeType === Node.ELEMENT_NODE 
+          ? (selection.anchorNode as HTMLElement) 
+          : selection.anchorNode.parentElement;
+        activeLi = parentEl ? (parentEl.closest('li') as HTMLElement | null) : null;
+      }
+
+      if (activeLi) {
+        if (this.handleBackspaceInListItem(activeLi, e)) {
+          return;
+        }
+      }
+
       if (selection && selection.rangeCount > 0 && selection.isCollapsed) {
         const range = selection.getRangeAt(0);
         if (range.startOffset === 0) {
@@ -1649,7 +1961,20 @@ export class NotionEditorEngine {
               return;
             } else if (block.classList.contains('notion-todo-item')) {
               e.preventDefault();
-              this.turnBlockInto(block, 'p');
+              const currentIndent = parseInt(block.getAttribute('data-indent') || '0', 10);
+              if (currentIndent > 0) {
+                const newIndent = currentIndent - 1;
+                block.setAttribute('data-indent', String(newIndent));
+                if (newIndent === 0) {
+                  block.removeAttribute('data-indent');
+                  block.style.marginLeft = '';
+                } else {
+                  block.style.marginLeft = `${newIndent * 24}px`;
+                }
+                this.recordChange();
+              } else {
+                this.turnBlockInto(block, 'p');
+              }
               return;
             } else if (block.classList.contains('notion-callout')) {
               e.preventDefault();
@@ -1661,8 +1986,9 @@ export class NotionEditorEngine {
       }
     }
 
-    // Tab Navigation em Tabelas
+    // Tab Navigation & Indentation (Tabelas, Listas, To-Dos, Parágrafos)
     if (e.key === 'Tab') {
+      // 1. Tab em Tabelas
       const cell = document.activeElement ? document.activeElement.closest('td, th') as HTMLElement | null : null;
       if (cell) {
         e.preventDefault();
@@ -1693,27 +2019,112 @@ export class NotionEditorEngine {
           return;
         }
       }
+
+      // 2. Tab / Shift+Tab em Listas (ul / ol -> li)
+      const selection = window.getSelection();
+      let activeLi: HTMLElement | null = null;
+      if (selection && selection.anchorNode) {
+        const parentEl = selection.anchorNode.nodeType === Node.ELEMENT_NODE 
+          ? (selection.anchorNode as HTMLElement) 
+          : selection.anchorNode.parentElement;
+        activeLi = parentEl ? (parentEl.closest('li') as HTMLElement | null) : null;
+      }
+
+      if (activeLi) {
+        e.preventDefault();
+        if (e.shiftKey) {
+          this.outdentListItem(activeLi);
+        } else {
+          this.indentListItem(activeLi);
+        }
+        return;
+      }
+
+      // 3. Tab / Shift+Tab em To-Do Items
+      let activeTodo: HTMLElement | null = null;
+      if (selection && selection.anchorNode) {
+        const parentEl = selection.anchorNode.nodeType === Node.ELEMENT_NODE 
+          ? (selection.anchorNode as HTMLElement) 
+          : selection.anchorNode.parentElement;
+        activeTodo = parentEl ? (parentEl.closest('.notion-todo-item') as HTMLElement | null) : null;
+      }
+
+      if (activeTodo) {
+        e.preventDefault();
+        const currentIndent = parseInt(activeTodo.getAttribute('data-indent') || '0', 10);
+        if (e.shiftKey) {
+          if (currentIndent > 0) {
+            const newIndent = currentIndent - 1;
+            activeTodo.setAttribute('data-indent', String(newIndent));
+            if (newIndent === 0) {
+              activeTodo.removeAttribute('data-indent');
+              activeTodo.style.marginLeft = '';
+            } else {
+              activeTodo.style.marginLeft = `${newIndent * 24}px`;
+            }
+            this.recordChange();
+          } else {
+            this.turnBlockInto(activeTodo, 'p');
+          }
+        } else {
+          if (currentIndent < 5) {
+            const newIndent = currentIndent + 1;
+            activeTodo.setAttribute('data-indent', String(newIndent));
+            activeTodo.style.marginLeft = `${newIndent * 24}px`;
+            this.recordChange();
+          }
+        }
+        return;
+      }
+
+      // 4. Tab em Parágrafos / Texto Comum (insere 2 espaços sem perder foco)
+      e.preventDefault();
+      document.execCommand('insertText', false, '  ');
+      this.recordChange();
+      return;
     }
 
-    // Enter dentro de To-Do
+    // Enter dentro de Li ou To-Do
     if (e.key === 'Enter') {
-      const todoItem = document.activeElement ? document.activeElement.closest('.notion-todo-item') as HTMLElement | null : null;
-      if (todoItem && !e.shiftKey) {
+      const selection = window.getSelection();
+      let activeLi: HTMLElement | null = null;
+      let activeTodo: HTMLElement | null = null;
+
+      if (selection && selection.anchorNode) {
+        const parentEl = selection.anchorNode.nodeType === Node.ELEMENT_NODE 
+          ? (selection.anchorNode as HTMLElement) 
+          : selection.anchorNode.parentElement;
+        activeLi = parentEl ? (parentEl.closest('li') as HTMLElement | null) : null;
+        activeTodo = parentEl ? (parentEl.closest('.notion-todo-item') as HTMLElement | null) : null;
+      }
+
+      if (activeLi && !e.shiftKey) {
+        if (this.handleEnterInListItem(activeLi, e)) {
+          return;
+        }
+      }
+
+      if (activeTodo && !e.shiftKey) {
         e.preventDefault();
-        const textSpan = todoItem.querySelector('.notion-todo-text');
+        const textSpan = activeTodo.querySelector('.notion-todo-text');
         if (textSpan && !textSpan.textContent?.trim()) {
-          this.turnBlockInto(todoItem, 'p');
+          this.turnBlockInto(activeTodo, 'p');
           return;
         }
 
+        const currentIndent = parseInt(activeTodo.getAttribute('data-indent') || '0', 10);
         const newItem = document.createElement('div');
         newItem.className = 'notion-todo-item';
         newItem.setAttribute('contenteditable', 'false');
+        if (currentIndent > 0) {
+          newItem.setAttribute('data-indent', String(currentIndent));
+          newItem.style.marginLeft = `${currentIndent * 24}px`;
+        }
         newItem.innerHTML = `
           <input type="checkbox" class="notion-todo-checkbox" />
           <span class="notion-todo-text" contenteditable="true"></span>
         `;
-        todoItem.insertAdjacentElement('afterend', newItem);
+        activeTodo.insertAdjacentElement('afterend', newItem);
         this.recordChange();
         setTimeout(() => {
           (newItem.querySelector('.notion-todo-text') as HTMLElement)?.focus();
