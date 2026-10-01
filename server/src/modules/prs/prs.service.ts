@@ -67,11 +67,40 @@ export class PRsService {
     return { min_approvals: minApprovals, is_solo: isSolo, anti_self_approval: antiSelfApproval };
   }
 
+  getRepoPRsPath(repoName: string): string {
+    const repoDir = this.getRepoDir(repoName);
+    return path.join(repoDir, '.spec-memory', 'prs.json');
+  }
+
+  loadRepoPRs(repoName: string): any[] {
+    const filePath = this.getRepoPRsPath(repoName);
+    if (fs.existsSync(filePath)) {
+      try {
+        const data = fs.readFileSync(filePath, 'utf-8');
+        const list = JSON.parse(data);
+        if (Array.isArray(list)) return list;
+      } catch (e) {
+        console.error(`Erro ao carregar prs para ${repoName}:`, e);
+      }
+    }
+    return [];
+  }
+
+  saveRepoPRs(repoName: string, prs: any[]): void {
+    const filePath = this.getRepoPRsPath(repoName);
+    try {
+      fs.mkdirSync(path.dirname(filePath), { recursive: true });
+      fs.writeFileSync(filePath, JSON.stringify(prs, null, 2), 'utf-8');
+    } catch (e) {
+      console.error(`Erro ao salvar prs para ${repoName}:`, e);
+    }
+  }
+
   async getPRs(targetRepoQuery?: string) {
     const cfg = loadConfig();
     const activeRepo = cfg.active_repo;
     const repoName = targetRepoQuery || activeRepo?.name || 'local';
-    let allPRs = cfg.prs || [];
+    let allPRs = this.loadRepoPRs(repoName);
 
     // Auto-sync remote GitHub Pull Requests if authenticated and target matches active repo
     if (cfg.authenticated && cfg.token && activeRepo?.full_name && !activeRepo?.is_local && activeRepo?.name === repoName) {
@@ -121,8 +150,7 @@ export class PRsService {
             }
           }
           if (modified) {
-            cfg.prs = allPRs;
-            saveConfig(cfg);
+            this.saveRepoPRs(repoName, allPRs);
           }
         }
       } catch (ghErr) {
@@ -515,12 +543,8 @@ Retorne APENAS um JSON válido no formato:
       );
     }
 
-    if (!cfg.prs) cfg.prs = [];
-
-    const remoteUrl = activeRepo?.html_url;
-    await ensureGitRepo(repoDir, cfg.user, remoteUrl, cfg.token);
-
-    const newId = cfg.prs.length + 1;
+    const repoPRs = this.loadRepoPRs(repoName);
+    const newId = repoPRs.length + 1;
     const branchName = payload.branch || `gov/update-${Date.now().toString().slice(-4)}`;
     const now = new Date().toISOString();
 
@@ -611,10 +635,9 @@ Retorne APENAS um JSON válido no formato:
       html_url: prHtmlUrl,
     };
 
-    cfg.prs.unshift(newPR);
-    if (!cfg.workspace_changes) cfg.workspace_changes = {};
-    cfg.workspace_changes[repoName] = [];
-    saveConfig(cfg);
+    repoPRs.unshift(newPR);
+    this.saveRepoPRs(repoName, repoPRs);
+    clearWorkspaceChanges(repoName);
 
     return {
       success: true,
@@ -628,8 +651,15 @@ Retorne APENAS um JSON válido no formato:
     payloadOrApprover?: string | { approver?: string; role?: string; comment?: string }
   ) {
     const cfg = loadConfig();
-    const prs = cfg.prs || [];
-    const target = prs.find((p: any) => String(p.id) === String(prId));
+    const repoName = (payloadOrApprover && typeof payloadOrApprover === 'object' && (payloadOrApprover as any).repo) || cfg.active_repo?.name || 'local';
+    let prs = this.loadRepoPRs(repoName);
+    let target = prs.find((p: any) => String(p.id) === String(prId));
+
+    if (!target && repoName !== 'local') {
+      const fallbackPRs = this.loadRepoPRs('local');
+      target = fallbackPRs.find((p: any) => String(p.id) === String(prId));
+      if (target) prs = fallbackPRs;
+    }
 
     if (!target) {
       throw new Error(`PR #${prId} não encontrado.`);
@@ -643,7 +673,6 @@ Retorne APENAS um JSON válido no formato:
       throw new Error(`PR #${prId} está fechado e não pode ser aprovado.`);
     }
 
-    const repoName = target.repo_name || cfg.active_repo?.name || 'local';
     const repoDir = this.getRepoDir(repoName);
     const govRules = this.getGovernanceRules(repoName);
     const minApprovals = target.min_approvals || govRules.min_approvals || 1;
@@ -747,7 +776,7 @@ Retorne APENAS um JSON válido no formato:
       }
     }
 
-    saveConfig(cfg);
+    this.saveRepoPRs(repoName, prs);
 
     return {
       success: true,
@@ -766,8 +795,15 @@ Retorne APENAS um JSON válido no formato:
 
   async mergePR(prId: number | string) {
     const cfg = loadConfig();
-    const prs = cfg.prs || [];
-    const target = prs.find((p: any) => String(p.id) === String(prId));
+    const repoName = cfg.active_repo?.name || 'local';
+    let prs = this.loadRepoPRs(repoName);
+    let target = prs.find((p: any) => String(p.id) === String(prId));
+
+    if (!target && repoName !== 'local') {
+      const fallbackPRs = this.loadRepoPRs('local');
+      target = fallbackPRs.find((p: any) => String(p.id) === String(prId));
+      if (target) prs = fallbackPRs;
+    }
 
     if (!target) {
       throw new Error(`PR #${prId} não encontrado.`);
@@ -781,7 +817,6 @@ Retorne APENAS um JSON válido no formato:
       throw new Error(`PR #${prId} está arquivado/fechado e não pode ser mesclado.`);
     }
 
-    const repoName = target.repo_name || cfg.active_repo?.name || 'local';
     const govRules = this.getGovernanceRules(repoName);
     const minApprovals = target.min_approvals || govRules.min_approvals || 1;
 
@@ -808,7 +843,7 @@ Retorne APENAS um JSON válido no formato:
     await this.executeMerge(target);
     target.status = 'MERGED';
     target.merged_at = new Date().toISOString();
-    saveConfig(cfg);
+    this.saveRepoPRs(repoName, prs);
 
     return {
       success: true,
@@ -826,7 +861,8 @@ Retorne APENAS um JSON válido no formato:
     repo?: string;
   }) {
     const cfg = loadConfig();
-    const prs = cfg.prs || [];
+    const repoName = payload.repo || cfg.active_repo?.name || 'local';
+    const prs = this.loadRepoPRs(repoName);
     const target = prs.find((p: any) => String(p.id) === String(payload.id));
 
     if (!target) {
@@ -837,7 +873,6 @@ Retorne APENAS um JSON válido no formato:
       throw new Error(`Não é possível editar arquivos de um PR finalizado ou arquivado.`);
     }
 
-    const repoName = target.repo_name || payload.repo || cfg.active_repo?.name || 'local';
     const repoDir = this.getRepoDir(repoName);
     const branchName = target.branch;
 
@@ -893,7 +928,7 @@ Retorne APENAS um JSON válido no formato:
       }
     }
 
-    saveConfig(cfg);
+    this.saveRepoPRs(repoName, prs);
 
     return {
       success: true,
@@ -909,8 +944,15 @@ Retorne APENAS um JSON válido no formato:
 
   async rejectPR(prId: number | string, reason?: string) {
     const cfg = loadConfig();
-    const prs = cfg.prs || [];
-    const target = prs.find((p: any) => String(p.id) === String(prId));
+    const repoName = cfg.active_repo?.name || 'local';
+    let prs = this.loadRepoPRs(repoName);
+    let target = prs.find((p: any) => String(p.id) === String(prId));
+
+    if (!target && repoName !== 'local') {
+      const fallbackPRs = this.loadRepoPRs('local');
+      target = fallbackPRs.find((p: any) => String(p.id) === String(prId));
+      if (target) prs = fallbackPRs;
+    }
 
     if (!target) {
       throw new Error(`PR #${prId} não encontrado.`);
@@ -935,7 +977,7 @@ Retorne APENAS um JSON válido no formato:
       }
     }
 
-    saveConfig(cfg);
+    this.saveRepoPRs(repoName, prs);
 
     return {
       success: true,
@@ -955,7 +997,8 @@ Retorne APENAS um JSON válido no formato:
 
     if (!targetHash && payload.id) {
       // Check PR list
-      const pr = (cfg.prs || []).find((p: any) => String(p.id) === String(payload.id));
+      const prs = this.loadRepoPRs(repoName);
+      const pr = prs.find((p: any) => String(p.id) === String(payload.id));
       if (pr) {
         targetHash = pr.commit_hash || String(pr.id);
         targetTitle = pr.title || '';

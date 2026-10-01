@@ -11,6 +11,7 @@ import {
 } from "./constants.js";
 import { validateJsonSchema } from "../utils/schema.validator.js";
 import { isPathHidden, loadHiddenFiles, DEFAULT_HIDDEN_FILES } from "../utils/hidden-files.js";
+import { vaultService, VAULT_KEYS } from "../modules/vault/vault.service.js";
 
 export interface WorkspaceChange {
   path: string;
@@ -157,14 +158,107 @@ export function loadConfig(): AppConfig {
   if (!cfg.workflows || cfg.workflows.length === 0) {
     cfg.workflows = master.workflows || [];
   }
+
+  // Carrega credenciais confidenciais a partir do cofre nativo do SO
+  const vaultGitHubToken = vaultService.getSecret(VAULT_KEYS.GITHUB_TOKEN);
+  if (vaultGitHubToken) {
+    cfg.token = vaultGitHubToken;
+    cfg.authenticated = true;
+  }
+
+  if (!cfg.ai_settings) {
+    cfg.ai_settings = {} as any;
+  }
+  const vaultAiKey = vaultService.getSecret(VAULT_KEYS.AI_API_KEY);
+  if (vaultAiKey) {
+    cfg.ai_settings.api_key = vaultAiKey;
+  }
+
+  if (!cfg.workspace_changes) {
+    cfg.workspace_changes = {};
+  }
+  if (cfg.active_repo?.name) {
+    cfg.workspace_changes[cfg.active_repo.name] = loadRepoWorkspaceChanges(cfg.active_repo.name);
+  }
+
   return cfg as AppConfig;
 }
 
 export function saveConfig(cfg: AppConfig): void {
   try {
-    fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2), "utf-8");
+    // 1. Sincroniza segredos diretamente no cofre nativo do SO (Keychain / DPAPI)
+    if (cfg.token !== undefined) {
+      if (cfg.token && cfg.token.trim().length > 0) {
+        vaultService.setSecret(VAULT_KEYS.GITHUB_TOKEN, cfg.token.trim());
+      } else {
+        vaultService.deleteSecret(VAULT_KEYS.GITHUB_TOKEN);
+      }
+    }
+
+    if (cfg.ai_settings?.api_key !== undefined) {
+      if (cfg.ai_settings.api_key && cfg.ai_settings.api_key.trim().length > 0) {
+        vaultService.setSecret(VAULT_KEYS.AI_API_KEY, cfg.ai_settings.api_key.trim());
+      } else {
+        vaultService.deleteSecret(VAULT_KEYS.AI_API_KEY);
+      }
+    }
+
+    // 2. Cria cópia sanitizada para persistência em disco sem dados confidenciais ou lixo de projeto
+    const sanitizedToDisk: any = {
+      authenticated: Boolean(cfg.authenticated && cfg.token),
+      token: "",
+      user: cfg.user || null,
+      orgs: cfg.orgs || [],
+      active_repo: cfg.active_repo || null,
+      ai_settings: cfg.ai_settings
+        ? {
+            provider: cfg.ai_settings.provider || "gemini",
+            model: cfg.ai_settings.model || "gemini-3.7-flash",
+            api_key: "",
+            custom_endpoint: cfg.ai_settings.custom_endpoint || "http://localhost:11434/v1",
+            default_provider: cfg.ai_settings.default_provider || "antigravity",
+          }
+        : undefined,
+      settings: cfg.settings || {},
+      governance: cfg.governance,
+      workflows: cfg.workflows || [],
+    };
+
+    fs.writeFileSync(CONFIG_PATH, JSON.stringify(sanitizedToDisk, null, 2), "utf-8");
   } catch (e) {
     console.error(`Erro ao salvar ${CONFIG_PATH}:`, e);
+  }
+}
+
+export function getRepoWorkspaceChangesPath(repoName: string): string {
+  const repoDir = path.join(PROJECTS_DIR, repoName || "local");
+  return path.join(repoDir, ".spec-memory", "workspace_changes.json");
+}
+
+export function loadRepoWorkspaceChanges(repoName: string): WorkspaceChange[] {
+  const filePath = getRepoWorkspaceChangesPath(repoName);
+  if (fs.existsSync(filePath)) {
+    try {
+      const data = fs.readFileSync(filePath, "utf-8");
+      const list = JSON.parse(data);
+      if (Array.isArray(list)) {
+        const repoDir = path.join(PROJECTS_DIR, repoName || "local");
+        return list.filter((c: any) => c?.path && !isPathHidden(c.path, loadHiddenFiles(repoDir)));
+      }
+    } catch (e) {
+      console.error(`Erro ao carregar workspace_changes para ${repoName}:`, e);
+    }
+  }
+  return [];
+}
+
+export function saveRepoWorkspaceChanges(repoName: string, changes: WorkspaceChange[]): void {
+  const filePath = getRepoWorkspaceChangesPath(repoName);
+  try {
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.writeFileSync(filePath, JSON.stringify(changes, null, 2), "utf-8");
+  } catch (e) {
+    console.error(`Erro ao salvar workspace_changes para ${repoName}:`, e);
   }
 }
 
@@ -229,35 +323,24 @@ export function recordChange(
   const safeOldContent = sanitizeContentForStorage(cleanPath, oldContent);
   const safeNewContent = sanitizeContentForStorage(cleanPath, newContent);
 
-  const cfg = loadConfig();
-  if (!cfg.workspace_changes) {
-    cfg.workspace_changes = {};
-  }
-  if (!cfg.workspace_changes[repoName]) {
-    cfg.workspace_changes[repoName] = [];
-  }
-
-  const existingIdx = cfg.workspace_changes[repoName].findIndex(
-    (c) => c.path === cleanPath,
-  );
+  const changes = loadRepoWorkspaceChanges(repoName);
+  const existingIdx = changes.findIndex((c) => c.path === cleanPath);
   const now = new Date().toISOString();
 
   if (existingIdx >= 0) {
-    const existing = cfg.workspace_changes[repoName][existingIdx];
-    // Preserve initial old_content if previously added/modified
+    const existing = changes[existingIdx];
     const preservedOldContent =
       existing.old_content !== undefined
         ? existing.old_content
         : safeOldContent;
 
-    // If the file reverted to original content, discard the change
     if (preservedOldContent === safeNewContent && changeType !== "DELETED") {
-      cfg.workspace_changes[repoName].splice(existingIdx, 1);
-      saveConfig(cfg);
+      changes.splice(existingIdx, 1);
+      saveRepoWorkspaceChanges(repoName, changes);
       return;
     }
 
-    cfg.workspace_changes[repoName][existingIdx] = {
+    changes[existingIdx] = {
       path: cleanPath,
       type:
         existing.type === "ADDED" && changeType !== "DELETED"
@@ -268,12 +351,11 @@ export function recordChange(
       timestamp: now,
     };
   } else {
-    // If saving identical content from scratch, don't record a change
     if (safeOldContent === safeNewContent && changeType !== "DELETED") {
       return;
     }
 
-    cfg.workspace_changes[repoName].push({
+    changes.push({
       path: cleanPath,
       type: changeType,
       old_content: safeOldContent,
@@ -282,15 +364,11 @@ export function recordChange(
     });
   }
 
-  saveConfig(cfg);
+  saveRepoWorkspaceChanges(repoName, changes);
 }
 
 export function clearWorkspaceChanges(repoName: string): void {
-  const cfg = loadConfig();
-  if (cfg.workspace_changes && cfg.workspace_changes[repoName]) {
-    cfg.workspace_changes[repoName] = [];
-    saveConfig(cfg);
-  }
+  saveRepoWorkspaceChanges(repoName, []);
 }
 
 export function getSSOTDefaultDir(): string {

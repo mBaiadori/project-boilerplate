@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "npx -y concurrently -k \"npm --prefix server run dev\" \"npm --prefix frontend run dev\"",
+    "dev1": "CONTEXT_OS_USER_DATA=./.user2-data PORT=4101 VITE_PORT=5174 VITE_BACKEND_PORT=4101 npx -y concurrently -k \"npm --prefix server run dev\" \"npm --prefix frontend run dev\"",
     "dev:server": "npm --prefix server run dev",
     "dev:frontend": "npm --prefix frontend run dev",
     "build:server": "npm --prefix server run build",

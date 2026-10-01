@@ -1,6 +1,7 @@
 import { app, BrowserWindow, shell, ipcMain, safeStorage } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
+import net from 'node:net';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import bytenode from 'bytenode';
 
@@ -8,12 +9,31 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 let mainWindow: BrowserWindow | null = null;
-const SERVER_PORT = 4100;
+let activeServerPort = 4100;
+
+/**
+ * Encontra uma porta TCP livre a partir de startPort
+ */
+async function findAvailablePort(startPort: number = 4100, maxAttempts: number = 50): Promise<number> {
+  for (let i = 0; i < maxAttempts; i++) {
+    const port = startPort + i;
+    const isFree = await new Promise<boolean>((resolve) => {
+      const server = net.createServer();
+      server.unref();
+      server.on('error', () => resolve(false));
+      server.listen({ port, host: '0.0.0.0' }, () => {
+        server.close(() => resolve(true));
+      });
+    });
+    if (isFree) return port;
+  }
+  return startPort;
+}
 
 /**
  * Inicializa o processo do servidor Fastify/Express embutido com suporte a Bytenode
  */
-async function startEmbeddedServer(): Promise<void> {
+async function startEmbeddedServer(): Promise<number> {
   const isDev = !app.isPackaged;
   const userDataDir = app.getPath('userData');
   const resourcesDir = process.resourcesPath || path.resolve(__dirname, '../../..');
@@ -23,9 +43,13 @@ async function startEmbeddedServer(): Promise<void> {
     fs.mkdirSync(userDataDir, { recursive: true });
   }
 
+  // Detecta porta livre dinamicamente (resiliência contra conflito com dev server)
+  const port = await findAvailablePort(4100);
+  activeServerPort = port;
+
   process.env.CONTEXT_OS_USER_DATA = userDataDir;
   process.env.CONTEXT_OS_RESOURCES = resourcesDir;
-  process.env.PORT = String(SERVER_PORT);
+  process.env.PORT = String(port);
   process.env.NODE_ENV = isDev ? 'development' : 'production';
 
   const serverJsc = isDev
@@ -36,7 +60,7 @@ async function startEmbeddedServer(): Promise<void> {
     ? path.resolve(__dirname, '../../../server/dist/server.prod.cjs')
     : path.join(process.resourcesPath, 'server/server.prod.cjs');
 
-  console.log(`[Desktop Main] Inicializando backend protegido... (caminho: ${serverProdCjs})`);
+  console.log(`[Desktop Main] Inicializando backend protegido na porta ${port}... (caminho: ${serverProdCjs})`);
 
   let started = false;
 
@@ -69,13 +93,13 @@ async function startEmbeddedServer(): Promise<void> {
   }
 
   // Polling de verificação de prontidão do servidor Fastify (até 15 segundos)
-  console.log('[Desktop Main] Aguardando inicialização do servidor HTTP...');
+  console.log(`[Desktop Main] Aguardando inicialização do servidor HTTP na porta ${port}...`);
   for (let attempt = 1; attempt <= 30; attempt++) {
     try {
-      const res = await fetch(`http://localhost:${SERVER_PORT}/api/status`);
+      const res = await fetch(`http://localhost:${port}/api/status`);
       if (res.ok) {
-        console.log(`[Desktop Main] Servidor Fastify pronto e respondendo na porta ${SERVER_PORT}!`);
-        return;
+        console.log(`[Desktop Main] Servidor Fastify pronto e respondendo na porta ${port}!`);
+        return port;
       }
     } catch {
       // Servidor ainda subindo
@@ -84,12 +108,13 @@ async function startEmbeddedServer(): Promise<void> {
   }
 
   console.warn('[Desktop Main] Timeout no polling do servidor, prosseguindo com carregamento da janela...');
+  return port;
 }
 
 /**
  * Criação da janela principal do Context OS
  */
-function createMainWindow() {
+function createMainWindow(port: number) {
   mainWindow = new BrowserWindow({
     width: 1440,
     height: 900,
@@ -107,7 +132,7 @@ function createMainWindow() {
   });
 
   const isDev = !app.isPackaged;
-  const appUrl = isDev ? `http://localhost:5173` : `http://localhost:${SERVER_PORT}`;
+  const appUrl = isDev ? `http://localhost:5173` : `http://localhost:${port}`;
 
   console.log(`[Desktop Main] Carregando URL na janela: ${appUrl}`);
   mainWindow.loadURL(appUrl);
@@ -144,12 +169,12 @@ ipcMain.handle('secure-store:decrypt', async (_event, encryptedBase64: string) =
 
 // Inicialização do ciclo de vida do Electron
 app.whenReady().then(async () => {
-  await startEmbeddedServer();
-  createMainWindow();
+  const port = await startEmbeddedServer();
+  createMainWindow(port);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      createMainWindow();
+      createMainWindow(activeServerPort);
     }
   });
 });

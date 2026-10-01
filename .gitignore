@@ -8,6 +8,8 @@ projects/
 /projects/config.json
 /config.json
 config.json
+/.user2-data
+.user*-data
 /ai-memory-main
 node_modules
 old_ui
