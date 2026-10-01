@@ -199,9 +199,91 @@ export class TranslationsService {
 
     if (fs.existsSync(fullPath)) {
       fs.unlinkSync(fullPath);
+      this.cleanEmptyParentDirs(path.dirname(fullPath), path.join(repoDir, '.translations', lang));
     }
 
     return { success: true };
+  }
+
+  /**
+   * Atualiza e move os caminhos das traduções quando um arquivo ou pasta é renomeado ou movido na árvore
+   */
+  renameTranslationsForPath(repoName: string, oldPath: string, newPath: string): void {
+    const repoDir = this.getRepoDir(repoName);
+    const translationsBaseDir = path.join(repoDir, '.translations');
+    if (!fs.existsSync(translationsBaseDir)) return;
+
+    const cleanOld = (oldPath || '').trim().replace(/^\/+/, '').replace(/\/+$/, '');
+    const cleanNew = (newPath || '').trim().replace(/^\/+/, '').replace(/\/+$/, '');
+    if (!cleanOld || !cleanNew) return;
+
+    try {
+      const langEntries = fs.readdirSync(translationsBaseDir, { withFileTypes: true });
+      for (const entry of langEntries) {
+        if (!entry.isDirectory()) continue;
+        const langCode = entry.name;
+        const langOldFullPath = path.join(translationsBaseDir, langCode, cleanOld);
+        const langNewFullPath = path.join(translationsBaseDir, langCode, cleanNew);
+
+        if (fs.existsSync(langOldFullPath)) {
+          // Garante a criação do diretório pai de destino
+          fs.mkdirSync(path.dirname(langNewFullPath), { recursive: true });
+          fs.renameSync(langOldFullPath, langNewFullPath);
+
+          // Limpa pastas vazias remanescentes na origem
+          this.cleanEmptyParentDirs(path.dirname(langOldFullPath), path.join(translationsBaseDir, langCode));
+        }
+      }
+    } catch (err) {
+      console.warn(`[TranslationsService] Erro ao renomear caminhos de tradução de '${cleanOld}' para '${cleanNew}':`, err);
+    }
+  }
+
+  /**
+   * Remove arquivos de tradução correspondentes quando um arquivo ou diretório é excluído da árvore
+   */
+  deleteTranslationsForPath(repoName: string, filePath: string): void {
+    const repoDir = this.getRepoDir(repoName);
+    const translationsBaseDir = path.join(repoDir, '.translations');
+    if (!fs.existsSync(translationsBaseDir)) return;
+
+    const cleanPath = (filePath || '').trim().replace(/^\/+/, '').replace(/\/+$/, '');
+    if (!cleanPath) return;
+
+    try {
+      const langEntries = fs.readdirSync(translationsBaseDir, { withFileTypes: true });
+      for (const entry of langEntries) {
+        if (!entry.isDirectory()) continue;
+        const langCode = entry.name;
+        const langTargetFullPath = path.join(translationsBaseDir, langCode, cleanPath);
+
+        if (fs.existsSync(langTargetFullPath)) {
+          if (fs.statSync(langTargetFullPath).isDirectory()) {
+            fs.rmSync(langTargetFullPath, { recursive: true, force: true });
+          } else {
+            fs.unlinkSync(langTargetFullPath);
+          }
+          this.cleanEmptyParentDirs(path.dirname(langTargetFullPath), path.join(translationsBaseDir, langCode));
+        }
+      }
+    } catch (err) {
+      console.warn(`[TranslationsService] Erro ao deletar caminhos de tradução para '${cleanPath}':`, err);
+    }
+  }
+
+  private cleanEmptyParentDirs(dir: string, stopAt: string): void {
+    try {
+      let current = dir;
+      while (current.length > stopAt.length && fs.existsSync(current)) {
+        const files = fs.readdirSync(current);
+        if (files.length === 0) {
+          fs.rmdirSync(current);
+          current = path.dirname(current);
+        } else {
+          break;
+        }
+      }
+    } catch {}
   }
 
   async translateDocument(

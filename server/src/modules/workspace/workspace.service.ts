@@ -16,6 +16,7 @@ import {
   extractDocLinksFromMarkdown,
   type DocumentMetadataItem,
 } from "./docs-metadata.service.js";
+import { translationsService } from "../translations/translations.service.js";
 
 export interface TreeNode {
   name: string;
@@ -537,6 +538,7 @@ export class WorkspaceService {
     }
 
     docsMetadataService.renameDocMetadata(repoName, cleanOld, cleanNew);
+    translationsService.renameTranslationsForPath(repoName, cleanOld, cleanNew);
 
     this.invalidateTreeCache(repoName);
     const newTree = (await this.getTree(repoName, true)).tree;
@@ -573,6 +575,7 @@ export class WorkspaceService {
     recordChange(repoName, cleanPath, "DELETED", oldContent, "");
 
     docsMetadataService.deleteDocMetadata(repoName, cleanPath);
+    translationsService.deleteTranslationsForPath(repoName, cleanPath);
 
     this.invalidateTreeCache(repoName);
     const newTree = (await this.getTree(repoName, true)).tree;
