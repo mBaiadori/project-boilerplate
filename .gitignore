@@ -75,3 +75,5 @@ Thumbs.db
 *.log
 scratch/
 .system_generated/
+docker/forgejo/data/
+forgejo-data/

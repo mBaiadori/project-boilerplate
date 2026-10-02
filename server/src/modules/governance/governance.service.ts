@@ -4,6 +4,7 @@ import crypto from 'node:crypto';
 import { PROJECTS_DIR } from '../../config/constants.js';
 import { loadConfig, saveConfig } from '../../config/storage.js';
 import { callGitHubAPI } from '../../utils/git.js';
+import { vaultEngineService } from '../vault/vault-engine.service.js';
 import {
   CollaboratorInfo,
   GitHubPermission,
@@ -143,9 +144,12 @@ export class GovernanceService {
     const pConfig = this.readProjectConfig(targetRepoName);
     const localMemberMeta = pConfig.governance_collaborators || {};
 
-    let collaborators: CollaboratorInfo[] = [];
-    const ownerLogin = activeRepo?.owner || cfg.user?.login || 'local-owner';
     const resolvedFullName = this.resolveRepoFullName(targetRepoName);
+    const repoOwnerFromFullName = (resolvedFullName && resolvedFullName.includes('/') && !resolvedFullName.startsWith('local/'))
+      ? resolvedFullName.split('/')[0]
+      : null;
+    const ownerLogin = (typeof activeRepo?.owner === 'string' ? activeRepo.owner : activeRepo?.owner?.login) || repoOwnerFromFullName || cfg.user?.login || 'local-owner';
+    let collaborators: CollaboratorInfo[] = [];
     let githubAuthError: string | null = null;
 
     const findLocalMeta = (username: string) => {
@@ -491,6 +495,23 @@ export class GovernanceService {
     };
     this.writeProjectConfig(targetRepoName, pConfig);
 
+    // Sincroniza também no .keymap.json do repositório
+    try {
+      const keymap = vaultEngineService.getKeymap(targetRepoName);
+      if (keymap.members[cleanUsername]) {
+        keymap.members[cleanUsername].level = rankNum;
+        if (Array.isArray(payload.departments)) {
+          keymap.members[cleanUsername].departments = payload.departments;
+        }
+        if (Array.isArray(allowedPaths)) {
+          keymap.members[cleanUsername].allowed_paths = allowedPaths;
+        }
+        vaultEngineService.saveKeymap(targetRepoName, keymap);
+      }
+    } catch (err: any) {
+      console.warn('[GovernanceService] Aviso ao sincronizar .keymap.json:', err?.message || err);
+    }
+
     const actor = cfg.user?.login ? `@${cfg.user.login}` : 'Tech Lead';
     this.logAudit(targetRepoName, {
       action: 'KEY_ROTATED',
@@ -663,10 +684,15 @@ export class GovernanceService {
           protectionPayload
         );
         if (ghRes.statusCode >= 400) {
-          throw new Error(ghRes.data?.message || 'Falha ao aplicar branch protection no GitHub.');
+          const msg = ghRes.data?.message || '';
+          if (ghRes.statusCode === 403 && (msg.includes('Upgrade to GitHub Pro') || msg.includes('pricing plans'))) {
+            console.info('[GovernanceService] Repositório privado em plano GitHub Free: O GitHub exige plano Pro/Team para regras de nuvem em repositórios privados. Governança local e cofre criptográfico Zero-Trust mantidos 100% ativos.');
+          } else {
+            console.warn('[GovernanceService] Aviso do GitHub ao aplicar branch protection:', ghRes.statusCode, msg);
+          }
         }
       } catch (err: any) {
-        console.warn('[GovernanceService] Erro ao aplicar regra de branch protection no GitHub:', err);
+        console.warn('[GovernanceService] Erro ao aplicar regra de branch protection no GitHub:', err?.message || err);
       }
     }
 

@@ -1393,6 +1393,34 @@ export const API = {
   async scanSecrets(repo?: string): Promise<ApiResponse<{ hasSecrets: boolean; violations: any[] }>> {
     const res = await fetch(`/api/governance/scan-secrets${repo ? `?repo=${encodeURIComponent(repo)}` : ''}`);
     return { ok: res.ok, data: await res.json() };
+  },
+
+  async getKeymap(repo?: string): Promise<ApiResponse<any>> {
+    const res = await fetch(`/api/governance/keymap${repo ? `?repo=${encodeURIComponent(repo)}` : ''}`);
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async registerVaultKey(user: string, profile?: any, repo?: string): Promise<ApiResponse<any>> {
+    const res = await fetch('/api/governance/keymap/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user, ...profile, repo })
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async syncVault(repo?: string, user?: string): Promise<ApiResponse<{ success: boolean; decryptedCount: number; skippedCount: number; omittedCount: number }>> {
+    const res = await fetch('/api/governance/vault/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ repo, user })
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async getVaultStatus(repo?: string, user?: string): Promise<ApiResponse<{ lastSync: string; cachedFilesCount: number; unlockedCompartments: string[]; registeredMembersCount: number }>> {
+    const res = await fetch(`/api/governance/vault/status${repo ? `?repo=${encodeURIComponent(repo)}` : ''}${user ? `&user=${encodeURIComponent(user)}` : ''}`);
+    return { ok: res.ok, data: await res.json() };
   }
 };
 

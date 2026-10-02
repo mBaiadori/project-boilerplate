@@ -1,7 +1,9 @@
+import fs from 'node:fs';
 import path from 'node:path';
 import { PROJECTS_DIR } from '../../config/constants.js';
 import { loadConfig, clearWorkspaceChanges } from '../../config/storage.js';
 import { workspaceService } from '../workspace/workspace.service.js';
+import { vaultEngineService } from '../vault/vault-engine.service.js';
 import {
   ensureGitRepo,
   getGitStatus,
@@ -36,7 +38,14 @@ export class GitService {
       remoteUrl = `https://github.com/${cfg.user.login}/${repoName}.git`;
     }
     const token = cfg.token;
-    return await ensureGitRepo(repoDir, cfg.user, remoteUrl, token, repoName, true);
+    const res = await ensureGitRepo(repoDir, cfg.user, remoteUrl, token, repoName, true);
+    // Sincroniza cofre transparente no repositório ativo
+    try {
+      await vaultEngineService.syncLocalWorkspaceFromGit(repoName, cfg.user?.login);
+    } catch (err: any) {
+      console.warn('[GitService] Aviso ao sincronizar cofre local:', err?.message || err);
+    }
+    return res;
   }
 
   async getStatus() {
@@ -110,16 +119,44 @@ export class GitService {
     const repoName = cfg.active_repo?.name || 'local';
     const repoDir = this.getRepoDir(repoName);
     const res = await createAndCheckoutBranch(repoDir, branchName);
+    try {
+      await vaultEngineService.syncLocalWorkspaceFromGit(repoName, cfg.user?.login);
+    } catch {}
     workspaceService.invalidateTreeCache(repoName);
     return res;
   }
 
-  async commit(message: string, files?: string[]) {
+  async commit(message: string, files?: string[], userLogin?: string, repo?: string) {
     await this.ensureActiveRepoGit();
     const cfg = loadConfig();
-    const repoName = cfg.active_repo?.name || 'local';
+    const repoName = repo || cfg.active_repo?.name || 'local';
     const repoDir = this.getRepoDir(repoName);
-    const res = await commitChanges(repoDir, message, files);
+    const login = userLogin || cfg.user?.login;
+
+    // 1. Cifra automaticamente quaisquer .md protegidos modificados para seus respectivos .enc
+    let targetFiles = files;
+    try {
+      const stagingRes = await vaultEngineService.prepareGitStaging(repoName, files, login);
+      if (files && files.length > 0) {
+        targetFiles = files.map((f) => {
+          const encPath = `${f}.enc`;
+          if (f.endsWith('.md') && (stagingRes.modifiedEncFiles.includes(encPath) || fs.existsSync(path.join(repoDir, encPath)))) {
+            return encPath;
+          }
+          return f;
+        });
+        for (const enc of stagingRes.modifiedEncFiles) {
+          if (!targetFiles.includes(enc)) {
+            targetFiles.push(enc);
+          }
+        }
+      }
+    } catch (err: any) {
+      console.warn('[GitService] Aviso ao preparar staging do cofre:', err?.message || err);
+    }
+
+    // 2. Executa commit no Git
+    const res = await commitChanges(repoDir, message, targetFiles);
     workspaceService.invalidateTreeCache(repoName);
     return res;
   }
@@ -130,7 +167,20 @@ export class GitService {
     const repoName = cfg.active_repo?.name || 'local';
     const repoDir = this.getRepoDir(repoName);
     const targetBranch = branch || cfg.active_repo?.default_branch || 'main';
+
+    // 1. Cifra alterações pendentes locais antes de enviar
+    try {
+      await vaultEngineService.prepareGitStaging(repoName, undefined, cfg.user?.login);
+    } catch {}
+
+    // 2. Executa sync (pull + push)
     const result = await syncGit(repoDir, 'origin', targetBranch);
+
+    // 3. Descriptografa novos arquivos protegidos recebidos do Git
+    try {
+      await vaultEngineService.syncLocalWorkspaceFromGit(repoName, cfg.user?.login);
+    } catch {}
+
     workspaceService.invalidateTreeCache(repoName);
 
     // Reconcilia e limpa alterações se o git status estiver limpo

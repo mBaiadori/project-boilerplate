@@ -37,6 +37,21 @@ class EventsService {
     }
   }
 
+  public closeAll(): void {
+    for (const client of this.clients) {
+      try {
+        client.reply.raw.end();
+      } catch {}
+    }
+    this.clients.clear();
+    if (this.watcher) {
+      try {
+        this.watcher.close();
+      } catch {}
+      this.watcher = null;
+    }
+  }
+
   private initWatcher(): void {
     const watchPaths = [UI_DIR, UI_DIST_DIR, PROJECTS_DIR];
     try {

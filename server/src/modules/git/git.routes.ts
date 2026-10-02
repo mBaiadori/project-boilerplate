@@ -60,16 +60,18 @@ export async function gitRoutes(app: FastifyInstance) {
   // 5. Commit changes
   app.post("/api/git/commit", async (req, reply) => {
     try {
-      const { message, files } = req.body as {
+      const { message, files, user, repo } = req.body as {
         message: string;
         files?: string[];
+        user?: string;
+        repo?: string;
       };
       if (!message || !message.trim()) {
         return reply
           .status(400)
           .send({ error: "Mensagem de commit é obrigatória" });
       }
-      const res = await gitService.commit(message.trim(), files);
+      const res = await gitService.commit(message.trim(), files, user, repo);
       return res;
     } catch (err: any) {
       return reply

@@ -47,7 +47,8 @@ export interface AppConfig {
   workspace_changes: Record<string, WorkspaceChange[]>;
   templates?: any[];
   workflows?: any[];
-  prs?: any[];
+  git_provider?: 'github' | 'forgejo' | 'gitea';
+  git_provider_url?: string;
   governance?: {
     min_approvals: number;
     reviewers: string[];
@@ -798,6 +799,29 @@ export async function ensureDefaultRepoFiles(repoName: string): Promise<void> {
       ".templates.json",
       repoName,
     );
+  }
+
+  // .github/CODEOWNERS: gera o arquivo de propriedade dos arquivos do cofre
+  const githubDir = path.join(targetDir, ".github");
+  const codeownersPath = path.join(githubDir, "CODEOWNERS");
+  if (!fs.existsSync(codeownersPath)) {
+    try {
+      if (!fs.existsSync(githubDir)) {
+        fs.mkdirSync(githubDir, { recursive: true });
+      }
+      const ownerLogin = (cfg.active_repo?.full_name?.split("/")[0]) || cfg.user?.login || "admin";
+      const codeownersContent = `# Context OS - Governança & Root of Trust
+# Arquivos críticos de controle de acesso exigem aprovação do proprietário
+.keymap.json @${ownerLogin}
+.project.config.json @${ownerLogin}
+.gitignore @${ownerLogin}
+.scripts/ @${ownerLogin}
+.github/ @${ownerLogin}
+`;
+      fs.writeFileSync(codeownersPath, codeownersContent, "utf-8");
+    } catch (err: any) {
+      console.warn(`[Storage] Aviso ao criar .github/CODEOWNERS em ${repoName}:`, err.message);
+    }
   }
 
   // Ensure target repo has an independent .git initialized

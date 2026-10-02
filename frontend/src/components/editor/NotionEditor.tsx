@@ -1,5 +1,5 @@
 import { FileText, FolderTree, Plus, Shield, Lock, Unlock, Eye, EyeOff } from "lucide-react";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { useWorkspace } from "../../context/WorkspaceContext";
 import { useSecurity } from "../../context/SecurityContext";
 import { API } from "../../services/api";
@@ -25,6 +25,7 @@ import { VisualMarkdownDiff } from "./VisualMarkdownDiff";
 import { LanguageSelectorDropdown } from "./LanguageSelectorDropdown";
 import { TranslationBanner } from "./TranslationBanner";
 import { SyncTranslationModal } from "../modals/SyncTranslationModal";
+import { MergeConflictResolutionModal } from "../modals/MergeConflictResolutionModal";
 import type { SupportedLanguage, SyncToMainPreview } from "../../types";
 
 interface NotionEditorProps {
@@ -112,6 +113,17 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
   const [isTranslationOutdated, setIsTranslationOutdated] = useState(false);
   const [syncPreview, setSyncPreview] = useState<SyncToMainPreview | null>(null);
   const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
+
+  // Merge Conflict State
+  const [isConflictModalOpen, setIsConflictModalOpen] = useState(false);
+  const hasMergeConflict = useMemo(() => {
+    return (
+      typeof content === "string" &&
+      content.includes("<<<<<<< ") &&
+      content.includes("=======") &&
+      content.includes(">>>>>>> ")
+    );
+  }, [content]);
   const [isSyncingToMain, setIsSyncingToMain] = useState(false);
 
   // Security Level & Document Lock Gate State
@@ -1462,6 +1474,54 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
           />
         )}
 
+        {/* Merge Conflict Banner */}
+        {hasMergeConflict && (
+          <div
+            style={{
+              margin: "12px 24px 0",
+              padding: "12px 16px",
+              borderRadius: "var(--radius-md, 8px)",
+              background: "rgba(234, 179, 8, 0.12)",
+              border: "1px solid rgba(234, 179, 8, 0.4)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              color: "var(--color-on-surface)",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <span className="material-symbols-outlined" style={{ color: "#eab308", fontSize: "22px" }}>
+                merge_type
+              </span>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: "13px" }}>Conflito de Merge Detectado</div>
+                <div style={{ fontSize: "12px", color: "var(--color-outline)" }}>
+                  Este documento possui alterações conflitantes entre sua versão local e o repositório Git.
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={() => setIsConflictModalOpen(true)}
+              style={{
+                padding: "6px 14px",
+                borderRadius: "6px",
+                background: "#eab308",
+                color: "#000",
+                fontWeight: 600,
+                fontSize: "12px",
+                border: "none",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+              }}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>splitscreen</span>
+              Resolver Conflito Visualmente
+            </button>
+          </div>
+        )}
+
         {/* Fragment Not Found / Snippet Alert Banner */}
         {fragmentAlert && fragmentAlert.type === "not_found" && (
           <div
@@ -2081,6 +2141,19 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
         onClose={() => setIsSyncModalOpen(false)}
         preview={syncPreview}
         onConfirmApply={handleConfirmApplyToMain}
+      />
+
+      {/* Merge Conflict Resolution Modal */}
+      <MergeConflictResolutionModal
+        isOpen={isConflictModalOpen}
+        onClose={() => setIsConflictModalOpen(false)}
+        filePath={filePath || "documento.md"}
+        content={content}
+        onSaveResolved={(resolvedContent) => {
+          onChange(resolvedContent);
+          setEditorToast({ text: "Conflito resolvido com sucesso!", type: "success" });
+          setTimeout(() => setEditorToast(null), 3000);
+        }}
       />
     </div>
   );

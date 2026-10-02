@@ -240,6 +240,7 @@ export const GovernanceMembersSubView: React.FC = () => {
 
   // Quorum & Branch Protection State
   const [quorumRules, setQuorumRules] = useState<any>(null);
+  const [keymap, setKeymap] = useState<any>(null);
   const [branchProtection, setBranchProtection] = useState<any>(null);
   const [isSavingQuorum, setIsSavingQuorum] = useState<boolean>(false);
   const [isApplyingProtection, setIsApplyingProtection] =
@@ -277,6 +278,12 @@ export const GovernanceMembersSubView: React.FC = () => {
         setIsSoloMode(res.data.isSoloMode);
         setGithubAuthError(res.data.githubAuthError || null);
       }
+      try {
+        const kmRes = await API.getKeymap(currentRepoName);
+        if (kmRes.ok && kmRes.data) {
+          setKeymap(kmRes.data);
+        }
+      } catch {}
     } catch (err) {
       console.warn("[GovernanceSubView] Erro ao carregar colaboradores:", err);
     } finally {
@@ -847,6 +854,7 @@ export const GovernanceMembersSubView: React.FC = () => {
                   <th style={{ padding: "10px 16px" }}>Permissão Git</th>
                   <th style={{ padding: "10px 16px" }}>Nível</th>
                   <th style={{ padding: "10px 16px" }}>Rotas / Pastas Permitidas</th>
+                  <th style={{ padding: "10px 16px" }}>Chave X25519</th>
                   <th style={{ padding: "10px 16px", textAlign: "right" }}>
                     Ações
                   </th>
@@ -1024,6 +1032,47 @@ export const GovernanceMembersSubView: React.FC = () => {
                             <span style={{ fontSize: "11px", color: "var(--color-outline, #a6adc8)" }}>Nenhuma</span>
                           )}
                         </div>
+                      </td>
+
+                      <td style={{ padding: "10px 16px" }}>
+                        {keymap?.members?.[collab.login]?.fingerprint ? (
+                          <span
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "4px",
+                              padding: "2px 8px",
+                              borderRadius: "12px",
+                              backgroundColor: "rgba(16, 185, 129, 0.1)",
+                              border: "1px solid rgba(16, 185, 129, 0.3)",
+                              color: "#10b981",
+                              fontSize: "11px",
+                              fontFamily: "monospace",
+                            }}
+                            title={`Chave Pública X25519: ${keymap.members[collab.login].fingerprint}`}
+                          >
+                            <span className="material-symbols-outlined" style={{ fontSize: "13px" }}>
+                              key
+                            </span>
+                            {keymap.members[collab.login].fingerprint}
+                          </span>
+                        ) : (
+                          <span
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "4px",
+                              padding: "2px 8px",
+                              borderRadius: "12px",
+                              backgroundColor: "rgba(255, 255, 255, 0.05)",
+                              border: "1px solid rgba(255, 255, 255, 0.1)",
+                              color: "var(--color-outline)",
+                              fontSize: "11px",
+                            }}
+                          >
+                            Pendente
+                          </span>
+                        )}
                       </td>
 
                       <td style={{ padding: "10px 16px", textAlign: "right" }}>

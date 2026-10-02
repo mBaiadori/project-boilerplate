@@ -1,4 +1,8 @@
 import crypto from 'node:crypto';
+import os from 'node:os';
+import fs from 'node:fs';
+import path from 'node:path';
+import { execSync } from 'node:child_process';
 import type { DynamicSecurityLevel, LevelCanaryProbe, UserKeySlot, SecretScanResult, SecretScanViolation } from '../modules/governance/governance.types.js';
 
 export interface EncryptedEnvelopeHeader {
@@ -531,3 +535,242 @@ export function scanContentForSecrets(content: string, filePath: string): Secret
     violations,
   };
 }
+
+/**
+ * ============================================================================
+ * CRIPTOGRAFIA ASSIMÉTRICA X25519 & SEALED DEK SLOTS (ZERO-API / ZERO-KNOWLEDGE)
+ * ============================================================================
+ */
+
+export interface UserKeyPair {
+  publicKeyPem: string;
+  privateKeyPem: string;
+  publicKeyBase64: string;
+  fingerprint: string;
+}
+
+export interface SealedDEKSlot {
+  ephemeral_public_key: string; // SPKI PEM
+  salt: string; // Base64
+  iv: string; // Base64
+  auth_tag: string; // Base64
+  ciphertext: string; // Base64 ciphertext of DEK
+  created_at: string;
+}
+
+export interface MergePlaintextResult {
+  hasConflicts: boolean;
+  mergedContent: string;
+  conflictCount: number;
+}
+
+/**
+ * Gera um novo par de chaves assimétricas Curve25519 / X25519 para o usuário.
+ * A chave privada deve ser salva no Keychain nativo (VaultService) e NUNCA ir para o Git.
+ * A chave pública é compartilhada no .keymap.json do repositório.
+ */
+export function generateX25519KeyPair(): UserKeyPair {
+  const kp = crypto.generateKeyPairSync('x25519');
+  const publicKeyPem = kp.publicKey.export({ type: 'spki', format: 'pem' }) as string;
+  const privateKeyPem = kp.privateKey.export({ type: 'pkcs8', format: 'pem' }) as string;
+  const publicKeyDer = kp.publicKey.export({ type: 'spki', format: 'der' });
+  const publicKeyBase64 = publicKeyDer.toString('base64');
+  
+  // Fingerprint SHA-256 curto (8 bytes hex) para exibição amigável
+  const fingerprint = crypto.createHash('sha256').update(publicKeyDer).digest('hex').slice(0, 16);
+
+  return {
+    publicKeyPem,
+    privateKeyPem,
+    publicKeyBase64,
+    fingerprint,
+  };
+}
+
+/**
+ * Gera uma chave simétrica aleatória de 256 bits (AES-256) para ser usada como DEK de compartimento.
+ */
+export function generateDEK(): Buffer {
+  return crypto.randomBytes(32);
+}
+
+/**
+ * Cifra uma DEK (Data Encryption Key) para a chave pública de um destinatário (ECIES sobre X25519).
+ * Gera um par efêmero, calcula o segredo compartilhado (ECDH), deriva uma KEK via HKDF e cifra com AES-256-GCM.
+ */
+export function sealDEKForPublicKey(dek: Buffer | string, recipientPublicKeyPem: string): SealedDEKSlot {
+  const dekBuffer = Buffer.isBuffer(dek) ? dek : Buffer.from(dek, 'base64');
+  
+  // 1. Gera par efêmero
+  const ephemeral = crypto.generateKeyPairSync('x25519');
+  const recipientKey = crypto.createPublicKey(recipientPublicKeyPem);
+
+  // 2. ECDH entre efêmero e destinatário
+  const sharedSecret = crypto.diffieHellman({
+    privateKey: ephemeral.privateKey,
+    publicKey: recipientKey,
+  });
+
+  // 3. HKDF para derivar KEK (Key Encryption Key)
+  const salt = crypto.randomBytes(16);
+  const kek = Buffer.from(
+    crypto.hkdfSync('sha256', sharedSecret, salt, Buffer.from('context-os-vault-kek-v1'), 32)
+  );
+
+  // 4. Cifra a DEK com AES-256-GCM
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', kek, iv);
+  const ciphertext = Buffer.concat([cipher.update(dekBuffer), cipher.final()]);
+  const authTag = cipher.getAuthTag();
+
+  return {
+    ephemeral_public_key: ephemeral.publicKey.export({ type: 'spki', format: 'pem' }) as string,
+    salt: salt.toString('base64'),
+    iv: iv.toString('base64'),
+    auth_tag: authTag.toString('base64'),
+    ciphertext: ciphertext.toString('base64'),
+    created_at: new Date().toISOString(),
+  };
+}
+
+/**
+ * Descriptografa uma DEK selada utilizando a chave privada X25519 do destinatário.
+ */
+export function openDEKWithPrivateKey(slot: SealedDEKSlot, recipientPrivateKeyPem: string): Buffer {
+  const recipientPrivateKey = crypto.createPrivateKey(recipientPrivateKeyPem);
+  const ephemeralKey = crypto.createPublicKey(slot.ephemeral_public_key);
+
+  // 1. ECDH para reconstituir o segredo compartilhado
+  const sharedSecret = crypto.diffieHellman({
+    privateKey: recipientPrivateKey,
+    publicKey: ephemeralKey,
+  });
+
+  // 2. HKDF com o mesmo salt para reconstituir a KEK
+  const salt = Buffer.from(slot.salt, 'base64');
+  const kek = Buffer.from(
+    crypto.hkdfSync('sha256', sharedSecret, salt, Buffer.from('context-os-vault-kek-v1'), 32)
+  );
+
+  // 3. Decifra AES-256-GCM
+  const iv = Buffer.from(slot.iv, 'base64');
+  const authTag = Buffer.from(slot.auth_tag, 'base64');
+  const ciphertext = Buffer.from(slot.ciphertext, 'base64');
+
+  const decipher = crypto.createDecipheriv('aes-256-gcm', kek, iv);
+  decipher.setAuthTag(authTag);
+  const dek = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+
+  return dek;
+}
+
+/**
+ * Criptografa conteúdo de arquivo em texto plano diretamente para o formato de envelope .enc do Context OS.
+ */
+export function encryptFileToEnc(
+  plaintext: string,
+  dek: Buffer,
+  meta: { level?: number; department?: string; title?: string; key_id?: string } = {}
+): string {
+  const header: EncryptedEnvelopeHeader = {
+    title: meta.title || 'Documento Protegido',
+    security_level: meta.level ?? 2,
+    security_level_id: String(meta.level ?? 2),
+    encrypted: true,
+    algorithm: 'AES-256-GCM',
+    key_id: meta.key_id || (meta.department ? `dept-${meta.department}` : `lvl-${meta.level ?? 2}`),
+    department: meta.department,
+    updated_at: new Date().toISOString(),
+  };
+
+  const enc = encryptAES256GCM(plaintext, dek);
+  return buildEncryptedEnvelope(header, enc);
+}
+
+/**
+ * Descriptografa um arquivo .enc utilizando a DEK fornecida.
+ */
+export function decryptEncFile(
+  encContent: string,
+  dek: Buffer
+): { success: boolean; content?: string; error?: string; header?: EncryptedEnvelopeHeader | null } {
+  const parsed = parseEncryptedEnvelope(encContent);
+  if (!parsed.isEncrypted || !parsed.payloadData) {
+    return { success: false, error: 'Conteúdo não é um envelope criptográfico válido do Context OS.' };
+  }
+
+  try {
+    const text = decryptAES256GCM(
+      parsed.payloadData.payload,
+      parsed.payloadData.iv,
+      parsed.payloadData.authTag,
+      dek
+    );
+    return { success: true, content: text, header: parsed.header };
+  } catch (err: any) {
+    return { success: false, error: 'Falha na autenticação/chave da descriptografia: ' + (err?.message || err) };
+  }
+}
+
+/**
+ * Executa um Merge de 3 Vias no texto plano (Base Ancestral vs Nossa Versão Local vs Versão Remota do Git).
+ * Utiliza o algoritmo nativo `git merge-file` para garantir fusão perfeita linha a linha.
+ * Se houver conflitos reais de linha, embute os marcadores legíveis em texto plano.
+ */
+export function mergePlaintext3Way(
+  baseText: string,
+  oursText: string,
+  theirsText: string,
+  labels: { ours?: string; base?: string; theirs?: string } = {}
+): MergePlaintextResult {
+  const tmpDir = os.tmpdir();
+  const rand = crypto.randomBytes(6).toString('hex');
+  const fBase = path.join(tmpDir, `ctx_base_${rand}.tmp`);
+  const fOurs = path.join(tmpDir, `ctx_ours_${rand}.tmp`);
+  const fTheirs = path.join(tmpDir, `ctx_theirs_${rand}.tmp`);
+
+  const lblOurs = labels.ours || 'Sua Versão (Local)';
+  const lblBase = labels.base || 'Versão Original (Base)';
+  const lblTheirs = labels.theirs || 'Versão Remota (Git)';
+
+  try {
+    fs.writeFileSync(fBase, baseText, 'utf-8');
+    fs.writeFileSync(fOurs, oursText, 'utf-8');
+    fs.writeFileSync(fTheirs, theirsText, 'utf-8');
+
+    // Executa git merge-file
+    try {
+      const mergedStdout = execSync(
+        `git merge-file -p -L "${lblOurs}" -L "${lblBase}" -L "${lblTheirs}" "${fOurs}" "${fBase}" "${fTheirs}"`,
+        { encoding: 'utf-8', maxBuffer: 10 * 1024 * 1024 }
+      );
+      return {
+        hasConflicts: false,
+        mergedContent: mergedStdout,
+        conflictCount: 0,
+      };
+    } catch (mergeErr: any) {
+      // Se houver conflito, o git merge-file sai com código > 0 e o stdout contém os marcadores!
+      const outputWithMarkers = mergeErr.stdout ? String(mergeErr.stdout) : '';
+      const conflictMarkers = (outputWithMarkers.match(new RegExp(`<<<<<<< ${lblOurs}`, 'g')) || []).length;
+
+      return {
+        hasConflicts: true,
+        mergedContent: outputWithMarkers,
+        conflictCount: conflictMarkers || 1,
+      };
+    }
+  } catch (err: any) {
+    // Fallback se não conseguir rodar git merge-file: retorna a versão local e sinaliza
+    return {
+      hasConflicts: true,
+      mergedContent: oursText,
+      conflictCount: 1,
+    };
+  } finally {
+    try { if (fs.existsSync(fBase)) fs.unlinkSync(fBase); } catch {}
+    try { if (fs.existsSync(fOurs)) fs.unlinkSync(fOurs); } catch {}
+    try { if (fs.existsSync(fTheirs)) fs.unlinkSync(fTheirs); } catch {}
+  }
+}
+

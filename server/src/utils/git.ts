@@ -25,22 +25,52 @@ export async function executeGitCommand(
   }
 }
 
+import { loadConfig } from "../config/storage.js";
+
+export function resolveGitProviderBaseUrl(customUrl?: string): { baseUrl: string; isForgejo: boolean } {
+  const cfg = loadConfig();
+  if (customUrl && customUrl.startsWith('http')) {
+    const isForgejo = !customUrl.includes('api.github.com');
+    return { baseUrl: customUrl.replace(/\/$/, ''), isForgejo };
+  }
+  if (
+    cfg.git_provider === 'forgejo' ||
+    cfg.git_provider === 'gitea' ||
+    (cfg.git_provider_url && !cfg.git_provider_url.includes('api.github.com')) ||
+    (cfg.active_repo?.html_url && !cfg.active_repo.html_url.includes('github.com'))
+  ) {
+    const baseUrl = (cfg.git_provider_url || 'http://localhost:3000/api/v1').replace(/\/$/, '');
+    return { baseUrl, isForgejo: true };
+  }
+  return { baseUrl: 'https://api.github.com', isForgejo: false };
+}
+
 export async function callGitHubAPI(
   endpoint: string,
   token: string,
   method: string = "GET",
   data: any = null,
+  customBaseUrl?: string,
 ): Promise<{ statusCode: number; data: any }> {
-  const url = endpoint.startsWith("http")
-    ? endpoint
-    : `https://api.github.com${endpoint}`;
+  let url: string;
+  let isForgejo = false;
+
+  if (endpoint.startsWith("http://") || endpoint.startsWith("https://")) {
+    url = endpoint;
+    isForgejo = !endpoint.includes("api.github.com");
+  } else {
+    const resolved = resolveGitProviderBaseUrl(customBaseUrl);
+    url = `${resolved.baseUrl}${endpoint.startsWith("/") ? "" : "/"}${endpoint}`;
+    isForgejo = resolved.isForgejo;
+  }
+
   const headers: Record<string, string> = {
-    Accept: "application/vnd.github+json",
+    Accept: "application/json, application/vnd.github+json",
     "User-Agent": "Context-OS-Spec-Driven",
   };
 
   if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
+    headers["Authorization"] = isForgejo ? `token ${token}` : `Bearer ${token}`;
   }
 
   const options: RequestInit = {
@@ -66,10 +96,12 @@ export async function callGitHubAPI(
   } catch (err: any) {
     return {
       statusCode: 500,
-      data: { message: err.message || "Erro de conexão com o GitHub" },
+      data: { message: err.message || "Erro de conexão com o Provedor Git" },
     };
   }
 }
+
+export const callGitProviderAPI = callGitHubAPI;
 
 export async function applyBranchProtection(
   repoFullName: string,
@@ -77,6 +109,29 @@ export async function applyBranchProtection(
   token: string,
   requiredApprovals: number = 1,
 ): Promise<{ statusCode: number; data: any }> {
+  const { isForgejo } = resolveGitProviderBaseUrl();
+
+  if (isForgejo) {
+    const endpoint = `/repos/${repoFullName}/branch_protections`;
+    const body = {
+      branch_name: branch,
+      enable_push: false,
+      enable_push_whitelist: false,
+      required_approvals: requiredApprovals,
+      enable_approvals_whitelist: false,
+      protected_file_patterns: ".keymap.json;.project.config.json;.gitignore;.scripts/**;.github/**",
+    };
+    const res = await callGitHubAPI(endpoint, token, "POST", body);
+    if (res.statusCode === 200 || res.statusCode === 201) {
+      return res;
+    }
+    if (res.statusCode === 409 || (res.data?.message && res.data.message.includes("already exists"))) {
+      const patchEndpoint = `/repos/${repoFullName}/branch_protections/${encodeURIComponent(branch)}`;
+      return await callGitHubAPI(patchEndpoint, token, "PATCH", body);
+    }
+    return res;
+  }
+
   const endpoint = `/repos/${repoFullName}/branches/${branch}/protection`;
   const body = {
     required_status_checks: null,
