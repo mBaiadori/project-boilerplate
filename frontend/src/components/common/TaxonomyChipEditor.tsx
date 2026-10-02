@@ -1,10 +1,10 @@
-import React from "react";
-import { Edit2, Trash2, Check, X, Plus } from "lucide-react";
+import React, { useRef, useEffect } from "react";
+import { X, Plus } from "lucide-react";
 import { ColorDotPicker } from "./ColorDotPicker";
 import type { TaxonomyItem, DocumentMetadataItem } from "../../types";
 
 export interface TaxonomyChipEditorProps {
-  items: Array<TaxonomyItem | DocumentMetadataItem>;
+  items: Array<TaxonomyItem | DocumentMetadataItem | any>;
   editingIndex: number | null;
   editName: string;
   editColor: string;
@@ -45,15 +45,31 @@ export const TaxonomyChipEditor: React.FC<TaxonomyChipEditorProps> = ({
   onNewColorChange,
   onSaveAdd,
   onCancelAdd,
-  placeholder = "item...",
+  placeholder = "Novo item...",
   addTooltip = "Adicionar item",
 }) => {
+  const addInputRef = useRef<HTMLInputElement>(null);
+  const editInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isAdding && addInputRef.current) {
+      addInputRef.current.focus();
+    }
+  }, [isAdding]);
+
+  useEffect(() => {
+    if (editingIndex !== null && editInputRef.current) {
+      editInputRef.current.focus();
+      editInputRef.current.select();
+    }
+  }, [editingIndex]);
+
   return (
-    <div className="ui-row ui-row--wrap ui-row--align-center ui-row--xs">
+    <div className="ui-taxonomy-chip-container">
       {items.map((item, idx) => {
         const isEditing = editingIndex === idx;
-        const color = item.color || "#3b82f6";
-        const name = (item as any).name || (item as any).id || "";
+        const color = isEditing ? editColor : (item.color || "#3b82f6");
+        const name = (item as any).label || (item as any).name || (item as any).id || "";
 
         if (isEditing) {
           return (
@@ -61,45 +77,49 @@ export const TaxonomyChipEditor: React.FC<TaxonomyChipEditorProps> = ({
               key={idx}
               className="ui-taxonomy-chip-edit"
               style={{
-                backgroundColor: `${editColor}16`,
-                border: `1.5px solid ${editColor}`,
-                color: editColor,
+                backgroundColor: `${color}18`,
+                border: `1px solid ${color}55`,
+                color: color,
               }}
             >
-              <ColorDotPicker
-                color={editColor}
-                onChange={onEditColorChange}
-                size={14}
-              />
+              <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+                <ColorDotPicker
+                  color={editColor}
+                  onChange={onEditColorChange}
+                  size={12}
+                />
+              </div>
               <input
+                ref={editInputRef}
                 type="text"
+                className="ui-taxonomy-chip-input"
                 value={editName}
                 onChange={(e) => onEditNameChange(e.target.value)}
+                onBlur={() => {
+                  if (editName.trim()) {
+                    onSaveEdit();
+                  } else {
+                    onCancelEdit();
+                  }
+                }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") onSaveEdit();
                   if (e.key === "Escape") onCancelEdit();
                 }}
-                className="ui-taxonomy-chip-edit__input"
                 style={{
-                  width: `${Math.max(editName.length, 6)}ch`,
-                  color: editColor,
+                  width: `${Math.max(editName.length, 2) + 1.5}ch`,
+                  minWidth: "24px",
                 }}
-                autoFocus
               />
               <button
                 type="button"
-                onClick={onSaveEdit}
                 className="ui-taxonomy-chip__action-btn"
-                style={{ color: editColor }}
-                title="Salvar (Enter)"
-              >
-                <Check size={12} />
-              </button>
-              <button
-                type="button"
-                onClick={onCancelEdit}
-                className="ui-taxonomy-chip__action-btn ui-text-muted"
-                title="Cancelar (Esc)"
+                onMouseDown={(e) => {
+                  e.preventDefault(); // Evita o blur prematuro antes da remoção
+                  onRequestRemove(idx);
+                }}
+                title="Remover"
+                style={{ color: color }}
               >
                 <X size={12} />
               </button>
@@ -113,95 +133,95 @@ export const TaxonomyChipEditor: React.FC<TaxonomyChipEditorProps> = ({
             className="ui-taxonomy-chip"
             style={{
               backgroundColor: `${color}14`,
-              border: `1px solid ${color}40`,
+              border: `1px solid ${color}35`,
               color: color,
+              cursor: "pointer",
             }}
+            onClick={() => onStartEdit(idx)}
+            title="Clique para editar"
           >
             <div
-              className="ui-taxonomy-chip__dot"
-              style={{ backgroundColor: color }}
-            />
-            <span
-              onClick={() => onStartEdit(idx)}
-              className="ui-taxonomy-chip__label"
-              title="Clique para editar"
+              onClick={(e) => e.stopPropagation()}
+              style={{ display: "inline-flex", alignItems: "center", justifyContent: "center" }}
             >
-              {name.toUpperCase()}
-            </span>
-            <div className="ui-taxonomy-chip__actions">
-              <button
-                type="button"
-                onClick={() => onStartEdit(idx)}
-                className="ui-taxonomy-chip__action-btn"
-                style={{ color: color }}
-                title="Editar"
-              >
-                <Edit2 size={10} />
-              </button>
-              <button
-                type="button"
-                onClick={() => onRequestRemove(idx)}
-                className="ui-taxonomy-chip__action-btn"
-                style={{ color: color }}
-                title="Remover"
-              >
-                <Trash2 size={10} />
-              </button>
+              <ColorDotPicker
+                color={color}
+                onChange={(newCol) => {
+                  onStartEdit(idx);
+                  onEditColorChange(newCol);
+                  onSaveEdit();
+                }}
+                size={12}
+              />
             </div>
+            <span className="ui-taxonomy-chip__label">
+              {name}
+            </span>
+            <button
+              type="button"
+              className="ui-taxonomy-chip__action-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                onRequestRemove(idx);
+              }}
+              title="Remover"
+              style={{ color: color }}
+            >
+              <X size={12} />
+            </button>
           </div>
         );
       })}
 
-      {/* Botão + ou Chip de Adicionar */}
+      {/* Chip de Adicionar Novo Item */}
       {isAdding ? (
         <div
           className="ui-taxonomy-chip-edit"
           style={{
-            backgroundColor: `${newColor}16`,
-            border: `1.5px solid ${newColor}`,
+            backgroundColor: `${newColor}18`,
+            border: `1px solid ${newColor}55`,
             color: newColor,
           }}
         >
-          <ColorDotPicker
-            color={newColor}
-            onChange={onNewColorChange}
-            size={14}
-          />
+          <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+            <ColorDotPicker
+              color={newColor}
+              onChange={onNewColorChange}
+              size={12}
+            />
+          </div>
           <input
+            ref={addInputRef}
             type="text"
+            className="ui-taxonomy-chip-input"
             placeholder={placeholder}
             value={newName}
             onChange={(e) => onNewNameChange(e.target.value)}
+            onBlur={() => {
+              if (newName.trim()) {
+                onSaveAdd();
+              } else {
+                onCancelAdd();
+              }
+            }}
             onKeyDown={(e) => {
-              if (e.key === "Enter") onSaveAdd();
+              if (e.key === "Enter" && newName.trim()) onSaveAdd();
               if (e.key === "Escape") onCancelAdd();
             }}
-            className="ui-taxonomy-chip-edit__input"
             style={{
-              width: `${Math.max(newName.length, 10)}ch`,
-              color: newColor,
+              width: `${Math.max(newName.length, placeholder.length) + 1.5}ch`,
+              minWidth: "60px",
             }}
-            autoFocus
           />
           <button
             type="button"
-            onClick={onSaveAdd}
-            disabled={!newName.trim()}
             className="ui-taxonomy-chip__action-btn"
-            style={{
-              color: newColor,
-              opacity: newName.trim() ? 0.9 : 0.4,
-              cursor: newName.trim() ? "pointer" : "default",
+            onMouseDown={(e) => {
+              e.preventDefault();
+              onCancelAdd();
             }}
-            title="Criar (Enter)"
-          >
-            <Check size={12} />
-          </button>
-          <button
-            type="button"
-            onClick={onCancelAdd}
-            className="ui-taxonomy-chip__action-btn ui-text-muted"
-            title="Cancelar (Esc)"
+            title="Cancelar"
+            style={{ color: newColor }}
           >
             <X size={12} />
           </button>
@@ -210,12 +230,15 @@ export const TaxonomyChipEditor: React.FC<TaxonomyChipEditorProps> = ({
         <button
           type="button"
           onClick={onStartAdd}
-          className="ui-chip-add-btn"
           title={addTooltip}
+          className="ui-chip-add-btn"
         >
-          <Plus size={13} />
+          <Plus size={13} style={{ display: "inline-block", verticalAlign: "middle" }} />
+          <span style={{ display: "inline-block", verticalAlign: "middle" }}>Adicionar</span>
         </button>
       )}
     </div>
   );
 };
+
+

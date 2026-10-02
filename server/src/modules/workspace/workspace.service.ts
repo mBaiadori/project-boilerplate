@@ -18,6 +18,7 @@ import {
 } from "./docs-metadata.service.js";
 import { translationsService } from "../translations/translations.service.js";
 import { governanceService } from "../governance/governance.service.js";
+import { canAccessDocument } from "../../utils/crypto.js";
 
 export interface TreeNode {
   name: string;
@@ -145,6 +146,13 @@ export class WorkspaceService {
 
     if (!repoDirExists) {
       this.invalidateTreeCache(repoName);
+      // If folder does not exist on disk, do NOT recreate or auto-clone it!
+      if (!fs.existsSync(repoDir)) {
+        return {
+          repo: repoName,
+          tree: [],
+        };
+      }
     }
 
     if (!forceRefresh && repoDirExists) {
@@ -157,7 +165,7 @@ export class WorkspaceService {
       }
     }
 
-    await ensureDefaultRepoFiles(repoName);
+    await ensureDefaultRepoFiles(repoName, false);
 
     const docsMetadata = docsMetadataService.loadDocsMetadata(repoName);
     const metaMap = new Map(docsMetadata.map((d) => [d.path, d]));
@@ -274,10 +282,48 @@ export class WorkspaceService {
     };
   }
 
+  verifyUserClearance(repoName: string, filePath: string, meta?: any): void {
+    const cfg = loadConfig();
+    const activeUserLogin = cfg.user?.login || 'local';
+    const pConfig = governanceService.readProjectConfig(repoName);
+    const localMemberMeta = pConfig.governance_collaborators || {};
+    const collabMeta = (Object.entries(localMemberMeta).find(
+      ([k]) => k.toLowerCase() === activeUserLogin.toLowerCase()
+    )?.[1] as any) || {};
+
+    const resolvedFullName = cfg.active_repo?.full_name || '';
+    const isOwner = activeUserLogin.toLowerCase() === (resolvedFullName.split('/')[0] || cfg.user?.login || '').toLowerCase();
+
+    const userProfile = {
+      level: isOwner ? 0 : (collabMeta.level !== undefined ? Number(collabMeta.level) : (collabMeta.security_level !== undefined ? Number(collabMeta.security_level) : 2)),
+      departments: isOwner ? ['*'] : (Array.isArray(collabMeta.departments) && collabMeta.departments.length > 0 ? collabMeta.departments : ['engineering']),
+      allowed_paths: isOwner ? ['*'] : (Array.isArray(collabMeta.allowed_paths) && collabMeta.allowed_paths.length > 0 ? collabMeta.allowed_paths : ['*']),
+    };
+
+    const cleanPath = (filePath || '').trim().replace(/^\/+/, '');
+    const docMeta = docsMetadataService.getDocMetadata(repoName, cleanPath);
+    const docLevel = meta?.level !== undefined
+      ? Number(meta.level)
+      : meta?.security_level !== undefined
+      ? Number(meta.security_level)
+      : docMeta?.security_level !== undefined
+      ? Number(docMeta.security_level)
+      : 999;
+    const docDept = meta?.department || docMeta?.categories || cleanPath.split('/')[0];
+
+    if (!canAccessDocument(userProfile, { level: docLevel, security_level: docLevel, department: docDept, path: cleanPath })) {
+      throw new Error(`Acesso Negado: Seu nível de segurança (Nível ${userProfile.level}) não possui autorização para criar ou editar o documento '${cleanPath}' (Nível ${docLevel}).`);
+    }
+  }
+
   async saveFile(filePath: string, content: string, meta?: any) {
     const cfg = loadConfig();
     const repoName = cfg.active_repo?.name || "local";
     const cleanPath = (filePath || "").trim().replace(/^\/+/, "");
+    
+    // Validação estrita de Clearance de Governança
+    this.verifyUserClearance(repoName, cleanPath, meta);
+
     const fullPath = path.join(this.getRepoDir(repoName), cleanPath);
 
     let oldContent = "";
@@ -335,6 +381,11 @@ export class WorkspaceService {
 
     if (!cleanPath) {
       throw new Error("Caminho não pode ser vazio.");
+    }
+
+    // Validação estrita de Clearance de Governança
+    if (!isFolder) {
+      this.verifyUserClearance(repoName, cleanPath, meta);
     }
 
     const repoDir = this.getRepoDir(repoName);

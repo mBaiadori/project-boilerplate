@@ -41,6 +41,8 @@ class EventsService {
     for (const client of this.clients) {
       try {
         client.reply.raw.end();
+        client.reply.raw.destroy();
+        client.reply.raw.socket?.destroy();
       } catch {}
     }
     this.clients.clear();

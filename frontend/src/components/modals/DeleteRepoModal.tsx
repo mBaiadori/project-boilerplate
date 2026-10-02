@@ -1,0 +1,214 @@
+import React, { useState, useEffect } from "react";
+import { Modal, Button, FormField, Input } from "../ui";
+import { API } from "../../services/api";
+import type { Repo } from "../../types";
+import { Trash2, AlertTriangle, HardDrive, Globe } from "lucide-react";
+
+interface DeleteRepoModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  repo: Repo | null;
+  initialMode?: "delete" | "unlink";
+  onDeleted: () => void;
+}
+
+export const DeleteRepoModal: React.FC<DeleteRepoModalProps> = ({
+  isOpen,
+  onClose,
+  repo,
+  initialMode = "delete",
+  onDeleted,
+}) => {
+  const [confirmName, setConfirmName] = useState("");
+  const [deleteMode, setDeleteMode] = useState<"both" | "local_only">(
+    initialMode === "unlink" ? "local_only" : "both",
+  );
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const isAdmin = repo?.permissions?.admin ?? (repo?.is_owner || repo?.is_local || false);
+  const hasRemote = !repo?.is_local && Boolean(repo?.html_url || repo?.full_name);
+
+  useEffect(() => {
+    if (isOpen) {
+      setConfirmName("");
+      setErrorMsg(null);
+      if (initialMode === "unlink" || !hasRemote || !isAdmin) {
+        setDeleteMode("local_only");
+      } else {
+        setDeleteMode("both");
+      }
+    }
+  }, [isOpen, repo, hasRemote, isAdmin, initialMode]);
+
+  if (!isOpen || !repo) return null;
+
+  const isConfirmed = confirmName.trim().toLowerCase() === repo.name.trim().toLowerCase();
+
+  const handleDelete = async () => {
+    if (!isConfirmed) return;
+    setIsDeleting(true);
+    setErrorMsg(null);
+
+    try {
+      const deleteRemote = deleteMode === "both" && hasRemote && isAdmin;
+      const res = await API.deleteRepo({
+        name: repo.name,
+        owner: repo.owner,
+        delete_remote: deleteRemote,
+        delete_local: true,
+      });
+
+      if (res.ok) {
+        onDeleted();
+        onClose();
+      } else {
+        setErrorMsg(res.data?.error || res.data?.message || "Erro ao processar exclusão.");
+      }
+    } catch (err: any) {
+      setErrorMsg(err.message || "Falha na comunicação com o servidor.");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const isUnlinking = deleteMode === "local_only" && hasRemote;
+
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={isUnlinking ? "Desvincular Repositório" : "Excluir Repositório"}
+      size="md"
+    >
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            gap: 12,
+            padding: "12px 14px",
+            borderRadius: "var(--radius-md, 8px)",
+            backgroundColor: "rgba(239, 68, 68, 0.08)",
+            border: "1px solid rgba(239, 68, 68, 0.2)",
+          }}
+        >
+          <AlertTriangle size={20} style={{ color: "#ef4444", flexShrink: 0, marginTop: 2 }} />
+          <div style={{ fontSize: "13px", lineHeight: "1.5", color: "var(--text-primary)" }}>
+            <strong>Atenção:</strong> Esta ação é irreversível para os arquivos selecionados.
+          </div>
+        </div>
+
+        {hasRemote && (
+          <FormField label="Opção de Exclusão:">
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 4 }}>
+              {isAdmin ? (
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    padding: "10px 12px",
+                    borderRadius: "var(--radius-md, 6px)",
+                    border: deleteMode === "both" ? "1px solid var(--primary)" : "1px solid var(--border-color)",
+                    backgroundColor: deleteMode === "both" ? "var(--primary-light, rgba(26, 115, 232, 0.06))" : "transparent",
+                    cursor: "pointer",
+                    fontSize: "13px",
+                  }}
+                >
+                  <input
+                    type="radio"
+                    name="delete-mode"
+                    value="both"
+                    checked={deleteMode === "both"}
+                    onChange={() => setDeleteMode("both")}
+                    style={{ accentColor: "var(--primary)" }}
+                  />
+                  <Globe size={15} style={{ color: "var(--text-muted)" }} />
+                  <div>
+                    <span style={{ fontWeight: 500 }}>Excluir no Provedor Remoto e Local</span>
+                    <div style={{ fontSize: "11.5px", color: "var(--text-muted)" }}>
+                      Deleta permanentemente o repositório remoto e apaga a pasta local.
+                    </div>
+                  </div>
+                </label>
+              ) : null}
+
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  padding: "10px 12px",
+                  borderRadius: "var(--radius-md, 6px)",
+                  border: deleteMode === "local_only" ? "1px solid var(--primary)" : "1px solid var(--border-color)",
+                  backgroundColor: deleteMode === "local_only" ? "var(--primary-light, rgba(26, 115, 232, 0.06))" : "transparent",
+                  cursor: "pointer",
+                  fontSize: "13px",
+                }}
+              >
+                <input
+                  type="radio"
+                  name="delete-mode"
+                  value="local_only"
+                  checked={deleteMode === "local_only"}
+                  onChange={() => setDeleteMode("local_only")}
+                  style={{ accentColor: "var(--primary)" }}
+                />
+                <HardDrive size={15} style={{ color: "var(--text-muted)" }} />
+                <div>
+                  <span style={{ fontWeight: 500 }}>Apenas desvincular do Context OS</span>
+                  <div style={{ fontSize: "11.5px", color: "var(--text-muted)" }}>
+                    Remove o cache local de <code>projects/{repo.name}</code> mantendo o repositório intacto no servidor remoto.
+                  </div>
+                </div>
+              </label>
+            </div>
+          </FormField>
+        )}
+
+        <FormField
+          label={`Digite "${repo.name}" para confirmar:`}
+        >
+          <Input
+            id="input-confirm-delete-repo"
+            placeholder={repo.name}
+            value={confirmName}
+            onChange={(e) => setConfirmName(e.target.value)}
+            autoFocus
+          />
+        </FormField>
+
+        {errorMsg && (
+          <div style={{ color: "#ef4444", fontSize: "12.5px" }}>
+            {errorMsg}
+          </div>
+        )}
+
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "flex-end",
+            gap: 10,
+            marginTop: 8,
+          }}
+        >
+          <Button variant="ghost" size="sm" onClick={onClose} disabled={isDeleting}>
+            Cancelar
+          </Button>
+          <Button
+            id="btn-confirm-delete-repo"
+            variant={isUnlinking ? "primary" : "danger"}
+            size="sm"
+            isLoading={isDeleting}
+            disabled={!isConfirmed}
+            icon={isUnlinking ? <HardDrive size={14} /> : <Trash2 size={14} />}
+            onClick={handleDelete}
+          >
+            {isUnlinking ? "Desvincular Repositório" : "Excluir Repositório"}
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  );
+};

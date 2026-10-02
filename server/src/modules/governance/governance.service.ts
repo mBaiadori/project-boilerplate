@@ -58,7 +58,7 @@ export class GovernanceService {
     return path.join(dir, '.project.config.json');
   }
 
-  private readProjectConfig(repoName?: string): any {
+  public readProjectConfig(repoName?: string): any {
     const p = this.getProjectConfigPath(repoName);
     if (fs.existsSync(p)) {
       try {
@@ -102,12 +102,12 @@ export class GovernanceService {
     const targetRepoName = repoName || activeRepo?.name || 'local';
     const repoDir = this.getRepoDir(targetRepoName);
 
-    // 1. Inspect git config origin url
+    // 1. Inspect git config origin url (handles GitHub, Forgejo, Gitea and custom domains)
     const gitConfigPath = path.join(repoDir, '.git', 'config');
     if (fs.existsSync(gitConfigPath)) {
       try {
         const configText = fs.readFileSync(gitConfigPath, 'utf-8');
-        const match = configText.match(/github\.com[/:]([a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+?)(\.git|\s|$)/);
+        const match = configText.match(/url\s*=\s*(?:https?:\/\/[^\/]+\/|git@[^:]+:)([a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+?)(\.git|\s|$)/);
         if (match && match[1]) {
           const fullName = match[1].replace(/\.git$/, '');
           if (!fullName.startsWith('local/')) {
@@ -117,17 +117,12 @@ export class GovernanceService {
       } catch {}
     }
 
-    // 2. If activeRepo.full_name is valid
-    if (activeRepo?.full_name && !activeRepo.full_name.startsWith('local/')) {
+    // 2. If activeRepo.full_name is valid and remote
+    if (activeRepo?.full_name && !activeRepo.full_name.startsWith('local/') && !activeRepo.is_local) {
       return activeRepo.full_name;
     }
 
-    // 3. Fallback to user.login/repoName
-    if (cfg.user?.login && targetRepoName !== 'local') {
-      return `${cfg.user.login}/${targetRepoName}`;
-    }
-
-    return targetRepoName;
+    return `local/${targetRepoName}`;
   }
 
   async getCollaborators(repoName?: string): Promise<{
@@ -159,7 +154,7 @@ export class GovernanceService {
       return entry ? entry[1] : {};
     };
 
-    // 1. Fetch remote GitHub collaborators if authenticated and valid remote repo
+    // 1. Fetch remote collaborators if authenticated and valid remote repo
     if (cfg.token && resolvedFullName && !resolvedFullName.startsWith('local/')) {
       try {
         const ghRes = await callGitHubAPI(`/repos/${resolvedFullName}/collaborators?affiliation=all&per_page=100`, cfg.token);
@@ -199,9 +194,14 @@ export class GovernanceService {
             };
           });
         } else if (ghRes.statusCode === 401) {
-          githubAuthError = 'Token do GitHub expirado ou inválido (401 Bad credentials).';
-        } else if (ghRes.statusCode === 403 || ghRes.statusCode === 404) {
-          githubAuthError = `Sem permissão de acesso ao repositório ${resolvedFullName} no GitHub (${ghRes.statusCode}).`;
+          const providerName = cfg.git_provider === 'forgejo' ? 'Forgejo' : 'GitHub';
+          githubAuthError = `Token do ${providerName} expirado ou inválido (401 Bad credentials). Atualize suas credenciais para sincronizar os membros.`;
+        } else if (ghRes.statusCode === 403) {
+          const providerName = cfg.git_provider === 'forgejo' ? 'Forgejo' : 'GitHub';
+          githubAuthError = `Sem permissão de acesso ao repositório ${resolvedFullName} no ${providerName} (${ghRes.statusCode}).`;
+        } else if (ghRes.statusCode === 404) {
+          // Repositório ainda não publicado no servidor remoto -> opera localmente sem erro
+          githubAuthError = null;
         }
 
         // 2. Also fetch Pending Invitations

@@ -147,6 +147,42 @@ export async function applyBranchProtection(
   return await callGitHubAPI(endpoint, token, "PUT", body);
 }
 
+export async function checkBranchProtection(
+  repoFullName: string,
+  branch: string,
+  token: string,
+): Promise<{ isProtected: boolean; details?: string }> {
+  if (!token || !repoFullName) {
+    return { isProtected: false };
+  }
+  const { isForgejo } = resolveGitProviderBaseUrl();
+  try {
+    if (isForgejo) {
+      const endpoint = `/repos/${repoFullName}/branch_protections`;
+      const res = await callGitHubAPI(endpoint, token, "GET");
+      if (res.statusCode === 200 && Array.isArray(res.data)) {
+        const found = res.data.some(
+          (p: any) => p.branch_name === branch || p.rule_name === branch,
+        );
+        return {
+          isProtected: found,
+          details: found ? "Proteção ativa no Forgejo" : "Sem proteção ativa",
+        };
+      }
+      return { isProtected: false, details: "Sem proteção ativa" };
+    }
+
+    const endpoint = `/repos/${repoFullName}/branches/${branch}/protection`;
+    const res = await callGitHubAPI(endpoint, token, "GET");
+    if (res.statusCode === 200) {
+      return { isProtected: true, details: "Proteção ativa no GitHub" };
+    }
+    return { isProtected: false, details: "Sem proteção ativa" };
+  } catch (e: any) {
+    return { isProtected: false, details: e.message || "Não foi possível verificar" };
+  }
+}
+
 export interface GitFileStatus {
   path: string;
   status: "M" | "A" | "D" | "U" | "R" | "C" | "??";
@@ -268,17 +304,34 @@ async function internalEnsureGitRepo(
 
   // Auto-resolve remoteUrl if missing and token exists
   let targetRemoteUrl = remoteUrl;
+  const { baseUrl, isForgejo } = resolveGitProviderBaseUrl();
   if (!targetRemoteUrl && token && user?.login && repoName && repoName !== "default" && repoName !== "_default") {
-    targetRemoteUrl = `https://github.com/${user.login}/${repoName}.git`;
+    if (isForgejo) {
+      const rootUrl = baseUrl.replace(/\/api\/v1\/?$/, '');
+      targetRemoteUrl = `${rootUrl}/${user.login}/${repoName}.git`;
+    } else {
+      targetRemoteUrl = `https://github.com/${user.login}/${repoName}.git`;
+    }
   }
 
   // Form authenticated clone URL if applicable
   let authRemoteUrl = targetRemoteUrl || "";
-  if (targetRemoteUrl && token && targetRemoteUrl.startsWith("https://github.com/")) {
-    const repoPath = targetRemoteUrl
-      .replace("https://github.com/", "")
-      .replace(/\.git$/, "");
-    authRemoteUrl = `https://x-access-token:${token}@github.com/${repoPath}.git`;
+  if (targetRemoteUrl && token) {
+    if (isForgejo) {
+      try {
+        const u = new URL(targetRemoteUrl);
+        u.username = user?.login || 'token';
+        u.password = token;
+        authRemoteUrl = u.toString();
+      } catch {
+        authRemoteUrl = targetRemoteUrl;
+      }
+    } else if (targetRemoteUrl.startsWith("https://github.com/")) {
+      const repoPath = targetRemoteUrl
+        .replace("https://github.com/", "")
+        .replace(/\.git$/, "");
+      authRemoteUrl = `https://x-access-token:${token}@github.com/${repoPath}.git`;
+    }
   }
 
   if (authRemoteUrl) {

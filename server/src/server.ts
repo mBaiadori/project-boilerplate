@@ -16,8 +16,18 @@ async function start() {
     const shutdown = async (_signal: string) => {
       if (isShuttingDown) return;
       isShuttingDown = true;
+
+      // Garante encerramento imediato em no máximo 250ms caso conexões fiquem presas
+      const forceExitTimer = setTimeout(() => {
+        process.exit(0);
+      }, 250);
+      forceExitTimer.unref();
+
       try {
         eventsService.closeAll();
+        if (typeof (app.server as any)?.closeAllConnections === 'function') {
+          (app.server as any).closeAllConnections();
+        }
         await app.close();
       } catch {
         // Ignora erros ao desligar

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useWorkspace } from "../../context/WorkspaceContext";
+import { useAuth } from "../../context/AuthContext";
 import { API } from "../../services/api";
 import {
   isPathHidden,
@@ -41,6 +42,8 @@ type WhatsNewFilterType = "all" | "new" | "modified" | "proposals";
 export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
   onOpenFile,
 }) => {
+  const { provider } = useAuth();
+  const providerLabel = provider === "forgejo" ? "Forgejo" : provider === "github" ? "GitHub" : "Modo Local";
   const {
     activeRepo,
     gitStatus,
@@ -411,14 +414,27 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
 
   const handleCreateProposal = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!prTitle.trim()) return;
+    if (isClean) {
+      setFeedback({
+        type: "error",
+        message: "Nenhuma alteração pendente detectada. Modifique arquivos no editor e salve (Ctrl+S) antes de propor uma versão.",
+      });
+      return;
+    }
+    if (!prTitle.trim()) {
+      setFeedback({
+        type: "error",
+        message: "Por favor, informe o título da proposta ou clique em 'Gerar Resumo Automático'.",
+      });
+      return;
+    }
 
     setIsCreatingPR(true);
     setFeedback(null);
     try {
       const res = await API.createUnifiedPR({
-        title: prTitle,
-        description: prDescription,
+        title: prTitle.trim(),
+        description: prDescription.trim(),
         repo: activeRepo?.name,
       });
 
@@ -426,7 +442,7 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
         setCreatedPRUrl(res.data.html_url || res.data.url || "#");
         setFeedback({
           type: "success",
-          message: "Proposta de versão enviada com sucesso!",
+          message: res.data.message || "Proposta de versão enviada com sucesso!",
         });
         setPrTitle("");
         setPrDescription("");
@@ -599,7 +615,7 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
               onClick={handleSync}
               isLoading={isSyncing}
             >
-              {isSyncing ? "Sincronizando..." : "Sincronizar com GitHub"}
+              {isSyncing ? "Sincronizando..." : `Sincronizar com ${providerLabel}`}
             </Button>
           </Row>
         }
@@ -1621,6 +1637,32 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
                     </Button>
                   </Row>
 
+                  {isClean && (
+                    <div
+                      style={{
+                        padding: "10px 14px",
+                        borderRadius: "6px",
+                        background: "var(--color-surface-container-low, #f8fafc)",
+                        border: "1px dashed var(--color-outline-variant, #cbd5e1)",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "10px",
+                        fontSize: "12.5px",
+                        color: "var(--color-on-surface-variant, #64748b)",
+                      }}
+                    >
+                      <span
+                        className="material-symbols-outlined"
+                        style={{ fontSize: "18px", color: "var(--color-primary, #2563eb)", flexShrink: 0 }}
+                      >
+                        info
+                      </span>
+                      <span>
+                        Nenhum arquivo modificado detectado no momento. Edite ou crie documentos no editor e salve suas alterações (Ctrl+S) para propor uma nova versão.
+                      </span>
+                    </div>
+                  )}
+
                   <FormField
                     label="Título da Proposta"
                     required
@@ -1631,7 +1673,7 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
                       placeholder="Ex: docs: atualização de especificações e termos de governança"
                       value={prTitle}
                       onChange={(e) => setPrTitle(e.target.value)}
-                      disabled={isCreatingPR || isClean}
+                      disabled={isCreatingPR}
                     />
                   </FormField>
 
@@ -1645,28 +1687,71 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
                       placeholder="Detalhe os motivos das alterações, impactos e itens adicionados..."
                       value={prDescription}
                       onChange={(e) => setPrDescription(e.target.value)}
-                      disabled={isCreatingPR || isClean}
+                      disabled={isCreatingPR}
                     />
                   </FormField>
 
-                  {createdPRUrl && (
+                  {feedback && (
                     <div
                       style={{
                         padding: "10px 14px",
                         borderRadius: "6px",
-                        background: "var(--color-success-subtle, #f0fdf4)",
-                        border: "1px solid var(--color-border-subtle, #bbf7d0)",
+                        background:
+                          feedback.type === "success"
+                            ? "var(--color-success-subtle, #f0fdf4)"
+                            : "var(--color-danger-subtle, #fef2f2)",
+                        border: `1px solid ${
+                          feedback.type === "success"
+                            ? "var(--color-border-subtle, #bbf7d0)"
+                            : "var(--color-border-danger, #fecaca)"
+                        }`,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
                       }}
                     >
                       <span
+                        className="material-symbols-outlined"
                         style={{
-                          fontSize: "13px",
-                          color: "var(--color-success, #166534)",
-                          fontWeight: 500,
+                          fontSize: "18px",
+                          color:
+                            feedback.type === "success"
+                              ? "var(--color-success, #16a34a)"
+                              : "var(--color-danger, #dc2626)",
+                          flexShrink: 0,
                         }}
                       >
-                        🎉 Proposta criada com sucesso!
+                        {feedback.type === "success" ? "check_circle" : "error"}
                       </span>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                        <span
+                          style={{
+                            fontSize: "13px",
+                            color:
+                              feedback.type === "success"
+                                ? "var(--color-success, #166534)"
+                                : "var(--color-danger, #991b1b)",
+                            fontWeight: 500,
+                          }}
+                        >
+                          {feedback.message}
+                        </span>
+                        {feedback.type === "success" && createdPRUrl && createdPRUrl !== "#" && (
+                          <a
+                            href={createdPRUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            style={{
+                              fontSize: "12px",
+                              color: "var(--color-primary, #2563eb)",
+                              textDecoration: "underline",
+                              fontWeight: 600,
+                            }}
+                          >
+                            Abrir Pull Request no Provedor Git ↗
+                          </a>
+                        )}
+                      </div>
                     </div>
                   )}
 
@@ -1681,7 +1766,7 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
                       type="submit"
                       variant="primary"
                       size="md"
-                      disabled={isCreatingPR || isClean || !prTitle.trim()}
+                      disabled={isCreatingPR}
                       isLoading={isCreatingPR}
                       icon={
                         <span

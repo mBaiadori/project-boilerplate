@@ -8,6 +8,7 @@ import React, {
 } from "react";
 import type {
   Repo,
+  RepoDiagnosis,
   WorkspaceChange,
   TreeNode,
   GitStatus,
@@ -66,7 +67,10 @@ interface WorkspaceContextType {
   refreshWhatsNew: () => Promise<void>;
   markWhatsNewAsSeen: () => void;
   loadRepos: () => Promise<void>;
-  selectRepo: (repo: Repo, initialFile?: string) => Promise<void>;
+  selectRepo: (
+    repo: Repo,
+    initialFile?: string,
+  ) => Promise<{ success: boolean; is_ready?: boolean; diagnosis?: RepoDiagnosis }>;
   selectRepoByName: (
     repoName: string,
     initialFile?: string,
@@ -193,7 +197,8 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
     try {
       const res = await API.getRepos();
       if (res.ok && res.data.repos) {
-        setRepos(res.data.repos);
+        const cleanRepos = res.data.repos.filter((r) => r.name !== 'default' && r.name !== '_default');
+        setRepos(cleanRepos);
       }
     } catch (err) {
       console.error("[WorkspaceContext] Erro ao carregar repositórios:", err);
@@ -810,10 +815,13 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
   }, [whatsNewSummary, refreshWhatsNew]);
 
   const selectRepo = useCallback(
-    async (repo: Repo, initialFile?: string) => {
-      if (!repo || !repo.name) return;
+    async (
+      repo: Repo,
+      initialFile?: string,
+    ): Promise<{ success: boolean; is_ready?: boolean; diagnosis?: RepoDiagnosis }> => {
+      if (!repo || !repo.name) return { success: false, is_ready: false };
       if (inFlightRepoRef.current === repo.name) {
-        return;
+        return { success: true, is_ready: true };
       }
       inFlightRepoRef.current = repo.name;
       setIsLoadingWorkspace(true);
@@ -833,7 +841,16 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
         setFileMetadataState({});
         fileMetadataRef.current = {};
 
-        await API.selectRepo(repo);
+        const selectRes = await API.selectRepo(repo);
+        const isReady = selectRes.data?.is_ready !== false;
+        const diagnosis = selectRes.data?.diagnosis;
+
+        if (!isReady) {
+          setIsLoadingTree(false);
+          setIsLoadingWorkspace(false);
+          return { success: true, is_ready: false, diagnosis };
+        }
+
         const data = await API.getProjectTree(repo.name);
         setTree(data.tree || []);
 
@@ -857,6 +874,8 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
           refreshGitLog(15),
           refreshWhatsNew(),
         ]).catch(() => {});
+
+        return { success: true, is_ready: true, diagnosis };
       } finally {
         inFlightRepoRef.current = null;
         setIsLoadingTree(false);

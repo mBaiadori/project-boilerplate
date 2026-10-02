@@ -1,11 +1,13 @@
 import React, { useMemo } from "react";
 import { useWorkspace } from "../../context/WorkspaceContext";
+import { useAuth } from "../../context/AuthContext";
 import { isPathHidden } from "../../utils/hidden-files";
 import { IconButton, Button, Badge, Spinner } from "../ui";
 import {
   ArrowLeft,
   Sparkles,
   HelpCircle,
+  ExternalLink,
 } from "lucide-react";
 
 interface TopHeaderProps {
@@ -25,8 +27,18 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
   onNavigateToEdits,
   onOpenTour = () => {},
 }) => {
-  const { activeRepo, pendingChanges, isLoadingWorkspace } =
-    useWorkspace();
+  const { activeRepo, pendingChanges, isLoadingWorkspace } = useWorkspace();
+  const { provider, providerUrl } = useAuth();
+  const providerLabel = provider === "forgejo" ? "Forgejo" : provider === "github" ? "GitHub" : "Modo Local";
+
+  const getRepoWebUrl = () => {
+    if (activeRepo?.html_url) return activeRepo.html_url;
+    if (provider === "forgejo") {
+      const base = (providerUrl || "http://localhost:3000/api/v1").replace(/\/api\/v1\/?$/, "");
+      return `${base}/${activeRepo?.full_name}`;
+    }
+    return `https://github.com/${activeRepo?.full_name}`;
+  };
 
   const filteredPendingChanges = useMemo(() => {
     return (pendingChanges || []).filter(
@@ -78,22 +90,15 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
             {activeRepo?.full_name && !activeRepo.is_local && (
               <a
                 id="dash-repo-github-link"
-                href={`https://github.com/${activeRepo.full_name}`}
+                href={getRepoWebUrl()}
                 target="_blank"
                 rel="noreferrer"
                 className="dash-repo-github-icon-btn"
-                title={`Abrir no GitHub (${activeRepo.full_name})`}
-                aria-label={`Abrir repositório ${activeRepo.full_name} no GitHub`}
+                title={`Abrir no ${providerLabel} (${activeRepo.full_name})`}
+                aria-label={`Abrir repositório ${activeRepo.full_name} no ${providerLabel}`}
+                style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}
               >
-                <svg
-                  height="18"
-                  width="18"
-                  viewBox="0 0 16 16"
-                  fill="currentColor"
-                  style={{ display: "block" }}
-                >
-                  <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
-                </svg>
+                <ExternalLink size={14} />
               </a>
             )}
             {isLoadingWorkspace && (

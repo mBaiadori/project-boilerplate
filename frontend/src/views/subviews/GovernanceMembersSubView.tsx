@@ -22,6 +22,7 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import { API } from "../../services/api";
+import { useAuth } from "../../context/AuthContext";
 import { useWorkspace } from "../../context/WorkspaceContext";
 import { useSecurity } from "../../context/SecurityContext";
 import { Button } from "../../components/ui/Button";
@@ -190,6 +191,8 @@ const FolderTreePicker: React.FC<FolderTreePickerProps> = ({
 };
 
 export const GovernanceMembersSubView: React.FC = () => {
+  const { provider } = useAuth();
+  const providerLabel = provider === "forgejo" ? "Forgejo" : provider === "github" ? "GitHub" : "Modo Local";
   const { activeRepo, tree } = useWorkspace();
   const currentRepoName = activeRepo?.name;
   const {
@@ -791,9 +794,7 @@ export const GovernanceMembersSubView: React.FC = () => {
                 style={{ color: "#eab308", flexShrink: 0 }}
               />
               <div style={{ flex: 1 }}>
-                Token do GitHub expirado ou inválido. Atualize em{" "}
-                <strong>Configurações &gt; Autenticação</strong> para
-                sincronizar os membros remotos.
+                {githubAuthError || "Token de autenticação expirado ou inválido. Atualize suas credenciais para sincronizar os membros remotos."}
               </div>
               <Button
                 variant="outline"
@@ -805,6 +806,124 @@ export const GovernanceMembersSubView: React.FC = () => {
               </Button>
             </div>
           )}
+
+          {/* Git Provider & Security Status Cards */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+              gap: "12px",
+              marginBottom: "16px",
+            }}
+          >
+            <div
+              style={{
+                padding: "12px 16px",
+                borderRadius: "10px",
+                background: "var(--color-surface-container, rgba(255, 255, 255, 0.03))",
+                border: "1px solid var(--color-outline-variant, rgba(255, 255, 255, 0.08))",
+                display: "flex",
+                alignItems: "center",
+                gap: "12px",
+              }}
+            >
+              <div
+                style={{
+                  width: "34px",
+                  height: "34px",
+                  borderRadius: "8px",
+                  background: "rgba(99, 102, 241, 0.15)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "#818cf8",
+                  flexShrink: 0,
+                }}
+              >
+                <ShieldCheck size={18} />
+              </div>
+              <div>
+                <div style={{ fontSize: "11px", color: "var(--color-outline, #a6adc8)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                  Provedor Git
+                </div>
+                <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-on-surface, #cdd6f4)" }}>
+                  {providerLabel === "Modo Local" ? "Modo Local" : `${providerLabel} Remoto`}
+                </div>
+              </div>
+            </div>
+
+            <div
+              style={{
+                padding: "12px 16px",
+                borderRadius: "10px",
+                background: "var(--color-surface-container, rgba(255, 255, 255, 0.03))",
+                border: "1px solid var(--color-outline-variant, rgba(255, 255, 255, 0.08))",
+                display: "flex",
+                alignItems: "center",
+                gap: "12px",
+              }}
+            >
+              <div
+                style={{
+                  width: "34px",
+                  height: "34px",
+                  borderRadius: "8px",
+                  background: branchProtection?.enabled ? "rgba(34, 197, 94, 0.15)" : "rgba(234, 179, 8, 0.15)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: branchProtection?.enabled ? "#22c55e" : "#eab308",
+                  flexShrink: 0,
+                }}
+              >
+                <GitBranch size={18} />
+              </div>
+              <div>
+                <div style={{ fontSize: "11px", color: "var(--color-outline, #a6adc8)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                  Branch 'main'
+                </div>
+                <div style={{ fontSize: "13px", fontWeight: 600, color: branchProtection?.enabled ? "#22c55e" : "#eab308" }}>
+                  {branchProtection?.enabled ? `Protegida (${branchProtection.required_approving_review_count || 1} revisão)` : 'Push Direto Ativo'}
+                </div>
+              </div>
+            </div>
+
+            <div
+              style={{
+                padding: "12px 16px",
+                borderRadius: "10px",
+                background: "var(--color-surface-container, rgba(255, 255, 255, 0.03))",
+                border: "1px solid var(--color-outline-variant, rgba(255, 255, 255, 0.08))",
+                display: "flex",
+                alignItems: "center",
+                gap: "12px",
+              }}
+            >
+              <div
+                style={{
+                  width: "34px",
+                  height: "34px",
+                  borderRadius: "8px",
+                  background: "rgba(16, 185, 129, 0.15)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "#10b981",
+                  flexShrink: 0,
+                }}
+              >
+                <Key size={18} />
+              </div>
+              <div>
+                <div style={{ fontSize: "11px", color: "var(--color-outline, #a6adc8)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                  Cofre Criptográfico
+                </div>
+                <div style={{ fontSize: "13px", fontWeight: 600, color: "#10b981" }}>
+                  Zero-Trust X25519 & AES
+                </div>
+              </div>
+            </div>
+          </div>
 
           <div
             style={{
@@ -824,7 +943,7 @@ export const GovernanceMembersSubView: React.FC = () => {
                 size={13}
                 className={isLoadingCollabs ? "animate-spin" : ""}
               />
-              <span>Sincronizar GitHub</span>
+              <span>Sincronizar Git</span>
             </Button>
           </div>
 
@@ -929,7 +1048,7 @@ export const GovernanceMembersSubView: React.FC = () => {
                                 gap: "3px",
                               }}
                             >
-                              GitHub <ExternalLink size={10} />
+                              {providerLabel} <ExternalLink size={10} />
                             </a>
                           </div>
                         </div>
@@ -1184,7 +1303,7 @@ export const GovernanceMembersSubView: React.FC = () => {
               >
                 <GitBranch size={18} color="#818cf8" />
                 <h3 style={{ fontSize: "15px", fontWeight: 600, margin: 0 }}>
-                  Proteção de Branch no GitHub (`main`)
+                  Proteção de Branch no {providerLabel} (`main`)
                 </h3>
               </div>
 
@@ -1246,7 +1365,7 @@ export const GovernanceMembersSubView: React.FC = () => {
               {branchProtection?.enabled ? (
                 <>
                   <Check size={14} color="#10b981" />
-                  <span>Branch main já está protegida no GitHub</span>
+                  <span>Branch main já está protegida no {providerLabel}</span>
                 </>
               ) : (
                 <>
@@ -1627,7 +1746,7 @@ export const GovernanceMembersSubView: React.FC = () => {
                 margin: "0 0 12px 0",
               }}
             >
-              Verifica se existem tokens de API (GitHub PATs, OpenAI Keys, AWS) ou documentos marcados como confidenciais sem criptografia no repositório.
+              Verifica se existem tokens de API, chaves privadas ou documentos marcados como confidenciais sem criptografia no repositório.
             </p>
 
             {secretScanResult && (
@@ -1806,7 +1925,7 @@ export const GovernanceMembersSubView: React.FC = () => {
               padding: "8px 0",
             }}
           >
-            <FormField label="Nome de Usuário no GitHub">
+            <FormField label={`Nome de Usuário no ${providerLabel}`}>
               <input
                 type="text"
                 placeholder="Ex: octocat"
@@ -1844,7 +1963,7 @@ export const GovernanceMembersSubView: React.FC = () => {
               />
             </FormField>
 
-            <FormField label="Permissão GitHub">
+            <FormField label={`Permissão ${providerLabel}`}>
               <select
                 value={invitePermission}
                 onChange={(e) => setInvitePermission(e.target.value)}

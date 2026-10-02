@@ -62,7 +62,8 @@ const renderMarkdownDescription = (text: string) => {
 };
 
 export const PRsSubView: React.FC<PRsSubViewProps> = () => {
-  const { user } = useAuth();
+  const { user, provider } = useAuth();
+  const providerLabel = provider === "forgejo" ? "Forgejo" : provider === "github" ? "GitHub" : "Modo Local";
   const navigate = useNavigate();
   const {
     activeRepo,
@@ -721,9 +722,9 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
                             <Badge
                               variant="neutral"
                               size="sm"
-                              title="Sincronizado com GitHub"
+                              title={`Sincronizado com ${providerLabel}`}
                             >
-                              GitHub #{pr.github_number}
+                              {providerLabel} #{pr.github_number}
                             </Badge>
                           )}
                         </div>
@@ -1337,7 +1338,7 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
                                 gap: "4px",
                               }}
                             >
-                              Ver no GitHub
+                              Ver no {providerLabel}
                               <span
                                 className="material-symbols-outlined"
                                 style={{ fontSize: "14px" }}

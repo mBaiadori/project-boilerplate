@@ -4954,7 +4954,9 @@ span[title] {
   color: var(--text-body, #1e293b);
   outline: none;
   box-sizing: border-box;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .ai-history-search-input:focus {

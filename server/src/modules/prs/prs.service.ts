@@ -508,7 +508,7 @@ Retorne APENAS um JSON válido no formato:
 
     const allChangedPaths = Array.from(
       new Set([...rawChanges.map((c) => c.path), ...gitFiles.map((f) => f.path)])
-    );
+    ).filter((p) => !p.includes('.spec-memory') && !p.includes('.git'));
 
     if (allChangedPaths.length === 0) {
       throw new Error('Não há alterações pendentes para criar um PR.');
@@ -583,9 +583,13 @@ Retorne APENAS um JSON válido no formato:
           prHtmlUrl = ghRes.data.html_url || prHtmlUrl;
         }
       } catch (err) {
-        console.warn('[PRsService] Aviso ao abrir PR no GitHub remoto:', err);
+        console.warn('[PRsService] Aviso ao abrir PR no Git remoto:', err);
       }
     }
+
+    // Switch back to default branch so local environment is clean and ready for further edits
+    const defaultBranch = activeRepo?.default_branch || 'main';
+    await executeGitCommand(`git checkout ${defaultBranch}`, repoDir);
 
     const detailedChanges = allChangedPaths.map((p) => {
       const wsChange = rawChanges.find((c) => c.path === p);

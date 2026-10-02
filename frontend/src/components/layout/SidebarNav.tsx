@@ -1,17 +1,16 @@
-import React, { useState } from "react";
 import {
-  FileText,
-  History,
-  BookTemplate,
-  Cpu,
-  GitPullRequest,
   BookOpen,
-  SpellCheck,
-  ShieldCheck,
-  Settings,
+  BookTemplate,
   ChevronLeft,
-  ChevronRight,
+  Cpu,
+  FileText,
+  GitPullRequest,
+  History,
+  Settings,
+  ShieldCheck,
+  SpellCheck,
 } from "lucide-react";
+import React, { useState } from "react";
 
 export type SubViewType =
   | "editor"
@@ -116,14 +115,16 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
             onClick={() => setIsCollapsed(!isCollapsed)}
           >
             <span className="toggle-arrow">
-              {isCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+              <ChevronLeft size={14} />
             </span>
           </button>
         </div>
 
         {navItems.map((item) => {
           const isItemActive =
-            item.isActive !== undefined ? item.isActive : activeView === item.id;
+            item.isActive !== undefined
+              ? item.isActive
+              : activeView === item.id;
           return (
             <button
               key={item.id}
@@ -133,7 +134,14 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
               onClick={() => onSelectView(item.id)}
               style={{ position: "relative" }}
             >
-              <span className="nav-icon" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+              <span
+                className="nav-icon"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
                 {item.icon}
               </span>
               <span className="nav-label">{item.label}</span>

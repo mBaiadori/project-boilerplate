@@ -1,6 +1,6 @@
 // API CLIENT MODULE (REST Calls to Backend Server)
 import type { 
-  WorkspaceStatus, Repo, WorkspaceChange, TreeNode, 
+  WorkspaceStatus, Repo, RepoDiagnosis, RepoInitializePayload, WorkspaceChange, TreeNode, 
   PR, TemplateItem, TutorialItem, AISettingsState, DictionaryTerm, User,
   GitStatus, GitCommitInfo, DocumentMetadataItem, WhatsNewSummary,
   SkillItem, ProjectSkillsManifest, ToolCallRecord,
@@ -19,11 +19,11 @@ export const API = {
     return res.json();
   },
 
-  async loginWithToken(token: string): Promise<ApiResponse<{ success?: boolean; user?: User; error?: string }>> {
+  async loginWithToken(token: string, provider: 'github' | 'forgejo' = 'github', provider_url?: string): Promise<ApiResponse<{ success?: boolean; user?: User; error?: string }>> {
     const res = await fetch('/api/auth/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token })
+      body: JSON.stringify({ token, provider, provider_url })
     });
     return { ok: res.ok, data: await res.json() };
   },
@@ -54,11 +54,87 @@ export const API = {
     return { ok: res.ok, data: await res.json() };
   },
 
-  async selectRepo(repo: Partial<Repo>): Promise<ApiResponse<any>> {
+  async selectRepo(repo: Partial<Repo>): Promise<ApiResponse<{ success: boolean; is_ready?: boolean; active_repo?: Repo; diagnosis?: RepoDiagnosis; error?: string }>> {
     const res = await fetch('/api/repos/select', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(repo)
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async diagnoseRepo(name: string): Promise<ApiResponse<RepoDiagnosis>> {
+    const res = await fetch('/api/repos/diagnose', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name })
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async initializeRepo(payload: RepoInitializePayload): Promise<ApiResponse<{ success: boolean; message: string; active_repo: Repo; diagnosis?: RepoDiagnosis; error?: string }>> {
+    const res = await fetch('/api/repos/initialize', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async getOrgs(): Promise<ApiResponse<{ orgs: Array<{ login: string; full_name?: string; avatar_url?: string; description?: string }> }>> {
+    const res = await fetch('/api/repos/orgs');
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async createOrg(payload: { username: string; full_name?: string; description?: string; visibility?: string }): Promise<ApiResponse<{ success: boolean; org?: any; requires_web_flow?: boolean; web_url?: string; message?: string; error?: string }>> {
+    const res = await fetch('/api/repos/orgs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async deleteRepo(payload: {
+    name: string;
+    owner?: string;
+    delete_remote?: boolean;
+    delete_local?: boolean;
+  }): Promise<ApiResponse<any>> {
+    const res = await fetch('/api/repos', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async updateRepo(payload: {
+    current_name: string;
+    new_name?: string;
+    description?: string;
+    is_private?: boolean;
+    owner?: string;
+  }): Promise<ApiResponse<{ success: boolean; remoteUpdated?: boolean; message?: string; repo?: any; error?: string }>> {
+    const res = await fetch('/api/repos', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async cloneRepo(payload: {
+    source_name: string;
+    new_name: string;
+    owner?: string;
+    description?: string;
+    is_private?: boolean;
+  }): Promise<ApiResponse<{ success: boolean; message?: string; repo?: any; error?: string }>> {
+    const res = await fetch('/api/repos/clone', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
     });
     return { ok: res.ok, data: await res.json() };
   },

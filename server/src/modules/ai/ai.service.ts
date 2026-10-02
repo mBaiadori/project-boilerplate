@@ -126,7 +126,11 @@ export class AIService {
     const model = aiSettings.model || 'gemini-2.5-flash';
     const apiKey = aiSettings.api_key || process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY || '';
 
-    const systemPrompt = customSystemPrompt || DEFAULT_GLOBAL_SYSTEM_PROMPT;
+    const cfg = loadConfig();
+    const activeUser = cfg.user?.login || 'local';
+    const isOwner = activeUser.toLowerCase() === (cfg.active_repo?.full_name?.split('/')[0] || cfg.user?.login || '').toLowerCase();
+    const governanceContext = `\n\n[Context OS Governance Guard]\nUsuário Ativo: @${activeUser} | Papel: ${isOwner ? 'Owner / Root (Acesso Total)' : 'Colaborador'}\nRespeite estritamente os níveis de segurança, diretrizes de governança e restrições departamentais.`;
+    const systemPrompt = (customSystemPrompt || DEFAULT_GLOBAL_SYSTEM_PROMPT) + governanceContext;
     const contextPrompt = docContext
       ? `\n\n--- DOCUMENTO ATUAL (${filePath}) ---\n${docContext}\n--- FIM DO DOCUMENTO ---`
       : '';

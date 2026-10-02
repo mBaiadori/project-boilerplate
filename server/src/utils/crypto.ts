@@ -478,6 +478,18 @@ export function scanContentForSecrets(content: string, filePath: string): Secret
     return { hasSecrets: false, violations };
   }
 
+  // Ignore internal system memory, caches and git metadata
+  const cleanPath = (filePath || '').replace(/\\/g, '/');
+  if (
+    cleanPath.includes('.spec-memory') ||
+    cleanPath.includes('.git') ||
+    cleanPath.endsWith('.json') ||
+    cleanPath.includes('.keymap') ||
+    cleanPath.includes('node_modules')
+  ) {
+    return { hasSecrets: false, violations };
+  }
+
   // Check 1: GitHub Tokens
   if (/(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]{20,255}/.test(content) || /github_pat_[A-Za-z0-9_]{50,255}/.test(content)) {
     violations.push({

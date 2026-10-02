@@ -221,6 +221,8 @@ export function saveConfig(cfg: AppConfig): void {
           }
         : undefined,
       settings: cfg.settings || {},
+      git_provider: cfg.git_provider || "forgejo",
+      git_provider_url: cfg.git_provider_url || undefined,
       governance: cfg.governance,
       workflows: cfg.workflows || [],
     };
@@ -652,12 +654,22 @@ function verifyAndRepairStructure(
   }
 }
 
-export async function ensureDefaultRepoFiles(repoName: string): Promise<void> {
+export async function ensureDefaultRepoFiles(
+  repoName: string,
+  allowAutoCloneOrInit: boolean = false,
+): Promise<void> {
   if (!repoName) return;
 
   const defaultDir = getSSOTDefaultDir();
   const targetDir = path.join(PROJECTS_DIR, repoName);
   const cfg = loadConfig();
+
+  // If directory does not exist and auto-creation is not explicitly requested, do not recreate!
+  if (!fs.existsSync(targetDir)) {
+    if (!allowAutoCloneOrInit) {
+      return;
+    }
+  }
 
   const defaultHiddenFiles = [
     ".git",
@@ -677,27 +689,30 @@ export async function ensureDefaultRepoFiles(repoName: string): Promise<void> {
     ".hidden_files.json",
   ];
 
-  // 1. If remote repo is missing or has no .git, clone and pull FIRST
-  const isRemote =
-    (cfg.active_repo?.name === repoName && Boolean(cfg.active_repo?.html_url)) ||
-    (Boolean(cfg.token) && repoName !== "default" && repoName !== "_default");
-  let remoteUrl =
-    cfg.active_repo?.name === repoName ? cfg.active_repo?.html_url : undefined;
-  if (!remoteUrl && cfg.token && cfg.user?.login && repoName !== "default" && repoName !== "_default") {
-    remoteUrl = `https://github.com/${cfg.user.login}/${repoName}.git`;
-  }
-  const token = cfg.token;
+  // 1. If remote repo is missing or has no .git, clone and pull FIRST ONLY IF allowed
+  if (allowAutoCloneOrInit) {
+    const isRemote =
+      (cfg.active_repo?.name === repoName && Boolean(cfg.active_repo?.html_url)) ||
+      (Boolean(cfg.token) && repoName !== "default" && repoName !== "_default");
+    let remoteUrl =
+      cfg.active_repo?.name === repoName ? cfg.active_repo?.html_url : undefined;
+    if (!remoteUrl && cfg.token && cfg.user?.login && repoName !== "default" && repoName !== "_default") {
+      remoteUrl = `https://github.com/${cfg.user.login}/${repoName}.git`;
+    }
+    const token = cfg.token;
 
-  if (
-    isRemote &&
-    (!fs.existsSync(targetDir) || !fs.existsSync(path.join(targetDir, ".git")))
-  ) {
-    const { ensureGitRepo } = await import("../utils/git.js");
-    await ensureGitRepo(targetDir, cfg.user, remoteUrl, token, repoName, true);
+    if (
+      isRemote &&
+      (!fs.existsSync(targetDir) || !fs.existsSync(path.join(targetDir, ".git")))
+    ) {
+      const { ensureGitRepo } = await import("../utils/git.js");
+      await ensureGitRepo(targetDir, cfg.user, remoteUrl, token, repoName, true);
+    }
   }
 
-  // Ensure target directory exists
+  // Ensure target directory exists only if we have permission to initialize
   if (!fs.existsSync(targetDir)) {
+    if (!allowAutoCloneOrInit) return;
     fs.mkdirSync(targetDir, { recursive: true });
   }
 
@@ -822,11 +837,5 @@ export async function ensureDefaultRepoFiles(repoName: string): Promise<void> {
     } catch (err: any) {
       console.warn(`[Storage] Aviso ao criar .github/CODEOWNERS em ${repoName}:`, err.message);
     }
-  }
-
-  // Ensure target repo has an independent .git initialized
-  if (!fs.existsSync(path.join(targetDir, ".git"))) {
-    const { ensureGitRepo } = await import("../utils/git.js");
-    await ensureGitRepo(targetDir, cfg.user, remoteUrl, token, repoName, true);
   }
 }

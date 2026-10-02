@@ -6,7 +6,9 @@ interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  loginWithToken: (token: string) => Promise<{ success: boolean; error?: string }>;
+  provider: 'github' | 'forgejo' | 'local';
+  providerUrl?: string;
+  loginWithToken: (token: string, provider?: 'github' | 'forgejo', providerUrl?: string) => Promise<{ success: boolean; error?: string }>;
   loginLocal: () => Promise<{ success: boolean }>;
   logout: () => Promise<void>;
   refreshAuth: () => Promise<void>;
@@ -16,6 +18,8 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [provider, setProvider] = useState<'github' | 'forgejo' | 'local'>('forgejo');
+  const [providerUrl, setProviderUrl] = useState<string | undefined>('http://localhost:3000/api/v1');
   const [isLoading, setIsLoading] = useState(true);
 
   const refreshAuth = async () => {
@@ -23,6 +27,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const status = await API.getStatus();
       if (status.authenticated && status.user) {
         setUser(status.user);
+        if (status.git_provider) {
+          setProvider(status.git_provider as any);
+        }
+        if (status.git_provider_url) {
+          setProviderUrl(status.git_provider_url);
+        }
       } else {
         setUser(null);
       }
@@ -38,14 +48,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     refreshAuth();
   }, []);
 
-  const loginWithToken = async (token: string) => {
+  const loginWithToken = async (token: string, selectedProvider: 'github' | 'forgejo' = 'forgejo', selectedProviderUrl?: string) => {
     try {
-      const res = await API.loginWithToken(token);
+      const res = await API.loginWithToken(token, selectedProvider, selectedProviderUrl);
       if (res.ok && res.data.user) {
         setUser(res.data.user);
+        setProvider(selectedProvider);
+        if (selectedProviderUrl) setProviderUrl(selectedProviderUrl);
         return { success: true };
       }
-      return { success: false, error: res.data.error || 'Falha ao autenticar com token GitHub' };
+      return { success: false, error: res.data.error || `Falha ao autenticar com token ${selectedProvider === 'forgejo' ? 'Forgejo' : 'GitHub'}` };
     } catch (err: any) {
       return { success: false, error: err.message || 'Erro de conexão com o servidor' };
     }
@@ -56,13 +68,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const res = await API.loginWithToken('local_mode');
       if (res.ok && res.data.user) {
         setUser(res.data.user);
+        setProvider('local');
         return { success: true };
       }
-      // Se não, cria usuário local padrão
       setUser({ login: 'local_dev', name: 'Desenvolvedor Local', role: 'Administrador Local', is_local: true });
+      setProvider('local');
       return { success: true };
     } catch (err) {
       setUser({ login: 'local_dev', name: 'Desenvolvedor Local', role: 'Administrador Local', is_local: true });
+      setProvider('local');
       return { success: true };
     }
   };
@@ -83,6 +97,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         user,
         isAuthenticated: !!user,
         isLoading,
+        provider,
+        providerUrl,
         loginWithToken,
         loginLocal,
         logout,

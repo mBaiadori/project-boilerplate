@@ -1864,7 +1864,7 @@ export const SettingsSubView: React.FC = () => {
 
               <CardContent>
                 <Stack gap="lg">
-                  {/* Linha 1: Idioma Oficial - Seleciona apenas entre os idiomas suportados habilitados */}
+                  {/* Idiomas Habilitados & Seleção do Idioma Oficial */}
                   <Stack gap="xs">
                     <div
                       style={{
@@ -1875,120 +1875,10 @@ export const SettingsSubView: React.FC = () => {
                     >
                       <div>
                         <span className="ui-text-subtitle ui-text-bold">
-                          Idioma Oficial do Projeto
+                          Idiomas Habilitados no Projeto
                         </span>
                         <div className="ui-text-body-sm ui-text-muted">
-                          Este é o idioma oficial aceito na documentação do
-                          projeto. Apenas os idiomas habilitados abaixo aparecem
-                          nesta lista.
-                        </div>
-                      </div>
-                    </div>
-
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns:
-                          "repeat(auto-fill, minmax(200px, 1fr))",
-                        gap: "8px",
-                        marginTop: "6px",
-                      }}
-                    >
-                      {supportedLanguages.map((lang) => {
-                        const isSelected =
-                          defaultLanguage.toLowerCase() ===
-                          lang.code.toLowerCase();
-                        return (
-                          <button
-                            key={lang.code}
-                            type="button"
-                            onClick={() => {
-                              if (lang.code === defaultLanguage) return;
-                              if (docMetadataList.length > 0) {
-                                setLanguageChangeDialog({
-                                  isOpen: true,
-                                  targetLang: lang.code,
-                                });
-                              } else {
-                                setDefaultLanguage(lang.code);
-                              }
-                            }}
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "space-between",
-                              padding: "8px 12px",
-                              borderRadius: "8px",
-                              border: isSelected
-                                ? "2px solid #0ea5e9"
-                                : "1px solid var(--color-outline-variant, #e2e8f0)",
-                              background: isSelected
-                                ? "rgba(14, 165, 233, 0.08)"
-                                : "var(--color-surface, #ffffff)",
-                              color: "var(--color-on-surface, #1e293b)",
-                              cursor: "pointer",
-                              textAlign: "left",
-                              transition: "all 0.15s ease",
-                            }}
-                          >
-                            <div
-                              style={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: "8px",
-                              }}
-                            >
-                              <span style={{ fontSize: "18px" }}>
-                                {lang.flag}
-                              </span>
-                              <div>
-                                <div
-                                  style={{
-                                    fontSize: "12.5px",
-                                    fontWeight: isSelected ? 700 : 500,
-                                  }}
-                                >
-                                  {lang.label}
-                                </div>
-                                <div
-                                  style={{
-                                    fontSize: "10.5px",
-                                    color: "var(--color-outline, #64748b)",
-                                  }}
-                                >
-                                  {lang.code.toUpperCase()}
-                                </div>
-                              </div>
-                            </div>
-                            {isSelected && (
-                              <Badge variant="primary" size="sm">
-                                OFICIAL
-                              </Badge>
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </Stack>
-
-                  <Divider />
-
-                  {/* Linha 2: Idiomas Habilitados para Tradução Sob Demanda */}
-                  <Stack gap="xs">
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                      }}
-                    >
-                      <div>
-                        <span className="ui-text-subtitle ui-text-bold">
-                          Idiomas Habilitados para Tradução Sob Demanda
-                        </span>
-                        <div className="ui-text-body-sm ui-text-muted">
-                          Idiomas disponíveis para os membros da equipe
-                          traduzirem documentos no editor.
+                          Idiomas disponíveis para a documentação e traduções sob demanda. Clique em um idioma para defini-lo como oficial.
                         </div>
                       </div>
                     </div>
@@ -2010,6 +1900,37 @@ export const SettingsSubView: React.FC = () => {
                         return (
                           <div
                             key={lang.code}
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => {
+                              if (isDefault) return;
+                              if (docMetadataList.length > 0) {
+                                setLanguageChangeDialog({
+                                  isOpen: true,
+                                  targetLang: lang.code,
+                                });
+                              } else {
+                                setDefaultLanguage(lang.code);
+                              }
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                if (isDefault) return;
+                                if (docMetadataList.length > 0) {
+                                  setLanguageChangeDialog({
+                                    isOpen: true,
+                                    targetLang: lang.code,
+                                  });
+                                } else {
+                                  setDefaultLanguage(lang.code);
+                                }
+                              }
+                            }}
+                            title={
+                              isDefault
+                                ? `${lang.label} é o idioma oficial do projeto`
+                                : `Clique para definir ${lang.label} como o idioma oficial do projeto`
+                            }
                             style={{
                               display: "inline-flex",
                               alignItems: "center",
@@ -2025,6 +1946,24 @@ export const SettingsSubView: React.FC = () => {
                               color: "var(--color-on-surface, #1e293b)",
                               fontSize: "12.5px",
                               fontWeight: 500,
+                              cursor: isDefault ? "default" : "pointer",
+                              userSelect: "none",
+                              transition: "all 0.15s ease",
+                            }}
+                            onMouseEnter={(e) => {
+                              if (!isDefault) {
+                                e.currentTarget.style.borderColor = "#0ea5e9";
+                                e.currentTarget.style.background =
+                                  "rgba(14, 165, 233, 0.06)";
+                              }
+                            }}
+                            onMouseLeave={(e) => {
+                              if (!isDefault) {
+                                e.currentTarget.style.borderColor =
+                                  "var(--color-outline-variant, #cbd5e1)";
+                                e.currentTarget.style.background =
+                                  "var(--color-surface-container-low, #f8fafc)";
+                              }
                             }}
                           >
                             <span style={{ fontSize: "15px" }}>
@@ -2051,7 +1990,8 @@ export const SettingsSubView: React.FC = () => {
                               <button
                                 type="button"
                                 title={`Desabilitar e remover ${lang.label} do projeto`}
-                                onClick={() => {
+                                onClick={(e) => {
+                                  e.stopPropagation();
                                   const updated = supportedLanguages.filter(
                                     (l) =>
                                       l.code.toLowerCase() !==
