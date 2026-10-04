@@ -1,9 +1,11 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation, Trans } from "react-i18next";
 import type { Repo, RepoDiagnosis } from "../types";
 import { useAuth } from "../context/AuthContext";
 import { useWorkspace } from "../context/WorkspaceContext";
 import { API } from "../services/api";
+import { LanguageSwitcher } from "../components/common/LanguageSwitcher";
 import {
   Button,
   IconButton,
@@ -50,6 +52,7 @@ interface ReposViewProps {
 }
 
 export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
+  const { t } = useTranslation(["repos", "common"]);
   const navigate = useNavigate();
   const { user, logout, provider } = useAuth();
   const providerLabel =
@@ -57,7 +60,7 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
       ? "Forgejo"
       : provider === "github"
         ? "GitHub"
-        : "Modo Local";
+        : t("repos:providerLocal");
   const { repos, loadRepos, selectRepo, isLoading } = useWorkspace();
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedOrg, setSelectedOrg] = useState("all");
@@ -94,7 +97,7 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
   const [isCreatingRepo, setIsCreatingRepo] = useState(false);
   const [newRepoName, setNewRepoName] = useState("");
   const [newRepoDesc, setNewRepoDesc] = useState(
-    "Repositório com regras de Governança",
+    t("repos:createDescDefault")
   );
   const [newRepoApprovals, setNewRepoApprovals] = useState(1);
   const [newRepoProtection, setNewRepoProtection] = useState(true);
@@ -247,7 +250,7 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
                 id="user-name"
                 style={{ margin: 0, fontSize: "14px", fontWeight: 600 }}
               >
-                {user?.name || user?.login || "Desenvolvedor"}
+                {user?.name || user?.login || t("repos:defaultDeveloperName")}
               </h3>
               <span
                 id="user-login"
@@ -258,7 +261,8 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
             </div>
           </div>
 
-          <div className="nav-actions" style={{ display: "flex", gap: "8px" }}>
+          <div className="nav-actions" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <LanguageSwitcher variant="subtle" />
             <Button
               id="btn-open-onboarding"
               variant="subtle"
@@ -266,7 +270,7 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
               leftIcon={<Sparkles size={15} />}
               onClick={() => setShowOnboarding(true)}
             >
-              Assistente / Onboarding
+              {t("repos:navOnboarding")}
             </Button>
             <Button
               id="btn-open-create-org"
@@ -275,7 +279,7 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
               leftIcon={<Building2 size={15} />}
               onClick={() => setIsCreateOrgModalOpen(true)}
             >
-              Nova Organização
+              {t("repos:navNewOrg")}
             </Button>
             <Button
               id="btn-open-create-repo"
@@ -284,7 +288,7 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
               leftIcon={isCreatingRepo ? <X size={15} /> : <Plus size={15} />}
               onClick={() => setIsCreatingRepo(!isCreatingRepo)}
             >
-              {isCreatingRepo ? "Fechar Painel" : "Novo Repositório"}
+              {isCreatingRepo ? t("repos:navClosePanel") : t("repos:navNewRepo")}
             </Button>
             <Button
               id="btn-logout"
@@ -293,7 +297,7 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
               leftIcon={<LogOut size={15} />}
               onClick={logout}
             >
-              Desconectar
+              {t("repos:navLogout")}
             </Button>
           </div>
         </header>
@@ -317,12 +321,12 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
               style={{ marginBottom: 24 }}
             >
               <CardHeader
-                title="Criar Novo Repositório com Governança"
-                subtitle="Inicialize o repositório com branch protection e templates SDD oficiais"
+                title={t("repos:createCardTitle")}
+                subtitle={t("repos:createCardSubtitle")}
                 actions={
                   <IconButton
                     size="sm"
-                    tooltip="Fechar"
+                    tooltip={t("common:close")}
                     onClick={() => setIsCreatingRepo(false)}
                   >
                     <X size={16} />
@@ -340,7 +344,7 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
                       gap: 16,
                     }}
                   >
-                    <FormField label="Proprietário / Organização:">
+                    <FormField label={t("repos:createOwnerLabel")}>
                       <select
                         id="create-repo-owner"
                         className="ui-input"
@@ -348,20 +352,20 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
                         onChange={(e) => setSelectedOrg(e.target.value)}
                       >
                         <option value="all">
-                          {user?.login} (Conta Pessoal)
+                          {t("repos:createOwnerPersonal", { user: user?.login })}
                         </option>
                         {orgs.map((o) => (
                           <option key={o} value={o}>
-                            {o} (Organização)
+                            {t("repos:createOwnerOrg", { org: o })}
                           </option>
                         ))}
                       </select>
                     </FormField>
 
-                    <FormField label="Nome do Repositório:" required>
+                    <FormField label={t("repos:createNameLabel")} required>
                       <Input
                         id="create-repo-name"
-                        placeholder="ex: fintech-billing"
+                        placeholder={t("repos:createNamePlaceholder")}
                         value={newRepoName}
                         onChange={(e) => setNewRepoName(e.target.value)}
                         required
@@ -377,7 +381,7 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
                       gap: 16,
                     }}
                   >
-                    <FormField label="Descrição:">
+                    <FormField label={t("repos:createDescLabel")}>
                       <Input
                         id="create-repo-desc"
                         value={newRepoDesc}
@@ -385,7 +389,7 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
                       />
                     </FormField>
 
-                    <FormField label="Aprovações necessárias:">
+                    <FormField label={t("repos:createApprovalsLabel")}>
                       <select
                         id="create-repo-approvals"
                         className="ui-input"
@@ -394,8 +398,8 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
                           setNewRepoApprovals(Number(e.target.value))
                         }
                       >
-                        <option value="1">1 Aprovação (1-of-N)</option>
-                        <option value="2">2 Aprovações</option>
+                        <option value="1">{t("repos:createApprovals1")}</option>
+                        <option value="2">{t("repos:createApprovals2")}</option>
                       </select>
                     </FormField>
                   </div>
@@ -413,20 +417,19 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
                       checked={newRepoProtection}
                       onChange={setNewRepoProtection}
                       label={
-                        <span>
-                          Bloquear branch <code>main</code> (Exige PR
-                          obrigatório)
-                        </span>
+                        <Trans ns="repos" i18nKey="createProtectionLabel">
+                          Bloquear branch <code>main</code> (Exige PR obrigatório)
+                        </Trans>
                       }
-                      description="Garante que nenhuma alteração direta seja feita sem revisão"
+                      description={t("repos:createProtectionDesc")}
                     />
 
                     <Switch
                       id="create-repo-private"
                       checked={newRepoPrivate}
                       onChange={setNewRepoPrivate}
-                      label={`Repositório Privado no ${providerLabel}`}
-                      description="Visível apenas para você e colaboradores autorizados"
+                      label={t("repos:createPrivateLabel", { provider: providerLabel })}
+                      description={t("repos:createPrivateDesc")}
                     />
                   </div>
                 </CardContent>
@@ -438,7 +441,7 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
                     size="sm"
                     onClick={() => setIsCreatingRepo(false)}
                   >
-                    Cancelar
+                    {t("common:cancel")}
                   </Button>
                   <Button
                     id="btn-submit-create-repo"
@@ -448,7 +451,7 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
                     isLoading={isSubmitting}
                     disabled={!newRepoName.trim()}
                   >
-                    Criar Repositório
+                    {t("repos:createSubmitButton")}
                   </Button>
                 </CardFooter>
               </form>
@@ -459,16 +462,16 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
           <div className="repos-section-header" style={{ marginBottom: 20 }}>
             <div className="section-title" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <h2 style={{ fontSize: "18px", fontWeight: 600, margin: 0 }}>Seus Repositórios</h2>
+                <h2 style={{ fontSize: "18px", fontWeight: 600, margin: 0 }}>{t("repos:sectionTitle")}</h2>
                 <Badge id="repos-count-badge" variant="primary">
-                  {filteredRepos.length} repositório(s)
+                  {t("repos:reposCount", { count: filteredRepos.length })}
                 </Badge>
               </div>
 
               <div style={{ width: 280 }}>
                 <SearchInput
                   id="repos-search-input"
-                  placeholder="Buscar repositório por nome ou descrição..."
+                  placeholder={t("repos:searchPlaceholder")}
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   onClear={() => setSearchTerm("")}
@@ -483,7 +486,7 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
                 className={`chip-filter-btn ${selectedOrg === "all" ? "active" : ""}`}
                 onClick={() => setSelectedOrg("all")}
               >
-                <span>Todas as contas</span>
+                <span>{t("repos:filterAllAccounts")}</span>
                 <span className="chip-count">{repos.length}</span>
               </button>
 
@@ -494,7 +497,7 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
                   onClick={() => setSelectedOrg(user.login)}
                 >
                   <User size={13} />
-                  <span>Pessoal (@{user.login})</span>
+                  <span>{t("repos:filterPersonal", { user: user.login })}</span>
                   <span className="chip-count">
                     {
                       repos.filter(
@@ -533,7 +536,7 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
                   onClick={() => setSelectedOrg("local")}
                 >
                   <HardDrive size={13} />
-                  <span>Locais</span>
+                  <span>{t("repos:filterLocal")}</span>
                   <span className="chip-count">
                     {repos.filter((r) => r.is_local).length}
                   </span>
@@ -555,14 +558,14 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
                   textAlign: "center",
                 }}
               >
-                <Spinner size="lg" message="Carregando repositórios..." />
+                <Spinner size="lg" message={t("repos:loadingRepos")} />
               </div>
             ) : filteredRepos.length === 0 ? (
               <div style={{ gridColumn: "1 / -1" }}>
                 <EmptyState
                   icon={<FolderGit2 size={44} strokeWidth={1.4} />}
-                  title="Nenhum repositório encontrado"
-                  description="Tente ajustar os filtros ou clique em 'Novo Repositório' acima para começar."
+                  title={t("repos:emptyTitle")}
+                  description={t("repos:emptyDescription")}
                   action={
                     <Button
                       variant="primary"
@@ -570,7 +573,7 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
                       leftIcon={<Plus size={15} />}
                       onClick={() => setIsCreatingRepo(true)}
                     >
-                      Novo Repositório
+                      {t("repos:emptyAction")}
                     </Button>
                   }
                 />
@@ -599,8 +602,8 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
                     aria-disabled={isAnyOpening && !isOpening}
                     title={
                       isOpening
-                        ? `Carregando ${repo.name}...`
-                        : `Abrir Dashboard do projeto ${repo.full_name || repo.name}`
+                        ? t("repos:cardLoadingTooltip", { name: repo.name })
+                        : t("repos:cardOpenTooltip", { name: repo.full_name || repo.name })
                     }
                     onClick={() => !isAnyOpening && handleOpenRepo(repo)}
                     onKeyDown={(e) => {
@@ -645,7 +648,7 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
                               size="sm"
                               icon={<HardDrive size={11} style={{ marginRight: 3 }} />}
                             >
-                              Vinculado
+                              {t("repos:badgeLinked")}
                             </Badge>
                           ) : (
                             <Badge
@@ -653,7 +656,7 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
                               size="sm"
                               icon={<Globe size={11} style={{ marginRight: 3 }} />}
                             >
-                              Não vinculado
+                              {t("repos:badgeUnlinked")}
                             </Badge>
                           )}
 
@@ -663,7 +666,7 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
                               size="sm"
                               icon={<HardDrive size={11} style={{ marginRight: 3 }} />}
                             >
-                              Local
+                              {t("repos:badgeLocal")}
                             </Badge>
                           ) : isOwner ? (
                             <Badge
@@ -671,7 +674,7 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
                               size="sm"
                               icon={<User size={11} style={{ marginRight: 3 }} />}
                             >
-                              Proprietário
+                              {t("repos:badgeOwner")}
                             </Badge>
                           ) : isOrg ? (
                             <Badge
@@ -679,7 +682,7 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
                               size="sm"
                               icon={<Building2 size={11} style={{ marginRight: 3 }} />}
                             >
-                              Org
+                              {t("repos:badgeOrg")}
                             </Badge>
                           ) : (
                             <Badge
@@ -687,7 +690,7 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
                               size="sm"
                               icon={<Users size={11} style={{ marginRight: 3 }} />}
                             >
-                              Colaborador
+                              {t("repos:badgeCollaborator")}
                             </Badge>
                           )}
 
@@ -702,7 +705,7 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
                               )
                             }
                           >
-                            {repo.is_private ? "Privado" : "Público"}
+                            {repo.is_private ? t("repos:badgePrivate") : t("repos:badgePublic")}
                           </Badge>
                         </div>
                       </div>
@@ -711,8 +714,7 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
                         className={`repo-desc ${repo.description ? "" : "empty"}`}
                         title={repo.description || ""}
                       >
-                        {repo.description ||
-                          "Repositório de especificações e governança"}
+                        {repo.description || t("repos:cardDefaultDesc")}
                       </p>
                     </div>
 
@@ -746,7 +748,7 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
                                 alignItems: "center",
                                 transition: "color 0.15s ease, background 0.15s ease",
                               }}
-                              title="Editar configurações do repositório (Nome, Descrição, Visibilidade)"
+                              title={t("repos:actionEditTooltip")}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setRepoToEdit(repo);
@@ -778,7 +780,7 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
                                 alignItems: "center",
                                 transition: "color 0.15s ease, background 0.15s ease",
                               }}
-                              title="Clonar repositório existente"
+                              title={t("repos:actionCloneTooltip")}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setRepoToClone(repo);
@@ -813,7 +815,7 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
                               alignItems: "center",
                               transition: "color 0.15s ease, background 0.15s ease",
                             }}
-                            title="Desvincular do Context OS (liberar espaço em disco)"
+                            title={t("repos:actionUnlinkTooltip")}
                             onClick={(e) => {
                               e.stopPropagation();
                               setModalMode("unlink");
@@ -848,7 +850,7 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
                               alignItems: "center",
                               transition: "color 0.15s ease, background 0.15s ease",
                             }}
-                            title={repo.is_local ? "Excluir repositório local" : "Excluir repositório remoto"}
+                            title={repo.is_local ? t("repos:actionDeleteLocalTooltip") : t("repos:actionDeleteRemoteTooltip")}
                             onClick={(e) => {
                               e.stopPropagation();
                               setModalMode("delete");
@@ -885,7 +887,7 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
                             >
                               progress_activity
                             </span>
-                            <span>Abrindo...</span>
+                            <span>{t("repos:cardOpening")}</span>
                           </div>
                         ) : (
                           <ArrowRight

@@ -1,5 +1,6 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { WorkspaceProvider } from './context/WorkspaceContext';
 import { SecurityProvider } from './context/SecurityContext';
@@ -10,6 +11,7 @@ import { DashboardView } from './views/DashboardView';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, isLoading } = useAuth();
+  const { t } = useTranslation('common');
 
   if (isLoading) {
     return (
@@ -24,7 +26,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
           fontFamily: 'var(--font-sans, system-ui)'
         }}
       >
-        Carregando Governance Platform...
+        {t('loadingPlatform')}
       </div>
     );
   }
@@ -38,6 +40,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 
 const AuthRoute: React.FC = () => {
   const { isAuthenticated, isLoading } = useAuth();
+  const { t } = useTranslation('common');
   const navigate = useNavigate();
 
   if (isLoading) {
@@ -53,7 +56,7 @@ const AuthRoute: React.FC = () => {
           fontFamily: 'var(--font-sans, system-ui)'
         }}
       >
-        Carregando Governance Platform...
+        {t('loadingPlatform')}
       </div>
     );
   }

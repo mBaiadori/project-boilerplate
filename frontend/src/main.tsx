@@ -1,6 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
+import './i18n'
 import App from './App.tsx'
 
 // Detecta ambiente Desktop (Electron) e plataforma para ajustes nativos (drag, traffic lights)
