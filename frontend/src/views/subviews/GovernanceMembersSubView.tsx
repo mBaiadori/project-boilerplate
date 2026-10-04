@@ -15,7 +15,6 @@ import {
   Check,
   Bot,
   Terminal,
-  History,
   ExternalLink,
   AlertTriangle,
   Search,
@@ -651,7 +650,7 @@ const FolderTreePicker: React.FC<FolderTreePickerProps> = ({
 };
 
 export const GovernanceMembersSubView: React.FC = () => {
-  const { provider } = useAuth();
+  const { user, provider } = useAuth();
   const providerLabel = provider === "forgejo" ? "Forgejo" : provider === "github" ? "GitHub" : "Modo Local";
   const { activeRepo, tree } = useWorkspace();
   const currentRepoName = activeRepo?.name;
@@ -659,8 +658,6 @@ export const GovernanceMembersSubView: React.FC = () => {
     departments,
     myAccess,
     activeAIToken,
-    grantFolderAccess,
-    revokeFolderAccess,
     rotateFolderKey,
     refreshVault,
     generateAIToken,
@@ -674,6 +671,22 @@ export const GovernanceMembersSubView: React.FC = () => {
   // Collaborators State
   const [collaborators, setCollaborators] = useState<any[]>([]);
   const [isSoloMode, setIsSoloMode] = useState<boolean>(true);
+
+  const isAdmin = Boolean(
+    activeRepo?.permissions?.admin ?? (
+      activeRepo?.is_owner ||
+      activeRepo?.is_local ||
+      myAccess?.isOwner ||
+      (user?.login && collaborators.some((c) => c.login === user.login && (c.is_owner || c.permission === "admin"))) ||
+      false
+    )
+  );
+
+  useEffect(() => {
+    if (!isAdmin && (activeTab === "quorum" || activeTab === "audit")) {
+      setActiveTab("members");
+    }
+  }, [isAdmin, activeTab]);
   const [isLoadingCollabs, setIsLoadingCollabs] = useState<boolean>(false);
   const [isInviteModalOpen, setIsInviteModalOpen] = useState<boolean>(false);
   const [githubAuthError, setGithubAuthError] = useState<string | null>(null);
@@ -701,15 +714,7 @@ export const GovernanceMembersSubView: React.FC = () => {
     message: string;
   } | null>(null);
 
-  // Manage Member Vault Access Modal State
-  const [isVaultModalOpen, setIsVaultModalOpen] = useState<boolean>(false);
-  const [selectedMemberForVault, setSelectedMemberForVault] = useState<any>(null);
-  const [selectedFoldersForMember, setSelectedFoldersForMember] = useState<string[]>([]);
-  const [isSavingMemberVault, setIsSavingMemberVault] = useState<boolean>(false);
-  const [vaultActionFeedback, setVaultActionFeedback] = useState<{
-    type: "success" | "error";
-    message: string;
-  } | null>(null);
+  // Rotating folder key state
   const [rotatingFolderId, setRotatingFolderId] = useState<string | null>(null);
 
   // Quorum & Branch Protection State
@@ -972,57 +977,6 @@ export const GovernanceMembersSubView: React.FC = () => {
     }
   };
 
-  // Handlers para Gestão de Cofres & Chaves
-  const handleOpenVaultModal = (collab: any) => {
-    setSelectedMemberForVault(collab);
-    const memberSlots = keymap?.slots?.[collab.login] || {};
-    const existingFolders = Object.keys(memberSlots);
-    const userDepts = collab.departments || [];
-    const initialSelected = Array.from(new Set([...existingFolders, ...userDepts])).filter(
-      (d) => d !== "*" && d !== "default" && d !== "public"
-    );
-    setSelectedFoldersForMember(initialSelected);
-    setVaultActionFeedback(null);
-    setIsVaultModalOpen(true);
-  };
-
-  const handleSaveMemberVault = async () => {
-    if (!selectedMemberForVault) return;
-    setIsSavingMemberVault(true);
-    setVaultActionFeedback(null);
-
-    const login = selectedMemberForVault.login;
-    const allConfiguredFolders = departments.map((d) => d.id);
-    const foldersToGrant = selectedFoldersForMember;
-    const foldersToRevoke = allConfiguredFolders.filter((f) => !selectedFoldersForMember.includes(f));
-
-    try {
-      if (foldersToGrant.length > 0) {
-        await grantFolderAccess(login, foldersToGrant);
-      }
-      if (foldersToRevoke.length > 0) {
-        await revokeFolderAccess(login, foldersToRevoke);
-      }
-      await fetchCollaborators();
-      await refreshVault();
-      setVaultActionFeedback({
-        type: "success",
-        message: `Chaves de acesso aos cofres atualizadas com sucesso para @${login}.`,
-      });
-      setTimeout(() => {
-        setIsVaultModalOpen(false);
-        setVaultActionFeedback(null);
-      }, 1200);
-    } catch (err: any) {
-      setVaultActionFeedback({
-        type: "error",
-        message: err?.message || "Falha ao atualizar chaves do colaborador.",
-      });
-    } finally {
-      setIsSavingMemberVault(false);
-    }
-  };
-
   const handleRotateFolderKey = async (folderId: string) => {
     setRotatingFolderId(folderId);
     try {
@@ -1134,7 +1088,7 @@ export const GovernanceMembersSubView: React.FC = () => {
             {isSoloMode ? "Modo Solo" : "Modo Equipe"}
           </Badge>
 
-          {activeTab === "members" && (
+          {activeTab === "members" && isAdmin && (
             <Button
               variant="primary"
               size="sm"
@@ -1184,31 +1138,33 @@ export const GovernanceMembersSubView: React.FC = () => {
           <span>Colaboradores ({collaborators.length})</span>
         </button>
 
-        <button
-          onClick={() => setActiveTab("quorum")}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "8px",
-            padding: "8px 16px",
-            background: "none",
-            border: "none",
-            borderBottom:
-              activeTab === "quorum"
-                ? "2px solid var(--color-primary, #6366f1)"
-                : "2px solid transparent",
-            color:
-              activeTab === "quorum"
-                ? "var(--color-primary, #6366f1)"
-                : "var(--color-outline, #a6adc8)",
-            fontWeight: activeTab === "quorum" ? 600 : 500,
-            cursor: "pointer",
-            fontSize: "14px",
-          }}
-        >
-          <GitBranch size={16} />
-          <span>Proteção</span>
-        </button>
+        {isAdmin && (
+          <button
+            onClick={() => setActiveTab("quorum")}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              padding: "8px 16px",
+              background: "none",
+              border: "none",
+              borderBottom:
+                activeTab === "quorum"
+                  ? "2px solid var(--color-primary, #6366f1)"
+                  : "2px solid transparent",
+              color:
+                activeTab === "quorum"
+                  ? "var(--color-primary, #6366f1)"
+                  : "var(--color-outline, #a6adc8)",
+              fontWeight: activeTab === "quorum" ? 600 : 500,
+              cursor: "pointer",
+              fontSize: "14px",
+            }}
+          >
+            <GitBranch size={16} />
+            <span>Proteção</span>
+          </button>
+        )}
 
         <button
           onClick={() => setActiveTab("vault")}
@@ -1233,7 +1189,7 @@ export const GovernanceMembersSubView: React.FC = () => {
           }}
         >
           <Key size={16} />
-          <span>Chaves & Cofres</span>
+          <span>Chaves Criptográficas</span>
           {myAccess?.folders && myAccess.folders.filter((f) => f.hasAccess).length > 0 && (
             <Badge variant="success" size="xs">
               {myAccess.folders.filter((f) => f.hasAccess).length} autorizados
@@ -1241,31 +1197,33 @@ export const GovernanceMembersSubView: React.FC = () => {
           )}
         </button>
 
-        <button
-          onClick={() => setActiveTab("audit")}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "8px",
-            padding: "8px 16px",
-            background: "none",
-            border: "none",
-            borderBottom:
-              activeTab === "audit"
-                ? "2px solid var(--color-primary, #6366f1)"
-                : "2px solid transparent",
-            color:
-              activeTab === "audit"
-                ? "var(--color-primary, #6366f1)"
-                : "var(--color-outline, #a6adc8)",
-            fontWeight: activeTab === "audit" ? 600 : 500,
-            cursor: "pointer",
-            fontSize: "14px",
-          }}
-        >
-          <History size={16} />
-          <span>Auditoria</span>
-        </button>
+        {isAdmin && (
+          <button
+            onClick={() => setActiveTab("audit")}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              padding: "8px 16px",
+              background: "none",
+              border: "none",
+              borderBottom:
+                activeTab === "audit"
+                  ? "2px solid var(--color-primary, #6366f1)"
+                  : "2px solid transparent",
+              color:
+                activeTab === "audit"
+                  ? "var(--color-primary, #6366f1)"
+                  : "var(--color-outline, #a6adc8)",
+              fontWeight: activeTab === "audit" ? 600 : 500,
+              cursor: "pointer",
+              fontSize: "14px",
+            }}
+          >
+            <ShieldCheck size={16} />
+            <span>Auditoria</span>
+          </button>
+        )}
       </div>
 
       {/* TAB 1: COLABORADORES */}
@@ -1468,12 +1426,13 @@ export const GovernanceMembersSubView: React.FC = () => {
                   <th style={{ padding: "10px 16px" }}>Colaborador</th>
                   <th style={{ padding: "10px 16px" }}>Cargo / Função</th>
                   <th style={{ padding: "10px 16px" }}>Permissão Git</th>
-                  <th style={{ padding: "10px 16px" }}>Cofres Autorizados</th>
-                  <th style={{ padding: "10px 16px" }}>Rotas / Pastas Permitidas</th>
+                  <th style={{ padding: "10px 16px" }}>Pastas & Rotas Permitidas</th>
                   <th style={{ padding: "10px 16px" }}>Chave X25519</th>
-                  <th style={{ padding: "10px 16px", textAlign: "right" }}>
-                    Ações
-                  </th>
+                  {isAdmin && (
+                    <th style={{ padding: "10px 16px", textAlign: "right" }}>
+                      Ações
+                    </th>
+                  )}
                 </tr>
               </thead>
               <tbody>
@@ -1572,69 +1531,6 @@ export const GovernanceMembersSubView: React.FC = () => {
                         >
                           {collab.permission}
                         </Badge>
-                      </td>
-
-                      <td style={{ padding: "10px 16px" }}>
-                        {collab.is_owner ? (
-                          <span
-                            style={{
-                              padding: "3px 10px",
-                              borderRadius: "14px",
-                              fontSize: "12px",
-                              fontWeight: 600,
-                              backgroundColor: "rgba(239, 68, 68, 0.15)",
-                              borderColor: "rgba(239, 68, 68, 0.4)",
-                              borderWidth: "1px",
-                              borderStyle: "solid",
-                              color: "#ef4444",
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: "5px",
-                            }}
-                          >
-                            <Shield size={12} />
-                            Todos (Master)
-                          </span>
-                        ) : (
-                          <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
-                            {departments
-                              .filter((dept) => {
-                                const memberSlots = keymap?.slots?.[collab.login] || {};
-                                const userDepts = collab.departments || [];
-                                return memberSlots[dept.id] || memberSlots[dept.folder] || userDepts.includes(dept.id);
-                              })
-                              .map((dept) => (
-                                <span
-                                  key={dept.id}
-                                  style={{
-                                    padding: "2px 8px",
-                                    borderRadius: "12px",
-                                    fontSize: "11px",
-                                    fontWeight: 600,
-                                    backgroundColor: dept.color + "15",
-                                    borderColor: dept.color + "40",
-                                    borderWidth: "1px",
-                                    borderStyle: "solid",
-                                    color: dept.color,
-                                    display: "inline-flex",
-                                    alignItems: "center",
-                                    gap: "4px",
-                                  }}
-                                >
-                                  {dept.name}
-                                </span>
-                              ))}
-                            {!departments.some((dept) => {
-                              const memberSlots = keymap?.slots?.[collab.login] || {};
-                              const userDepts = collab.departments || [];
-                              return memberSlots[dept.id] || memberSlots[dept.folder] || userDepts.includes(dept.id);
-                            }) && (
-                              <span style={{ fontSize: "11px", color: "var(--color-outline, #a6adc8)" }}>
-                                Público apenas
-                              </span>
-                            )}
-                          </div>
-                        )}
                       </td>
 
                       <td style={{ padding: "10px 16px" }}>
@@ -1755,42 +1651,34 @@ export const GovernanceMembersSubView: React.FC = () => {
                         )}
                       </td>
 
-                      <td style={{ padding: "10px 16px", textAlign: "right" }}>
-                        <div style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
-                          <Button
-                            variant="outline"
-                            size="xs"
-                            onClick={() => handleOpenVaultModal(collab)}
-                            style={{ padding: "4px 8px", display: "inline-flex", alignItems: "center", gap: "4px" }}
-                            title="Liberar ou revogar chaves criptográficas de pastas seguras para este membro"
-                          >
-                            <Key size={12} color="#818cf8" />
-                            <span style={{ fontSize: "11px" }}>Cofres</span>
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="xs"
-                            onClick={() => handleOpenEditModal(collab)}
-                            style={{ padding: "4px 8px" }}
-                            title="Editar permissões, cargo e rotas do colaborador"
-                          >
-                            <Edit2 size={13} />
-                          </Button>
-                          {!collab.is_owner && (
+                      {isAdmin && (
+                        <td style={{ padding: "10px 16px", textAlign: "right" }}>
+                          <div style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
                             <Button
-                              variant="danger"
+                              variant="ghost"
                               size="xs"
-                              onClick={() =>
-                                handleRemoveCollaborator(collab.login)
-                              }
+                              onClick={() => handleOpenEditModal(collab)}
                               style={{ padding: "4px 8px" }}
-                              title="Remover colaborador e revogar todas as chaves"
+                              title="Editar permissões, cargo e rotas do colaborador"
                             >
-                              <Trash2 size={13} />
+                              <Edit2 size={13} />
                             </Button>
-                          )}
-                        </div>
-                      </td>
+                            {!collab.is_owner && (
+                              <Button
+                                variant="danger"
+                                size="xs"
+                                onClick={() =>
+                                  handleRemoveCollaborator(collab.login)
+                                }
+                                style={{ padding: "4px 8px" }}
+                                title="Remover colaborador e revogar todas as chaves"
+                              >
+                                <Trash2 size={13} />
+                              </Button>
+                            )}
+                          </div>
+                        </td>
+                      )}
                     </tr>
                   );
                 })}
@@ -2223,7 +2111,7 @@ export const GovernanceMembersSubView: React.FC = () => {
                   <th style={{ padding: "10px 16px" }}>Meu Acesso</th>
                   <th style={{ padding: "10px 16px" }}>Arquivos Cifrados</th>
                   <th style={{ padding: "10px 16px" }}>Membros com Chave</th>
-                  <th style={{ padding: "10px 16px", textAlign: "right" }}>Ações</th>
+                  {isAdmin && <th style={{ padding: "10px 16px", textAlign: "right" }}>Ações</th>}
                 </tr>
               </thead>
               <tbody>
@@ -2337,19 +2225,21 @@ export const GovernanceMembersSubView: React.FC = () => {
                         </div>
                       </td>
 
-                      <td style={{ padding: "12px 16px", textAlign: "right" }}>
-                        <Button
-                          variant="outline"
-                          size="xs"
-                          onClick={() => handleRotateFolderKey(folder.id)}
-                          disabled={isRotating}
-                          title="Gera uma nova DEK aleatória, recifra os arquivos e re-sela apenas para os membros ativos autorizados."
-                          style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}
-                        >
-                          <RefreshCw size={11} className={isRotating ? "animate-spin" : ""} />
-                          <span>{isRotating ? "Rotacionando..." : "Rotacionar Chave"}</span>
-                        </Button>
-                      </td>
+                      {isAdmin && (
+                        <td style={{ padding: "12px 16px", textAlign: "right" }}>
+                          <Button
+                            variant="outline"
+                            size="xs"
+                            onClick={() => handleRotateFolderKey(folder.id)}
+                            disabled={isRotating}
+                            title="Gera uma nova DEK aleatória, recifra os arquivos e re-sela apenas para os membros ativos autorizados."
+                            style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}
+                          >
+                            <RefreshCw size={11} className={isRotating ? "animate-spin" : ""} />
+                            <span>{isRotating ? "Rotacionando..." : "Rotacionar Chave"}</span>
+                          </Button>
+                        </td>
+                      )}
                     </tr>
                   );
                 })}
@@ -2359,83 +2249,92 @@ export const GovernanceMembersSubView: React.FC = () => {
           </Card>
 
           {/* Secret Scanning Card */}
-          <Card variant="flat" padding="md">
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                marginBottom: "10px",
-              }}
-            >
-              <div
-                style={{ display: "flex", alignItems: "center", gap: "8px" }}
-              >
-                <Search size={18} color="#f59e0b" />
-                <h3 style={{ fontSize: "15px", fontWeight: 600, margin: 0 }}>
-                  Scanner de Segredos & Conformidade Git
-                </h3>
-              </div>
-
-              <Button
-                variant="outline"
-                size="xs"
-                onClick={handleScanSecrets}
-                disabled={isScanningSecrets}
-                style={{ display: "flex", alignItems: "center", gap: "6px" }}
-              >
-                <RefreshCw
-                  size={13}
-                  className={isScanningSecrets ? "animate-spin" : ""}
-                />
-                <span>{isScanningSecrets ? "Escanear..." : "Escanear Agora"}</span>
-              </Button>
-            </div>
-
-            <p
-              style={{
-                fontSize: "13px",
-                color: "var(--color-outline, #a6adc8)",
-                margin: "0 0 12px 0",
-              }}
-            >
-              Verifica se existem tokens de API, chaves privadas ou documentos marcados como confidenciais sem criptografia no repositório.
-            </p>
-
-            {secretScanResult && (
+          {isAdmin && (
+            <Card variant="flat" padding="md">
               <div
                 style={{
-                  padding: "10px 14px",
-                  borderRadius: "6px",
-                  background: secretScanResult.hasSecrets
-                    ? "rgba(239, 68, 68, 0.15)"
-                    : "rgba(16, 185, 129, 0.15)",
-                  color: secretScanResult.hasSecrets ? "#ef4444" : "#10b981",
-                  fontSize: "13px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  marginBottom: "10px",
                 }}
               >
-                {secretScanResult.hasSecrets ? (
-                  <div>
-                    <div style={{ fontWeight: 600, marginBottom: "6px" }}>
-                      ⚠️ Foram encontrados segredos ou documentos confidenciais desprotegidos:
-                    </div>
-                    <ul style={{ margin: 0, paddingLeft: "20px" }}>
-                      {secretScanResult.violations.map((v, i) => (
-                        <li key={i} style={{ marginBottom: "2px" }}>
-                          <code>{v.file}</code> — {v.reason} ({v.type})
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : (
-                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                    <CheckCircle2 size={16} />
-                    <span>Nenhum segredo em texto plano detectado no repositório.</span>
-                  </div>
-                )}
+                <div
+                  style={{ display: "flex", alignItems: "center", gap: "8px" }}
+                >
+                  <Search size={18} color="#f59e0b" />
+                  <h3 style={{ fontSize: "15px", fontWeight: 600, margin: 0 }}>
+                    Scanner de Segredos & Conformidade Git
+                  </h3>
+                </div>
+
+                <Button
+                  variant="outline"
+                  size="xs"
+                  onClick={handleScanSecrets}
+                  disabled={isScanningSecrets}
+                  style={{ display: "flex", alignItems: "center", gap: "6px" }}
+                >
+                  <RefreshCw
+                    size={13}
+                    className={isScanningSecrets ? "animate-spin" : ""}
+                  />
+                  <span>{isScanningSecrets ? "Escanear..." : "Escanear Agora"}</span>
+                </Button>
               </div>
-            )}
-          </Card>
+
+              <p
+                style={{
+                  fontSize: "13px",
+                  color: "var(--color-outline, #a6adc8)",
+                  margin: "0 0 12px 0",
+                }}
+              >
+                Verifica se existem tokens de API, chaves privadas ou documentos marcados como confidenciais sem criptografia no repositório.
+              </p>
+
+              {secretScanResult && (
+                <div
+                  style={{
+                    padding: "10px 14px",
+                    borderRadius: "6px",
+                    background: secretScanResult.hasSecrets
+                      ? "rgba(239, 68, 68, 0.15)"
+                      : "rgba(16, 185, 129, 0.15)",
+                    border: `1px solid ${
+                      secretScanResult.hasSecrets
+                        ? "rgba(239, 68, 68, 0.3)"
+                        : "rgba(16, 185, 129, 0.3)"
+                    }`,
+                    color: secretScanResult.hasSecrets ? "#ef4444" : "#10b981",
+                    fontSize: "13px",
+                    marginBottom: "12px",
+                  }}
+                >
+                  {secretScanResult.hasSecrets ? (
+                    <div>
+                      <div style={{ fontWeight: 600, marginBottom: "6px", display: "flex", alignItems: "center", gap: "6px" }}>
+                        <AlertTriangle size={16} />
+                        <span>Foram encontrados segredos ou documentos confidenciais desprotegidos:</span>
+                      </div>
+                      <ul style={{ margin: 0, paddingLeft: "20px" }}>
+                        {secretScanResult.violations.map((v: any, i: number) => (
+                          <li key={i} style={{ marginBottom: "2px" }}>
+                            <code>{v.file}</code> — {v.reason} ({v.type})
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : (
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                      <CheckCircle2 size={16} />
+                      <span>Nenhum segredo em texto plano detectado no repositório.</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </Card>
+          )}
         </div>
       )}
 
@@ -2845,159 +2744,6 @@ export const GovernanceMembersSubView: React.FC = () => {
                 disabled={isSavingEdit}
               >
                 {isSavingEdit ? "Salvando..." : "Salvar Alterações"}
-              </Button>
-            </div>
-          </div>
-        </Modal>
-      )}
-
-      {/* Modal Gerenciar Cofres do Membro */}
-      {isVaultModalOpen && selectedMemberForVault && (
-        <Modal
-          isOpen={isVaultModalOpen}
-          onClose={() => {
-            setIsVaultModalOpen(false);
-            setSelectedMemberForVault(null);
-            setVaultActionFeedback(null);
-          }}
-          title={`Gerenciar Cofres Criptográficos: @${selectedMemberForVault.login}`}
-        >
-          <div
-            style={{ display: "flex", flexDirection: "column", gap: "16px" }}
-          >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "12px",
-                padding: "10px",
-                borderRadius: "8px",
-                background: "var(--color-surface-container-high, #1e1e2e)",
-                border: "1px solid var(--color-outline-variant, rgba(255, 255, 255, 0.08))",
-              }}
-            >
-              <img
-                src={selectedMemberForVault.avatar_url}
-                alt={selectedMemberForVault.login}
-                style={{ width: "36px", height: "36px", borderRadius: "50%", background: "#313244" }}
-              />
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 600, color: "var(--color-on-surface, #cdd6f4)", fontSize: "14px" }}>
-                  @{selectedMemberForVault.login}
-                </div>
-                <div style={{ fontSize: "11px", color: "var(--color-outline, #a6adc8)" }}>
-                  Chave Pública: {keymap?.members?.[selectedMemberForVault.login]?.fingerprint || "X25519 Registrada"}
-                </div>
-              </div>
-            </div>
-
-            <p style={{ fontSize: "13px", color: "var(--color-outline, #a6adc8)", margin: 0 }}>
-              Marque as pastas seguras para as quais este colaborador terá a chave de descriptografia (DEK selada). Ao desmarcar uma pasta, o acesso é revogado e a chave do cofre é rotacionada automaticamente.
-            </p>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-              {departments.map((dept) => {
-                const isSelected = selectedFoldersForMember.includes(dept.id);
-                return (
-                  <div
-                    key={dept.id}
-                    onClick={() => {
-                      if (isSelected) {
-                        setSelectedFoldersForMember(selectedFoldersForMember.filter((id) => id !== dept.id));
-                      } else {
-                        setSelectedFoldersForMember([...selectedFoldersForMember, dept.id]);
-                      }
-                    }}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      padding: "10px 12px",
-                      borderRadius: "8px",
-                      background: isSelected ? dept.color + "15" : "var(--color-surface-container-high, #1e1e2e)",
-                      border: isSelected ? `1px solid ${dept.color}60` : "1px solid var(--color-outline-variant, rgba(255, 255, 255, 0.08))",
-                      cursor: "pointer",
-                      transition: "all 0.15s ease",
-                    }}
-                  >
-                    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={() => {}}
-                        style={{ accentColor: dept.color, cursor: "pointer" }}
-                      />
-                      <span
-                        className="material-symbols-outlined"
-                        style={{ fontSize: "18px", color: dept.color }}
-                      >
-                        {dept.icon || "folder"}
-                      </span>
-                      <div>
-                        <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-on-surface, #cdd6f4)" }}>
-                          {dept.name} ({dept.folder}/)
-                        </div>
-                        <div style={{ fontSize: "11px", color: "var(--color-outline, #a6adc8)" }}>
-                          Cofre criptográfico AES-256
-                        </div>
-                      </div>
-                    </div>
-
-                    <Badge
-                      variant={isSelected ? "success" : "neutral"}
-                      size="xs"
-                    >
-                      {isSelected ? "Liberado" : "Bloqueado"}
-                    </Badge>
-                  </div>
-                );
-              })}
-            </div>
-
-            {vaultActionFeedback && (
-              <div
-                style={{
-                  padding: "8px 12px",
-                  borderRadius: "6px",
-                  background:
-                    vaultActionFeedback.type === "success"
-                      ? "rgba(16, 185, 129, 0.15)"
-                      : "rgba(239, 68, 68, 0.15)",
-                  color:
-                    vaultActionFeedback.type === "success" ? "#10b981" : "#ef4444",
-                  fontSize: "13px",
-                }}
-              >
-                {vaultActionFeedback.message}
-              </div>
-            )}
-
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "flex-end",
-                gap: "8px",
-                marginTop: "8px",
-              }}
-            >
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setIsVaultModalOpen(false);
-                  setSelectedMemberForVault(null);
-                  setVaultActionFeedback(null);
-                }}
-              >
-                Cancelar
-              </Button>
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={handleSaveMemberVault}
-                disabled={isSavingMemberVault}
-              >
-                {isSavingMemberVault ? "Provisionando Chaves..." : "Salvar Chaves de Acesso"}
               </Button>
             </div>
           </div>

@@ -265,10 +265,13 @@ export function ensureGitIgnore(repoDir: string): void {
     }
   }
 
-  try {
-    fs.writeFileSync(gitignorePath, lines.join("\n") + "\n", "utf-8");
-  } catch (e) {
-    console.warn(`[Git] Falha ao atualizar .gitignore em ${repoDir}:`, e);
+  const newContent = lines.join("\n") + "\n";
+  if (newContent !== currentContent) {
+    try {
+      fs.writeFileSync(gitignorePath, newContent, "utf-8");
+    } catch (e) {
+      console.warn(`[Git] Falha ao atualizar .gitignore em ${repoDir}:`, e);
+    }
   }
 }
 

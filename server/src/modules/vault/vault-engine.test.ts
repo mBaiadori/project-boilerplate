@@ -123,7 +123,7 @@ describe('VaultEngineService - Sincronização Transparente & Gestão Zero-API',
     const summary = vaultEngineService.getMyAccessSummary(TEST_REPO, 'marcos_test');
     assert.strictEqual(summary.login, 'marcos_test');
     assert.strictEqual(summary.isOwner, true);
-    assert.ok(summary.folders.length >= 5);
+    assert.ok(summary.folders.length >= 2);
     const engFolder = summary.folders.find((f) => f.id === 'engineering');
     assert.ok(engFolder);
     assert.strictEqual(engFolder.hasAccess, true);

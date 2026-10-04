@@ -20,6 +20,8 @@ import { governanceService } from '../governance/governance.service.js';
 import { prSecurityService } from './pr-security.service.js';
 import { prWorktreeService } from './pr-worktree.service.js';
 import { prConflictsService } from './pr-conflicts.service.js';
+import { vaultEngineService } from '../vault/vault-engine.service.js';
+import { workspaceService } from '../workspace/workspace.service.js';
 
 export interface PRApprovalAudit {
   user: string;
@@ -1233,38 +1235,79 @@ export class PRsService {
     const trailers = auditLines.length > 0 ? `\n\n${auditLines.join('\n')}\nReviewed-in: Context OS Governance Platform` : '';
     const commitMsg = `Merge PR #${targetPR.id}: ${targetPR.title}${trailers}`;
 
-    // 1. Local Git Merge
-    await executeGitCommand(`git checkout ${targetBranch}`, repoDir);
-    if (targetPR.branch) {
-      const mergeRes = await executeGitCommand(
-        `git merge "${targetPR.branch}" --no-ff -m "${commitMsg.replace(/"/g, '\\"')}"`,
-        repoDir
-      );
-      if (!mergeRes.success) {
-        throw new Error(`Falha no merge do Git: ${mergeRes.stderr || mergeRes.stdout}`);
-      }
-    }
-
-    // 2. Remote GitHub Merge (if GitHub PR)
-    if (cfg.authenticated && cfg.token && activeRepo?.full_name && targetPR.github_number) {
-      try {
-        await callGitHubAPI(
-          `/repos/${activeRepo.full_name}/pulls/${targetPR.github_number}/merge`,
-          cfg.token,
-          'PUT',
-          {
-            commit_title: `Merge PR #${targetPR.id}: ${targetPR.title}`,
-            commit_message: auditLines.join('\n'),
-            merge_method: 'merge',
-          }
-        );
-        await executeGitCommand(`git push origin ${targetBranch}`, repoDir);
-      } catch (ghMergeErr) {
-        console.warn(`[PRsService] Aviso ao executar merge no GitHub remoto:`, ghMergeErr);
-      }
-    }
-
+    // 1. Limpa arquivo transitório de mudanças de workspace
     clearWorkspaceChanges(repoName);
+    const workspaceChangesPath = path.join(repoDir, '.spec-memory', 'workspace_changes.json');
+    if (fs.existsSync(workspaceChangesPath)) {
+      try { fs.unlinkSync(workspaceChangesPath); } catch {}
+    }
+
+    // 2. Se houver arquivos modificados ou untracked na working tree (ex: .docs.metadata.json ou .gitignore), guarda em stash temporário
+    let didStash = false;
+    try {
+      const statusRes = await executeGitCommand('git status --porcelain', repoDir);
+      if (statusRes.success && statusRes.stdout.trim().length > 0) {
+        const stashRes = await executeGitCommand('git stash push --include-untracked -m "context-os-pre-merge-stash"', repoDir);
+        if (stashRes.success && !stashRes.stdout.includes('No local changes to save')) {
+          didStash = true;
+        }
+      }
+    } catch {}
+
+    try {
+      // 3. Local Git Checkout
+      const checkoutRes = await executeGitCommand(`git checkout ${targetBranch}`, repoDir);
+      if (!checkoutRes.success) {
+        throw new Error(`Falha ao alternar para branch ${targetBranch}: ${checkoutRes.stderr || checkoutRes.stdout}`);
+      }
+
+      // 4. Local Git Merge
+      if (targetPR.branch) {
+        const mergeRes = await executeGitCommand(
+          `git merge "${targetPR.branch}" --no-ff -m "${commitMsg.replace(/"/g, '\\"')}"`,
+          repoDir
+        );
+        if (!mergeRes.success) {
+          await executeGitCommand('git merge --abort', repoDir);
+          throw new Error(`Falha no merge do Git: ${mergeRes.stderr || mergeRes.stdout}`);
+        }
+      }
+
+      // 5. Remote GitHub Merge (if GitHub PR)
+      if (cfg.authenticated && cfg.token && activeRepo?.full_name && targetPR.github_number) {
+        try {
+          await callGitHubAPI(
+            `/repos/${activeRepo.full_name}/pulls/${targetPR.github_number}/merge`,
+            cfg.token,
+            'PUT',
+            {
+              commit_title: `Merge PR #${targetPR.id}: ${targetPR.title}`,
+              commit_message: auditLines.join('\n'),
+              merge_method: 'merge',
+            }
+          );
+          await executeGitCommand(`git push origin ${targetBranch}`, repoDir);
+        } catch (ghMergeErr) {
+          console.warn(`[PRsService] Aviso ao executar merge no GitHub remoto:`, ghMergeErr);
+        }
+      }
+
+      // 6. Sincroniza cofre e descriptografa arquivos após o merge
+      try {
+        await vaultEngineService.syncLocalWorkspaceFromGit(repoName, cfg.user?.login);
+      } catch (vaultErr: any) {
+        console.warn(`[PRsService] Aviso ao sincronizar cofre após merge:`, vaultErr?.message);
+      }
+
+      workspaceService.invalidateTreeCache(repoName);
+      clearWorkspaceChanges(repoName);
+    } finally {
+      if (didStash) {
+        try {
+          await executeGitCommand('git stash pop', repoDir);
+        } catch {}
+      }
+    }
   }
 }
 

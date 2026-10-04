@@ -1512,8 +1512,22 @@ export const FileTree: React.FC<FileTreeProps> = ({
               {/* Inline input if creating inside this folder */}
               {renderInlineCreateInput(node.path)}
 
-              {node.children &&
-                node.children.map((child) => renderTreeNode(child))}
+              {node.children && node.children.length > 0 ? (
+                node.children.map((child) => renderTreeNode(child))
+              ) : inlineCreating?.parentPath !== node.path ? (
+                <div
+                  style={{
+                    padding: "4px 12px 4px 28px",
+                    fontSize: "11px",
+                    color: "var(--color-outline, #a6adc8)",
+                    fontStyle: "italic",
+                    opacity: 0.6,
+                    userSelect: "none",
+                  }}
+                >
+                  Pasta vazia
+                </div>
+              ) : null}
             </div>
           )}
         </div>
