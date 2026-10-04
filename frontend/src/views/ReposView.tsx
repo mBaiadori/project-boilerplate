@@ -1,11 +1,12 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useTranslation, Trans } from "react-i18next";
+import { useTranslation } from "react-i18next";
 import type { Repo, RepoDiagnosis } from "../types";
 import { useAuth } from "../context/AuthContext";
 import { useWorkspace } from "../context/WorkspaceContext";
 import { API } from "../services/api";
 import { LanguageSwitcher } from "../components/common/LanguageSwitcher";
+import { AccountSwitcherMenu } from "../components/auth/AccountSwitcherMenu";
 import {
   Button,
   IconButton,
@@ -96,9 +97,7 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
   // Create Repo State
   const [isCreatingRepo, setIsCreatingRepo] = useState(false);
   const [newRepoName, setNewRepoName] = useState("");
-  const [newRepoDesc, setNewRepoDesc] = useState(
-    t("repos:createDescDefault")
-  );
+  const [newRepoDesc, setNewRepoDesc] = useState("Repositório com regras de Governança");
   const [newRepoApprovals, setNewRepoApprovals] = useState(1);
   const [newRepoProtection, setNewRepoProtection] = useState(true);
   const [newRepoPrivate, setNewRepoPrivate] = useState(true);
@@ -232,34 +231,7 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
       >
         {/* Navbar Topo */}
         <header className="repos-navbar">
-          <div
-            className="user-badge"
-            style={{ display: "flex", alignItems: "center", gap: "12px" }}
-          >
-            <img
-              id="user-avatar"
-              src={
-                user?.avatar_url ||
-                `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.name || "User")}&background=1a73e8&color=fff`
-              }
-              alt="Avatar"
-              style={{ width: "36px", height: "36px", borderRadius: "50%" }}
-            />
-            <div>
-              <h3
-                id="user-name"
-                style={{ margin: 0, fontSize: "14px", fontWeight: 600 }}
-              >
-                {user?.name || user?.login || t("repos:defaultDeveloperName")}
-              </h3>
-              <span
-                id="user-login"
-                style={{ fontSize: "12px", color: "var(--text-muted)" }}
-              >
-                @{user?.login || "local"}
-              </span>
-            </div>
-          </div>
+          <AccountSwitcherMenu />
 
           <div className="nav-actions" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             <LanguageSwitcher variant="subtle" />
@@ -271,24 +243,6 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
               onClick={() => setShowOnboarding(true)}
             >
               {t("repos:navOnboarding")}
-            </Button>
-            <Button
-              id="btn-open-create-org"
-              variant="secondary"
-              size="sm"
-              leftIcon={<Building2 size={15} />}
-              onClick={() => setIsCreateOrgModalOpen(true)}
-            >
-              {t("repos:navNewOrg")}
-            </Button>
-            <Button
-              id="btn-open-create-repo"
-              variant={isCreatingRepo ? "secondary" : "primary"}
-              size="sm"
-              leftIcon={isCreatingRepo ? <X size={15} /> : <Plus size={15} />}
-              onClick={() => setIsCreatingRepo(!isCreatingRepo)}
-            >
-              {isCreatingRepo ? t("repos:navClosePanel") : t("repos:navNewRepo")}
             </Button>
             <Button
               id="btn-logout"
@@ -417,11 +371,11 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
                       checked={newRepoProtection}
                       onChange={setNewRepoProtection}
                       label={
-                        <Trans ns="repos" i18nKey="createProtectionLabel">
+                        <span>
                           Bloquear branch <code>main</code> (Exige PR obrigatório)
-                        </Trans>
+                        </span>
                       }
-                      description={t("repos:createProtectionDesc")}
+                      description={t("repos:createProtectionDesc", "Garante que nenhuma alteração direta seja feita sem revisão")}
                     />
 
                     <Switch
@@ -477,6 +431,37 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
                   onClear={() => setSearchTerm("")}
                 />
               </div>
+            </div>
+
+            {/* Ações: Novo Repositório e Nova Organização */}
+            <div
+              className="repos-actions-row"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "10px",
+                flexWrap: "wrap",
+                marginBottom: 4,
+              }}
+            >
+              <Button
+                id="btn-open-create-repo"
+                variant={isCreatingRepo ? "secondary" : "primary"}
+                size="sm"
+                leftIcon={isCreatingRepo ? <X size={15} /> : <Plus size={15} />}
+                onClick={() => setIsCreatingRepo(!isCreatingRepo)}
+              >
+                {isCreatingRepo ? t("repos:navClosePanel") : t("repos:navNewRepo")}
+              </Button>
+              <Button
+                id="btn-open-create-org"
+                variant="secondary"
+                size="sm"
+                leftIcon={<Building2 size={15} />}
+                onClick={() => setIsCreateOrgModalOpen(true)}
+              >
+                {t("repos:navNewOrg")}
+              </Button>
             </div>
 
             {/* Filtros em Chips por Organização / Conta */}

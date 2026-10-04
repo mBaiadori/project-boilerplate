@@ -134,27 +134,6 @@ export const VisualMarkdownDiff: React.FC<VisualMarkdownDiffProps> = ({
             </button>
             <button
               type="button"
-              onClick={() => setViewMode('lines')}
-              style={{
-                padding: '4px 9px',
-                border: 'none',
-                borderRadius: '4px',
-                fontSize: '11.5px',
-                fontWeight: 600,
-                cursor: 'pointer',
-                background: viewMode === 'lines' ? '#ffffff' : 'transparent',
-                color: viewMode === 'lines' ? 'var(--primary, #2563eb)' : 'var(--text-muted, #64748b)',
-                boxShadow: viewMode === 'lines' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px',
-              }}
-            >
-              <span className="material-symbols-outlined icon-xs">format_list_numbered</span>
-              Linhas (Código)
-            </button>
-            <button
-              type="button"
               onClick={() => setViewMode('inline')}
               style={{
                 padding: '4px 9px',

@@ -21,12 +21,23 @@ export interface WorkspaceChange {
   timestamp: string;
 }
 
+export interface SavedAccount {
+  id: string; // e.g. "forgejo:marcosbaiadori" or "github:mBaiadori"
+  user: any;
+  token: string;
+  git_provider: 'github' | 'forgejo' | 'gitea';
+  git_provider_url?: string;
+  orgs?: any[];
+  last_active?: string;
+}
+
 export interface AppConfig {
   authenticated: boolean;
   token: string;
   user: any;
   orgs: any[];
   active_repo: any;
+  accounts?: SavedAccount[];
   ai_settings: {
     provider: string;
     model: string;
@@ -167,6 +178,38 @@ export function loadConfig(): AppConfig {
     cfg.authenticated = true;
   }
 
+  if (Array.isArray(cfg.accounts)) {
+    for (const acc of cfg.accounts) {
+      if (!acc.token && acc.id) {
+        const accToken = vaultService.getSecret(`account_token_${acc.id}`);
+        if (accToken) {
+          acc.token = accToken;
+        }
+      }
+    }
+  } else {
+    cfg.accounts = [];
+  }
+
+  // Auto-seed active user into accounts if missing
+  if (cfg.user?.login) {
+    const currentId = cfg.git_provider === 'forgejo'
+      ? `forgejo:${cfg.git_provider_url || 'localhost'}:${cfg.user.login}`
+      : `github:${cfg.user.login}`;
+
+    if (!cfg.accounts.some((a: any) => a.id === currentId || a.user?.login === cfg.user.login)) {
+      cfg.accounts.push({
+        id: currentId,
+        user: cfg.user,
+        token: cfg.token || '',
+        git_provider: cfg.git_provider || 'forgejo',
+        git_provider_url: cfg.git_provider_url,
+        orgs: cfg.orgs || [],
+        last_active: new Date().toISOString(),
+      });
+    }
+  }
+
   if (!cfg.ai_settings) {
     cfg.ai_settings = {} as any;
   }
@@ -196,6 +239,14 @@ export function saveConfig(cfg: AppConfig): void {
       }
     }
 
+    if (Array.isArray(cfg.accounts)) {
+      for (const acc of cfg.accounts) {
+        if (acc.id && acc.token) {
+          vaultService.setSecret(`account_token_${acc.id}`, acc.token);
+        }
+      }
+    }
+
     if (cfg.ai_settings?.api_key !== undefined) {
       if (cfg.ai_settings.api_key && cfg.ai_settings.api_key.trim().length > 0) {
         vaultService.setSecret(VAULT_KEYS.AI_API_KEY, cfg.ai_settings.api_key.trim());
@@ -204,13 +255,24 @@ export function saveConfig(cfg: AppConfig): void {
       }
     }
 
-    // 2. Cria cópia sanitizada para persistência em disco sem dados confidenciais ou lixo de projeto
+    // 2. Cria cópia para persistência em disco
     const sanitizedToDisk: any = {
       authenticated: Boolean(cfg.authenticated && cfg.token),
       token: "",
       user: cfg.user || null,
       orgs: cfg.orgs || [],
       active_repo: cfg.active_repo || null,
+      accounts: Array.isArray(cfg.accounts)
+        ? cfg.accounts.map((a) => ({
+            id: a.id,
+            user: a.user,
+            token: a.token || "",
+            git_provider: a.git_provider,
+            git_provider_url: a.git_provider_url,
+            orgs: a.orgs || [],
+            last_active: a.last_active,
+          }))
+        : [],
       ai_settings: cfg.ai_settings
         ? {
             provider: cfg.ai_settings.provider || "gemini",

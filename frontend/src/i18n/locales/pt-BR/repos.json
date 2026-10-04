@@ -1,7 +1,7 @@
 {
   "defaultDeveloperName": "Desenvolvedor",
   "providerLocal": "Modo Local",
-  "navOnboarding": "Assistente / Onboarding",
+  "navOnboarding": "Onboarding",
   "navNewOrg": "Nova Organização",
   "navClosePanel": "Fechar Painel",
   "navNewRepo": "Novo Repositório",
@@ -50,5 +50,8 @@
   "actionUnlinkTooltip": "Desvincular do Context OS (liberar espaço em disco)",
   "actionDeleteLocalTooltip": "Excluir repositório local",
   "actionDeleteRemoteTooltip": "Excluir repositório remoto",
-  "cardOpening": "Abrindo..."
+  "cardOpening": "Abrindo...",
+  "activeAccount": "Conta Ativa",
+  "addAnotherAccount": "+ Adicionar outra conta",
+  "removeAccountTooltip": "Remover esta conta salva"
 }

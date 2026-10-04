@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import type { User } from '../types';
+import type { User, SavedAccount } from '../types';
 import { API } from '../services/api';
 
 interface AuthContextType {
@@ -8,8 +8,11 @@ interface AuthContextType {
   isLoading: boolean;
   provider: 'github' | 'forgejo' | 'local';
   providerUrl?: string;
+  accounts: SavedAccount[];
   loginWithToken: (token: string, provider?: 'github' | 'forgejo', providerUrl?: string) => Promise<{ success: boolean; error?: string }>;
   loginLocal: () => Promise<{ success: boolean }>;
+  switchAccount: (accountId: string) => Promise<{ success: boolean; error?: string }>;
+  removeAccount: (accountId: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   refreshAuth: () => Promise<void>;
 }
@@ -20,6 +23,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [provider, setProvider] = useState<'github' | 'forgejo' | 'local'>('forgejo');
   const [providerUrl, setProviderUrl] = useState<string | undefined>('http://localhost:3000/api/v1');
+  const [accounts, setAccounts] = useState<SavedAccount[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const refreshAuth = async () => {
@@ -35,6 +39,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       } else {
         setUser(null);
+      }
+      if (Array.isArray(status.accounts)) {
+        setAccounts(status.accounts);
       }
     } catch (err) {
       console.error('[AuthContext] Erro ao obter status:', err);
@@ -55,11 +62,51 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(res.data.user);
         setProvider(selectedProvider);
         if (selectedProviderUrl) setProviderUrl(selectedProviderUrl);
+        await refreshAuth();
         return { success: true };
       }
       return { success: false, error: res.data.error || `Falha ao autenticar com token ${selectedProvider === 'forgejo' ? 'Forgejo' : 'GitHub'}` };
     } catch (err: any) {
       return { success: false, error: err.message || 'Erro de conexão com o servidor' };
+    }
+  };
+
+  const switchAccount = async (accountId: string) => {
+    try {
+      setIsLoading(true);
+      const res = await API.switchAccount(accountId);
+      if (res.ok && res.data.user) {
+        setUser(res.data.user);
+        if (res.data.accounts) {
+          setAccounts(res.data.accounts);
+        }
+        await refreshAuth();
+        return { success: true };
+      }
+      return { success: false, error: res.data.error || 'Falha ao alternar conta' };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Erro ao alternar perfil' };
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const removeAccount = async (accountId: string) => {
+    try {
+      const res = await API.removeAccount(accountId);
+      if (res.ok) {
+        if (res.data.accounts) {
+          setAccounts(res.data.accounts);
+        }
+        if (res.data.user !== undefined) {
+          setUser(res.data.user);
+        }
+        await refreshAuth();
+        return { success: true };
+      }
+      return { success: false, error: 'Falha ao remover conta' };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Erro ao remover conta' };
     }
   };
 
@@ -69,6 +116,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (res.ok && res.data.user) {
         setUser(res.data.user);
         setProvider('local');
+        await refreshAuth();
         return { success: true };
       }
       setUser({ login: 'local_dev', name: 'Desenvolvedor Local', role: 'Administrador Local', is_local: true });
@@ -88,6 +136,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.error('[AuthContext] Erro ao deslogar:', err);
     } finally {
       setUser(null);
+      await refreshAuth();
     }
   };
 
@@ -99,8 +148,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isLoading,
         provider,
         providerUrl,
+        accounts,
         loginWithToken,
         loginLocal,
+        switchAccount,
+        removeAccount,
         logout,
         refreshAuth
       }}

@@ -1,7 +1,9 @@
 import { FileText, FolderTree, Plus, Shield, Lock, Unlock, Eye, EyeOff } from "lucide-react";
 import React, { useCallback, useEffect, useRef, useState, useMemo } from "react";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { useWorkspace } from "../../context/WorkspaceContext";
 import { useSecurity } from "../../context/SecurityContext";
+import { useAuth } from "../../context/AuthContext";
 import { API } from "../../services/api";
 import {
   parseFrontmatter,
@@ -114,8 +116,18 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
   const [syncPreview, setSyncPreview] = useState<SyncToMainPreview | null>(null);
   const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
 
+  // Collaborative PR Editing Mode State
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const prId = searchParams.get("pr");
+  const prBaseSha = searchParams.get("base") || "";
+  const [prHeadSha, setPrHeadSha] = useState<string>(prBaseSha);
+  const isPREditing = !!prId;
+
   // Merge Conflict State
   const [isConflictModalOpen, setIsConflictModalOpen] = useState(false);
+  const [conflictBundleText, setConflictBundleText] = useState<string>("");
   const hasMergeConflict = useMemo(() => {
     return (
       typeof content === "string" &&
@@ -125,6 +137,33 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
     );
   }, [content]);
   const [isSyncingToMain, setIsSyncingToMain] = useState(false);
+
+  // Load document content directly from PR branch when in PR editing mode
+  useEffect(() => {
+    if (!prId || !filePath) return;
+    let isCancelled = false;
+    API.getPRFile({ pr_id: prId, path: filePath, repo: activeRepo?.name })
+      .then((res) => {
+        if (isCancelled) return;
+        if (res.ok && res.data) {
+          if (res.data.head_sha) {
+            setPrHeadSha(res.data.head_sha);
+          }
+          if (res.data.content !== undefined) {
+            onChangeRef.current(res.data.content);
+            if (engineRef.current) {
+              engineRef.current.setMarkdown(res.data.content);
+            }
+          }
+        }
+      })
+      .catch((err) => {
+        console.warn("[NotionEditor] Erro ao carregar arquivo da branch do PR:", err);
+      });
+    return () => {
+      isCancelled = true;
+    };
+  }, [prId, filePath, activeRepo?.name]);
 
   // Security Level & Document Lock Gate State
   const { securityLevels, departments, isLevelUnlocked, canAccessDoc, unlockLevel } = useSecurity();
@@ -678,6 +717,71 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
     }
     if (!filePath) return;
 
+    // Se estiver em modo edição de PR, salva diretamente na branch isolada da proposta
+    if (prId) {
+      const currentMd = engineRef.current
+        ? engineRef.current.getMarkdown()
+        : docBodyRef.current;
+      const fullContent = parsedRef.current.hasFrontmatter
+        ? serializeFrontmatter(parsedRef.current.metadata, currentMd)
+        : currentMd;
+
+      try {
+        const res = await API.editPRFile({
+          id: prId,
+          filePath: filePath || "",
+          content: fullContent,
+          expectedBaseSha: prHeadSha,
+          author: user?.login,
+          repo: activeRepo?.name,
+        });
+
+        if (res.ok && res.data) {
+          if (res.data.conflict) {
+            setEditorToast({
+              text: "Conflito detectado com a versão remota da proposta.",
+              type: "warning",
+            });
+            // Fetch 3-way conflict bundle
+            const confRes = await API.getPRConflict({
+              pr_id: prId,
+              path: filePath,
+              repo: activeRepo?.name,
+            });
+            if (confRes.ok && confRes.data?.merged) {
+              setConflictBundleText(confRes.data.merged);
+            } else {
+              setConflictBundleText(fullContent);
+            }
+            setIsConflictModalOpen(true);
+          } else {
+            if (res.data.head_sha) {
+              setPrHeadSha(res.data.head_sha);
+            }
+            if (engineRef.current) {
+              engineRef.current.applyDictionaryHighlights();
+            }
+            setEditorToast({
+              text: `Proposta #${prId} atualizada com sucesso na branch!`,
+              type: "success",
+            });
+            setTimeout(() => setEditorToast(null), 2500);
+          }
+        } else {
+          setEditorToast({
+            text: res.data?.error || "Erro ao salvar alterações no PR.",
+            type: "warning",
+          });
+        }
+      } catch (err: any) {
+        setEditorToast({
+          text: err.message || "Erro de rede ao salvar no PR.",
+          type: "warning",
+        });
+      }
+      return;
+    }
+
     // Se estiver em modo tradução, salva apenas o corpo traduzido no arquivo oculto de tradução
     if (
       activeLanguageRef.current.toLowerCase() !==
@@ -717,7 +821,7 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
       });
       setTimeout(() => setEditorToast(null), 2500);
     }
-  }, [filePath, saveCurrentFile, onCustomSave]);
+  }, [filePath, saveCurrentFile, onCustomSave, prId, prHeadSha, user?.login, activeRepo?.name]);
 
   const handleSaveRef = useRef(handleSave);
   handleSaveRef.current = handleSave;
@@ -1459,6 +1563,76 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
           />
         )}
 
+        {/* Collaborative PR Editing Banner */}
+        {isPREditing && (
+          <div
+            style={{
+              margin: "12px 24px 0",
+              padding: "10px 16px",
+              borderRadius: "var(--radius-md, 8px)",
+              background: "var(--md-sys-color-primary-container, #e0f2fe)",
+              border: "1px solid var(--md-sys-color-primary, #0284c7)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              color: "var(--md-sys-color-on-primary-container, #0369a1)",
+              flexWrap: "wrap",
+              gap: "8px",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <span
+                className="material-symbols-outlined"
+                style={{
+                  color: "var(--md-sys-color-primary, #0284c7)",
+                  fontSize: "22px",
+                }}
+              >
+                rate_review
+              </span>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: "13px" }}>
+                  Modo de Edição na Proposta #{prId}
+                </div>
+                <div
+                  style={{
+                    fontSize: "12px",
+                    color: "var(--md-sys-color-on-surface-variant, #334155)",
+                  }}
+                >
+                  As alterações são gravadas na branch da proposta. O seu
+                  workspace e branch ativa permanecem intactos.
+                </div>
+              </div>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <button
+                type="button"
+                className="ui-btn ui-btn--tonal ui-btn--sm"
+                onClick={() =>
+                  navigate(
+                    `/repo/${encodeURIComponent(activeRepo?.name || "local")}/revisoes`,
+                  )
+                }
+                style={{
+                  fontSize: "12px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "4px",
+                }}
+              >
+                <span
+                  className="material-symbols-outlined"
+                  style={{ fontSize: "16px" }}
+                >
+                  arrow_back
+                </span>
+                Voltar para Revisões
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Translation Mode Banner */}
         {!isTemplateMode && activeLanguage.toLowerCase() !== defaultLanguage.toLowerCase() && (
           <TranslationBanner
@@ -2148,11 +2322,50 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
         isOpen={isConflictModalOpen}
         onClose={() => setIsConflictModalOpen(false)}
         filePath={filePath || "documento.md"}
-        content={content}
-        onSaveResolved={(resolvedContent) => {
-          onChange(resolvedContent);
-          setEditorToast({ text: "Conflito resolvido com sucesso!", type: "success" });
-          setTimeout(() => setEditorToast(null), 3000);
+        content={conflictBundleText || content}
+        onSaveResolved={async (resolvedContent) => {
+          if (prId && filePath) {
+            try {
+              const res = await API.resolvePRConflict({
+                pr_id: prId,
+                filePath,
+                resolvedContent,
+                repo: activeRepo?.name,
+              });
+              if (res.ok) {
+                if (res.data?.commitHash) {
+                  setPrHeadSha(res.data.commitHash);
+                }
+                onChange(resolvedContent);
+                if (engineRef.current) {
+                  engineRef.current.setMarkdown(resolvedContent);
+                  engineRef.current.applyDictionaryHighlights();
+                }
+                setIsConflictModalOpen(false);
+                setEditorToast({
+                  text: "Conflito resolvido e gravado na branch do PR!",
+                  type: "success",
+                });
+                setTimeout(() => setEditorToast(null), 3000);
+              } else {
+                alert(res.data?.error || "Erro ao resolver conflito no PR.");
+              }
+            } catch (err: any) {
+              alert(err.message || "Erro ao resolver conflito no PR.");
+            }
+          } else {
+            onChange(resolvedContent);
+            if (engineRef.current) {
+              engineRef.current.setMarkdown(resolvedContent);
+              engineRef.current.applyDictionaryHighlights();
+            }
+            setIsConflictModalOpen(false);
+            setEditorToast({
+              text: "Conflito resolvido com sucesso!",
+              type: "success",
+            });
+            setTimeout(() => setEditorToast(null), 3000);
+          }
         }}
       />
     </div>

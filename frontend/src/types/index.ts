@@ -91,12 +91,23 @@ export interface Repo {
   permissions?: RepoPermissions;
 }
 
+export interface SavedAccount {
+  id: string;
+  user: User;
+  git_provider: 'github' | 'forgejo' | 'local' | string;
+  git_provider_url?: string;
+  orgs?: any[];
+  is_active: boolean;
+  last_active?: string;
+}
+
 export interface WorkspaceStatus {
   authenticated: boolean;
   user: User | null;
   active_repo: Repo | null;
   git_provider?: string;
   git_provider_url?: string;
+  accounts?: SavedAccount[];
   pending_changes_count: number;
   ai_settings: {
     provider: string;
@@ -233,8 +244,27 @@ export interface PRApproval {
   role?: string;
   timestamp: string;
   commit_hash?: string;
-  status: 'APPROVED' | 'CHANGES_REQUESTED';
+  status: 'APPROVED' | 'CHANGES_REQUESTED' | 'INVALIDATED';
   comment?: string;
+  invalidated_at?: string;
+  invalidated_by_commit?: string;
+}
+
+export interface MergeabilityResult {
+  mergeable: boolean;
+  behind_by: number;
+  ahead_by: number;
+  conflicts: Array<{ path: string; is_encrypted: boolean }>;
+}
+
+export interface ConflictBundle {
+  filePath: string;
+  base: string;
+  ours: string;
+  theirs: string;
+  merged: string;
+  hasConflicts: boolean;
+  conflictCount: number;
 }
 
 export interface PR {
@@ -252,12 +282,15 @@ export interface PR {
     type?: string;
     additions?: number;
     deletions?: number;
+    restricted?: boolean;
     diff_text?: string;
     old_content?: string;
     new_content?: string;
   }>;
   branch: string;
   target_branch?: string;
+  head_sha?: string;
+  base_sha?: string;
   author: string;
   status: 'OPEN' | 'MERGED' | 'CLOSED' | 'open' | 'merged' | 'closed' | string;
   approvals: (string | PRApproval)[];
@@ -275,6 +308,13 @@ export interface PR {
   is_direct_commit?: boolean;
   commit_hash?: string;
   short_id?: string;
+  history?: Array<{
+    action: string;
+    actor: string;
+    timestamp: string;
+    file?: string;
+    commit?: string;
+  }>;
 }
 
 export interface ADR {

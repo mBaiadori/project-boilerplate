@@ -1,17 +1,133 @@
 import { FastifyInstance } from 'fastify';
 import { prsService } from './prs.service.js';
+import { prConflictsService } from './pr-conflicts.service.js';
+import { loadConfig } from '../../config/storage.js';
 
 export async function prsRoutes(fastify: FastifyInstance) {
   fastify.get('/api/prs', async (request, reply) => {
-    const query = request.query as { repo?: string };
-    const result = await prsService.getPRs(query.repo);
+    const query = request.query as { repo?: string; user?: string };
+    const cfg = loadConfig();
+    const userLogin = query.user || cfg.user?.login;
+    const result = await prsService.getPRs(query.repo, userLogin);
     return reply.send(result);
   });
 
   fastify.get('/api/prs/file-diff', async (request, reply) => {
-    const query = request.query as { repo?: string; path?: string; commit?: string };
-    const diff = await prsService.getPRFileDiff(query.repo || '', query.path || '', query.commit);
-    return reply.send({ diff });
+    const query = request.query as { repo?: string; path?: string; commit?: string; pr_id?: string; user?: string };
+    const cfg = loadConfig();
+    const userLogin = query.user || cfg.user?.login;
+    const diff = await prsService.getPRFileDiff(query.repo || '', query.path || '', query.commit, query.pr_id, userLogin);
+    return reply.send(diff);
+  });
+
+  fastify.get('/api/prs/file', async (request, reply) => {
+    const query = request.query as { repo?: string; pr_id?: string; path?: string; user?: string };
+    if (!query.pr_id || !query.path) {
+      return reply.status(400).send({ error: 'Parâmetros pr_id e path são obrigatórios.' });
+    }
+    const cfg = loadConfig();
+    const userLogin = query.user || cfg.user?.login;
+    try {
+      const fileData = await prsService.getPRFileContent(query.repo || '', query.pr_id, query.path, userLogin);
+      return reply.send(fileData);
+    } catch (err: any) {
+      return reply.status(400).send({ error: err.message });
+    }
+  });
+
+  fastify.get('/api/prs/mergeability', async (request, reply) => {
+    const query = request.query as { repo?: string; pr_id?: string };
+    if (!query.pr_id) {
+      return reply.status(400).send({ error: 'Parâmetro pr_id é obrigatório.' });
+    }
+    const repoName = query.repo || '';
+    const prs = prsService.loadRepoPRs(repoName);
+    const pr = prs.find((p: any) => String(p.id) === String(query.pr_id));
+    if (!pr) {
+      return reply.status(404).send({ error: `PR #${query.pr_id} não encontrado.` });
+    }
+    try {
+      const mergeability = await prConflictsService.getMergeability(repoName, pr);
+      return reply.send(mergeability);
+    } catch (err: any) {
+      return reply.status(500).send({ error: err.message });
+    }
+  });
+
+  fastify.get('/api/prs/conflict', async (request, reply) => {
+    const query = request.query as { repo?: string; pr_id?: string; path?: string; user?: string };
+    if (!query.pr_id || !query.path) {
+      return reply.status(400).send({ error: 'Parâmetros pr_id e path são obrigatórios.' });
+    }
+    const repoName = query.repo || '';
+    const prs = prsService.loadRepoPRs(repoName);
+    const pr = prs.find((p: any) => String(p.id) === String(query.pr_id));
+    if (!pr) {
+      return reply.status(404).send({ error: `PR #${query.pr_id} não encontrado.` });
+    }
+    const cfg = loadConfig();
+    const userLogin = query.user || cfg.user?.login;
+    try {
+      const bundle = await prConflictsService.getConflictBundle(repoName, pr, query.path, userLogin);
+      return reply.send(bundle);
+    } catch (err: any) {
+      return reply.status(400).send({ error: err.message });
+    }
+  });
+
+  fastify.post('/api/prs/resolve-conflict', async (request, reply) => {
+    const body = request.body as { repo?: string; pr_id?: string | number; filePath?: string; resolvedContent?: string; user?: string };
+    if (!body.pr_id || !body.filePath || body.resolvedContent === undefined) {
+      return reply.status(400).send({ error: 'Campos pr_id, filePath e resolvedContent são obrigatórios.' });
+    }
+    const repoName = body.repo || '';
+    const prs = prsService.loadRepoPRs(repoName);
+    const pr = prs.find((p: any) => String(p.id) === String(body.pr_id));
+    if (!pr) {
+      return reply.status(404).send({ error: `PR #${body.pr_id} não encontrado.` });
+    }
+    const cfg = loadConfig();
+    const userLogin = body.user || cfg.user?.login || 'marcosbaiadori';
+    try {
+      const res = await prConflictsService.resolveConflict(repoName, pr, body.filePath, body.resolvedContent, userLogin);
+      prsService.afterPRHeadChanged(repoName, pr, {
+        actor: userLogin,
+        file: body.filePath,
+        newHead: res.commitHash,
+      });
+      prsService.saveRepoPRs(repoName, prs);
+      return reply.send({ success: true, commitHash: res.commitHash });
+    } catch (err: any) {
+      return reply.status(400).send({ error: err.message });
+    }
+  });
+
+  fastify.post('/api/prs/update-from-base', async (request, reply) => {
+    const body = request.body as { repo?: string; pr_id?: string | number; user?: string };
+    if (!body.pr_id) {
+      return reply.status(400).send({ error: 'Campo pr_id é obrigatório.' });
+    }
+    const repoName = body.repo || '';
+    const prs = prsService.loadRepoPRs(repoName);
+    const pr = prs.find((p: any) => String(p.id) === String(body.pr_id));
+    if (!pr) {
+      return reply.status(404).send({ error: `PR #${body.pr_id} não encontrado.` });
+    }
+    const cfg = loadConfig();
+    const userLogin = body.user || cfg.user?.login || 'marcosbaiadori';
+    try {
+      const res = await prConflictsService.updateFromBase(repoName, pr, userLogin);
+      if (res.newCommitHash) {
+        prsService.afterPRHeadChanged(repoName, pr, {
+          actor: userLogin,
+          newHead: res.newCommitHash,
+        });
+        prsService.saveRepoPRs(repoName, prs);
+      }
+      return reply.send(res);
+    } catch (err: any) {
+      return reply.status(400).send({ error: err.message });
+    }
   });
 
   fastify.post('/api/workspace/generate-pr-summary', async (request, reply) => {

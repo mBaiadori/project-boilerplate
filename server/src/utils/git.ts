@@ -27,12 +27,19 @@ export async function executeGitCommand(
 
 import { loadConfig } from "../config/storage.js";
 
-export function resolveGitProviderBaseUrl(customUrl?: string): { baseUrl: string; isForgejo: boolean } {
-  const cfg = loadConfig();
+export function resolveGitProviderBaseUrl(customUrl?: string, provider?: string): { baseUrl: string; isForgejo: boolean } {
+  if (provider === 'github') {
+    return { baseUrl: 'https://api.github.com', isForgejo: false };
+  }
   if (customUrl && customUrl.startsWith('http')) {
-    const isForgejo = !customUrl.includes('api.github.com');
+    const isForgejo = !customUrl.includes('api.github.com') && !customUrl.includes('github.com');
     return { baseUrl: customUrl.replace(/\/$/, ''), isForgejo };
   }
+  if (provider === 'forgejo' || provider === 'gitea') {
+    const baseUrl = (customUrl || 'http://localhost:3000/api/v1').replace(/\/$/, '');
+    return { baseUrl, isForgejo: true };
+  }
+  const cfg = loadConfig();
   if (
     cfg.git_provider === 'forgejo' ||
     cfg.git_provider === 'gitea' ||
@@ -51,15 +58,16 @@ export async function callGitHubAPI(
   method: string = "GET",
   data: any = null,
   customBaseUrl?: string,
+  provider?: string,
 ): Promise<{ statusCode: number; data: any }> {
   let url: string;
   let isForgejo = false;
 
   if (endpoint.startsWith("http://") || endpoint.startsWith("https://")) {
     url = endpoint;
-    isForgejo = !endpoint.includes("api.github.com");
+    isForgejo = !endpoint.includes("api.github.com") && !endpoint.includes("github.com");
   } else {
-    const resolved = resolveGitProviderBaseUrl(customBaseUrl);
+    const resolved = resolveGitProviderBaseUrl(customBaseUrl, provider);
     url = `${resolved.baseUrl}${endpoint.startsWith("/") ? "" : "/"}${endpoint}`;
     isForgejo = resolved.isForgejo;
   }

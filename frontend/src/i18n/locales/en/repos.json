@@ -1,7 +1,7 @@
 {
   "defaultDeveloperName": "Developer",
   "providerLocal": "Local Mode",
-  "navOnboarding": "Assistant / Onboarding",
+  "navOnboarding": "Onboarding",
   "navNewOrg": "New Organization",
   "navClosePanel": "Close Panel",
   "navNewRepo": "New Repository",
@@ -50,5 +50,9 @@
   "actionUnlinkTooltip": "Unlink from Context OS (free disk space)",
   "actionDeleteLocalTooltip": "Delete local repository",
   "actionDeleteRemoteTooltip": "Delete remote repository",
-  "cardOpening": "Opening..."
+  "cardOpening": "Opening...",
+  "activeAccount": "Active Account",
+  "switchAccount": "Switch to another account",
+  "addAnotherAccount": "+ Add another account",
+  "removeAccountTooltip": "Remove this saved account"
 }

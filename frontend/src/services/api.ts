@@ -1,7 +1,7 @@
 // API CLIENT MODULE (REST Calls to Backend Server)
 import type { 
   WorkspaceStatus, Repo, RepoDiagnosis, RepoInitializePayload, WorkspaceChange, TreeNode, 
-  PR, TemplateItem, TutorialItem, AISettingsState, DictionaryTerm, User,
+  PR, TemplateItem, TutorialItem, AISettingsState, DictionaryTerm, User, SavedAccount,
   GitStatus, GitCommitInfo, DocumentMetadataItem, WhatsNewSummary,
   SkillItem, ProjectSkillsManifest, ToolCallRecord,
   AgentDefinition, MCPServerDefinition, ToolItem, CustomToolItem,
@@ -24,6 +24,27 @@ export const API = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token, provider, provider_url })
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async getAccounts(): Promise<ApiResponse<{ accounts: SavedAccount[] }>> {
+    const res = await fetch('/api/auth/accounts');
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async switchAccount(accountId: string): Promise<ApiResponse<{ success?: boolean; user?: User; error?: string; accounts?: SavedAccount[] }>> {
+    const res = await fetch('/api/auth/accounts/switch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ account_id: accountId })
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async removeAccount(accountId: string): Promise<ApiResponse<{ success?: boolean; accounts?: SavedAccount[]; user?: User; authenticated?: boolean }>> {
+    const res = await fetch(`/api/auth/accounts/${encodeURIComponent(accountId)}`, {
+      method: 'DELETE'
     });
     return { ok: res.ok, data: await res.json() };
   },
@@ -595,15 +616,79 @@ export const API = {
     return { ok: res.ok, data: await res.json() };
   },
 
+  async getPRFile(params: {
+    pr_id: number | string;
+    path: string;
+    repo?: string;
+  }): Promise<ApiResponse<{ pr_id: number | string; branch: string; head_sha: string; filePath: string; content: string }>> {
+    const query = new URLSearchParams();
+    query.set('pr_id', String(params.pr_id));
+    query.set('path', params.path);
+    if (params.repo) query.set('repo', params.repo);
+    const res = await fetch(`/api/prs/file?${query.toString()}`);
+    return { ok: res.ok, data: await res.json() };
+  },
+
   async editPRFile(payload: {
     id: number | string;
     filePath: string;
     content: string;
     commitMessage?: string;
+    expectedBaseSha?: string;
     author?: string;
     repo?: string;
   }): Promise<ApiResponse<any>> {
     const res = await fetch('/api/prs/edit-file', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async getPRMergeability(params: {
+    pr_id: number | string;
+    repo?: string;
+  }): Promise<ApiResponse<{ mergeable: boolean; behind_by: number; ahead_by: number; conflicts: Array<{ path: string; is_encrypted: boolean }> }>> {
+    const query = new URLSearchParams();
+    query.set('pr_id', String(params.pr_id));
+    if (params.repo) query.set('repo', params.repo);
+    const res = await fetch(`/api/prs/mergeability?${query.toString()}`);
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async getPRConflict(params: {
+    pr_id: number | string;
+    path: string;
+    repo?: string;
+  }): Promise<ApiResponse<{ filePath: string; base: string; ours: string; theirs: string; merged: string; hasConflicts: boolean; conflictCount: number }>> {
+    const query = new URLSearchParams();
+    query.set('pr_id', String(params.pr_id));
+    query.set('path', params.path);
+    if (params.repo) query.set('repo', params.repo);
+    const res = await fetch(`/api/prs/conflict?${query.toString()}`);
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async resolvePRConflict(payload: {
+    pr_id: number | string;
+    filePath: string;
+    resolvedContent: string;
+    repo?: string;
+  }): Promise<ApiResponse<{ success?: boolean; commitHash?: string; error?: string }>> {
+    const res = await fetch('/api/prs/resolve-conflict', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async updatePRFromBase(payload: {
+    pr_id: number | string;
+    repo?: string;
+  }): Promise<ApiResponse<{ success?: boolean; message?: string; newCommitHash?: string; error?: string }>> {
+    const res = await fetch('/api/prs/update-from-base', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -638,11 +723,11 @@ export const API = {
     return { ok: res.ok, data: await res.json() };
   },
 
-
-  async getPRFileDiff(params: { path: string; commit?: string; repo?: string }): Promise<ApiResponse<{ diff: string }>> {
+  async getPRFileDiff(params: { path: string; commit?: string; pr_id?: number | string; repo?: string }): Promise<ApiResponse<{ diff: string; old_content?: string; new_content?: string; additions?: number; deletions?: number; restricted?: boolean; error?: string; message?: string }>> {
     const query = new URLSearchParams();
     query.set('path', params.path);
     if (params.commit) query.set('commit', params.commit);
+    if (params.pr_id) query.set('pr_id', String(params.pr_id));
     if (params.repo) query.set('repo', params.repo);
     const res = await fetch(`/api/prs/file-diff?${query.toString()}`);
     return { ok: res.ok, data: await res.json() };

@@ -2,7 +2,7 @@ import React from "react";
 import { AlertCircle } from "lucide-react";
 
 export interface FormFieldProps {
-  label?: string;
+  label?: React.ReactNode;
   required?: boolean;
   helperText?: React.ReactNode;
   error?: React.ReactNode;

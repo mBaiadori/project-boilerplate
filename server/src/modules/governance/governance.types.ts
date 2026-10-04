@@ -207,6 +207,8 @@ export interface GovernanceAuditLogEntry {
     | 'PR_APPROVED'
     | 'PR_MERGED'
     | 'PR_REJECTED'
+    | 'PR_EDITED'
+    | 'PR_CONFLICT_RESOLVED'
     | 'KEY_ROTATED'
     | 'LEVEL_CREATED'
     | 'LEVEL_UPDATED'

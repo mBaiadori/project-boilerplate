@@ -3,6 +3,7 @@ import { marked } from "marked";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { VisualMarkdownDiff } from "../../components/editor/VisualMarkdownDiff";
+import { MergeConflictResolutionModal } from "../../components/modals/MergeConflictResolutionModal";
 import {
   Badge,
   Button,
@@ -18,6 +19,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useWorkspace } from "../../context/WorkspaceContext";
 import { API } from "../../services/api";
 import type { PR } from "../../types";
+import { isPathHidden, isSystemPath } from "../../utils/hidden-files";
 
 interface PRsSubViewProps {
   onOpenDiffModal?: () => void;
@@ -69,7 +71,6 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
     activeRepo,
     refreshGitStatus,
     refreshPendingChanges,
-    createOrSwitchBranch,
     projectConfig,
   } = useWorkspace();
   const repoName = activeRepo?.name || "local";
@@ -83,13 +84,17 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
   const [expandedPRs, setExpandedPRs] = useState<
     Record<number | string, boolean>
   >({});
-  const [prViewModes, setPrViewModes] = useState<
-    Record<string, "visual" | "raw">
+  const [collapsedFiles, setCollapsedFiles] = useState<
+    Record<string, boolean>
   >({});
   const [fileDiffsCache, setFileDiffsCache] = useState<Record<string, string>>(
     {},
   );
+  const [fileDiffsData, setFileDiffsData] = useState<Record<string, { diff?: string; old_content?: string; new_content?: string; restricted?: boolean; error?: string }>>({});
   const [loadingDiffs, setLoadingDiffs] = useState<Record<string, boolean>>({});
+  const [mergeabilityMap, setMergeabilityMap] = useState<Record<string | number, { mergeable: boolean; behind_by: number; ahead_by: number; conflicts: Array<{ path: string; is_encrypted: boolean }> }>>({});
+  const [activeConflictPR, setActiveConflictPR] = useState<{ pr: PR; filePath: string; bundle: any } | null>(null);
+  const [syncingFromBase, setSyncingFromBase] = useState<Record<string | number, boolean>>({});
   const [actionFeedback, setActionFeedback] = useState<{
     id: number | string;
     message: string;
@@ -131,44 +136,165 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
     loadPRs();
   }, [loadPRs]);
 
+  const fetchDiffForFile = useCallback(async (pr: PR, filePath: string) => {
+    const fileKey = `${pr.id}-${filePath}`;
+    if (fileDiffsData[fileKey] || loadingDiffs[fileKey]) return;
+    setLoadingDiffs((prev) => ({ ...prev, [fileKey]: true }));
+    try {
+      const diffRes = await API.getPRFileDiff({
+        path: filePath,
+        pr_id: pr.id,
+        commit: pr.commit_hash || pr.head_sha,
+        repo: repoName,
+      });
+      if (diffRes.ok && diffRes.data) {
+        setFileDiffsData((prev) => ({
+          ...prev,
+          [fileKey]: diffRes.data,
+        }));
+        if (diffRes.data.diff) {
+          setFileDiffsCache((prev) => ({
+            ...prev,
+            [fileKey]: diffRes.data.diff,
+          }));
+        }
+      }
+    } catch (e) {
+      console.warn(`[PRsSubView] Erro ao obter diff de ${filePath}:`, e);
+    } finally {
+      setLoadingDiffs((prev) => ({ ...prev, [fileKey]: false }));
+    }
+  }, [fileDiffsData, loadingDiffs, repoName]);
+
+  const fetchMergeability = useCallback(async (pr: PR) => {
+    try {
+      const res = await API.getPRMergeability({ pr_id: pr.id, repo: repoName });
+      if (res.ok && res.data) {
+        setMergeabilityMap((prev) => ({ ...prev, [pr.id]: res.data }));
+      }
+    } catch (e) {
+      console.warn(`[PRsSubView] Erro ao verificar mergeabilidade do PR #${pr.id}:`, e);
+    }
+  }, [repoName]);
+
+  const handleUpdateFromBase = async (pr: PR) => {
+    setSyncingFromBase((prev) => ({ ...prev, [pr.id]: true }));
+    setActionFeedback(null);
+    try {
+      const res = await API.updatePRFromBase({ pr_id: pr.id, repo: repoName });
+      if (res.ok) {
+        setActionFeedback({
+          id: pr.id,
+          message: res.data?.message || "Proposta sincronizada com a versão oficial com sucesso!",
+          type: "success",
+        });
+        await loadPRs();
+        fetchMergeability(pr);
+      } else {
+        setActionFeedback({
+          id: pr.id,
+          message: res.data?.error || "Erro ao atualizar da versão oficial.",
+          type: "error",
+        });
+      }
+    } catch (err: any) {
+      setActionFeedback({
+        id: pr.id,
+        message: err.message || "Erro ao atualizar da versão oficial.",
+        type: "error",
+      });
+    } finally {
+      setSyncingFromBase((prev) => ({ ...prev, [pr.id]: false }));
+    }
+  };
+
+  const handleOpenConflictResolution = async (pr: PR, filePath: string) => {
+    try {
+      const res = await API.getPRConflict({ pr_id: pr.id, path: filePath, repo: repoName });
+      if (res.ok && res.data) {
+        setActiveConflictPR({ pr, filePath, bundle: res.data });
+      } else {
+        alert((res.data as any)?.error || "Erro ao carregar dados do conflito.");
+      }
+    } catch (e: any) {
+      alert(e.message || "Erro ao carregar dados do conflito.");
+    }
+  };
+
+  const handleSaveConflictResolution = async (resolvedContent: string) => {
+    if (!activeConflictPR) return;
+    const { pr, filePath } = activeConflictPR;
+    try {
+      const res = await API.resolvePRConflict({
+        pr_id: pr.id,
+        filePath,
+        resolvedContent,
+        repo: repoName,
+      });
+      if (res.ok) {
+        setActiveConflictPR(null);
+        setActionFeedback({
+          id: pr.id,
+          message: `Conflito em "${filePath}" resolvido com sucesso!`,
+          type: "success",
+        });
+        await loadPRs();
+        fetchMergeability(pr);
+      } else {
+        alert(res.data?.error || "Erro ao salvar resolução de conflito.");
+      }
+    } catch (e: any) {
+      alert(e.message || "Erro ao salvar resolução de conflito.");
+    }
+  };
+
   const toggleExpand = async (id: number | string, pr: PR) => {
     const nextState = !expandedPRs[id];
     setExpandedPRs((prev) => ({ ...prev, [id]: nextState }));
 
-    if (
-      nextState &&
-      pr.is_direct_commit &&
-      pr.commit_hash &&
-      Array.isArray(pr.files)
-    ) {
-      for (const file of pr.files) {
-        const fileKey = `${pr.id}-${file.path}`;
-        if (
-          !file.diff_text &&
-          !fileDiffsCache[fileKey] &&
-          !loadingDiffs[fileKey]
-        ) {
-          setLoadingDiffs((prev) => ({ ...prev, [fileKey]: true }));
-          try {
-            const diffRes = await API.getPRFileDiff({
-              path: file.path,
-              commit: pr.commit_hash,
-              repo: repoName,
-            });
-            if (diffRes.ok && diffRes.data?.diff) {
-              setFileDiffsCache((prev) => ({
-                ...prev,
-                [fileKey]: diffRes.data.diff,
-              }));
-            }
-          } catch (e) {
-            console.warn(`[PRsSubView] Erro ao obter diff de ${file.path}:`, e);
-          } finally {
-            setLoadingDiffs((prev) => ({ ...prev, [fileKey]: false }));
-          }
+    if (nextState && Array.isArray(pr.files)) {
+      const isStatusOpen = (pr.status || '').toLowerCase() === 'open' || (pr.status || '').toLowerCase() === 'in_review';
+      if (isStatusOpen) {
+        fetchMergeability(pr);
+      }
+      const visibleFiles = pr.files.filter(
+        (file) => file?.path && !isSystemPath(file.path) && !isPathHidden(file.path)
+      );
+      for (const file of visibleFiles) {
+        if (!file.restricted) {
+          fetchDiffForFile(pr, file.path);
         }
       }
     }
+  };
+
+  const toggleFileCollapse = (fileKey: string) => {
+    setCollapsedFiles((prev) => ({
+      ...prev,
+      [fileKey]: !prev[fileKey],
+    }));
+  };
+
+  const handleExpandAllFiles = (prId: number | string, files: any[]) => {
+    setCollapsedFiles((prev) => {
+      const next = { ...prev };
+      files.forEach((f, idx) => {
+        const key = `${prId}-${f.path || idx}`;
+        next[key] = false;
+      });
+      return next;
+    });
+  };
+
+  const handleCollapseAllFiles = (prId: number | string, files: any[]) => {
+    setCollapsedFiles((prev) => {
+      const next = { ...prev };
+      files.forEach((f, idx) => {
+        const key = `${prId}-${f.path || idx}`;
+        next[key] = true;
+      });
+      return next;
+    });
   };
 
   const handleOpenApproveModal = (pr: PR) => {
@@ -217,16 +343,9 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
     }
   };
 
-  const handleEditDocumentInPR = async (pr: PR, filePath: string) => {
-    if (pr.branch) {
-      try {
-        await createOrSwitchBranch(pr.branch);
-      } catch (e) {
-        console.warn("[PRsSubView] Aviso ao alternar para branch do PR:", e);
-      }
-    }
+  const handleEditDocumentInPR = (pr: PR, filePath: string) => {
     navigate(
-      `/repo/${encodeURIComponent(repoName)}/editor?file=${encodeURIComponent(filePath)}`,
+      `/repo/${encodeURIComponent(repoName)}/editor?file=${encodeURIComponent(filePath)}&pr=${encodeURIComponent(String(pr.id))}&base=${encodeURIComponent(pr.head_sha || '')}`,
     );
   };
 
@@ -570,7 +689,12 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
               const isClosed = statusLower === "closed";
               const isOpen = !isMerged && !isClosed;
               const isExpanded = !!expandedPRs[pr.id];
-              const prFiles = Array.isArray(pr.files) ? pr.files : [];
+              const rawFiles = Array.isArray(pr.files) ? pr.files : [];
+              const prFiles = rawFiles.filter(
+                (f: any) =>
+                  f?.path && !isSystemPath(f.path) && !isPathHidden(f.path),
+              );
+              const systemFilesCount = rawFiles.length - prFiles.length;
               const isDirectCommit = !!pr.is_direct_commit;
 
               const statusBadgeText =
@@ -761,6 +885,11 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
                               alignItems: "center",
                               gap: "4px",
                             }}
+                            title={
+                              systemFilesCount > 0
+                                ? `Dos ${rawFiles.length} arquivos editados no total, ${systemFilesCount} ${systemFilesCount === 1 ? "é arquivo" : "são arquivos"} de sistema (ocultos).`
+                                : `${prFiles.length} ${prFiles.length === 1 ? "arquivo alterado" : "arquivos alterados"}`
+                            }
                           >
                             <span
                               className="material-symbols-outlined"
@@ -769,7 +898,18 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
                               description
                             </span>
                             {prFiles.length}{" "}
-                            {prFiles.length === 1 ? "arquivo" : "arquivos"}
+                            {prFiles.length === 1 ? "documento" : "documentos"}
+                            {systemFilesCount > 0 && (
+                              <span
+                                style={{
+                                  opacity: 0.8,
+                                  fontSize: "11.5px",
+                                  fontWeight: 400,
+                                }}
+                              >
+                                ({systemFilesCount} de sistema)
+                              </span>
+                            )}
                           </span>
 
                           {/* Quorum indicator only for active/open reviews */}
@@ -887,6 +1027,87 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
                         </div>
                       )}
 
+                      {/* Mergeability & Conflict Banner */}
+                      {isOpen && mergeabilityMap[pr.id] && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                          {mergeabilityMap[pr.id].conflicts.length > 0 ? (
+                            <div
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "space-between",
+                                padding: "12px 16px",
+                                borderRadius: "8px",
+                                background: "var(--color-danger-subtle, #fef2f2)",
+                                border: "1px solid var(--color-border-subtle, #fecaca)",
+                                color: "var(--color-danger, #991b1b)",
+                                fontSize: "13px",
+                                flexWrap: "wrap",
+                                gap: "10px",
+                              }}
+                            >
+                              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                <span className="material-symbols-outlined" style={{ fontSize: "20px", color: "var(--color-danger, #ef4444)" }}>
+                                  warning
+                                </span>
+                                <div>
+                                  <strong>Conflitos de mesclagem detectados:</strong> Esta proposta possui {mergeabilityMap[pr.id].conflicts.length} arquivo(s) com conflito em relação à branch oficial (<code>{pr.target_branch || "main"}</code>).
+                                </div>
+                              </div>
+                              <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                                {mergeabilityMap[pr.id].conflicts.map((conf, cIdx) => (
+                                  <Button
+                                    key={cIdx}
+                                    type="button"
+                                    size="xs"
+                                    variant="danger"
+                                    onClick={() => handleOpenConflictResolution(pr, conf.path)}
+                                    icon={<span className="material-symbols-outlined" style={{ fontSize: "14px" }}>build</span>}
+                                  >
+                                    Resolver {conf.path.split("/").pop()}
+                                  </Button>
+                                ))}
+                              </div>
+                            </div>
+                          ) : mergeabilityMap[pr.id].behind_by > 0 ? (
+                            <div
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "space-between",
+                                padding: "10px 14px",
+                                borderRadius: "8px",
+                                background: "var(--color-primary-subtle, #f0f9ff)",
+                                border: "1px solid var(--color-border-subtle, #bae6fd)",
+                                color: "var(--md-sys-color-primary, #0369a1)",
+                                fontSize: "13px",
+                                flexWrap: "wrap",
+                                gap: "10px",
+                              }}
+                            >
+                              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                <span className="material-symbols-outlined" style={{ fontSize: "18px" }}>
+                                  sync
+                                </span>
+                                <span>
+                                  Esta proposta está <strong>{mergeabilityMap[pr.id].behind_by}</strong> commit(s) atrás da branch oficial (<code>{pr.target_branch || "main"}</code>).
+                                </span>
+                              </div>
+                              <Button
+                                type="button"
+                                size="xs"
+                                variant="tonal"
+                                loading={syncingFromBase[pr.id]}
+                                onClick={() => handleUpdateFromBase(pr)}
+                                icon={<span className="material-symbols-outlined" style={{ fontSize: "14px" }}>update</span>}
+                              >
+                                Sincronizar com a Oficial
+                              </Button>
+                            </div>
+                          ) : null}
+                        </div>
+                      )}
+
                       {/* Quorum & Approvals Section */}
                       <div
                         style={{
@@ -960,6 +1181,8 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
                         >
                           {approvalsList.length > 0 ? (
                             approvalsList.map((app: any, idx: number) => {
+                              const isInvalidated =
+                                typeof app === "object" && app.status === "INVALIDATED";
                               const appUser =
                                 typeof app === "string" ? app : app.user;
                               const appRole =
@@ -974,6 +1197,54 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
                                   : null;
                               const appComment =
                                 typeof app === "object" ? app.comment : null;
+
+                              if (isInvalidated) {
+                                return (
+                                  <div
+                                    key={idx}
+                                    style={{
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: "6px",
+                                      padding: "4px 10px",
+                                      borderRadius: "6px",
+                                      background:
+                                        "var(--md-sys-color-surface-container-high, #f1f5f9)",
+                                      border:
+                                        "1px dashed var(--color-border-subtle, #cbd5e1)",
+                                      color: "var(--color-text-muted, #64748b)",
+                                      fontSize: "12px",
+                                    }}
+                                    title={
+                                      appComment ||
+                                      "Aprovação invalidada devido a novas edições no PR."
+                                    }
+                                  >
+                                    <span
+                                      className="material-symbols-outlined"
+                                      style={{
+                                        fontSize: "15px",
+                                        color: "var(--color-warning, #f59e0b)",
+                                      }}
+                                    >
+                                      history_toggle_off
+                                    </span>
+                                    <span style={{ textDecoration: "line-through" }}>
+                                      {appUser}
+                                    </span>
+                                    <span
+                                      style={{
+                                        fontSize: "11px",
+                                        opacity: 0.85,
+                                        color: "var(--color-warning, #d97706)",
+                                        fontWeight: 600,
+                                      }}
+                                    >
+                                      (Invalidada por edições)
+                                    </span>
+                                  </div>
+                                );
+                              }
 
                               return (
                                 <div
@@ -1101,24 +1372,89 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
                         >
                           <div
                             style={{
-                              fontSize: "13px",
-                              fontWeight: 600,
-                              color: "var(--color-text-primary, #0f172a)",
                               display: "flex",
                               alignItems: "center",
-                              gap: "6px",
+                              justifyContent: "space-between",
+                              flexWrap: "wrap",
+                              gap: "8px",
                             }}
                           >
-                            <span
-                              className="material-symbols-outlined"
+                            <div
                               style={{
-                                fontSize: "16px",
-                                color: "var(--md-sys-color-primary, #1a73e8)",
+                                fontSize: "13px",
+                                fontWeight: 600,
+                                color: "var(--color-text-primary, #0f172a)",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "6px",
+                                flexWrap: "wrap",
                               }}
                             >
-                              difference
-                            </span>
-                            Documentos Alterados ({prFiles.length}):
+                              <span
+                                className="material-symbols-outlined"
+                                style={{
+                                  fontSize: "16px",
+                                  color: "var(--md-sys-color-primary, #1a73e8)",
+                                }}
+                              >
+                                difference
+                              </span>
+                              <span>
+                                Documentos Alterados ({prFiles.length}):
+                              </span>
+                              {systemFilesCount > 0 && (
+                                <span
+                                  style={{
+                                    fontSize: "12px",
+                                    fontWeight: 400,
+                                    color: "var(--color-text-muted, #64748b)",
+                                  }}
+                                >
+                                  (dos {rawFiles.length} arquivos editados no total, {systemFilesCount} {systemFilesCount === 1 ? "é" : "são"} de sistema)
+                                </span>
+                              )}
+                            </div>
+
+                            {prFiles.length > 1 && (
+                              <div className="ui-row ui-row--align-center ui-row--xs">
+                                <Button
+                                  type="button"
+                                  size="xs"
+                                  variant="ghost"
+                                  onClick={() =>
+                                    handleExpandAllFiles(pr.id, prFiles)
+                                  }
+                                  icon={
+                                    <span
+                                      className="material-symbols-outlined"
+                                      style={{ fontSize: "14px" }}
+                                    >
+                                      unfold_more
+                                    </span>
+                                  }
+                                >
+                                  Expandir todos
+                                </Button>
+                                <Button
+                                  type="button"
+                                  size="xs"
+                                  variant="ghost"
+                                  onClick={() =>
+                                    handleCollapseAllFiles(pr.id, prFiles)
+                                  }
+                                  icon={
+                                    <span
+                                      className="material-symbols-outlined"
+                                      style={{ fontSize: "14px" }}
+                                    >
+                                      unfold_less
+                                    </span>
+                                  }
+                                >
+                                  Recolher todos
+                                </Button>
+                              </div>
+                            )}
                           </div>
 
                           <div
@@ -1130,9 +1466,13 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
                           >
                             {prFiles.map((f: any, fIdx: number) => {
                               const fileKey = `${pr.id}-${f.path || fIdx}`;
-                              const isVisual = prViewModes[fileKey] !== "raw";
+                              const isFileCollapsed = !!collapsedFiles[fileKey];
+                              const diffInfo = fileDiffsData[fileKey];
+                              const isRestricted = !!f.restricted || !!diffInfo?.restricted;
                               const fileDiff =
-                                f.diff_text || fileDiffsCache[fileKey] || "";
+                                f.diff_text || diffInfo?.diff || fileDiffsCache[fileKey] || "";
+                              const oldContent = diffInfo?.old_content || f.old_content || "";
+                              const newContent = diffInfo?.new_content || f.new_content || "";
                               const isLoadingDiff = loadingDiffs[fileKey];
 
                               return (
@@ -1142,35 +1482,64 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
                                   style={{
                                     padding: 0,
                                     overflow: "hidden",
-                                    border:
-                                      "1px solid var(--color-border-subtle, #e2e8f0)",
+                                    border: isRestricted
+                                      ? "1px solid var(--color-warning-subtle, #fde68a)"
+                                      : "1px solid var(--color-border-subtle, #e2e8f0)",
                                   }}
                                 >
                                   <div
+                                    onClick={() => toggleFileCollapse(fileKey)}
                                     style={{
                                       padding: "8px 12px",
-                                      background:
-                                        "var(--color-surface-subtle, #f8fafc)",
+                                      background: isRestricted
+                                        ? "var(--color-warning-subtle, #fefce8)"
+                                        : "var(--color-surface-subtle, #f8fafc)",
                                       display: "flex",
                                       justifyContent: "space-between",
                                       alignItems: "center",
                                       fontFamily: "var(--font-family-mono)",
                                       flexWrap: "wrap",
                                       gap: "8px",
+                                      cursor: "pointer",
+                                      userSelect: "none",
+                                      borderBottom: !isFileCollapsed
+                                        ? "1px solid var(--color-border-subtle, #e2e8f0)"
+                                        : "none",
                                     }}
                                   >
                                     <div className="ui-row ui-row--align-center ui-row--xs">
                                       <span
                                         className="material-symbols-outlined icon-xs"
                                         style={{
+                                          fontSize: "18px",
                                           color:
-                                            "var(--md-sys-color-primary, #1a73e8)",
+                                            "var(--color-text-muted, #64748b)",
+                                          transition: "transform 0.2s ease",
+                                          transform: isFileCollapsed
+                                            ? "rotate(-90deg)"
+                                            : "rotate(0deg)",
                                         }}
                                       >
-                                        description
+                                        expand_more
                                       </span>
-                                      <strong>{f.path}</strong>
-                                      {(f.additions > 0 || f.deletions > 0) && (
+                                      <span
+                                        className="material-symbols-outlined icon-xs"
+                                        style={{
+                                          color: isRestricted
+                                            ? "var(--color-warning, #d97706)"
+                                            : "var(--md-sys-color-primary, #1a73e8)",
+                                        }}
+                                      >
+                                        {isRestricted ? "lock" : "description"}
+                                      </span>
+                                      <strong style={{ color: isRestricted ? "var(--color-warning, #92400e)" : "inherit" }}>
+                                        {f.path}
+                                      </strong>
+                                      {isRestricted ? (
+                                        <Badge variant="warning" size="xs">
+                                          Restrito
+                                        </Badge>
+                                      ) : (f.additions > 0 || f.deletions > 0) ? (
                                         <>
                                           <span
                                             style={{
@@ -1191,11 +1560,14 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
                                             -{f.deletions || 0}
                                           </span>
                                         </>
-                                      )}
+                                      ) : null}
                                     </div>
 
-                                    <div className="ui-row ui-row--align-center ui-row--xs">
-                                      {isOpen && (
+                                    <div
+                                      className="ui-row ui-row--align-center ui-row--xs"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      {isOpen && !isRestricted && (
                                         <Button
                                           type="button"
                                           size="xs"
@@ -1216,95 +1588,116 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
                                           Editar Documento
                                         </Button>
                                       )}
-
-                                      <div
-                                        className="ui-btn-group"
-                                        style={{
-                                          background:
-                                            "var(--color-border-subtle, #e2e8f0)",
-                                          padding: "2px",
-                                          borderRadius: "6px",
-                                        }}
-                                      >
-                                        <Button
-                                          type="button"
-                                          size="xs"
-                                          variant={
-                                            isVisual ? "secondary" : "ghost"
-                                          }
-                                          onClick={() =>
-                                            setPrViewModes((prev) => ({
-                                              ...prev,
-                                              [fileKey]: "visual",
-                                            }))
-                                          }
-                                        >
-                                          Visualização Formatada
-                                        </Button>
-                                        <Button
-                                          type="button"
-                                          size="xs"
-                                          variant={
-                                            !isVisual ? "secondary" : "ghost"
-                                          }
-                                          onClick={() =>
-                                            setPrViewModes((prev) => ({
-                                              ...prev,
-                                              [fileKey]: "raw",
-                                            }))
-                                          }
-                                        >
-                                          Modo RAW (Diff)
-                                        </Button>
-                                      </div>
                                     </div>
                                   </div>
 
-                                  {isLoadingDiff ? (
-                                    <div
-                                      style={{
-                                        padding: "14px",
-                                        textAlign: "center",
-                                        color: "var(--color-text-muted)",
-                                      }}
-                                    >
-                                      Carregando diferenças da versão...
-                                    </div>
-                                  ) : isVisual &&
-                                    (f.old_content || f.new_content) ? (
-                                    <div
-                                      style={{
-                                        maxHeight: "380px",
-                                        overflowY: "auto",
-                                      }}
-                                    >
-                                      <VisualMarkdownDiff
-                                        oldContent={f.old_content || ""}
-                                        newContent={f.new_content || ""}
-                                        fileName={f.path}
-                                      />
-                                    </div>
-                                  ) : (
-                                    fileDiff && (
-                                      <pre
-                                        style={{
-                                          margin: 0,
-                                          padding: "10px 12px",
-                                          fontSize: "11.5px",
-                                          background: "#0d1117",
-                                          color: "#f8fafc",
-                                          overflowX: "auto",
-                                          fontFamily: "var(--font-family-mono)",
-                                        }}
-                                      >
-                                        {fileDiff}
-                                      </pre>
-                                    )
+                                  {!isFileCollapsed && (
+                                    <>
+                                      {isRestricted ? (
+                                        <div
+                                          style={{
+                                            padding: "16px 20px",
+                                            display: "flex",
+                                            alignItems: "center",
+                                            gap: "12px",
+                                            background: "var(--md-sys-color-surface-container-low, #f8f9fa)",
+                                            color: "var(--color-text-secondary, #64748b)",
+                                            fontSize: "13px",
+                                          }}
+                                        >
+                                          <span
+                                            className="material-symbols-outlined"
+                                            style={{ fontSize: "22px", color: "var(--color-warning, #f59e0b)" }}
+                                          >
+                                            lock
+                                          </span>
+                                          <div>
+                                            <div style={{ fontWeight: 600, color: "var(--color-text-primary, #0f172a)" }}>
+                                              Documento Restrito Criptografado
+                                            </div>
+                                            <div style={{ fontSize: "12px", marginTop: "2px" }}>
+                                              Você não possui credenciais de departamento ou nível de acesso suficiente para inspecionar o conteúdo ou as diferenças deste documento.
+                                            </div>
+                                          </div>
+                                        </div>
+                                      ) : isLoadingDiff ? (
+                                        <div
+                                          style={{
+                                            padding: "14px",
+                                            textAlign: "center",
+                                            color: "var(--color-text-muted)",
+                                          }}
+                                        >
+                                          Carregando diferenças da versão...
+                                        </div>
+                                      ) : oldContent || newContent ? (
+                                        <div
+                                          style={{
+                                            maxHeight: "380px",
+                                            overflowY: "auto",
+                                          }}
+                                        >
+                                          <VisualMarkdownDiff
+                                            oldContent={oldContent}
+                                            newContent={newContent}
+                                            fileName={f.path}
+                                          />
+                                        </div>
+                                      ) : (
+                                        fileDiff && (
+                                          <pre
+                                            style={{
+                                              margin: 0,
+                                              padding: "10px 12px",
+                                              fontSize: "11.5px",
+                                              background: "#0d1117",
+                                              color: "#f8fafc",
+                                              overflowX: "auto",
+                                              fontFamily:
+                                                "var(--font-family-mono)",
+                                            }}
+                                          >
+                                            {fileDiff}
+                                          </pre>
+                                        )
+                                      )}
+                                    </>
                                   )}
                                 </Card>
                               );
                             })}
                           </div>
+                        </div>
+                      )}
+
+                      {/* When all modified files in PR are system files */}
+                      {prFiles.length === 0 && rawFiles.length > 0 && (
+                        <div
+                          style={{
+                            padding: "12px 14px",
+                            borderRadius: "8px",
+                            background: "var(--color-surface-subtle, #f8fafc)",
+                            border:
+                              "1px dashed var(--color-border-subtle, #cbd5e1)",
+                            fontSize: "12.5px",
+                            color: "var(--color-text-muted, #64748b)",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
+                          }}
+                        >
+                          <span
+                            className="material-symbols-outlined"
+                            style={{
+                              fontSize: "18px",
+                              color: "var(--md-sys-color-primary, #1a73e8)",
+                            }}
+                          >
+                            info
+                          </span>
+                          <span>
+                            Dos {rawFiles.length} arquivos editados no total, todos ({rawFiles.length}) são arquivos de configuração ou metadados de sistema e foram omitidos da lista de documentos.
+                          </span>
                         </div>
                       )}
 
@@ -1831,6 +2224,17 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Conflict Resolution Modal */}
+      {activeConflictPR && activeConflictPR.bundle && (
+        <MergeConflictResolutionModal
+          isOpen={true}
+          onClose={() => setActiveConflictPR(null)}
+          filePath={activeConflictPR.filePath}
+          content={activeConflictPR.bundle.merged || ""}
+          onSaveResolved={handleSaveConflictResolution}
+        />
       )}
     </PageContainer>
   );

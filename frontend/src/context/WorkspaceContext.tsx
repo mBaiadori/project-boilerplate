@@ -128,7 +128,7 @@ const WorkspaceContext = createContext<WorkspaceContextType | undefined>(
 export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
-  const { isAuthenticated } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const [activeRepo, setActiveRepo] = useState<Repo | null>(null);
   const [repos, setRepos] = useState<Repo[]>([]);
   const [tree, setTree] = useState<TreeNode[]>([]);
@@ -1075,6 +1075,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
     };
   }, [
     isAuthenticated,
+    user?.login,
     loadRepos,
     refreshPendingChanges,
     loadTree,
