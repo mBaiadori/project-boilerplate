@@ -97,15 +97,42 @@ export class GovernanceService {
     const cfg = loadConfig();
     const activeRepo = cfg.active_repo;
     const targetRepoName = repoName || activeRepo?.name || "local";
-    const repoDir = this.getRepoDir(targetRepoName);
 
-    // 1. Inspect git config origin url (handles GitHub, Forgejo, Gitea and custom domains)
+    // 1. Repositórios locais ou padrão do sistema nunca devem apontar para repositório remoto acidentalmente
+    if (
+      targetRepoName === "local" ||
+      targetRepoName === "default" ||
+      targetRepoName === "_default"
+    ) {
+      if (
+        activeRepo?.name === targetRepoName &&
+        activeRepo.full_name &&
+        !activeRepo.full_name.startsWith("local/") &&
+        !activeRepo.is_local
+      ) {
+        return activeRepo.full_name;
+      }
+      return `local/${targetRepoName}`;
+    }
+
+    // 2. Se o repositório ativo selecionado for o mesmo e for explicitamente local
+    if (activeRepo?.name?.toLowerCase() === targetRepoName.toLowerCase()) {
+      if (activeRepo.is_local || activeRepo.full_name?.startsWith("local/")) {
+        return `local/${targetRepoName}`;
+      }
+      if (activeRepo.full_name && !activeRepo.full_name.startsWith("local/")) {
+        return activeRepo.full_name;
+      }
+    }
+
+    // 3. Inspeciona o .git/config específico da pasta deste repositório
+    const repoDir = this.getRepoDir(targetRepoName);
     const gitConfigPath = path.join(repoDir, ".git", "config");
     if (fs.existsSync(gitConfigPath)) {
       try {
         const configText = fs.readFileSync(gitConfigPath, "utf-8");
         const match = configText.match(
-          /url\s*=\s*(?:https?:\/\/[^\/]+\/|git@[^:]+:)([a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+?)(\.git|\s|$)/,
+          /url\s*=\s*(?:https?:\/\/[^\/]+(?::\d+)?\/|git@[^:]+:)([a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+?)(\.git|\s|$)/,
         );
         if (match && match[1]) {
           const fullName = match[1].replace(/\.git$/, "");
@@ -116,15 +143,7 @@ export class GovernanceService {
       } catch {}
     }
 
-    // 2. If activeRepo.full_name is valid and remote
-    if (
-      activeRepo?.full_name &&
-      !activeRepo.full_name.startsWith("local/") &&
-      !activeRepo.is_local
-    ) {
-      return activeRepo.full_name;
-    }
-
+    // 4. Se não há remote configurado no .git/config, o repositório opera em modo local
     return `local/${targetRepoName}`;
   }
 

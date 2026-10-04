@@ -1,18 +1,13 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronDown, User, UserPlus, LogOut, Trash2 } from "lucide-react";
+import { ChevronDown, User, LogOut } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
-import { useWorkspace } from "../../context/WorkspaceContext";
-import { Badge, IconButton } from "../ui";
-import { AddAccountModal } from "../modals/AddAccountModal";
+import { Badge } from "../ui";
 
 export const AccountSwitcherMenu: React.FC = () => {
-  const { t } = useTranslation(["repos", "common"]);
-  const { user, provider, accounts, switchAccount, removeAccount, logout } =
-    useAuth();
-  const { loadRepos } = useWorkspace();
+  const { t } = useTranslation(["repos", "common", "auth"]);
+  const { user, provider, logout } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   // Close when clicking outside
@@ -36,8 +31,6 @@ export const AccountSwitcherMenu: React.FC = () => {
       : provider === "github"
         ? "GitHub"
         : "Modo Local";
-
-  const otherAccounts = accounts.filter((a) => !a.is_active);
 
   return (
     <div
@@ -85,8 +78,8 @@ export const AccountSwitcherMenu: React.FC = () => {
               src={user.avatar_url}
               alt={user.name || user.login}
               style={{
-                width: "30px",
-                height: "30px",
+                width: "28px",
+                height: "28px",
                 borderRadius: "50%",
                 objectFit: "cover",
                 border: "1.5px solid var(--color-primary-container, #d2e3fc)",
@@ -96,8 +89,8 @@ export const AccountSwitcherMenu: React.FC = () => {
           ) : (
             <div
               style={{
-                width: "30px",
-                height: "30px",
+                width: "28px",
+                height: "28px",
                 borderRadius: "50%",
                 backgroundColor: "var(--color-primary-container, #d2e3fc)",
                 display: "flex",
@@ -106,7 +99,7 @@ export const AccountSwitcherMenu: React.FC = () => {
                 color: "var(--color-primary, #1a73e8)",
               }}
             >
-              <User size={16} />
+              <User size={15} />
             </div>
           )}
           <span
@@ -114,8 +107,8 @@ export const AccountSwitcherMenu: React.FC = () => {
               position: "absolute",
               bottom: "-1px",
               right: "-1px",
-              width: "9px",
-              height: "9px",
+              width: "8px",
+              height: "8px",
               borderRadius: "50%",
               backgroundColor: "#10b981",
               border: "2px solid var(--color-surface, #ffffff)",
@@ -158,7 +151,7 @@ export const AccountSwitcherMenu: React.FC = () => {
         </div>
 
         <ChevronDown
-          size={15}
+          size={14}
           style={{
             color: "var(--color-on-surface-variant, #5f6368)",
             transform: isOpen ? "rotate(180deg)" : "none",
@@ -168,7 +161,7 @@ export const AccountSwitcherMenu: React.FC = () => {
         />
       </button>
 
-      {/* Dropdown Menu */}
+      {/* Dropdown Popover */}
       {isOpen && (
         <div
           className="account-switcher-dropdown"
@@ -176,7 +169,7 @@ export const AccountSwitcherMenu: React.FC = () => {
             position: "absolute",
             top: "calc(100% + 8px)",
             left: 0,
-            width: "320px",
+            width: "280px",
             backgroundColor: "var(--color-surface, #ffffff)",
             border: "1px solid var(--color-outline-variant, #dadce0)",
             borderRadius: "var(--radius-lg, 12px)",
@@ -187,34 +180,22 @@ export const AccountSwitcherMenu: React.FC = () => {
             animation: "fadeIn 0.15s ease",
           }}
         >
-          {/* Header / Active Account */}
+          {/* Header / Active Account Details */}
           <div
             style={{
-              padding: "14px 16px",
+              padding: "16px",
               backgroundColor: "var(--color-surface-container-low, #f8f9fa)",
               borderBottom: "1px solid var(--color-outline-variant, #dadce0)",
             }}
           >
-            <div
-              style={{
-                fontSize: "10.5px",
-                fontWeight: 700,
-                textTransform: "uppercase",
-                letterSpacing: "0.6px",
-                color: "var(--color-on-surface-variant, #5f6368)",
-                marginBottom: "8px",
-              }}
-            >
-              {t("repos:activeAccount", "Conta Ativa")}
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "10px" }}>
               {user?.avatar_url ? (
                 <img
                   src={user.avatar_url}
                   alt={user.name || user.login}
                   style={{
-                    width: "38px",
-                    height: "38px",
+                    width: "42px",
+                    height: "42px",
                     borderRadius: "50%",
                     objectFit: "cover",
                     border: "2px solid var(--color-primary-container, #d2e3fc)",
@@ -223,8 +204,8 @@ export const AccountSwitcherMenu: React.FC = () => {
               ) : (
                 <div
                   style={{
-                    width: "38px",
-                    height: "38px",
+                    width: "42px",
+                    height: "42px",
                     borderRadius: "50%",
                     backgroundColor: "var(--color-primary-container, #d2e3fc)",
                     display: "flex",
@@ -233,13 +214,13 @@ export const AccountSwitcherMenu: React.FC = () => {
                     color: "var(--color-primary, #1a73e8)",
                   }}
                 >
-                  <User size={18} />
+                  <User size={20} />
                 </div>
               )}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div
                   style={{
-                    fontSize: "13.5px",
+                    fontSize: "14px",
                     fontWeight: 600,
                     color: "var(--color-on-surface, #202124)",
                     overflow: "hidden",
@@ -258,177 +239,22 @@ export const AccountSwitcherMenu: React.FC = () => {
                   @{user?.login}
                 </div>
               </div>
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
               <Badge variant="primary" size="sm">
                 {providerLabel}
               </Badge>
+              {user?.role && (
+                <Badge variant="subtle" size="sm">
+                  {user.role}
+                </Badge>
+              )}
             </div>
           </div>
 
-          {/* Other Saved Accounts */}
-          {otherAccounts.length > 0 && (
-            <div
-              style={{
-                padding: "6px 0",
-                borderBottom: "1px solid var(--color-outline-variant, #dadce0)",
-              }}
-            >
-              {otherAccounts.map((acc) => (
-                <div
-                  key={acc.id}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    padding: "8px 16px",
-                    cursor: "pointer",
-                    transition: "background 0.12s ease",
-                  }}
-                  onClick={async () => {
-                    const res = await switchAccount(acc.id);
-                    if (res.success) {
-                      await loadRepos();
-                    }
-                    setIsOpen(false);
-                  }}
-                  onMouseEnter={(e) =>
-                    (e.currentTarget.style.backgroundColor =
-                      "var(--color-surface-container, #f1f3f4)")
-                  }
-                  onMouseLeave={(e) =>
-                    (e.currentTarget.style.backgroundColor = "transparent")
-                  }
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "10px",
-                      minWidth: 0,
-                    }}
-                  >
-                    {acc.user?.avatar_url ? (
-                      <img
-                        src={acc.user.avatar_url}
-                        alt={acc.user.login}
-                        style={{
-                          width: "30px",
-                          height: "30px",
-                          borderRadius: "50%",
-                          objectFit: "cover",
-                          border:
-                            "1px solid var(--color-outline-variant, #dadce0)",
-                        }}
-                      />
-                    ) : (
-                      <div
-                        style={{
-                          width: "30px",
-                          height: "30px",
-                          borderRadius: "50%",
-                          backgroundColor:
-                            "var(--color-surface-container-high, #e8eaed)",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          color: "var(--color-on-surface-variant, #5f6368)",
-                        }}
-                      >
-                        <User size={15} />
-                      </div>
-                    )}
-                    <div style={{ minWidth: 0 }}>
-                      <div
-                        style={{
-                          fontSize: "13px",
-                          fontWeight: 600,
-                          color: "var(--color-on-surface, #202124)",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {acc.user?.name || acc.user?.login}
-                      </div>
-                      <div
-                        style={{
-                          fontSize: "11.5px",
-                          color: "var(--color-on-surface-variant, #5f6368)",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "4px",
-                        }}
-                      >
-                        <span>@{acc.user?.login}</span>
-                        <span>•</span>
-                        <span style={{ fontWeight: 500 }}>
-                          {acc.git_provider === "forgejo"
-                            ? "Forgejo"
-                            : "GitHub"}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <IconButton
-                    size="sm"
-                    tooltip={t(
-                      "repos:removeAccountTooltip",
-                      "Remover esta conta salva",
-                    )}
-                    onClick={async (e) => {
-                      e.stopPropagation();
-                      await removeAccount(acc.id);
-                    }}
-                  >
-                    <Trash2
-                      size={14}
-                      style={{ color: "var(--color-error, #d93025)" }}
-                    />
-                  </IconButton>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Action: Add Account & Logout */}
-          <div style={{ padding: "6px" }}>
-            <button
-              type="button"
-              id="btn-add-account-menu"
-              style={{
-                width: "100%",
-                display: "flex",
-                alignItems: "center",
-                gap: "10px",
-                padding: "9px 12px",
-                borderRadius: "var(--radius-sm, 6px)",
-                border: "none",
-                backgroundColor: "transparent",
-                color: "var(--color-primary, #1a73e8)",
-                fontSize: "13px",
-                fontWeight: 600,
-                cursor: "pointer",
-                textAlign: "left",
-                transition: "background 0.12s ease",
-              }}
-              onMouseEnter={(e) =>
-                (e.currentTarget.style.backgroundColor =
-                  "var(--color-primary-container, #d2e3fc)")
-              }
-              onMouseLeave={(e) =>
-                (e.currentTarget.style.backgroundColor = "transparent")
-              }
-              onClick={() => {
-                setIsOpen(false);
-                setIsAddModalOpen(true);
-              }}
-            >
-              <UserPlus size={16} />
-              <span>
-                {t("repos:addAnotherAccount", "+ Adicionar outra conta")}
-              </span>
-            </button>
-
+          {/* Action: Logout */}
+          <div style={{ padding: "8px" }}>
             <button
               type="button"
               id="btn-logout-menu"
@@ -437,7 +263,7 @@ export const AccountSwitcherMenu: React.FC = () => {
                 display: "flex",
                 alignItems: "center",
                 gap: "10px",
-                padding: "9px 12px",
+                padding: "10px 12px",
                 borderRadius: "var(--radius-sm, 6px)",
                 border: "none",
                 backgroundColor: "transparent",
@@ -466,15 +292,6 @@ export const AccountSwitcherMenu: React.FC = () => {
           </div>
         </div>
       )}
-
-      {/* Add Account Modal */}
-      <AddAccountModal
-        isOpen={isAddModalOpen}
-        onClose={() => setIsAddModalOpen(false)}
-        onSuccess={() => {
-          loadRepos();
-        }}
-      />
     </div>
   );
 };

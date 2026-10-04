@@ -1,13 +1,15 @@
-import { ExternalLink, Monitor, Sparkles } from "lucide-react";
+import { ExternalLink, Monitor, Sparkles, User, Trash2, LogIn, Plus } from "lucide-react";
 import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { LanguageSwitcher } from "../components/common/LanguageSwitcher";
 import {
   AlertBanner,
+  Badge,
   Button,
   Card,
   CardContent,
   FormField,
+  IconButton,
   Input,
 } from "../components/ui";
 import { useAuth } from "../context/AuthContext";
@@ -17,11 +19,12 @@ interface AuthViewProps {
 }
 
 export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
-  const { t } = useTranslation(["auth", "common"]);
-  const { loginWithToken, loginLocal } = useAuth();
+  const { t } = useTranslation(["auth", "common", "repos"]);
+  const { loginWithToken, loginLocal, accounts, switchAccount, removeAccount } = useAuth();
   const [provider] = useState<"forgejo" | "github">("github");
   const [forgejoUrl, setForgejoUrl] = useState("http://localhost:3000/api/v1");
   const [token, setToken] = useState("");
+  const [showTokenForm, setShowTokenForm] = useState(accounts.length === 0);
   const [isLoading, setIsLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{
     text: string;
@@ -37,6 +40,26 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
   };
 
   const currentProviderName = provider === "forgejo" ? "Forgejo" : "GitHub";
+
+  const handleSelectAccount = async (accountId: string) => {
+    setIsLoading(true);
+    setStatusMessage(null);
+    try {
+      const res = await switchAccount(accountId);
+      if (res.success) {
+        onLoginSuccess();
+      } else {
+        setStatusMessage({
+          text: res.error || t("auth:statusDefaultError"),
+          type: "error",
+        });
+      }
+    } catch {
+      setStatusMessage({ text: t("auth:statusServerError"), type: "error" });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleTokenLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -118,7 +141,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
       <div
         style={{
           width: "100%",
-          maxWidth: "620px",
+          maxWidth: "520px",
           display: "flex",
           flexDirection: "column",
           gap: "16px",
@@ -170,7 +193,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
           <p
             style={{
               margin: 0,
-              maxWidth: "560px",
+              maxWidth: "500px",
               fontSize: "13px",
               color: "var(--color-on-surface-variant)",
               lineHeight: 1.45,
@@ -180,68 +203,256 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
           </p>
         </div>
 
-        {/* Main Split Grid */}
-        <div
+        {/* Main Auth Card */}
+        <Card
           style={{
+            width: "100%",
             display: "flex",
             flexDirection: "column",
-            gap: "16px",
-            alignItems: "center",
-            justifyContent: "center",
-            width: "100%",
           }}
         >
-          {/* Card Esquerdo: Escolha do Provedor e Formulário */}
-          <Card
+          <CardContent
             style={{
-              height: "100%",
+              padding: "24px",
               display: "flex",
               flexDirection: "column",
-              minWidth: "460px",
+              gap: "18px",
             }}
           >
-            <CardContent
-              style={{
-                padding: "20px",
-                display: "flex",
-                flexDirection: "column",
-                gap: "14px",
-                height: "100%",
-              }}
-            >
-              <div>
-                <h2
+            {/* Status Alert if any */}
+            {statusMessage && (
+              <AlertBanner
+                variant={statusMessage.type}
+                title={statusMessage.text}
+                onClose={() => setStatusMessage(null)}
+              />
+            )}
+
+            {/* Section: Saved Accounts (if any) */}
+            {accounts.length > 0 && !showTokenForm && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                <div>
+                  <h2
+                    style={{
+                      margin: 0,
+                      fontSize: "15px",
+                      fontWeight: 700,
+                      color: "var(--color-on-surface)",
+                    }}
+                  >
+                    {t("auth:savedAccountsTitle", "Contas Salvas")}
+                  </h2>
+                  <p
+                    style={{
+                      margin: "2px 0 0 0",
+                      fontSize: "12px",
+                      color: "var(--color-on-surface-variant)",
+                    }}
+                  >
+                    {t("auth:savedAccountsSubtitle", "Selecione uma conta para entrar rapidamente:")}
+                  </p>
+                </div>
+
+                <div
                   style={{
-                    margin: 0,
-                    fontSize: "15px",
-                    fontWeight: 700,
-                    color: "var(--color-on-surface)",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "8px",
+                    maxHeight: "260px",
+                    overflowY: "auto",
+                    paddingRight: "2px",
                   }}
                 >
-                  {t("auth:accessTitle")}
-                </h2>
-                <p
+                  {accounts.map((acc) => (
+                    <div
+                      key={acc.id}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        padding: "10px 14px",
+                        backgroundColor: "var(--color-surface-container-low, #f8f9fa)",
+                        border: "1px solid var(--color-outline-variant, #dadce0)",
+                        borderRadius: "var(--radius-md, 8px)",
+                        transition: "all 0.15s ease",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "12px",
+                          minWidth: 0,
+                          flex: 1,
+                        }}
+                      >
+                        {acc.user?.avatar_url ? (
+                          <img
+                            src={acc.user.avatar_url}
+                            alt={acc.user.login}
+                            style={{
+                              width: "36px",
+                              height: "36px",
+                              borderRadius: "50%",
+                              objectFit: "cover",
+                              border: "1.5px solid var(--color-primary-container, #d2e3fc)",
+                            }}
+                          />
+                        ) : (
+                          <div
+                            style={{
+                              width: "36px",
+                              height: "36px",
+                              borderRadius: "50%",
+                              backgroundColor: "var(--color-primary-container, #d2e3fc)",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              color: "var(--color-primary, #1a73e8)",
+                            }}
+                          >
+                            <User size={18} />
+                          </div>
+                        )}
+                        <div style={{ minWidth: 0 }}>
+                          <div
+                            style={{
+                              fontSize: "13.5px",
+                              fontWeight: 600,
+                              color: "var(--color-on-surface, #202124)",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {acc.user?.name || acc.user?.login}
+                          </div>
+                          <div
+                            style={{
+                              fontSize: "12px",
+                              color: "var(--color-on-surface-variant, #5f6368)",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "6px",
+                            }}
+                          >
+                            <span>@{acc.user?.login}</span>
+                            <Badge variant="subtle" size="sm">
+                              {acc.git_provider === "forgejo" ? "Forgejo" : "GitHub"}
+                            </Badge>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          disabled={isLoading}
+                          onClick={() => handleSelectAccount(acc.id)}
+                          leftIcon={<LogIn size={14} />}
+                        >
+                          {t("auth:signInAs", "Entrar")}
+                        </Button>
+
+                        <IconButton
+                          size="sm"
+                          tooltip={t("auth:removeAccountTooltip", "Remover conta salva")}
+                          onClick={async () => {
+                            await removeAccount(acc.id);
+                          }}
+                        >
+                          <Trash2 size={15} style={{ color: "var(--color-error, #d93025)" }} />
+                        </IconButton>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div
                   style={{
-                    margin: "2px 0 0 0",
-                    fontSize: "12px",
-                    color: "var(--color-on-surface-variant)",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    margin: "6px 0 2px",
                   }}
                 >
-                  {t("auth:accessSubtitle")}
-                </p>
+                  <div style={{ flex: 1, height: "1px", background: "var(--color-outline-variant)" }} />
+                  <span
+                    style={{
+                      fontSize: "10px",
+                      fontWeight: 600,
+                      color: "var(--color-outline)",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    {t("common:or")}
+                  </span>
+                  <div style={{ flex: 1, height: "1px", background: "var(--color-outline-variant)" }} />
+                </div>
+
+                <Button
+                  variant="subtle"
+                  size="sm"
+                  fullWidth
+                  type="button"
+                  onClick={() => setShowTokenForm(true)}
+                  icon={<Plus size={14} />}
+                >
+                  {t("auth:addNewAccount", "Adicionar nova conta / token")}
+                </Button>
+
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  fullWidth
+                  type="button"
+                  onClick={handleLocalModeLogin}
+                  disabled={isLoading}
+                  icon={<Monitor size={14} />}
+                >
+                  {t("auth:localModeButton")}
+                </Button>
               </div>
+            )}
 
-              {/* Provider Selector Tabs (Forgejo hidden for future release) */}
-              {/* <div style={{ display: 'none' }}>...</div> */}
+            {/* Section: Token Form (when no accounts saved or clicked Add Account) */}
+            {(accounts.length === 0 || showTokenForm) && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <div>
+                    <h2
+                      style={{
+                        margin: 0,
+                        fontSize: "15px",
+                        fontWeight: 700,
+                        color: "var(--color-on-surface)",
+                      }}
+                    >
+                      {t("auth:accessTitle")}
+                    </h2>
+                    <p
+                      style={{
+                        margin: "2px 0 0 0",
+                        fontSize: "12px",
+                        color: "var(--color-on-surface-variant)",
+                      }}
+                    >
+                      {t("auth:accessSubtitle")}
+                    </p>
+                  </div>
 
-              {/* Provider Active Form */}
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "10px",
-                }}
-              >
+                  {accounts.length > 0 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowTokenForm(false)}
+                    >
+                      {t("auth:savedAccountsTitle", "Ver Salvas")}
+                    </Button>
+                  )}
+                </div>
+
                 {provider === "forgejo" ? (
                   <>
                     <FormField
@@ -351,14 +562,6 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
                   >
                     {t("auth:connectButton", { provider: currentProviderName })}
                   </Button>
-
-                  {statusMessage && (
-                    <AlertBanner
-                      variant={statusMessage.type}
-                      title={statusMessage.text}
-                      onClose={() => setStatusMessage(null)}
-                    />
-                  )}
                 </form>
 
                 <div
@@ -407,219 +610,11 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
                   {t("auth:localModeButton")}
                 </Button>
               </div>
-            </CardContent>
-          </Card>
-
-          {/* Card Direito: Comparativo & Diferenciais de Governança
-          <Card
-            style={{
-              height: "100%",
-              display: "flex",
-              flexDirection: "column",
-              background: "var(--color-surface-container-lowest)",
-            }}
-          >
-            <CardContent
-              style={{
-                padding: "20px",
-                display: "flex",
-                flexDirection: "column",
-                gap: "14px",
-                height: "100%",
-                justifyContent: "flex-start",
-              }}
-            >
-              <div
-                style={{ display: "flex", alignItems: "center", gap: "10px" }}
-              >
-                <div
-                  style={{
-                    padding: "6px",
-                    borderRadius: "8px",
-                    background: "var(--color-primary-container)",
-                    color: "var(--color-primary)",
-                    display: "flex",
-                  }}
-                >
-                  <ShieldCheck size={18} />
-                </div>
-                <div>
-                  <h3
-                    style={{
-                      margin: 0,
-                      fontSize: "15px",
-                      fontWeight: 700,
-                      color: "var(--color-on-surface)",
-                    }}
-                  >
-                    {t("auth:differencesTitle")}
-                  </h3>
-                  <span
-                    style={{
-                      fontSize: "12px",
-                      color: "var(--color-on-surface-variant)",
-                    }}
-                  >
-                    {t("auth:differencesSubtitle")}
-                  </span>
-                </div>
-              </div>
-
-         
-              <div
-                style={{
-                  padding: "12px 14px",
-                  borderRadius: "var(--radius-md, 8px)",
-                  background:
-                    provider === "forgejo"
-                      ? "rgba(var(--color-primary-rgb, 59, 130, 246), 0.08)"
-                      : "var(--color-surface-container)",
-                  border:
-                    provider === "forgejo"
-                      ? "1px solid var(--color-primary)"
-                      : "1px solid var(--color-outline-variant)",
-                  transition: "all 0.2s ease",
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    marginBottom: "6px",
-                  }}
-                >
-                  <strong
-                    style={{
-                      fontSize: "13px",
-                      color: "var(--color-on-surface)",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "6px",
-                    }}
-                  >
-                    <Server size={14} />
-                    {t("auth:forgejoBoxTitle")}
-                  </strong>
-                  <span
-                    style={{
-                      fontSize: "10.5px",
-                      fontWeight: 700,
-                      background: "#10b98120",
-                      color: "#10b981",
-                      padding: "2px 7px",
-                      borderRadius: "10px",
-                    }}
-                  >
-                    {t("auth:forgejoBoxTag")}
-                  </span>
-                </div>
-                <ul
-                  style={{
-                    margin: 0,
-                    paddingLeft: "16px",
-                    fontSize: "12px",
-                    color: "var(--color-on-surface-variant)",
-                    lineHeight: 1.45,
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "4px",
-                  }}
-                >
-                  <li>
-                    <Trans ns="auth" i18nKey="forgejoItem1">
-                      <strong>Branch & File Protection:</strong> Regras nativas
-                      sem custo em repositórios privados.
-                    </Trans>
-                  </li>
-                  <li>
-                    <Trans ns="auth" i18nKey="forgejoItem2">
-                      <strong>Controle Total:</strong> Roda na sua
-                      infraestrutura, sem dados externos.
-                    </Trans>
-                  </li>
-                </ul>
-              </div>
-
-           
-              <div
-                style={{
-                  padding: "12px 14px",
-                  borderRadius: "var(--radius-md, 8px)",
-                  background:
-                    provider === "github"
-                      ? "rgba(var(--color-primary-rgb, 59, 130, 246), 0.08)"
-                      : "var(--color-surface-container)",
-                  border:
-                    provider === "github"
-                      ? "1px solid var(--color-primary)"
-                      : "1px solid var(--color-outline-variant)",
-                  transition: "all 0.2s ease",
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    marginBottom: "6px",
-                  }}
-                >
-                  <strong
-                    style={{
-                      fontSize: "13px",
-                      color: "var(--color-on-surface)",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "6px",
-                    }}
-                  >
-                    <Globe size={14} />
-                    {t("auth:githubBoxTitle")}
-                  </strong>
-                  <span
-                    style={{
-                      fontSize: "10.5px",
-                      fontWeight: 600,
-                      color: "var(--color-outline)",
-                      background: "var(--color-surface-container-high)",
-                      padding: "2px 7px",
-                      borderRadius: "10px",
-                    }}
-                  >
-                    {t("auth:githubBoxTag")}
-                  </span>
-                </div>
-                <ul
-                  style={{
-                    margin: 0,
-                    paddingLeft: "16px",
-                    fontSize: "12px",
-                    color: "var(--color-on-surface-variant)",
-                    lineHeight: 1.45,
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "4px",
-                  }}
-                >
-                  <li>
-                    <Trans ns="auth" i18nKey="githubItem1">
-                      <strong>Repositórios GitHub:</strong> Conexão direta com
-                      seus repositórios existentes.
-                    </Trans>
-                  </li>
-                  <li>
-                    <Trans ns="auth" i18nKey="githubItem2">
-                      <strong>Cofre Zero-Trust:</strong> Criptografia ponta a
-                      ponta em todos os planos.
-                    </Trans>
-                  </li>
-                </ul>
-              </div>
-            </CardContent>
-          </Card> */}
-        </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
 };
+
