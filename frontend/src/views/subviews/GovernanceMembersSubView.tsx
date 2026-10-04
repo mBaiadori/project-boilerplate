@@ -31,56 +31,439 @@ import { Modal } from "../../components/ui/Modal";
 import { FormField } from "../../components/ui/FormField";
 import { Card } from "../../components/ui/Card";
 
+interface FolderNode {
+  path: string;
+  name: string;
+  depth: number;
+  children: FolderNode[];
+}
+
 interface FolderTreePickerProps {
   tree: any[];
-  selectedPaths: string[];
-  onChange: (paths: string[]) => void;
+  allowedPaths: string[];
+  deniedPaths: string[];
+  onChange: (allowed: string[], denied: string[]) => void;
+  disabled?: boolean;
 }
 
 const FolderTreePicker: React.FC<FolderTreePickerProps> = ({
   tree,
-  selectedPaths,
+  allowedPaths,
+  deniedPaths,
   onChange,
+  disabled = false,
 }) => {
-  const folders = useMemo(() => {
-    const list: { path: string; name: string; depth: number }[] = [];
-    const walk = (nodes: any[], depth = 0) => {
-      for (const node of nodes) {
+  const [searchQuery, setSearchQuery] = useState("");
+  const [collapsedPaths, setCollapsedPaths] = useState<Record<string, boolean>>({});
+
+  // Constrói árvore hierárquica a partir da árvore plana de arquivos do workspace
+  const folderTree = useMemo(() => {
+    const rootNodes: FolderNode[] = [];
+    const nodeMap = new Map<string, FolderNode>();
+
+    const walk = (nodes: any[], currentDepth = 0) => {
+      for (const node of nodes || []) {
         if (node.type === "directory" || (node.children && node.children.length > 0)) {
-          const clean = (node.path || "").replace(/^\/+/, "");
-          list.push({ path: clean, name: node.name, depth });
+          const cleanPath = (node.path || "").replace(/\\/g, "/").replace(/^\/+/, "");
+          if (!cleanPath) continue;
+
+          const folderNode: FolderNode = {
+            path: cleanPath,
+            name: node.name || cleanPath.split("/").pop() || cleanPath,
+            depth: currentDepth,
+            children: [],
+          };
+
+          nodeMap.set(cleanPath, folderNode);
+
+          // Verifica se tem pai
+          const pathSegments = cleanPath.split("/");
+          if (pathSegments.length > 1) {
+            const parentPath = pathSegments.slice(0, -1).join("/");
+            const parentNode = nodeMap.get(parentPath);
+            if (parentNode) {
+              parentNode.children.push(folderNode);
+            } else {
+              rootNodes.push(folderNode);
+            }
+          } else {
+            rootNodes.push(folderNode);
+          }
+
           if (Array.isArray(node.children)) {
-            walk(node.children, depth + 1);
+            walk(node.children, currentDepth + 1);
           }
         }
       }
     };
+
     walk(tree || []);
-    return list;
+    return rootNodes;
   }, [tree]);
 
-  const isGlobal = selectedPaths.includes("*") || selectedPaths.includes("/**");
+  // Lista plana para contagem e busca rápida
+  const allFolderPaths = useMemo(() => {
+    const list: { path: string; name: string }[] = [];
+    const traverse = (nodes: FolderNode[]) => {
+      for (const n of nodes) {
+        list.push({ path: n.path, name: n.name });
+        traverse(n.children);
+      }
+    };
+    traverse(folderTree);
+    return list;
+  }, [folderTree]);
 
-  const handleToggleGlobal = () => {
+  const isGlobal = allowedPaths.includes("*") || allowedPaths.includes("/**");
+
+  // Helper para verificar status de acesso de uma pasta
+  const getFolderAccessState = useCallback((folderPath: string): {
+    isDenied: boolean;
+    isExplicitlyAllowed: boolean;
+    isInherited: boolean;
+    hasAccess: boolean;
+    parentSource?: string;
+  } => {
+    const clean = folderPath.replace(/\\/g, "/").replace(/^\/+/, "").toLowerCase();
+
+    // 1. Negação explícita tem prioridade máxima
+    const isDenied = deniedPaths.some((p) => {
+      const cleanP = p.replace(/\\/g, "/").replace(/^\/+/, "").replace(/\/\*+$/, "").toLowerCase();
+      return clean === cleanP || clean.startsWith(cleanP + "/");
+    });
+
+    if (isDenied) {
+      return { isDenied: true, isExplicitlyAllowed: false, isInherited: false, hasAccess: false };
+    }
+
+    // 2. Acesso Global
     if (isGlobal) {
-      onChange([]);
+      return { isDenied: false, isExplicitlyAllowed: false, isInherited: true, hasAccess: true, parentSource: "*" };
+    }
+
+    // 3. Explícito
+    const isExplicitlyAllowed = allowedPaths.some((p) => {
+      const cleanP = p.replace(/\\/g, "/").replace(/^\/+/, "").replace(/\/\*+$/, "").toLowerCase();
+      return clean === cleanP;
+    });
+
+    if (isExplicitlyAllowed) {
+      return { isDenied: false, isExplicitlyAllowed: true, isInherited: false, hasAccess: true };
+    }
+
+    // 4. Herdado do Pai
+    const parentAllowed = allowedPaths.find((p) => {
+      const cleanP = p.replace(/\\/g, "/").replace(/^\/+/, "").replace(/\/\*+$/, "").toLowerCase();
+      return clean.startsWith(cleanP + "/");
+    });
+
+    if (parentAllowed) {
+      return { isDenied: false, isExplicitlyAllowed: false, isInherited: true, hasAccess: true, parentSource: parentAllowed };
+    }
+
+    return { isDenied: false, isExplicitlyAllowed: false, isInherited: false, hasAccess: false };
+  }, [allowedPaths, deniedPaths, isGlobal]);
+
+  // Toggle Global
+  const handleToggleGlobal = () => {
+    if (disabled) return;
+    if (isGlobal) {
+      onChange([], []);
     } else {
-      onChange(["*"]);
+      onChange(["*"], []);
     }
   };
 
-  const handleToggleFolder = (folderPath: string) => {
+  // Toggle Permissão Normal de Pasta
+  const handleToggleAllowFolder = (folderPath: string) => {
+    if (disabled) return;
     const clean = folderPath.replace(/\\/g, "/").replace(/^\/+/, "");
-    if (isGlobal) {
-      onChange([clean]);
-      return;
+    const state = getFolderAccessState(clean);
+
+    let nextAllowed = isGlobal ? allFolderPaths.map((f) => f.path) : [...allowedPaths];
+    let nextDenied = [...deniedPaths];
+
+    // Se estava negado, remove a negação
+    nextDenied = nextDenied.filter((p) => {
+      const cleanP = p.replace(/\\/g, "/").replace(/^\/+/, "").replace(/\/\*+$/, "");
+      return cleanP.toLowerCase() !== clean.toLowerCase();
+    });
+
+    if (state.hasAccess && !state.isInherited) {
+      // Remove a permissão explícita
+      nextAllowed = nextAllowed.filter((p) => {
+        const cleanP = p.replace(/\\/g, "/").replace(/^\/+/, "").replace(/\/\*+$/, "");
+        return cleanP.toLowerCase() !== clean.toLowerCase() && p !== "*";
+      });
+    } else if (!state.hasAccess) {
+      // Adiciona permissão explícita
+      if (!nextAllowed.includes(clean)) {
+        nextAllowed.push(clean);
+      }
+    } else if (state.isInherited) {
+      // Já herda, então se o usuário desmarcar o checkbox, cria uma negação para essa subpasta
+      if (!nextDenied.includes(clean)) {
+        nextDenied.push(clean);
+      }
     }
-    const isSelected = selectedPaths.includes(clean);
-    if (isSelected) {
-      onChange(selectedPaths.filter((p) => p !== clean));
+
+    onChange(nextAllowed, nextDenied);
+  };
+
+  // Toggle Bloqueio de Exceção (Subpasta)
+  const handleToggleDenyFolder = (folderPath: string) => {
+    if (disabled) return;
+    const clean = folderPath.replace(/\\/g, "/").replace(/^\/+/, "");
+    const isCurrentlyDenied = deniedPaths.some((p) => {
+      const cleanP = p.replace(/\\/g, "/").replace(/^\/+/, "").replace(/\/\*+$/, "");
+      return cleanP.toLowerCase() === clean.toLowerCase();
+    });
+
+    let nextDenied = [...deniedPaths];
+    if (isCurrentlyDenied) {
+      // Remove o bloqueio (restaura herança)
+      nextDenied = nextDenied.filter((p) => {
+        const cleanP = p.replace(/\\/g, "/").replace(/^\/+/, "").replace(/\/\*+$/, "");
+        return cleanP.toLowerCase() !== clean.toLowerCase();
+      });
     } else {
-      onChange([...selectedPaths, clean]);
+      // Adiciona bloqueio de exceção
+      nextDenied.push(clean);
     }
+
+    onChange(allowedPaths, nextDenied);
+  };
+
+  const toggleCollapse = (path: string) => {
+    setCollapsedPaths((prev) => ({ ...prev, [path]: !prev[path] }));
+  };
+
+  // Renderizador recursivo de nós da árvore
+  const renderNode = (node: FolderNode) => {
+    const state = getFolderAccessState(node.path);
+    const hasChildren = node.children && node.children.length > 0;
+    const isCollapsed = !!collapsedPaths[node.path];
+
+    // Se houver busca, filtra nós
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      const matchesSelf = node.name.toLowerCase().includes(query) || node.path.toLowerCase().includes(query);
+      const matchesChild = (function checkChild(n: FolderNode): boolean {
+        return (
+          n.name.toLowerCase().includes(query) ||
+          n.path.toLowerCase().includes(query) ||
+          n.children.some(checkChild)
+        );
+      })(node);
+
+      if (!matchesSelf && !matchesChild) return null;
+    }
+
+    return (
+      <div key={node.path} style={{ display: "flex", flexDirection: "column" }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            padding: "5px 8px",
+            paddingLeft: `${Math.max(node.depth * 18 + 8, 8)}px`,
+            borderRadius: "6px",
+            backgroundColor: state.isDenied
+              ? "rgba(239, 68, 68, 0.12)"
+              : state.isExplicitlyAllowed
+              ? "rgba(99, 102, 241, 0.15)"
+              : state.isInherited
+              ? "rgba(16, 185, 129, 0.08)"
+              : "transparent",
+            border: state.isDenied
+              ? "1px solid rgba(239, 68, 68, 0.35)"
+              : state.isExplicitlyAllowed
+              ? "1px solid rgba(99, 102, 241, 0.35)"
+              : state.isInherited
+              ? "1px solid rgba(16, 185, 129, 0.2)"
+              : "1px solid transparent",
+            marginBottom: "3px",
+            transition: "all 0.15s ease",
+          }}
+        >
+          {/* Chevron Expand/Collapse */}
+          {hasChildren ? (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleCollapse(node.path);
+              }}
+              style={{
+                background: "none",
+                border: "none",
+                padding: 0,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                color: "var(--color-outline, #a6adc8)",
+              }}
+            >
+              <span
+                className="material-symbols-outlined"
+                style={{
+                  fontSize: "16px",
+                  transform: isCollapsed ? "rotate(-90deg)" : "rotate(0deg)",
+                  transition: "transform 0.15s ease",
+                }}
+              >
+                expand_more
+              </span>
+            </button>
+          ) : (
+            <div style={{ width: "16px" }} />
+          )}
+
+          {/* Checkbox de Permissão */}
+          <input
+            type="checkbox"
+            checked={state.hasAccess && !state.isDenied}
+            disabled={disabled}
+            onChange={() => handleToggleAllowFolder(node.path)}
+            title={
+              state.isDenied
+                ? "Pasta bloqueada por exceção. Clique para permitir."
+                : state.isInherited
+                ? "Acesso herdado da pasta superior. Clique para remover acesso desta subpasta."
+                : "Alternar permissão desta pasta."
+            }
+            style={{ cursor: disabled ? "not-allowed" : "pointer", accentColor: "#6366f1" }}
+          />
+
+          {/* Ícone da Pasta */}
+          <span
+            className="material-symbols-outlined"
+            style={{
+              fontSize: "17px",
+              color: state.isDenied
+                ? "#ef4444"
+                : state.isExplicitlyAllowed
+                ? "#6366f1"
+                : state.isInherited
+                ? "#10b981"
+                : "var(--color-outline, #a6adc8)",
+            }}
+          >
+            {state.isDenied ? "folder_off" : state.isInherited ? "folder_shared" : "folder"}
+          </span>
+
+          {/* Nome da Pasta */}
+          <span
+            style={{
+              fontSize: "12.5px",
+              fontWeight: state.isExplicitlyAllowed || state.isDenied ? 600 : 400,
+              color: state.isDenied
+                ? "#ef4444"
+                : state.hasAccess
+                ? "var(--color-on-surface, #cdd6f4)"
+                : "var(--color-outline, #a6adc8)",
+              textDecoration: state.isDenied ? "line-through" : "none",
+            }}
+          >
+            {node.name}
+          </span>
+
+          {/* Badge de Status / Herança / Exceção */}
+          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "6px" }}>
+            {state.isDenied && (
+              <span
+                style={{
+                  fontSize: "10.5px",
+                  fontWeight: 600,
+                  color: "#ef4444",
+                  background: "rgba(239, 68, 68, 0.18)",
+                  padding: "1px 6px",
+                  borderRadius: "4px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "3px",
+                }}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: "12px" }}>
+                  lock
+                </span>
+                Exceção: Bloqueado
+              </span>
+            )}
+
+            {!state.isDenied && state.isInherited && (
+              <span
+                style={{
+                  fontSize: "10.5px",
+                  color: "#10b981",
+                  background: "rgba(16, 185, 129, 0.12)",
+                  padding: "1px 6px",
+                  borderRadius: "4px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "3px",
+                }}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: "12px" }}>
+                  subdirectory_arrow_right
+                </span>
+                Herdado
+              </span>
+            )}
+
+            {!state.isDenied && state.isExplicitlyAllowed && (
+              <span
+                style={{
+                  fontSize: "10.5px",
+                  fontWeight: 600,
+                  color: "#6366f1",
+                  background: "rgba(99, 102, 241, 0.15)",
+                  padding: "1px 6px",
+                  borderRadius: "4px",
+                }}
+              >
+                Permitido
+              </span>
+            )}
+
+            {/* Botão de Exceção Rápida (Bloquear Subpasta ou Restaurar) */}
+            {(state.hasAccess || state.isDenied) && !disabled && (
+              <button
+                type="button"
+                onClick={() => handleToggleDenyFolder(node.path)}
+                title={state.isDenied ? "Remover exceção e restaurar acesso herdado" : "Bloquear especificamente esta subpasta (Criar Exceção)"}
+                style={{
+                  background: state.isDenied ? "rgba(16, 185, 129, 0.15)" : "rgba(239, 68, 68, 0.15)",
+                  border: state.isDenied ? "1px solid rgba(16, 185, 129, 0.3)" : "1px solid rgba(239, 68, 68, 0.3)",
+                  borderRadius: "4px",
+                  padding: "2px 6px",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "3px",
+                  color: state.isDenied ? "#10b981" : "#ef4444",
+                  fontSize: "10.5px",
+                  fontWeight: 500,
+                }}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: "12px" }}>
+                  {state.isDenied ? "lock_open" : "lock"}
+                </span>
+                {state.isDenied ? "Desbloquear" : "Bloquear Subpasta"}
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Subpastas Filhas */}
+        {hasChildren && !isCollapsed && (
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            {node.children.map(renderNode)}
+          </div>
+        )}
+      </div>
+    );
   };
 
   return (
@@ -89,14 +472,59 @@ const FolderTreePicker: React.FC<FolderTreePickerProps> = ({
         border: "1px solid var(--color-outline-variant, rgba(255, 255, 255, 0.12))",
         borderRadius: "8px",
         background: "var(--color-surface-container, #181825)",
-        maxHeight: "220px",
-        overflowY: "auto",
-        padding: "8px",
+        overflow: "hidden",
         display: "flex",
         flexDirection: "column",
-        gap: "4px",
+        gap: "6px",
+        padding: "10px",
       }}
     >
+      {/* Barra de Filtro e Busca Rápida */}
+      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+        <div
+          style={{
+            flex: 1,
+            display: "flex",
+            alignItems: "center",
+            gap: "6px",
+            background: "var(--color-surface-container-high, #1e1e2e)",
+            borderRadius: "6px",
+            padding: "4px 8px",
+            border: "1px solid var(--color-outline-variant, rgba(255, 255, 255, 0.08))",
+          }}
+        >
+          <span className="material-symbols-outlined" style={{ fontSize: "15px", color: "#a6adc8" }}>
+            search
+          </span>
+          <input
+            type="text"
+            placeholder="Buscar pastas e subpastas..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            disabled={disabled}
+            style={{
+              background: "transparent",
+              border: "none",
+              outline: "none",
+              color: "var(--color-on-surface, #cdd6f4)",
+              fontSize: "12px",
+              width: "100%",
+            }}
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery("")}
+              style={{ background: "none", border: "none", color: "#a6adc8", cursor: "pointer", padding: 0 }}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>
+                close
+              </span>
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Opção Acesso Global */}
       <div
         onClick={handleToggleGlobal}
@@ -106,18 +534,19 @@ const FolderTreePicker: React.FC<FolderTreePickerProps> = ({
           gap: "8px",
           padding: "6px 10px",
           borderRadius: "6px",
-          cursor: "pointer",
+          cursor: disabled ? "not-allowed" : "pointer",
           backgroundColor: isGlobal ? "rgba(139, 92, 246, 0.18)" : "transparent",
-          border: isGlobal ? "1px solid rgba(139, 92, 246, 0.4)" : "1px solid transparent",
+          border: isGlobal ? "1px solid rgba(139, 92, 246, 0.4)" : "1px solid rgba(255, 255, 255, 0.06)",
           transition: "background 0.15s ease",
         }}
       >
         <input
           type="checkbox"
           checked={isGlobal}
+          disabled={disabled}
           onChange={handleToggleGlobal}
           onClick={(e) => e.stopPropagation()}
-          style={{ cursor: "pointer", accentColor: "#8b5cf6" }}
+          style={{ cursor: disabled ? "not-allowed" : "pointer", accentColor: "#8b5cf6" }}
         />
         <span
           className="material-symbols-outlined"
@@ -129,62 +558,93 @@ const FolderTreePicker: React.FC<FolderTreePickerProps> = ({
           Todas as Pastas e Documentos (*)
         </span>
         <span style={{ fontSize: "11px", color: "var(--color-outline, #a6adc8)", marginLeft: "auto" }}>
-          Acesso Global
+          Herança Global
         </span>
       </div>
 
-      <div style={{ height: "1px", background: "var(--color-outline-variant, rgba(255, 255, 255, 0.08))", margin: "4px 0" }} />
+      <div style={{ height: "1px", background: "var(--color-outline-variant, rgba(255, 255, 255, 0.08))", margin: "2px 0" }} />
 
-      {/* Lista de Pastas da Tree */}
-      {folders.length === 0 ? (
-        <div style={{ padding: "8px 10px", fontSize: "12px", color: "#a6adc8", fontStyle: "italic" }}>
-          Nenhuma pasta detectada no workspace. O colaborador terá acesso a todas as rotas (*).
-        </div>
-      ) : (
-        folders.map((f) => {
-          const isSelected = isGlobal || selectedPaths.includes(f.path);
-          return (
-            <div
-              key={f.path}
-              onClick={() => handleToggleFolder(f.path)}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-                padding: "5px 8px",
-                paddingLeft: `${Math.max(f.depth * 16 + 8, 8)}px`,
-                borderRadius: "5px",
-                cursor: "pointer",
-                backgroundColor: isSelected && !isGlobal ? "rgba(99, 102, 241, 0.12)" : "transparent",
-                border: isSelected && !isGlobal ? "1px solid rgba(99, 102, 241, 0.3)" : "1px solid transparent",
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={isSelected}
-                disabled={isGlobal}
-                onChange={() => handleToggleFolder(f.path)}
-                onClick={(e) => e.stopPropagation()}
-                style={{ cursor: isGlobal ? "not-allowed" : "pointer", accentColor: "#6366f1" }}
-              />
+      {/* Árvore de Pastas */}
+      <div
+        style={{
+          maxHeight: "230px",
+          overflowY: "auto",
+          display: "flex",
+          flexDirection: "column",
+          gap: "2px",
+          paddingRight: "4px",
+        }}
+      >
+        {folderTree.length === 0 ? (
+          <div style={{ padding: "10px", fontSize: "12px", color: "#a6adc8", fontStyle: "italic", textAlign: "center" }}>
+            Nenhuma pasta detectada no workspace. O colaborador terá acesso a todas as rotas (*).
+          </div>
+        ) : (
+          folderTree.map(renderNode)
+        )}
+      </div>
+
+      {/* Rodapé com Resumo Dinâmico e Exceções */}
+      {deniedPaths.length > 0 && (
+        <div
+          style={{
+            marginTop: "4px",
+            padding: "6px 10px",
+            borderRadius: "6px",
+            background: "rgba(239, 68, 68, 0.08)",
+            border: "1px solid rgba(239, 68, 68, 0.2)",
+            display: "flex",
+            flexDirection: "column",
+            gap: "4px",
+          }}
+        >
+          <div style={{ fontSize: "11px", fontWeight: 600, color: "#ef4444", display: "flex", alignItems: "center", gap: "4px" }}>
+            <span className="material-symbols-outlined" style={{ fontSize: "13px" }}>
+              block
+            </span>
+            {deniedPaths.length} {deniedPaths.length === 1 ? "Subpasta Bloqueada (Exceção)" : "Subpastas Bloqueadas (Exceções)"}:
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
+            {deniedPaths.map((path) => (
               <span
-                className="material-symbols-outlined"
+                key={path}
                 style={{
-                  fontSize: "16px",
-                  color: isSelected ? "#6366f1" : "var(--color-outline, #a6adc8)",
+                  fontSize: "10.5px",
+                  color: "#ef4444",
+                  background: "rgba(239, 68, 68, 0.15)",
+                  border: "1px solid rgba(239, 68, 68, 0.3)",
+                  padding: "1px 6px",
+                  borderRadius: "12px",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "3px",
                 }}
               >
-                folder
+                {path}
+                {!disabled && (
+                  <button
+                    type="button"
+                    onClick={() => handleToggleDenyFolder(path)}
+                    title="Remover exceção"
+                    style={{
+                      background: "none",
+                      border: "none",
+                      color: "#ef4444",
+                      cursor: "pointer",
+                      padding: 0,
+                      display: "flex",
+                      alignItems: "center",
+                    }}
+                  >
+                    <span className="material-symbols-outlined" style={{ fontSize: "12px" }}>
+                      close
+                    </span>
+                  </button>
+                )}
               </span>
-              <span style={{ fontSize: "12px", color: isSelected ? "var(--color-on-surface, #cdd6f4)" : "var(--color-outline, #a6adc8)", fontWeight: isSelected ? 600 : 400 }}>
-                {f.name}
-              </span>
-              <span style={{ fontSize: "10.5px", color: "var(--color-outline, #6c7086)", marginLeft: "auto", fontFamily: "monospace" }}>
-                {f.path}
-              </span>
-            </div>
-          );
-        })
+            ))}
+          </div>
+        </div>
       )}
     </div>
   );
@@ -196,13 +656,13 @@ export const GovernanceMembersSubView: React.FC = () => {
   const { activeRepo, tree } = useWorkspace();
   const currentRepoName = activeRepo?.name;
   const {
-    securityLevels,
-    unlockedLevels,
-    unlockedLevelIds,
+    departments,
+    myAccess,
     activeAIToken,
-    unlockLevel,
-    lockLevel,
-    lockAll,
+    grantFolderAccess,
+    revokeFolderAccess,
+    rotateFolderKey,
+    refreshVault,
     generateAIToken,
   } = useSecurity();
 
@@ -219,9 +679,9 @@ export const GovernanceMembersSubView: React.FC = () => {
   const [githubAuthError, setGithubAuthError] = useState<string | null>(null);
   const [inviteUsername, setInviteUsername] = useState<string>("");
   const [invitePermission, setInvitePermission] = useState<string>("push");
-  const [inviteLevelId, setInviteLevelId] = useState<string>("engineering");
   const [inviteRoleName, setInviteRoleName] = useState<string>("");
   const [inviteAllowedPaths, setInviteAllowedPaths] = useState<string[]>(["*"]);
+  const [inviteDeniedPaths, setInviteDeniedPaths] = useState<string[]>([]);
   const [isInviting, setIsInviting] = useState<boolean>(false);
   const [inviteFeedback, setInviteFeedback] = useState<{
     type: "success" | "error";
@@ -233,13 +693,24 @@ export const GovernanceMembersSubView: React.FC = () => {
   const [editingCollab, setEditingCollab] = useState<any>(null);
   const [editRoleName, setEditRoleName] = useState<string>("");
   const [editPermission, setEditPermission] = useState<string>("push");
-  const [editLevelId, setEditLevelId] = useState<string>("2");
   const [editAllowedPaths, setEditAllowedPaths] = useState<string[]>(["*"]);
+  const [editDeniedPaths, setEditDeniedPaths] = useState<string[]>([]);
   const [isSavingEdit, setIsSavingEdit] = useState<boolean>(false);
   const [editFeedback, setEditFeedback] = useState<{
     type: "success" | "error";
     message: string;
   } | null>(null);
+
+  // Manage Member Vault Access Modal State
+  const [isVaultModalOpen, setIsVaultModalOpen] = useState<boolean>(false);
+  const [selectedMemberForVault, setSelectedMemberForVault] = useState<any>(null);
+  const [selectedFoldersForMember, setSelectedFoldersForMember] = useState<string[]>([]);
+  const [isSavingMemberVault, setIsSavingMemberVault] = useState<boolean>(false);
+  const [vaultActionFeedback, setVaultActionFeedback] = useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
+  const [rotatingFolderId, setRotatingFolderId] = useState<string | null>(null);
 
   // Quorum & Branch Protection State
   const [quorumRules, setQuorumRules] = useState<any>(null);
@@ -253,11 +724,9 @@ export const GovernanceMembersSubView: React.FC = () => {
     message: string;
   } | null>(null);
 
-  // Vault Passphrases Inputs State
-  const [levelInputs, setLevelInputs] = useState<Record<string, string>>({});
-  const [unlockErrors, setUnlockErrors] = useState<Record<string, string>>({});
   const [isGeneratingToken, setIsGeneratingToken] = useState<boolean>(false);
   const [copiedToken, setCopiedToken] = useState<boolean>(false);
+  const [copiedFingerprint, setCopiedFingerprint] = useState<boolean>(false);
 
   // Secret Scanning State
   const [isScanningSecrets, setIsScanningSecrets] = useState<boolean>(false);
@@ -340,40 +809,19 @@ export const GovernanceMembersSubView: React.FC = () => {
     fetchAuditLogs();
   }, [fetchCollaborators, fetchQuorumAndProtection, fetchAuditLogs]);
 
-  // Helper to find Level Definition
-  const getLevelDef = (levelIdOrRank: string | number) => {
-    return (
-      securityLevels.find(
-        (l) =>
-          l.id === levelIdOrRank ||
-          String(l.rank) === String(levelIdOrRank) ||
-          l.rank === Number(levelIdOrRank) ||
-          l.name.toLowerCase() === String(levelIdOrRank).toLowerCase(),
-      ) || {
-        id: "public",
-        rank: 999,
-        name: "Público / Geral",
-        color: "#10b981",
-        description: "Acesso Geral",
-      }
-    );
-  };
-
   // Handle Invite
   const handleSendInvite = async () => {
     if (!inviteUsername.trim()) return;
     setIsInviting(true);
     setInviteFeedback(null);
     try {
-      const chosenLevel = getLevelDef(inviteLevelId);
       const res = await API.inviteCollaborator({
         username: inviteUsername.trim(),
         permission: invitePermission as any,
-        security_level: chosenLevel.rank as any,
-        level: chosenLevel.rank as any,
         role: inviteRoleName.trim() || undefined,
         role_name: inviteRoleName.trim() || undefined,
         allowed_paths: inviteAllowedPaths,
+        denied_paths: inviteDeniedPaths,
         repo: currentRepoName,
       });
 
@@ -382,6 +830,7 @@ export const GovernanceMembersSubView: React.FC = () => {
         setInviteUsername("");
         setInviteRoleName("");
         setInviteAllowedPaths(["*"]);
+        setInviteDeniedPaths([]);
         fetchCollaborators();
         fetchAuditLogs();
         setTimeout(() => {
@@ -406,12 +855,12 @@ export const GovernanceMembersSubView: React.FC = () => {
     setEditingCollab(collab);
     setEditRoleName(collab.role || collab.role_name || "");
     setEditPermission(collab.permission || "push");
-    const lvl = getLevelDef(collab.security_level_id || collab.security_level);
-    setEditLevelId(lvl.id);
     const paths = Array.isArray(collab.allowed_paths) && collab.allowed_paths.length > 0
       ? collab.allowed_paths
       : (collab.is_owner ? ["*"] : ["*"]);
     setEditAllowedPaths(paths);
+    const denied = Array.isArray(collab.denied_paths) ? collab.denied_paths : [];
+    setEditDeniedPaths(denied);
     setEditFeedback(null);
     setIsEditModalOpen(true);
   };
@@ -422,16 +871,13 @@ export const GovernanceMembersSubView: React.FC = () => {
     setIsSavingEdit(true);
     setEditFeedback(null);
     try {
-      const chosenLevel = getLevelDef(editLevelId);
       const res = await API.updateCollaboratorClearance({
         username: editingCollab.login,
         permission: editPermission,
         role: editRoleName.trim() || undefined,
         role_name: editRoleName.trim() || undefined,
-        level: chosenLevel.rank,
-        security_level: chosenLevel.rank,
-        security_level_id: chosenLevel.id,
         allowed_paths: editAllowedPaths,
+        denied_paths: editDeniedPaths,
         repo: currentRepoName,
       });
 
@@ -526,32 +972,83 @@ export const GovernanceMembersSubView: React.FC = () => {
     }
   };
 
-  // Handle Unlock Level
-  const handleUnlockLevel = async (levelId: string) => {
-    const inputVal = levelInputs[levelId];
-    if (!inputVal) return;
-    setUnlockErrors((prev) => ({ ...prev, [levelId]: "" }));
+  // Handlers para Gestão de Cofres & Chaves
+  const handleOpenVaultModal = (collab: any) => {
+    setSelectedMemberForVault(collab);
+    const memberSlots = keymap?.slots?.[collab.login] || {};
+    const existingFolders = Object.keys(memberSlots);
+    const userDepts = collab.departments || [];
+    const initialSelected = Array.from(new Set([...existingFolders, ...userDepts])).filter(
+      (d) => d !== "*" && d !== "default" && d !== "public"
+    );
+    setSelectedFoldersForMember(initialSelected);
+    setVaultActionFeedback(null);
+    setIsVaultModalOpen(true);
+  };
 
-    const res = await unlockLevel(levelId, inputVal);
-    if (res.success) {
-      setLevelInputs((prev) => ({ ...prev, [levelId]: "" }));
-      setUnlockErrors((prev) => ({ ...prev, [levelId]: "" }));
-    } else {
-      setUnlockErrors((prev) => ({
-        ...prev,
-        [levelId]: res.error || "Passphrase incorreta. Falha de validação criptográfica.",
-      }));
+  const handleSaveMemberVault = async () => {
+    if (!selectedMemberForVault) return;
+    setIsSavingMemberVault(true);
+    setVaultActionFeedback(null);
+
+    const login = selectedMemberForVault.login;
+    const allConfiguredFolders = departments.map((d) => d.id);
+    const foldersToGrant = selectedFoldersForMember;
+    const foldersToRevoke = allConfiguredFolders.filter((f) => !selectedFoldersForMember.includes(f));
+
+    try {
+      if (foldersToGrant.length > 0) {
+        await grantFolderAccess(login, foldersToGrant);
+      }
+      if (foldersToRevoke.length > 0) {
+        await revokeFolderAccess(login, foldersToRevoke);
+      }
+      await fetchCollaborators();
+      await refreshVault();
+      setVaultActionFeedback({
+        type: "success",
+        message: `Chaves de acesso aos cofres atualizadas com sucesso para @${login}.`,
+      });
+      setTimeout(() => {
+        setIsVaultModalOpen(false);
+        setVaultActionFeedback(null);
+      }, 1200);
+    } catch (err: any) {
+      setVaultActionFeedback({
+        type: "error",
+        message: err?.message || "Falha ao atualizar chaves do colaborador.",
+      });
+    } finally {
+      setIsSavingMemberVault(false);
     }
+  };
+
+  const handleRotateFolderKey = async (folderId: string) => {
+    setRotatingFolderId(folderId);
+    try {
+      const res = await rotateFolderKey(folderId);
+      if (res.success) {
+        await fetchCollaborators();
+        await refreshVault();
+      }
+    } catch (err) {
+      console.warn("[GovernanceSubView] Erro ao rotacionar chave do cofre:", err);
+    } finally {
+      setRotatingFolderId(null);
+    }
+  };
+
+  const handleCopyFingerprint = (fingerprint: string) => {
+    navigator.clipboard.writeText(fingerprint);
+    setCopiedFingerprint(true);
+    setTimeout(() => setCopiedFingerprint(false), 2000);
   };
 
   // Handle Generate AI Token
   const handleGenerateToken = async () => {
     setIsGeneratingToken(true);
     try {
-      await generateAIToken(
-        unlockedLevels.length > 0 ? unlockedLevels[0] : 0,
-        60,
-      );
+      await generateAIToken(60);
       fetchAuditLogs();
     } finally {
       setIsGeneratingToken(false);
@@ -736,10 +1233,10 @@ export const GovernanceMembersSubView: React.FC = () => {
           }}
         >
           <Key size={16} />
-          <span>Chaves</span>
-          {unlockedLevels.length > 1 && (
+          <span>Chaves & Cofres</span>
+          {myAccess?.folders && myAccess.folders.filter((f) => f.hasAccess).length > 0 && (
             <Badge variant="success" size="xs">
-              {unlockedLevels.length - 1} ativas
+              {myAccess.folders.filter((f) => f.hasAccess).length} autorizados
             </Badge>
           )}
         </button>
@@ -971,7 +1468,7 @@ export const GovernanceMembersSubView: React.FC = () => {
                   <th style={{ padding: "10px 16px" }}>Colaborador</th>
                   <th style={{ padding: "10px 16px" }}>Cargo / Função</th>
                   <th style={{ padding: "10px 16px" }}>Permissão Git</th>
-                  <th style={{ padding: "10px 16px" }}>Nível</th>
+                  <th style={{ padding: "10px 16px" }}>Cofres Autorizados</th>
                   <th style={{ padding: "10px 16px" }}>Rotas / Pastas Permitidas</th>
                   <th style={{ padding: "10px 16px" }}>Chave X25519</th>
                   <th style={{ padding: "10px 16px", textAlign: "right" }}>
@@ -981,9 +1478,6 @@ export const GovernanceMembersSubView: React.FC = () => {
               </thead>
               <tbody>
                 {collaborators.map((collab) => {
-                  const levelDef = getLevelDef(
-                    collab.security_level_id || collab.security_level,
-                  );
                   return (
                     <tr
                       key={collab.login}
@@ -1081,25 +1575,66 @@ export const GovernanceMembersSubView: React.FC = () => {
                       </td>
 
                       <td style={{ padding: "10px 16px" }}>
-                        <span
-                          style={{
-                            padding: "3px 10px",
-                            borderRadius: "14px",
-                            fontSize: "12px",
-                            fontWeight: 600,
-                            backgroundColor: levelDef.color + "15",
-                            borderColor: levelDef.color + "40",
-                            borderWidth: "1px",
-                            borderStyle: "solid",
-                            color: levelDef.color,
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "5px",
-                          }}
-                        >
-                          <Shield size={12} />
-                          {levelDef.name} (Rank {levelDef.rank})
-                        </span>
+                        {collab.is_owner ? (
+                          <span
+                            style={{
+                              padding: "3px 10px",
+                              borderRadius: "14px",
+                              fontSize: "12px",
+                              fontWeight: 600,
+                              backgroundColor: "rgba(239, 68, 68, 0.15)",
+                              borderColor: "rgba(239, 68, 68, 0.4)",
+                              borderWidth: "1px",
+                              borderStyle: "solid",
+                              color: "#ef4444",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "5px",
+                            }}
+                          >
+                            <Shield size={12} />
+                            Todos (Master)
+                          </span>
+                        ) : (
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
+                            {departments
+                              .filter((dept) => {
+                                const memberSlots = keymap?.slots?.[collab.login] || {};
+                                const userDepts = collab.departments || [];
+                                return memberSlots[dept.id] || memberSlots[dept.folder] || userDepts.includes(dept.id);
+                              })
+                              .map((dept) => (
+                                <span
+                                  key={dept.id}
+                                  style={{
+                                    padding: "2px 8px",
+                                    borderRadius: "12px",
+                                    fontSize: "11px",
+                                    fontWeight: 600,
+                                    backgroundColor: dept.color + "15",
+                                    borderColor: dept.color + "40",
+                                    borderWidth: "1px",
+                                    borderStyle: "solid",
+                                    color: dept.color,
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "4px",
+                                  }}
+                                >
+                                  {dept.name}
+                                </span>
+                              ))}
+                            {!departments.some((dept) => {
+                              const memberSlots = keymap?.slots?.[collab.login] || {};
+                              const userDepts = collab.departments || [];
+                              return memberSlots[dept.id] || memberSlots[dept.folder] || userDepts.includes(dept.id);
+                            }) && (
+                              <span style={{ fontSize: "11px", color: "var(--color-outline, #a6adc8)" }}>
+                                Público apenas
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </td>
 
                       <td style={{ padding: "10px 16px" }}>
@@ -1150,6 +1685,32 @@ export const GovernanceMembersSubView: React.FC = () => {
                           ) : (
                             <span style={{ fontSize: "11px", color: "var(--color-outline, #a6adc8)" }}>Nenhuma</span>
                           )}
+
+                          {/* Pílulas de Exceções Bloqueadas */}
+                          {Array.isArray(collab.denied_paths) &&
+                            collab.denied_paths.map((deniedRoute: string) => (
+                              <span
+                                key={`denied-${deniedRoute}`}
+                                style={{
+                                  fontSize: "11px",
+                                  fontWeight: 600,
+                                  padding: "2px 8px",
+                                  borderRadius: "12px",
+                                  backgroundColor: "rgba(239, 68, 68, 0.12)",
+                                  border: "1px solid rgba(239, 68, 68, 0.3)",
+                                  color: "#ef4444",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "3px",
+                                }}
+                                title="Subpasta bloqueada especificamente por exceção"
+                              >
+                                <span className="material-symbols-outlined" style={{ fontSize: "12px" }}>
+                                  lock
+                                </span>
+                                {deniedRoute.replace(/\/\*\*$/, "")} (Bloqueada)
+                              </span>
+                            ))}
                         </div>
                       </td>
 
@@ -1197,6 +1758,16 @@ export const GovernanceMembersSubView: React.FC = () => {
                       <td style={{ padding: "10px 16px", textAlign: "right" }}>
                         <div style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
                           <Button
+                            variant="outline"
+                            size="xs"
+                            onClick={() => handleOpenVaultModal(collab)}
+                            style={{ padding: "4px 8px", display: "inline-flex", alignItems: "center", gap: "4px" }}
+                            title="Liberar ou revogar chaves criptográficas de pastas seguras para este membro"
+                          >
+                            <Key size={12} color="#818cf8" />
+                            <span style={{ fontSize: "11px" }}>Cofres</span>
+                          </Button>
+                          <Button
                             variant="ghost"
                             size="xs"
                             onClick={() => handleOpenEditModal(collab)}
@@ -1213,7 +1784,7 @@ export const GovernanceMembersSubView: React.FC = () => {
                                 handleRemoveCollaborator(collab.login)
                               }
                               style={{ padding: "4px 8px" }}
-                              title="Remover colaborador"
+                              title="Remover colaborador e revogar todas as chaves"
                             >
                               <Trash2 size={13} />
                             </Button>
@@ -1489,7 +2060,89 @@ export const GovernanceMembersSubView: React.FC = () => {
             )}
           </Card>
 
-          {/* Key Management Linear List */}
+          {/* Identidade Criptográfica do Usuário */}
+          <Card variant="flat" padding="md">
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: "8px",
+              }}
+            >
+              <div
+                style={{ display: "flex", alignItems: "center", gap: "8px" }}
+              >
+                <Key size={18} color="#10b981" />
+                <h3 style={{ fontSize: "15px", fontWeight: 600, margin: 0 }}>
+                  Minha Identidade Criptográfica (X25519)
+                </h3>
+              </div>
+
+              <Badge variant="success" size="xs" style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                <CheckCircle2 size={12} />
+                <span>Keychain Nativo do SO Ativo</span>
+              </Badge>
+            </div>
+
+            <p
+              style={{
+                fontSize: "13px",
+                color: "var(--color-outline, #a6adc8)",
+                margin: "0 0 14px 0",
+              }}
+            >
+              Suas chaves assimétricas de 256 bits são geradas e protegidas pelo cofre seguro do seu sistema operacional. As operações de cifragem e decifragem ocorrem de forma 100% transparente e sem senhas.
+            </p>
+
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "10px",
+                background: "var(--color-surface-container-high, #1e1e2e)",
+                padding: "8px 12px",
+                borderRadius: "6px",
+                border:
+                  "1px solid var(--color-outline-variant, rgba(255, 255, 255, 0.1))",
+              }}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: "16px", color: "#10b981" }}>
+                fingerprint
+              </span>
+              <div style={{ flex: 1, display: "flex", alignItems: "center", gap: "8px" }}>
+                <span style={{ fontSize: "12px", color: "var(--color-outline, #a6adc8)" }}>Fingerprint da Chave Pública:</span>
+                <code
+                  style={{
+                    fontSize: "12px",
+                    fontFamily: "monospace",
+                    color: "#a6e3a1",
+                    fontWeight: 600,
+                  }}
+                >
+                  {myAccess?.fingerprint || "Detectando..."}
+                </code>
+              </div>
+
+              {myAccess?.fingerprint && (
+                <Button
+                  variant="outline"
+                  size="xs"
+                  onClick={() => handleCopyFingerprint(myAccess.fingerprint)}
+                  style={{ display: "flex", alignItems: "center", gap: "4px" }}
+                >
+                  {copiedFingerprint ? (
+                    <Check size={13} color="#10b981" />
+                  ) : (
+                    <Copy size={13} />
+                  )}
+                  <span>{copiedFingerprint ? "Copiado!" : "Copiar"}</span>
+                </Button>
+              )}
+            </div>
+          </Card>
+
+          {/* Cofres e Pastas Seguras do Repositório */}
           <Card variant="flat" padding="none" style={{ overflow: "hidden" }}>
             <div
               style={{
@@ -1503,7 +2156,7 @@ export const GovernanceMembersSubView: React.FC = () => {
             >
               <div>
                 <h3 style={{ fontSize: "14px", fontWeight: 600, margin: 0 }}>
-                  Níveis de Segurança & Desbloqueio em Memória
+                  Criptografia & Chaves de Pastas (Zero-Knowledge)
                 </h3>
                 <span
                   style={{
@@ -1511,17 +2164,43 @@ export const GovernanceMembersSubView: React.FC = () => {
                     color: "var(--color-outline, #a6adc8)",
                   }}
                 >
-                  Validação criptográfica em tempo real via Canary AES-256-GCM.
+                  Chaves simétricas (DEKs) vinculadas dinamicamente às pastas do repositório
                 </span>
               </div>
 
-              {unlockedLevels.length > 1 && (
-                <Button variant="danger" size="xs" onClick={lockAll}>
-                  Bloquear Todas
-                </Button>
-              )}
+              <Button
+                variant="outline"
+                size="xs"
+                onClick={refreshVault}
+                style={{ display: "flex", alignItems: "center", gap: "6px" }}
+              >
+                <RefreshCw size={12} />
+                <span>Atualizar Chaves</span>
+              </Button>
             </div>
 
+            {(!myAccess?.folders || myAccess.folders.length === 0) && departments.length === 0 ? (
+              <div
+                style={{
+                  padding: "28px 16px",
+                  textAlign: "center",
+                  color: "var(--color-outline, #a6adc8)",
+                  fontSize: "13px",
+                  background: "var(--color-surface-container-high, #1e1e2e)",
+                  borderRadius: "8px",
+                  margin: "12px",
+                  border: "1px dashed var(--color-outline-variant, rgba(255, 255, 255, 0.12))",
+                }}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: "28px", color: "var(--color-outline, #a6adc8)", display: "block", marginBottom: "8px" }}>
+                  folder_open
+                </span>
+                Nenhuma pasta personalizada criada ainda no repositório.
+                <div style={{ fontSize: "11.5px", marginTop: "4px", color: "var(--color-outline, #6c7086)" }}>
+                  As chaves criptográficas são geradas e vinculadas automaticamente conforme pastas e arquivos são adicionados ao projeto.
+                </div>
+              </div>
+            ) : (
             <table
               style={{
                 width: "100%",
@@ -1540,31 +2219,36 @@ export const GovernanceMembersSubView: React.FC = () => {
                     textTransform: "uppercase",
                   }}
                 >
-                  <th style={{ padding: "10px 16px" }}>Nível & Rank</th>
-                  <th style={{ padding: "10px 16px" }}>Status</th>
-                  <th style={{ padding: "10px 16px" }}>
-                    Desbloqueio com Passphrase
-                  </th>
+                  <th style={{ padding: "10px 16px" }}>Pasta do Repositório</th>
+                  <th style={{ padding: "10px 16px" }}>Meu Acesso</th>
+                  <th style={{ padding: "10px 16px" }}>Arquivos Cifrados</th>
+                  <th style={{ padding: "10px 16px" }}>Membros com Chave</th>
+                  <th style={{ padding: "10px 16px", textAlign: "right" }}>Ações</th>
                 </tr>
               </thead>
               <tbody>
-                {securityLevels.map((lvl) => {
-                  const isUnlocked =
-                    unlockedLevelIds.includes(lvl.id) ||
-                    unlockedLevels.includes(lvl.rank);
-                  const isPublic = lvl.rank === 999 || lvl.id === "public";
-                  const errMessage = unlockErrors[lvl.id];
+                {(myAccess?.folders && myAccess.folders.length > 0
+                  ? myAccess.folders
+                  : departments.map((d) => ({
+                      ...d,
+                      fileCount: 0,
+                      authorizedMembers: [],
+                      hasAccess: true,
+                    }))
+                ).map((folder) => {
+                  const hasAccess = folder.hasAccess;
+                  const isRotating = rotatingFolderId === folder.id;
 
                   return (
                     <tr
-                      key={lvl.id}
+                      key={folder.id}
                       style={{
                         borderBottom:
                           "1px solid var(--color-outline-variant, rgba(255, 255, 255, 0.04))",
                         fontSize: "13px",
                       }}
                     >
-                      <td style={{ padding: "12px 16px", width: "260px" }}>
+                      <td style={{ padding: "12px 16px", width: "240px" }}>
                         <div
                           style={{
                             display: "flex",
@@ -1574,31 +2258,31 @@ export const GovernanceMembersSubView: React.FC = () => {
                         >
                           <span
                             style={{
-                              fontSize: "11px",
+                              fontSize: "12px",
                               fontWeight: 600,
-                              padding: "2px 8px",
+                              padding: "3px 10px",
                               borderRadius: "12px",
-                              backgroundColor: lvl.color + "15",
-                              borderColor: lvl.color + "40",
+                              backgroundColor: folder.color + "15",
+                              borderColor: folder.color + "40",
                               borderWidth: "1px",
                               borderStyle: "solid",
-                              color: lvl.color,
+                              color: folder.color,
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "6px",
                             }}
                           >
-                            {lvl.name} (Rank {lvl.rank})
+                            <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>
+                              {folder.icon || "folder"}
+                            </span>
+                            {folder.name} ({folder.folder}/)
                           </span>
                         </div>
                       </td>
 
                       <td style={{ padding: "12px 16px", width: "160px" }}>
                         <Badge
-                          variant={
-                            isPublic
-                              ? "neutral"
-                              : isUnlocked
-                                ? "success"
-                                : "warning"
-                          }
+                          variant={hasAccess ? "success" : "warning"}
                           size="xs"
                           style={{
                             display: "inline-flex",
@@ -1606,103 +2290,72 @@ export const GovernanceMembersSubView: React.FC = () => {
                             gap: "4px",
                           }}
                         >
-                          {isPublic ? (
-                            <span>Público</span>
-                          ) : isUnlocked ? (
+                          {hasAccess ? (
                             <>
                               <Unlock size={12} />
-                              <span>Desbloqueado</span>
+                              <span>Liberado</span>
                             </>
                           ) : (
                             <>
                               <Lock size={12} />
-                              <span>Bloqueado</span>
+                              <span>Sem Chave</span>
                             </>
                           )}
                         </Badge>
                       </td>
 
+                      <td style={{ padding: "12px 16px", width: "160px", color: "var(--color-outline, #a6adc8)" }}>
+                        <span style={{ fontFamily: "monospace", fontWeight: 600, color: "var(--color-on-surface)" }}>
+                          {folder.fileCount}
+                        </span>{" "}
+                        documentos
+                      </td>
+
                       <td style={{ padding: "12px 16px" }}>
-                        {isPublic ? (
-                          <span
-                            style={{
-                              color: "var(--color-outline, #a6adc8)",
-                              fontSize: "12px",
-                            }}
-                          >
-                            Texto plano sem criptografia
-                          </span>
-                        ) : isUnlocked ? (
-                          <Button
-                            variant="outline"
-                            size="xs"
-                            onClick={() => lockLevel(lvl.id)}
-                          >
-                            Bloquear Nível
-                          </Button>
-                        ) : (
-                          <div>
-                            <div
-                              style={{
-                                display: "flex",
-                                gap: "8px",
-                                maxWidth: "340px",
-                              }}
-                            >
-                              <input
-                                type="password"
-                                placeholder={`Passphrase para ${lvl.name}...`}
-                                value={levelInputs[lvl.id] || ""}
-                                onChange={(e) =>
-                                  setLevelInputs({
-                                    ...levelInputs,
-                                    [lvl.id]: e.target.value,
-                                  })
-                                }
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter") {
-                                    handleUnlockLevel(lvl.id);
-                                  }
-                                }}
-                                style={{
-                                  flex: 1,
-                                  padding: "4px 8px",
-                                  borderRadius: "6px",
-                                  background:
-                                    "var(--color-surface-container-high, #1e1e2e)",
-                                  color: "var(--color-on-surface, #cdd6f4)",
-                                  border:
-                                    "1px solid var(--color-outline-variant, rgba(255, 255, 255, 0.12))",
-                                  fontSize: "12px",
-                                }}
-                              />
-                              <Button
-                                variant="primary"
-                                size="xs"
-                                onClick={() => handleUnlockLevel(lvl.id)}
-                              >
-                                Desbloquear
-                              </Button>
-                            </div>
-                            {errMessage && (
-                              <div
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
+                          {folder.authorizedMembers && folder.authorizedMembers.length > 0 ? (
+                            folder.authorizedMembers.map((m) => (
+                              <span
+                                key={m}
                                 style={{
                                   fontSize: "11px",
-                                  color: "#ef4444",
-                                  marginTop: "4px",
+                                  padding: "1px 6px",
+                                  borderRadius: "4px",
+                                  backgroundColor: "var(--color-surface-container-high, #1e1e2e)",
+                                  border: "1px solid var(--color-outline-variant, rgba(255,255,255,0.1))",
+                                  color: "var(--color-on-surface, #cdd6f4)",
                                 }}
                               >
-                                {errMessage}
-                              </div>
-                            )}
-                          </div>
-                        )}
+                                @{m}
+                              </span>
+                            ))
+                          ) : (
+                            <span style={{ fontSize: "11px", color: "var(--color-outline, #a6adc8)", fontStyle: "italic" }}>
+                              Nenhum membro específico
+                            </span>
+                          )}
+                        </div>
+                      </td>
+
+                      <td style={{ padding: "12px 16px", textAlign: "right" }}>
+                        <Button
+                          variant="outline"
+                          size="xs"
+                          onClick={() => handleRotateFolderKey(folder.id)}
+                          disabled={isRotating}
+                          title="Gera uma nova DEK aleatória, recifra os arquivos e re-sela apenas para os membros ativos autorizados."
+                          style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}
+                        >
+                          <RefreshCw size={11} className={isRotating ? "animate-spin" : ""} />
+                          <span>{isRotating ? "Rotacionando..." : "Rotacionar Chave"}</span>
+                        </Button>
                       </td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
+            )}
           </Card>
 
           {/* Secret Scanning Card */}
@@ -1984,35 +2637,17 @@ export const GovernanceMembersSubView: React.FC = () => {
               </select>
             </FormField>
 
-            <FormField label="Nível de Segurança Inicial">
-              <select
-                value={inviteLevelId}
-                onChange={(e) => setInviteLevelId(e.target.value)}
-                style={{
-                  width: "100%",
-                  padding: "6px 10px",
-                  borderRadius: "6px",
-                  background: "var(--color-surface-container-high, #1e1e2e)",
-                  color: "var(--color-on-surface, #cdd6f4)",
-                  border:
-                    "1px solid var(--color-outline-variant, rgba(255, 255, 255, 0.12))",
-                  fontSize: "13px",
-                }}
-              >
-                {securityLevels.map((lvl) => (
-                  <option key={lvl.id} value={lvl.id}>
-                    {lvl.name} (Rank {lvl.rank})
-                  </option>
-                ))}
-              </select>
-            </FormField>
 
-            <FormField label="Rotas / Pastas Autorizadas (Escopo de Acesso)">
+            <FormField label="Rotas / Pastas Autorizadas e Exceções">
               <div style={{ marginTop: "4px" }}>
                 <FolderTreePicker
                   tree={tree || []}
-                  selectedPaths={inviteAllowedPaths}
-                  onChange={setInviteAllowedPaths}
+                  allowedPaths={inviteAllowedPaths}
+                  deniedPaths={inviteDeniedPaths}
+                  onChange={(allowed, denied) => {
+                    setInviteAllowedPaths(allowed);
+                    setInviteDeniedPaths(denied);
+                  }}
                 />
               </div>
             </FormField>
@@ -2150,35 +2785,19 @@ export const GovernanceMembersSubView: React.FC = () => {
               </select>
             </FormField>
 
-            <FormField label="Nível de Segurança / Clearance">
-              <select
-                value={editLevelId}
-                onChange={(e) => setEditLevelId(e.target.value)}
-                style={{
-                  width: "100%",
-                  padding: "6px 10px",
-                  borderRadius: "6px",
-                  background: "var(--color-surface-container-high, #1e1e2e)",
-                  color: "var(--color-on-surface, #cdd6f4)",
-                  border:
-                    "1px solid var(--color-outline-variant, rgba(255, 255, 255, 0.12))",
-                  fontSize: "13px",
-                }}
-              >
-                {securityLevels.map((lvl) => (
-                  <option key={lvl.id} value={lvl.id}>
-                    {lvl.name} (Rank {lvl.rank})
-                  </option>
-                ))}
-              </select>
-            </FormField>
 
-            <FormField label="Rotas / Pastas Autorizadas (Escopo de Acesso)">
+
+            <FormField label="Rotas / Pastas Autorizadas e Exceções">
               <div style={{ marginTop: "4px" }}>
                 <FolderTreePicker
                   tree={tree || []}
-                  selectedPaths={editAllowedPaths}
-                  onChange={setEditAllowedPaths}
+                  allowedPaths={editAllowedPaths}
+                  deniedPaths={editDeniedPaths}
+                  disabled={editingCollab.is_owner}
+                  onChange={(allowed, denied) => {
+                    setEditAllowedPaths(allowed);
+                    setEditDeniedPaths(denied);
+                  }}
                 />
               </div>
             </FormField>
@@ -2226,6 +2845,159 @@ export const GovernanceMembersSubView: React.FC = () => {
                 disabled={isSavingEdit}
               >
                 {isSavingEdit ? "Salvando..." : "Salvar Alterações"}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Modal Gerenciar Cofres do Membro */}
+      {isVaultModalOpen && selectedMemberForVault && (
+        <Modal
+          isOpen={isVaultModalOpen}
+          onClose={() => {
+            setIsVaultModalOpen(false);
+            setSelectedMemberForVault(null);
+            setVaultActionFeedback(null);
+          }}
+          title={`Gerenciar Cofres Criptográficos: @${selectedMemberForVault.login}`}
+        >
+          <div
+            style={{ display: "flex", flexDirection: "column", gap: "16px" }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "12px",
+                padding: "10px",
+                borderRadius: "8px",
+                background: "var(--color-surface-container-high, #1e1e2e)",
+                border: "1px solid var(--color-outline-variant, rgba(255, 255, 255, 0.08))",
+              }}
+            >
+              <img
+                src={selectedMemberForVault.avatar_url}
+                alt={selectedMemberForVault.login}
+                style={{ width: "36px", height: "36px", borderRadius: "50%", background: "#313244" }}
+              />
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 600, color: "var(--color-on-surface, #cdd6f4)", fontSize: "14px" }}>
+                  @{selectedMemberForVault.login}
+                </div>
+                <div style={{ fontSize: "11px", color: "var(--color-outline, #a6adc8)" }}>
+                  Chave Pública: {keymap?.members?.[selectedMemberForVault.login]?.fingerprint || "X25519 Registrada"}
+                </div>
+              </div>
+            </div>
+
+            <p style={{ fontSize: "13px", color: "var(--color-outline, #a6adc8)", margin: 0 }}>
+              Marque as pastas seguras para as quais este colaborador terá a chave de descriptografia (DEK selada). Ao desmarcar uma pasta, o acesso é revogado e a chave do cofre é rotacionada automaticamente.
+            </p>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              {departments.map((dept) => {
+                const isSelected = selectedFoldersForMember.includes(dept.id);
+                return (
+                  <div
+                    key={dept.id}
+                    onClick={() => {
+                      if (isSelected) {
+                        setSelectedFoldersForMember(selectedFoldersForMember.filter((id) => id !== dept.id));
+                      } else {
+                        setSelectedFoldersForMember([...selectedFoldersForMember, dept.id]);
+                      }
+                    }}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "10px 12px",
+                      borderRadius: "8px",
+                      background: isSelected ? dept.color + "15" : "var(--color-surface-container-high, #1e1e2e)",
+                      border: isSelected ? `1px solid ${dept.color}60` : "1px solid var(--color-outline-variant, rgba(255, 255, 255, 0.08))",
+                      cursor: "pointer",
+                      transition: "all 0.15s ease",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => {}}
+                        style={{ accentColor: dept.color, cursor: "pointer" }}
+                      />
+                      <span
+                        className="material-symbols-outlined"
+                        style={{ fontSize: "18px", color: dept.color }}
+                      >
+                        {dept.icon || "folder"}
+                      </span>
+                      <div>
+                        <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-on-surface, #cdd6f4)" }}>
+                          {dept.name} ({dept.folder}/)
+                        </div>
+                        <div style={{ fontSize: "11px", color: "var(--color-outline, #a6adc8)" }}>
+                          Cofre criptográfico AES-256
+                        </div>
+                      </div>
+                    </div>
+
+                    <Badge
+                      variant={isSelected ? "success" : "neutral"}
+                      size="xs"
+                    >
+                      {isSelected ? "Liberado" : "Bloqueado"}
+                    </Badge>
+                  </div>
+                );
+              })}
+            </div>
+
+            {vaultActionFeedback && (
+              <div
+                style={{
+                  padding: "8px 12px",
+                  borderRadius: "6px",
+                  background:
+                    vaultActionFeedback.type === "success"
+                      ? "rgba(16, 185, 129, 0.15)"
+                      : "rgba(239, 68, 68, 0.15)",
+                  color:
+                    vaultActionFeedback.type === "success" ? "#10b981" : "#ef4444",
+                  fontSize: "13px",
+                }}
+              >
+                {vaultActionFeedback.message}
+              </div>
+            )}
+
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: "8px",
+                marginTop: "8px",
+              }}
+            >
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setIsVaultModalOpen(false);
+                  setSelectedMemberForVault(null);
+                  setVaultActionFeedback(null);
+                }}
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleSaveMemberVault}
+                disabled={isSavingMemberVault}
+              >
+                {isSavingMemberVault ? "Provisionando Chaves..." : "Salvar Chaves de Acesso"}
               </Button>
             </div>
           </div>

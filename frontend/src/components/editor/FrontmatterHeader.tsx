@@ -1,7 +1,7 @@
 import React from "react";
 import type { DocumentMetadata } from "../../services/frontmatter";
 import { Badge, Input } from "../ui";
-import { Tag, Shield } from "lucide-react";
+import { Tag, FolderLock } from "lucide-react";
 import { useSecurity } from "../../context/SecurityContext";
 
 interface FrontmatterHeaderProps {
@@ -13,7 +13,7 @@ export const FrontmatterHeader: React.FC<FrontmatterHeaderProps> = ({
   metadata,
   onChange,
 }) => {
-  const { securityLevels } = useSecurity();
+  const { departments } = useSecurity();
 
   const statusOptions = [
     "draft",
@@ -31,27 +31,12 @@ export const FrontmatterHeader: React.FC<FrontmatterHeaderProps> = ({
     });
   };
 
-  const currentLevelId =
-    metadata.security_level_id ||
-    (metadata.security_level !== undefined
-      ? securityLevels.find((l) => l.rank === Number(metadata.security_level))?.id
-      : "public") ||
-    "public";
+  const currentDept = departments.find(
+    (d) => d.id === metadata.department || d.folder === metadata.department
+  );
 
-  const activeLevel =
-    securityLevels.find((l) => l.id === currentLevelId || l.rank === Number(metadata.security_level)) ||
-    securityLevels.find((l) => l.id === "public") ||
-    securityLevels[securityLevels.length - 1];
-
-  const handleSecurityLevelChange = (levelId: string) => {
-    const chosen = securityLevels.find((l) => l.id === levelId);
-    if (chosen) {
-      onChange({
-        ...metadata,
-        security_level_id: chosen.id,
-        security_level: chosen.rank,
-      });
-    }
+  const handleDepartmentChange = (deptId: string) => {
+    handleFieldChange("department", deptId === "none" ? undefined : deptId);
   };
 
   const categoryLabel = metadata.categories || metadata.category || "";
@@ -94,25 +79,25 @@ export const FrontmatterHeader: React.FC<FrontmatterHeaderProps> = ({
         </span>
 
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          {activeLevel && (
+          {currentDept && (
             <span
               style={{
                 fontSize: "11px",
                 fontWeight: 600,
                 padding: "2px 8px",
                 borderRadius: "12px",
-                backgroundColor: activeLevel.color + "15",
-                borderColor: activeLevel.color + "40",
+                backgroundColor: currentDept.color + "15",
+                borderColor: currentDept.color + "40",
                 borderWidth: "1px",
                 borderStyle: "solid",
-                color: activeLevel.color,
+                color: currentDept.color,
                 display: "inline-flex",
                 alignItems: "center",
                 gap: "4px",
               }}
             >
-              <Shield size={11} />
-              {activeLevel.name}
+              <FolderLock size={11} />
+              {currentDept.name}
             </span>
           )}
 
@@ -158,28 +143,31 @@ export const FrontmatterHeader: React.FC<FrontmatterHeaderProps> = ({
           </select>
         </div>
 
-        {/* Nível de Segurança / Acesso */}
+        {/* Cofre / Departamento */}
         <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
           <span style={{ fontSize: "12px", color: "var(--color-outline)", fontWeight: 600 }}>
-            Segurança:
+            Cofre:
           </span>
           <select
-            value={currentLevelId}
-            onChange={(e) => handleSecurityLevelChange(e.target.value)}
+            value={metadata.department || "none"}
+            onChange={(e) => handleDepartmentChange(e.target.value)}
             style={{
               fontSize: "12px",
               padding: "4px 8px",
               borderRadius: "var(--radius-md, 6px)",
               border: "1px solid var(--color-outline-variant)",
               background: "var(--color-surface-container)",
-              color: activeLevel?.color || "var(--color-on-surface)",
+              color: currentDept?.color || "var(--color-on-surface)",
               fontWeight: 500,
               outline: "none",
             }}
           >
-            {securityLevels.map((lvl) => (
-              <option key={lvl.id} value={lvl.id} style={{ color: "var(--color-on-surface)" }}>
-                {lvl.name} (Rank {lvl.rank})
+            <option value="none" style={{ color: "var(--color-on-surface)" }}>
+              Público / Padrão
+            </option>
+            {departments.map((dept) => (
+              <option key={dept.id} value={dept.id} style={{ color: "var(--color-on-surface)" }}>
+                {dept.name} ({dept.folder})
               </option>
             ))}
           </select>
@@ -203,4 +191,3 @@ export const FrontmatterHeader: React.FC<FrontmatterHeaderProps> = ({
     </div>
   );
 };
-

@@ -140,8 +140,7 @@ export interface TreeNode {
   status?: string;
   badge?: string;
   desc?: string;
-  security_level?: number;
-  security_level_id?: string;
+  department?: string;
 }
 
 export interface DocumentMetadataItem {
@@ -159,9 +158,6 @@ export interface DocumentMetadataItem {
   links: string[];
   templateId: string;
   prompt?: string;
-  security_level?: number;
-  level?: number;
-  security_level_id?: string;
   department?: string;
   [key: string]: any;
 }
@@ -191,23 +187,11 @@ export interface BadgeOption {
   description?: string;
 }
 
-export interface DynamicSecurityLevel {
-  id: string;
-  level?: number;
-  rank: number;
-  name: string;
-  color: string;
-  description?: string;
-  created_at?: string;
-  updated_at?: string;
-}
-
 export interface DepartmentConfig {
   id: string;
   name: string;
   folder: string;
   color: string;
-  default_level: number;
   icon?: string;
   description?: string;
 }
@@ -220,11 +204,9 @@ export interface CollaboratorInfo {
   permission: 'pull' | 'triage' | 'push' | 'maintain' | 'admin' | string;
   role?: string;
   role_name?: string;
-  security_level: number;
-  level?: number;
-  security_level_id?: string;
   departments?: string[];
   allowed_paths?: string[];
+  denied_paths?: string[];
   is_owner?: boolean;
   invited_at?: string;
   status?: 'active' | 'pending';
@@ -235,7 +217,6 @@ export interface ProjectMetadataOptions {
   statuses: StatusItem[];
   tags: TagOption[];
   badges?: (BadgeOption | string)[];
-  security_levels?: DynamicSecurityLevel[];
   departments?: DepartmentConfig[];
 }
 

@@ -89,4 +89,44 @@ describe('VaultEngineService - Sincronização Transparente & Gestão Zero-API',
     // Mas o .enc no repositório permanece intacto
     assert.strictEqual(fs.existsSync(path.join(repoDir, 'finance', 'dre-2026.md.enc')), true);
   });
+
+  it('Deve conceder acesso a pasta específica para membro e permitir sincronização', async () => {
+    // Concede acesso de finance para junior_dev
+    vaultEngineService.grantFolderAccess(TEST_REPO, 'junior_dev', ['finance']);
+    const keymap = vaultEngineService.getKeymap(TEST_REPO);
+    assert.ok(keymap.slots['junior_dev']?.['finance']);
+
+    // Agora junior_dev deve conseguir sincronizar e abrir o arquivo
+    const syncRes = await vaultEngineService.syncLocalWorkspaceFromGit(TEST_REPO, 'junior_dev');
+    assert.strictEqual(syncRes.decryptedCount, 1);
+    const finPlain = path.join(repoDir, 'finance', 'dre-2026.md');
+    assert.strictEqual(fs.existsSync(finPlain), true);
+  });
+
+  it('Deve revogar membro, rotacionar DEK e bloquear acesso a novos arquivos', async () => {
+    const revokeRes = vaultEngineService.revokeMember(TEST_REPO, 'junior_dev');
+    assert.strictEqual(revokeRes.success, true);
+    assert.ok(revokeRes.rotatedFolders.includes('finance'));
+
+    const keymap = vaultEngineService.getKeymap(TEST_REPO);
+    assert.strictEqual(keymap.members['junior_dev'], undefined);
+    assert.strictEqual(keymap.slots['junior_dev'], undefined);
+
+    // junior_dev agora não tem mais acesso a finance
+    const syncRes = await vaultEngineService.syncLocalWorkspaceFromGit(TEST_REPO, 'junior_dev');
+    assert.ok(syncRes.omittedCount >= 1);
+    const finPlain = path.join(repoDir, 'finance', 'dre-2026.md');
+    assert.strictEqual(fs.existsSync(finPlain), false);
+  });
+
+  it('Deve retornar resumo completo dos cofres em getMyAccessSummary', () => {
+    const summary = vaultEngineService.getMyAccessSummary(TEST_REPO, 'marcos_test');
+    assert.strictEqual(summary.login, 'marcos_test');
+    assert.strictEqual(summary.isOwner, true);
+    assert.ok(summary.folders.length >= 5);
+    const engFolder = summary.folders.find((f) => f.id === 'engineering');
+    assert.ok(engFolder);
+    assert.strictEqual(engFolder.hasAccess, true);
+  });
 });
+

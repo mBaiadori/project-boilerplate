@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch --exclude 'dist/**' src/server.ts",
+    "test": "tsx --test src/**/*.test.ts",
     "build": "tsc && cp -r src/schemas dist/schemas",
     "start": "node dist/server.js"
   },

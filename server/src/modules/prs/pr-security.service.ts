@@ -99,10 +99,7 @@ export class PRSecurityService {
       // If neither enc nor plain found at ref, check department by folder path
       const folderParts = cleanPath.split('/');
       const department = folderParts.length > 1 ? folderParts[0] : 'default';
-      const level = department === 'executive' ? 0 : department === 'finance' || department === 'legal' ? 1 : 2;
       const allowed = canAccessDocument(userProfile, {
-        level,
-        security_level: level,
         department,
         path: cleanPath,
       });
@@ -110,7 +107,6 @@ export class PRSecurityService {
         allowed,
         restricted: !allowed,
         isEncrypted: true,
-        level,
         department,
       };
     }

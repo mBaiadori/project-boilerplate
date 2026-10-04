@@ -6,6 +6,9 @@ import { loadConfig } from '../../config/storage.js';
 import { vaultService } from './vault.service.js';
 import {
   generateX25519KeyPair,
+  generateEd25519KeyPair,
+  signKeymapPayload,
+  verifyKeymapSignature,
   sealDEKForPublicKey,
   openDEKWithPrivateKey,
   encryptFileToEnc,
@@ -25,12 +28,16 @@ export interface KeymapMember {
   level: number;
   departments: string[];
   allowed_paths?: string[];
+  denied_paths?: string[];
   status: 'active' | 'pending';
+  registered_at?: string;
 }
 
 export interface KeymapConfig {
   version: number;
   updated_at: string;
+  signer?: string;
+  signature?: string;
   members: Record<string, KeymapMember>;
   slots: Record<string, Record<string, SealedDEKSlot>>; // login -> compartment -> slot
 }
@@ -50,8 +57,29 @@ export interface VaultCacheData {
   files: Record<string, VaultCacheEntry>;
 }
 
+export interface VaultFolderSummary {
+  id: string;
+  name: string;
+  folder: string;
+  color: string;
+  icon?: string;
+  default_level: number;
+  fileCount: number;
+  authorizedMembers: string[];
+  hasAccess: boolean;
+}
+
+export interface MyVaultAccessSummary {
+  login: string;
+  fingerprint: string;
+  publicKey: string;
+  status: 'active' | 'pending' | 'unregistered';
+  isOwner: boolean;
+  folders: VaultFolderSummary[];
+}
+
 export class VaultEngineService {
-  // Cache em memória para DEKs já descriptografadas na sessão ativa
+  // Cache estritamente em memória RAM para DEKs descriptografadas na sessão ativa
   private memoryDEKCache = new Map<string, Map<string, Buffer>>(); // repoName -> compartment -> Buffer
 
   private getRepoDir(repoName?: string): string {
@@ -72,6 +100,83 @@ export class VaultEngineService {
     return path.join(gitDir, 'context-vault-cache.json');
   }
 
+  private getProjectConfig(repoName?: string): any {
+    const repoDir = this.getRepoDir(repoName);
+    const cfgPath = path.join(repoDir, '.project.config.json');
+    if (fs.existsSync(cfgPath)) {
+      try {
+        return JSON.parse(fs.readFileSync(cfgPath, 'utf-8'));
+      } catch {}
+    }
+    return {};
+  }
+
+  /**
+   * Obtém lista dinâmica de pastas seguras/rotas a partir do config do projeto ou das pastas reais do workspace
+   */
+  getVaultFolders(repoName?: string): Array<{ id: string; name: string; folder: string; color: string; icon?: string; default_level: number }> {
+    const pConfig = this.getProjectConfig(repoName);
+    if (Array.isArray(pConfig.departments) && pConfig.departments.length > 0) {
+      return pConfig.departments;
+    }
+
+    // Varre pastas reais do diretório do repositório para descobrir rotas dinâmicas
+    const repoDir = this.getRepoDir(repoName);
+    if (fs.existsSync(repoDir)) {
+      try {
+        const entries = fs.readdirSync(repoDir, { withFileTypes: true });
+        const dynamicFolders: Array<{ id: string; name: string; folder: string; color: string; icon?: string; default_level: number }> = [];
+        const colors = ['#6366f1', '#10b981', '#a855f7', '#ec4899', '#f59e0b', '#06b6d4', '#3b82f6'];
+        let colorIdx = 0;
+
+        for (const entry of entries) {
+          if (entry.isDirectory() && !entry.name.startsWith('.') && entry.name !== 'node_modules') {
+            const folderName = entry.name;
+            dynamicFolders.push({
+              id: folderName.toLowerCase(),
+              name: folderName.charAt(0).toUpperCase() + folderName.slice(1),
+              folder: folderName,
+              color: colors[colorIdx % colors.length],
+              default_level: 1,
+              icon: 'folder',
+            });
+            colorIdx++;
+          }
+        }
+
+        // Também varre docs/ se existir
+        const docsDir = path.join(repoDir, 'docs');
+        if (fs.existsSync(docsDir)) {
+          const docEntries = fs.readdirSync(docsDir, { withFileTypes: true });
+          for (const dEntry of docEntries) {
+            if (dEntry.isDirectory() && !dEntry.name.startsWith('.')) {
+              const fullPath = `docs/${dEntry.name}`;
+              if (!dynamicFolders.some((f) => f.folder === fullPath || f.id === dEntry.name.toLowerCase())) {
+                dynamicFolders.push({
+                  id: dEntry.name.toLowerCase(),
+                  name: dEntry.name.charAt(0).toUpperCase() + dEntry.name.slice(1),
+                  folder: fullPath,
+                  color: colors[colorIdx % colors.length],
+                  default_level: 1,
+                  icon: 'folder_open',
+                });
+                colorIdx++;
+              }
+            }
+          }
+        }
+
+        if (dynamicFolders.length > 0) {
+          return dynamicFolders;
+        }
+      } catch (err) {
+        console.warn(`[VaultEngine] Erro ao varrer pastas de ${repoName}:`, err);
+      }
+    }
+
+    return [];
+  }
+
   /**
    * Carrega o .keymap.json do repositório
    */
@@ -82,7 +187,10 @@ export class VaultEngineService {
     if (fs.existsSync(keymapPath)) {
       try {
         const raw = fs.readFileSync(keymapPath, 'utf-8');
-        return JSON.parse(raw);
+        const parsed = JSON.parse(raw);
+        if (!parsed.members) parsed.members = {};
+        if (!parsed.slots) parsed.slots = {};
+        return parsed;
       } catch (err: any) {
         console.warn(`[VaultEngine] Erro ao ler .keymap.json em ${repoName}:`, err.message);
       }
@@ -97,12 +205,26 @@ export class VaultEngineService {
   }
 
   /**
-   * Salva o .keymap.json no repositório
+   * Salva o .keymap.json no repositório com assinatura digital Ed25519 opcional
    */
-  saveKeymap(repoName: string | undefined, keymap: KeymapConfig): void {
+  saveKeymap(repoName: string | undefined, keymap: KeymapConfig, signerLogin?: string): void {
     const repoDir = this.getRepoDir(repoName);
     const keymapPath = this.getKeymapPath(repoDir);
     keymap.updated_at = new Date().toISOString();
+
+    const activeSigner = signerLogin || loadConfig().user?.login || 'local_admin';
+    const signerPrivKey = vaultService.getSecret(`context_os_ed25519_priv_${activeSigner.toLowerCase()}`);
+    if (signerPrivKey) {
+      const payloadToSign = {
+        version: keymap.version,
+        updated_at: keymap.updated_at,
+        members: keymap.members,
+        slots: keymap.slots,
+      };
+      keymap.signer = activeSigner;
+      keymap.signature = signKeymapPayload(payloadToSign, signerPrivKey);
+    }
+
     fs.writeFileSync(keymapPath, JSON.stringify(keymap, null, 2), 'utf-8');
   }
 
@@ -143,8 +265,9 @@ export class VaultEngineService {
    * Obtém ou inicializa o par de chaves X25519 do usuário no Keychain nativo do SO
    */
   getOrCreateUserKeyPair(userLogin: string): UserKeyPair {
-    const privateKeySecretKey = `context_os_x25519_priv_${userLogin.toLowerCase()}`;
-    const publicKeySecretKey = `context_os_x25519_pub_${userLogin.toLowerCase()}`;
+    const cleanLogin = (userLogin || 'local_user').toLowerCase().replace(/^@/, '');
+    const privateKeySecretKey = `context_os_x25519_priv_${cleanLogin}`;
+    const publicKeySecretKey = `context_os_x25519_pub_${cleanLogin}`;
 
     const existingPriv = vaultService.getSecret(privateKeySecretKey);
     const existingPub = vaultService.getSecret(publicKeySecretKey);
@@ -161,10 +284,15 @@ export class VaultEngineService {
       };
     }
 
-    // Gera novo par de chaves assimétricas
+    // Gera novo par de chaves assimétricas X25519
     const newKp = generateX25519KeyPair();
     vaultService.setSecret(privateKeySecretKey, newKp.privateKeyPem);
     vaultService.setSecret(publicKeySecretKey, newKp.publicKeyPem);
+
+    // Gera também par Ed25519 para assinatura do admin
+    const edKp = generateEd25519KeyPair();
+    vaultService.setSecret(`context_os_ed25519_priv_${cleanLogin}`, edKp.privateKeyPem);
+    vaultService.setSecret(`context_os_ed25519_pub_${cleanLogin}`, edKp.publicKeyPem);
 
     return newKp;
   }
@@ -175,33 +303,45 @@ export class VaultEngineService {
   registerUserPublicKey(
     repoName: string,
     login: string,
-    profile: { level: number; departments: string[]; allowed_paths?: string[] }
+    profile: {
+      level?: number;
+      departments?: string[];
+      allowed_paths?: string[];
+      denied_paths?: string[];
+      status?: 'active' | 'pending';
+    } = {}
   ): KeymapMember {
-    const kp = this.getOrCreateUserKeyPair(login);
+    const cleanLogin = login.trim().replace(/^@/, '');
+    const kp = this.getOrCreateUserKeyPair(cleanLogin);
     const keymap = this.getKeymap(repoName);
 
+    const existing = keymap.members[cleanLogin];
+
     const member: KeymapMember = {
-      login,
+      login: cleanLogin,
       public_key: kp.publicKeyPem,
       fingerprint: kp.fingerprint,
-      level: profile.level ?? 2,
-      departments: profile.departments || ['engineering'],
-      allowed_paths: profile.allowed_paths,
-      status: 'active',
+      level: profile.level ?? existing?.level ?? 2,
+      departments: profile.departments || existing?.departments || ['engineering'],
+      allowed_paths: profile.allowed_paths || existing?.allowed_paths,
+      denied_paths: profile.denied_paths || existing?.denied_paths,
+      status: profile.status || existing?.status || 'active',
+      registered_at: existing?.registered_at || new Date().toISOString(),
     };
 
-    keymap.members[login] = member;
+    keymap.members[cleanLogin] = member;
     this.saveKeymap(repoName, keymap);
     return member;
   }
 
   /**
    * Desbloqueia e retorna todas as DEKs disponíveis para o usuário no repositório ativo
+   * Armazena EXCLUSIVAMENTE em memória RAM (memoryDEKCache).
    */
   getUnlockedDEKs(repoName?: string, userLogin?: string): Record<string, Buffer> {
     const cfg = loadConfig();
     const activeRepoName = repoName || cfg.active_repo?.name || 'local';
-    const login = userLogin || cfg.user?.login || 'marcosbaiadori';
+    const login = (userLogin || cfg.user?.login || 'marcosbaiadori').toLowerCase().replace(/^@/, '');
 
     let repoCache = this.memoryDEKCache.get(activeRepoName);
     if (!repoCache) {
@@ -210,22 +350,6 @@ export class VaultEngineService {
     }
 
     const deks: Record<string, Buffer> = {};
-
-    // 1. Tenta carregar do cache de sessão local do git se existir
-    const sessionFile = path.join(this.getRepoDir(activeRepoName), '.git', 'context-vault-session.json');
-    if (fs.existsSync(sessionFile)) {
-      try {
-        const raw = JSON.parse(fs.readFileSync(sessionFile, 'utf-8'));
-        for (const [dept, b64] of Object.entries(raw)) {
-          if (typeof b64 === 'string') {
-            const buf = Buffer.from(b64, 'base64');
-            repoCache.set(dept, buf);
-            deks[dept] = buf;
-          }
-        }
-      } catch {}
-    }
-
     const keymap = this.getKeymap(activeRepoName);
     const userSlots = keymap.slots[login] || {};
     let keyPair: UserKeyPair | null = null;
@@ -246,23 +370,12 @@ export class VaultEngineService {
       }
     }
 
-    this.saveSessionDEKs(activeRepoName, deks);
-    return deks;
-  }
+    // Copia também quaisquer DEKs já mantidas em memória
+    for (const [k, v] of repoCache.entries()) {
+      deks[k] = v;
+    }
 
-  private saveSessionDEKs(repoName: string, deks: Record<string, Buffer>): void {
-    try {
-      const repoDir = this.getRepoDir(repoName);
-      const gitDir = path.join(repoDir, '.git');
-      if (fs.existsSync(gitDir)) {
-        const sessionFile = path.join(gitDir, 'context-vault-session.json');
-        const serializable: Record<string, string> = {};
-        for (const [k, v] of Object.entries(deks)) {
-          serializable[k] = v.toString('base64');
-        }
-        fs.writeFileSync(sessionFile, JSON.stringify(serializable, null, 2), 'utf-8');
-      }
-    } catch {}
+    return deks;
   }
 
   /**
@@ -308,7 +421,235 @@ export class VaultEngineService {
     }
 
     this.saveKeymap(repoName, keymap);
-    this.saveSessionDEKs(repoName, this.getUnlockedDEKs(repoName));
+  }
+
+  /**
+   * Concede acesso a uma ou mais pastas/compartimentos para um membro
+   */
+  grantFolderAccess(repoName: string, targetLogin: string, folderIds: string[]): boolean {
+    const cleanLogin = targetLogin.trim().replace(/^@/, '');
+    const keymap = this.getKeymap(repoName);
+    const member = keymap.members[cleanLogin];
+    if (!member || !member.public_key) {
+      throw new Error(`Membro @${cleanLogin} não possui chave pública registrada no repositório.`);
+    }
+
+    const deks = this.getUnlockedDEKs(repoName);
+
+    for (const folderId of folderIds) {
+      let dek = deks[folderId];
+      if (!dek) {
+        // Se ainda não há DEK para esta pasta, cria uma nova
+        dek = crypto.randomBytes(32);
+        this.setCompartmentDEK(repoName, folderId, dek, [cleanLogin]);
+      } else {
+        const slot = sealDEKForPublicKey(dek, member.public_key);
+        if (!keymap.slots[cleanLogin]) keymap.slots[cleanLogin] = {};
+        keymap.slots[cleanLogin][folderId] = slot;
+      }
+
+      if (!member.departments.includes(folderId) && !member.departments.includes('*')) {
+        member.departments.push(folderId);
+      }
+    }
+
+    this.saveKeymap(repoName, keymap);
+    return true;
+  }
+
+  /**
+   * Revoga acesso a uma pasta específica e rotaciona a DEK
+   */
+  revokeFolderAccess(repoName: string, targetLogin: string, folderIds: string[]): boolean {
+    const cleanLogin = targetLogin.trim().replace(/^@/, '');
+    const keymap = this.getKeymap(repoName);
+    const member = keymap.members[cleanLogin];
+
+    for (const folderId of folderIds) {
+      if (keymap.slots[cleanLogin]) {
+        delete keymap.slots[cleanLogin][folderId];
+      }
+      if (member) {
+        member.departments = member.departments.filter((d) => d !== folderId);
+      }
+      // Rotaciona a DEK da pasta para invalidar a chave antiga em posse do membro revogado
+      this.rotateCompartmentDEK(repoName, folderId, [cleanLogin]);
+    }
+
+    this.saveKeymap(repoName, keymap);
+    return true;
+  }
+
+  /**
+   * Rotaciona a DEK de um compartimento, recifra todos os arquivos .md.enc e re-sela para os membros ativos remanescentes
+   */
+  rotateCompartmentDEK(repoName: string, compartmentId: string, excludedLogins: string[] = []): Buffer {
+    const repoDir = this.getRepoDir(repoName);
+    const keymap = this.getKeymap(repoName);
+    const newDek = crypto.randomBytes(32);
+
+    // 1. Atualiza o cache em memória
+    let repoCache = this.memoryDEKCache.get(repoName);
+    if (!repoCache) {
+      repoCache = new Map();
+      this.memoryDEKCache.set(repoName, repoCache);
+    }
+    repoCache.set(compartmentId, newDek);
+
+    // 2. Remove slots antigos deste compartimento
+    const excludedSet = new Set(excludedLogins.map((l) => l.toLowerCase().replace(/^@/, '')));
+    for (const [login, userSlots] of Object.entries(keymap.slots)) {
+      if (excludedSet.has(login.toLowerCase())) {
+        delete userSlots[compartmentId];
+      }
+    }
+
+    // 3. Re-sela a nova DEK para todos os membros ativos autorizados
+    for (const [login, member] of Object.entries(keymap.members)) {
+      if (member.status !== 'active' || excludedSet.has(login.toLowerCase())) continue;
+      if (
+        member.departments.includes('*') ||
+        member.departments.includes(compartmentId) ||
+        member.level === 0
+      ) {
+        const slot = sealDEKForPublicKey(newDek, member.public_key);
+        if (!keymap.slots[login]) keymap.slots[login] = {};
+        keymap.slots[login][compartmentId] = slot;
+      }
+    }
+
+    this.saveKeymap(repoName, keymap);
+
+    // 4. Recifra todos os arquivos .md.enc pertencentes a esse compartimento
+    const cache = this.getCache(repoName);
+    const folderDir = path.join(repoDir, compartmentId);
+
+    if (fs.existsSync(folderDir)) {
+      const scanAndReEncrypt = (dir: string) => {
+        const entries = fs.readdirSync(dir, { withFileTypes: true });
+        for (const ent of entries) {
+          const fullPath = path.join(dir, ent.name);
+          if (ent.isDirectory()) {
+            scanAndReEncrypt(fullPath);
+          } else if (ent.isFile() && ent.name.endsWith('.md')) {
+            const relPath = path.relative(repoDir, fullPath).replace(/\\/g, '/');
+            const encPath = `${fullPath}.enc`;
+            const plainContent = fs.readFileSync(fullPath, 'utf-8');
+            const encContent = encryptFileToEnc(plainContent, newDek, {
+              department: compartmentId,
+              title: path.basename(relPath, '.md'),
+            });
+            fs.writeFileSync(encPath, encContent, 'utf-8');
+
+            const plainSha = crypto.createHash('sha256').update(plainContent).digest('hex');
+            const encSha = crypto.createHash('sha256').update(encContent).digest('hex');
+
+            cache.files[relPath] = {
+              encSha256: encSha,
+              plainSha256: plainSha,
+              mtime: fs.statSync(fullPath).mtimeMs,
+              department: compartmentId,
+              lastSyncedAt: new Date().toISOString(),
+            };
+          }
+        }
+      };
+      scanAndReEncrypt(folderDir);
+      this.saveCache(repoName, cache);
+    }
+
+    return newDek;
+  }
+
+  /**
+   * Revoga completamente um membro: remove do keymap, limpa slots e rotaciona as DEKs das pastas acessadas
+   */
+  revokeMember(repoName: string, login: string): { success: boolean; rotatedFolders: string[] } {
+    const cleanLogin = login.trim().replace(/^@/, '');
+    const keymap = this.getKeymap(repoName);
+    const member = keymap.members[cleanLogin];
+    const rotatedFolders: string[] = [];
+
+    const userDepts = member?.departments || Object.keys(keymap.slots[cleanLogin] || {});
+
+    // Remove do keymap
+    delete keymap.members[cleanLogin];
+    delete keymap.slots[cleanLogin];
+    this.saveKeymap(repoName, keymap);
+
+    // Rotaciona todas as pastas que o usuário tinha acesso
+    const foldersToRotate = userDepts.includes('*')
+      ? this.getVaultFolders(repoName).map((f) => f.id)
+      : userDepts;
+
+    for (const folderId of foldersToRotate) {
+      if (folderId !== 'default' && folderId !== 'public') {
+        this.rotateCompartmentDEK(repoName, folderId, [cleanLogin]);
+        rotatedFolders.push(folderId);
+      }
+    }
+
+    return { success: true, rotatedFolders };
+  }
+
+  /**
+   * Retorna visão completa do estado de acesso a cofres para a interface do usuário
+   */
+  getMyAccessSummary(repoName?: string, userLogin?: string): MyVaultAccessSummary {
+    const cfg = loadConfig();
+    const activeRepoName = repoName || cfg.active_repo?.name || 'local';
+    const login = (userLogin || cfg.user?.login || 'marcosbaiadori').toLowerCase().replace(/^@/, '');
+    const repoDir = this.getRepoDir(activeRepoName);
+
+    const kp = this.getOrCreateUserKeyPair(login);
+    const keymap = this.getKeymap(activeRepoName);
+    const member = keymap.members[login];
+    const unlockedDEKs = this.getUnlockedDEKs(activeRepoName, login);
+    const folders = this.getVaultFolders(activeRepoName);
+
+    const pConfig = this.getProjectConfig(activeRepoName);
+    const isOwner = member?.level === 0 || cfg.user?.login === login || !member;
+
+    const folderSummaries: VaultFolderSummary[] = folders.map((f) => {
+      const folderPath = path.join(repoDir, f.folder);
+      let fileCount = 0;
+      if (fs.existsSync(folderPath)) {
+        try {
+          const files = fs.readdirSync(folderPath);
+          fileCount = files.filter((n) => n.endsWith('.md') || n.endsWith('.md.enc')).length;
+        } catch {}
+      }
+
+      const authorizedMembers: string[] = [];
+      for (const [mName, mSlots] of Object.entries(keymap.slots)) {
+        if (mSlots[f.id] || mSlots[f.folder]) {
+          authorizedMembers.push(mName);
+        }
+      }
+
+      const hasAccess = Boolean(unlockedDEKs[f.id] || unlockedDEKs[f.folder] || isOwner);
+
+      return {
+        id: f.id,
+        name: f.name,
+        folder: f.folder,
+        color: f.color,
+        icon: f.icon,
+        default_level: f.default_level,
+        fileCount,
+        authorizedMembers,
+        hasAccess,
+      };
+    });
+
+    return {
+      login,
+      fingerprint: kp.fingerprint,
+      publicKey: kp.publicKeyPem,
+      status: member ? member.status : 'unregistered',
+      isOwner,
+      folders: folderSummaries,
+    };
   }
 
   /**
@@ -324,23 +665,23 @@ export class VaultEngineService {
   }> {
     const cfg = loadConfig();
     const activeRepoName = repoName || cfg.active_repo?.name || 'local';
-    const login = userLogin || cfg.user?.login || 'marcosbaiadori';
+    const login = (userLogin || cfg.user?.login || 'marcosbaiadori').toLowerCase().replace(/^@/, '');
     const repoDir = this.getRepoDir(activeRepoName);
 
     if (!fs.existsSync(repoDir)) {
       return { decryptedCount: 0, skippedCount: 0, omittedCount: 0 };
     }
 
-    this.ensureGitIgnoreRules(repoDir);
+    this.ensureGitIgnoreRules(repoDir, activeRepoName);
     this.ensurePreCommitHook(repoDir);
 
     const cache = this.getCache(activeRepoName);
     const keymap = this.getKeymap(activeRepoName);
     const userProfile = keymap.members[login] || {
       login,
-      level: 0, // Root por padrão se for o dono local
-      departments: ['*'],
-      status: 'active',
+      level: Object.keys(keymap.members).length === 0 ? 0 : 999,
+      departments: Object.keys(keymap.members).length === 0 ? ['*'] : [],
+      status: Object.keys(keymap.members).length === 0 ? 'active' : 'pending',
     };
 
     const unlockedDEKs = this.getUnlockedDEKs(activeRepoName, login);
@@ -371,8 +712,6 @@ export class VaultEngineService {
           }
 
           const docMeta = {
-            security_level: parsed.header.security_level,
-            level: parsed.header.security_level,
             department: parsed.header.department,
             path: relPlainPath,
           };
@@ -390,8 +729,8 @@ export class VaultEngineService {
           }
 
           // Se tem permissão, verifica a DEK correspondente
-          const compartmentKey = parsed.header.department || `lvl-${parsed.header.security_level}`;
-          const dek = unlockedDEKs[compartmentKey] || unlockedDEKs['default'] || unlockedDEKs[String(parsed.header.security_level)];
+          const compartmentKey = parsed.header.department || 'default';
+          const dek = unlockedDEKs[compartmentKey] || unlockedDEKs['default'];
 
           // Se não temos a DEK ainda, não consegue abrir
           if (!dek) {
@@ -418,7 +757,6 @@ export class VaultEngineService {
               plainSha256: plainSha,
               mtime: fs.statSync(fullPlainPath).mtimeMs,
               department: parsed.header.department,
-              level: parsed.header.security_level,
               lastSyncedAt: new Date().toISOString(),
             };
             decryptedCount++;
@@ -456,10 +794,12 @@ export class VaultEngineService {
     const cache = this.getCache(activeRepoName);
     const keymap = this.getKeymap(activeRepoName);
     const activeMembers = Object.keys(keymap.members);
-    const login = userLogin || (cfg.user?.login && keymap.members[cfg.user.login] ? cfg.user.login : activeMembers[0]) || 'marcosbaiadori';
+    const login = (userLogin || (cfg.user?.login && keymap.members[cfg.user.login] ? cfg.user.login : activeMembers[0]) || 'marcosbaiadori').toLowerCase().replace(/^@/, '');
     let unlockedDEKs = this.getUnlockedDEKs(activeRepoName, login);
 
     const modifiedEncFiles: string[] = [];
+    const configuredFolders = this.getVaultFolders(activeRepoName);
+    const vaultFolderIds = new Set(configuredFolders.map((f) => f.folder.toLowerCase()));
 
     const filesToScan: string[] = [];
     if (specificFiles && specificFiles.length > 0) {
@@ -518,11 +858,18 @@ export class VaultEngineService {
       // Determina o departamento pela pasta (ex: finance/dre.md -> finance)
       const folderParts = relPlainPath.split('/');
       const department = folderParts.length > 1 ? folderParts[0] : 'default';
-      const level = department === 'executive' ? 0 : department === 'finance' || department === 'legal' ? 1 : 2;
+      const matchedFolder = configuredFolders.find((f) => f.folder.toLowerCase() === department.toLowerCase());
+      const level = matchedFolder ? matchedFolder.default_level : 2;
 
       // Obtém ou inicializa a DEK desse compartimento
       let dek = unlockedDEKs[department] || unlockedDEKs['default'];
       if (!dek) {
+        // Se a pasta protegida já possui slots de outros membros no keymap e este usuário não tem acesso, BLOQUEIA (Evita S4)
+        const hasExistingSlots = Object.values(keymap.slots).some((userSlot) => Boolean(userSlot[department]));
+        if (hasExistingSlots && keymap.members[login]?.level !== 0 && cfg.user?.login !== login) {
+          throw new Error(`Acesso negado: você não possui a chave criptográfica para cifrar arquivos na pasta '${department}'.`);
+        }
+
         dek = crypto.randomBytes(32);
         this.setCompartmentDEK(activeRepoName, department, dek, [login]);
         unlockedDEKs = this.getUnlockedDEKs(activeRepoName, login);
@@ -531,7 +878,6 @@ export class VaultEngineService {
       // Criptografa para .enc
       const encContent = encryptFileToEnc(plainContent, dek, {
         department,
-        level,
         title: path.basename(relPlainPath, '.md'),
       });
 
@@ -557,19 +903,22 @@ export class VaultEngineService {
   }
 
   /**
-   * Garante as regras de segurança no .gitignore para isolar o texto plano confidencial
+   * Garante as regras de segurança dinâmicas no .gitignore para isolar o texto plano confidencial
    */
-  ensureGitIgnoreRules(repoDir: string): void {
+  ensureGitIgnoreRules(repoDir: string, repoName?: string): void {
     const gitignorePath = path.join(repoDir, '.gitignore');
     let content = fs.existsSync(gitignorePath) ? fs.readFileSync(gitignorePath, 'utf-8') : '';
+
+    const folders = this.getVaultFolders(repoName);
+    const dynamicFolderRules = folders.flatMap((f) => [
+      `${f.folder}/*.md`,
+      `${f.folder}/**/*.md`,
+    ]);
 
     const requiredEntries = [
       '# Context OS Vault Transparent Plaintext & Cache',
       '.git/context-vault-cache.json',
-      'engineering/*.md',
-      'finance/*.md',
-      'legal/*.md',
-      'executive/*.md',
+      ...dynamicFolderRules,
       '!docs/public/**/*.md',
       '!README.md',
     ];

@@ -295,24 +295,18 @@ export class WorkspaceService {
     const isOwner = activeUserLogin.toLowerCase() === (resolvedFullName.split('/')[0] || cfg.user?.login || '').toLowerCase();
 
     const userProfile = {
-      level: isOwner ? 0 : (collabMeta.level !== undefined ? Number(collabMeta.level) : (collabMeta.security_level !== undefined ? Number(collabMeta.security_level) : 2)),
+      isOwner,
       departments: isOwner ? ['*'] : (Array.isArray(collabMeta.departments) && collabMeta.departments.length > 0 ? collabMeta.departments : ['engineering']),
       allowed_paths: isOwner ? ['*'] : (Array.isArray(collabMeta.allowed_paths) && collabMeta.allowed_paths.length > 0 ? collabMeta.allowed_paths : ['*']),
+      denied_paths: Array.isArray(collabMeta.denied_paths) ? collabMeta.denied_paths : [],
     };
 
     const cleanPath = (filePath || '').trim().replace(/^\/+/, '');
     const docMeta = docsMetadataService.getDocMetadata(repoName, cleanPath);
-    const docLevel = meta?.level !== undefined
-      ? Number(meta.level)
-      : meta?.security_level !== undefined
-      ? Number(meta.security_level)
-      : docMeta?.security_level !== undefined
-      ? Number(docMeta.security_level)
-      : 999;
-    const docDept = meta?.department || docMeta?.categories || cleanPath.split('/')[0];
+    const docDept = meta?.department || (docMeta as any)?.department || cleanPath.split('/')[0];
 
-    if (!canAccessDocument(userProfile, { level: docLevel, security_level: docLevel, department: docDept, path: cleanPath })) {
-      throw new Error(`Acesso Negado: Seu nível de segurança (Nível ${userProfile.level}) não possui autorização para criar ou editar o documento '${cleanPath}' (Nível ${docLevel}).`);
+    if (!canAccessDocument(userProfile, { department: docDept, path: cleanPath })) {
+      throw new Error(`Acesso Negado: Você não possui autorização de cofre ou rota para acessar o documento '${cleanPath}'.`);
     }
   }
 

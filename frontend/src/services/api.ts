@@ -13,10 +13,25 @@ export interface ApiResponse<T = any> {
   data: T;
 }
 
+async function safeParseJson<T = any>(res: Response, fallback: T = {} as T): Promise<T> {
+  try {
+    const text = await res.text();
+    if (!text || !text.trim()) {
+      if (!res.ok) {
+        return { error: `Servidor indisponível (${res.status} ${res.statusText || 'Sem resposta'})` } as any;
+      }
+      return fallback;
+    }
+    return JSON.parse(text);
+  } catch {
+    return { error: `Resposta inválida do servidor (${res.status})` } as any;
+  }
+}
+
 export const API = {
   async getStatus(): Promise<WorkspaceStatus> {
     const res = await fetch('/api/status');
-    return res.json();
+    return safeParseJson(res, { authenticated: false } as WorkspaceStatus);
   },
 
   async loginWithToken(token: string, provider: 'github' | 'forgejo' = 'github', provider_url?: string): Promise<ApiResponse<{ success?: boolean; user?: User; error?: string }>> {
@@ -25,12 +40,12 @@ export const API = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token, provider, provider_url })
     });
-    return { ok: res.ok, data: await res.json() };
+    return { ok: res.ok, data: await safeParseJson(res) };
   },
 
   async getAccounts(): Promise<ApiResponse<{ accounts: SavedAccount[] }>> {
     const res = await fetch('/api/auth/accounts');
-    return { ok: res.ok, data: await res.json() };
+    return { ok: res.ok, data: await safeParseJson(res, { accounts: [] }) };
   },
 
   async switchAccount(accountId: string): Promise<ApiResponse<{ success?: boolean; user?: User; error?: string; accounts?: SavedAccount[] }>> {
@@ -39,24 +54,24 @@ export const API = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ account_id: accountId })
     });
-    return { ok: res.ok, data: await res.json() };
+    return { ok: res.ok, data: await safeParseJson(res) };
   },
 
   async removeAccount(accountId: string): Promise<ApiResponse<{ success?: boolean; accounts?: SavedAccount[]; user?: User; authenticated?: boolean }>> {
     const res = await fetch(`/api/auth/accounts/${encodeURIComponent(accountId)}`, {
       method: 'DELETE'
     });
-    return { ok: res.ok, data: await res.json() };
+    return { ok: res.ok, data: await safeParseJson(res) };
   },
 
   async logout(): Promise<{ success: boolean }> {
     const res = await fetch('/api/auth/logout', { method: 'POST' });
-    return res.json();
+    return safeParseJson(res, { success: true });
   },
 
   async getRepos(): Promise<ApiResponse<{ repos: Repo[] }>> {
     const res = await fetch('/api/repos');
-    return { ok: res.ok, data: await res.json() };
+    return { ok: res.ok, data: await safeParseJson(res, { repos: [] }) };
   },
 
   async createRepo(payload: { 
@@ -1286,7 +1301,8 @@ export const API = {
       html_url: string;
       permission: string;
       role_name?: string;
-      security_level: number;
+      departments?: string[];
+      allowed_paths?: string[];
       is_owner?: boolean;
       status?: string;
     }>;
@@ -1303,12 +1319,11 @@ export const API = {
   async inviteCollaborator(payload: {
     username: string;
     permission: string;
-    security_level?: number;
-    level?: number;
     role?: string;
     role_name?: string;
     departments?: string[];
     allowed_paths?: string[];
+    denied_paths?: string[];
     repo?: string;
   }): Promise<ApiResponse<{ success: boolean; message: string; collaborator?: any; error?: string }>> {
     const res = await fetch('/api/governance/invite', {
@@ -1328,14 +1343,12 @@ export const API = {
 
   async updateCollaboratorClearance(payload: {
     username: string;
-    security_level?: number;
-    level?: number;
-    security_level_id?: string;
     role?: string;
     role_name?: string;
     permission?: string;
     departments?: string[];
     allowed_paths?: string[];
+    denied_paths?: string[];
     repo?: string;
   }): Promise<ApiResponse<{ success: boolean; message: string }>> {
     const res = await fetch('/api/governance/clearance', {
@@ -1437,59 +1450,15 @@ export const API = {
   },
 
   async createSecureAIToken(payload: {
-    user: string;
-    level: number;
-    passphrases: Record<number, string>;
+    user?: string;
+    folder?: string;
     repo?: string;
     ttlMinutes?: number;
-  }): Promise<ApiResponse<{ token: string; expiresAt: string; authorizedLevel: number }>> {
+  }): Promise<ApiResponse<{ token: string; expiresAt: string; error?: string }>> {
     const res = await fetch('/api/governance/ai-token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
-    });
-    return { ok: res.ok, data: await res.json() };
-  },
-
-  async encryptDoc(payload: {
-    content: string;
-    level: number;
-    passphrase?: string;
-    metadata?: any;
-    repo?: string;
-  }): Promise<ApiResponse<{ success: boolean; envelope: string; error?: string }>> {
-    const res = await fetch('/api/crypto/encrypt', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    return { ok: res.ok, data: await res.json() };
-  },
-
-  async decryptDoc(payload: {
-    envelope: string;
-    passphrases: Record<number, string>;
-    repo?: string;
-  }): Promise<ApiResponse<{ success: boolean; content?: string; level: number; error?: string }>> {
-    const res = await fetch('/api/crypto/decrypt', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    return { ok: res.ok, data: await res.json() };
-  },
-
-  // Dynamic Security Levels
-  async getSecurityLevels(repo?: string): Promise<ApiResponse<{ levels: any[] }>> {
-    const res = await fetch(`/api/governance/levels${repo ? `?repo=${encodeURIComponent(repo)}` : ''}`);
-    return { ok: res.ok, data: await res.json() };
-  },
-
-  async saveSecurityLevels(levels: any[], repo?: string): Promise<ApiResponse<{ success: boolean; levels: any[] }>> {
-    const res = await fetch('/api/governance/levels', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ levels, repo })
     });
     return { ok: res.ok, data: await res.json() };
   },
@@ -1504,49 +1473,6 @@ export const API = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ departments, repo })
-    });
-    return { ok: res.ok, data: await res.json() };
-  },
-
-  async migrateSecurityLevels(payload: {
-    oldLevelId: string;
-    oldRank?: number;
-    newLevelId: string;
-    newRank?: number;
-    repo?: string;
-  }): Promise<ApiResponse<{ success: boolean; migratedCount: number; files: string[] }>> {
-    const res = await fetch('/api/governance/levels/migrate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    return { ok: res.ok, data: await res.json() };
-  },
-
-  async unlockUserPassphrase(payload: {
-    user: string;
-    passphrase: string;
-    levelId?: string;
-    repo?: string;
-  }): Promise<ApiResponse<{ success: boolean; unlockedLevels: string[]; authorizedRanks: number[]; error?: string }>> {
-    const res = await fetch('/api/governance/vault/unlock-user', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    return { ok: res.ok, data: await res.json() };
-  },
-
-  async setUserPassphrase(payload: {
-    user: string;
-    passphrase: string;
-    levelId: string;
-    repo?: string;
-  }): Promise<ApiResponse<{ success: boolean; message: string; error?: string }>> {
-    const res = await fetch('/api/governance/vault/set-user-passphrase', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
     });
     return { ok: res.ok, data: await res.json() };
   },
@@ -1575,6 +1501,56 @@ export const API = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ repo, user })
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async getMyVaultAccess(repo?: string, user?: string): Promise<ApiResponse<{
+    success: boolean;
+    login: string;
+    fingerprint: string;
+    publicKey: string;
+    status: 'active' | 'pending' | 'unregistered';
+    isOwner: boolean;
+    folders: Array<{
+      id: string;
+      name: string;
+      folder: string;
+      color: string;
+      icon?: string;
+      default_level: number;
+      fileCount: number;
+      authorizedMembers: string[];
+      hasAccess: boolean;
+    }>;
+  }>> {
+    const res = await fetch(`/api/governance/vault/my-access${repo ? `?repo=${encodeURIComponent(repo)}` : ''}${user ? `&user=${encodeURIComponent(user)}` : ''}`);
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async grantVaultAccess(user: string, folders: string[], repo?: string): Promise<ApiResponse<{ success: boolean; message: string; error?: string }>> {
+    const res = await fetch('/api/governance/vault/grant-access', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user, folders, repo })
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async revokeVaultAccess(user: string, folders: string[], repo?: string): Promise<ApiResponse<{ success: boolean; message: string; error?: string }>> {
+    const res = await fetch('/api/governance/vault/revoke-access', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user, folders, repo })
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async rotateVaultKey(folder: string, repo?: string): Promise<ApiResponse<{ success: boolean; message: string; error?: string }>> {
+    const res = await fetch('/api/governance/vault/rotate-key', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ folder, repo })
     });
     return { ok: res.ok, data: await res.json() };
   },

@@ -247,7 +247,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
     isLoadingWorkspace,
     isLoadingTree,
   } = useWorkspace();
-  const { securityLevels, isLevelUnlocked } = useSecurity();
+  const { canAccessDoc, departments } = useSecurity();
   const repoName = activeRepo?.name || "default";
   const isTreeLoading = Boolean(isLoadingWorkspace || isLoadingTree);
   const [searchTerm, setSearchTerm] = useState("");
@@ -1553,26 +1553,12 @@ export const FileTree: React.FC<FileTreeProps> = ({
           : "M"
         : null;
 
-    const docSecLevel =
-      node.security_level !== undefined && node.security_level !== null
-        ? Number(node.security_level)
-        : 999;
-    const docSecLevelId =
-      node.security_level_id ||
-      (docSecLevel === 999
-        ? "public"
-        : securityLevels.find((l) => l.rank === docSecLevel)?.id || "public");
-    const secLevelObj = securityLevels.find(
-      (l) =>
-        (docSecLevelId && l.id === docSecLevelId) ||
-        (docSecLevel !== undefined && l.rank === Number(docSecLevel)),
+    const deptObj = departments.find(
+      (d) => d.id === (node as any).department || d.folder.toLowerCase() === (node as any).department?.toLowerCase()
     );
-    const hasSecProtection =
-      docSecLevel !== 999 &&
-      docSecLevelId !== "public";
-    const isLocked =
-      hasSecProtection &&
-      !isLevelUnlocked(docSecLevelId || docSecLevel);
+    const isAllowed = canAccessDoc(node as any);
+    const isLocked = !isAllowed;
+    const hasSecProtection = isLocked || deptObj !== undefined;
 
     return (
       <div
@@ -1676,10 +1662,10 @@ export const FileTree: React.FC<FileTreeProps> = ({
             )}
           </div>
           <div className="tree-file-right">
-            {hasSecProtection && secLevelObj && (
+            {hasSecProtection && deptObj && (
               <span
                 className="tree-badge-security"
-                title={`Nível de Segurança: ${secLevelObj.name} (Rank ${secLevelObj.rank}) - ${isLocked ? "Bloqueado por Chave" : "Desbloqueado"}`}
+                title={`Cofre: ${deptObj.name} - ${isLocked ? "Bloqueado por Chave de Cofre" : "Acesso Autorizado"}`}
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -1688,9 +1674,9 @@ export const FileTree: React.FC<FileTreeProps> = ({
                   fontWeight: 700,
                   padding: "1px 5px",
                   borderRadius: "10px",
-                  backgroundColor: `${secLevelObj.color}18`,
-                  color: secLevelObj.color,
-                  border: `1px solid ${secLevelObj.color}40`,
+                  backgroundColor: `${deptObj.color}18`,
+                  color: deptObj.color,
+                  border: `1px solid ${deptObj.color}40`,
                   marginRight: "4px",
                   lineHeight: "1.2",
                   flexShrink: 0,
@@ -1701,7 +1687,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
                 ) : (
                   <Shield size={9} style={{ flexShrink: 0 }} />
                 )}
-                <span>{secLevelObj.name.split("/")[0].trim()}</span>
+                <span>{deptObj.name.split("/")[0].trim()}</span>
               </span>
             )}
             {!isMarkdown && fileExt && (

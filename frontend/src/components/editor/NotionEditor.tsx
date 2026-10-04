@@ -1,4 +1,4 @@
-import { FileText, FolderTree, Plus, Shield, Lock, Unlock, Eye, EyeOff } from "lucide-react";
+import { FileText, FolderTree, Plus, Lock } from "lucide-react";
 import React, { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { useWorkspace } from "../../context/WorkspaceContext";
@@ -165,71 +165,34 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
     };
   }, [prId, filePath, activeRepo?.name]);
 
-  // Security Level & Document Lock Gate State
-  const { securityLevels, departments, isLevelUnlocked, canAccessDoc, unlockLevel } = useSecurity();
-  const [unlockPassphrase, setUnlockPassphrase] = useState("");
-  const [showUnlockPass, setShowUnlockPass] = useState(false);
-  const [isUnlocking, setIsUnlocking] = useState(false);
-  const [unlockError, setUnlockError] = useState("");
+  // Security Vault & Document Access Gate State
+  const { departments, canAccessDoc, refreshVault } = useSecurity();
+  const [isSyncingVault, setIsSyncingVault] = useState(false);
 
-  const docSecLevel =
-    fileMetadata?.level !== undefined && fileMetadata?.level !== null
-      ? Number(fileMetadata.level)
-      : fileMetadata?.security_level !== undefined && fileMetadata?.security_level !== null
-      ? Number(fileMetadata.security_level)
-      : 999;
-  const docSecLevelId =
-    fileMetadata?.security_level_id ||
-    (docSecLevel === 999
-      ? "public"
-      : securityLevels.find((l) => l.rank === docSecLevel || l.level === docSecLevel)?.id || String(docSecLevel));
-
-  const activeSecLevelObj =
-    securityLevels.find(
-      (l) =>
-        (docSecLevelId && l.id === docSecLevelId) ||
-        (docSecLevel !== undefined && (l.rank === Number(docSecLevel) || l.level === Number(docSecLevel)))
-    ) ||
-    securityLevels.find((l) => l.rank === 999 || l.level === 999) ||
-    securityLevels.find((l) => l.id === "public");
-
-  const activeDeptObj = departments.find((d) => d.id === fileMetadata?.department);
-
-  const isDocumentConfidential =
-    docSecLevel !== 999 &&
-    docSecLevelId !== "public";
+  const activeDeptObj = departments.find(
+    (d) => d.id === fileMetadata?.department || d.folder.toLowerCase() === fileMetadata?.department?.toLowerCase()
+  );
 
   const isAllowedByDept = canAccessDoc(fileMetadata || {});
-  const isDocumentLocked =
-    isDocumentConfidential &&
-    (!isLevelUnlocked(docSecLevelId || docSecLevel) || !isAllowedByDept);
+  const isDocumentLocked = !isAllowedByDept;
 
-  const handleUnlockDocument = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!unlockPassphrase.trim() || isUnlocking) return;
-    setIsUnlocking(true);
-    setUnlockError("");
+  const handleSyncVaultAccess = async () => {
+    setIsSyncingVault(true);
     try {
-      const res = await unlockLevel(
-        docSecLevelId || docSecLevel || "root",
-        unlockPassphrase
-      );
-      if (res.success) {
-        setUnlockPassphrase("");
-        setEditorToast({
-          text: `Nível ${activeSecLevelObj?.name || ""} desbloqueado com sucesso!`,
-          type: "success",
-        });
-        setTimeout(() => setEditorToast(null), 3000);
-      } else {
-        setUnlockError(
-          res.error || "Frase-chave incorreta para este documento."
-        );
-      }
+      await refreshVault();
+      setEditorToast({
+        text: "Permissões de cofres sincronizadas com o repositório.",
+        type: "success",
+      });
+      setTimeout(() => setEditorToast(null), 3000);
     } catch (err: any) {
-      setUnlockError(err.message || "Erro ao desbloquear documento.");
+      setEditorToast({
+        text: err.message || "Erro ao sincronizar cofres.",
+        type: "warning",
+      });
+      setTimeout(() => setEditorToast(null), 3000);
     } finally {
-      setIsUnlocking(false);
+      setIsSyncingVault(false);
     }
   };
 
@@ -1786,7 +1749,7 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
                 width: "100%",
                 padding: "36px 32px",
                 borderRadius: "16px",
-                border: `1px solid ${activeSecLevelObj?.color || "#ef4444"}35`,
+                border: `1px solid ${activeDeptObj?.color || "#ef4444"}35`,
                 background: "var(--color-surface-container-lowest, #ffffff)",
                 boxShadow: "0 14px 36px rgba(0, 0, 0, 0.07)",
                 display: "flex",
@@ -1801,8 +1764,8 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
                   width: "60px",
                   height: "60px",
                   borderRadius: "50%",
-                  backgroundColor: `${activeSecLevelObj?.color || "#ef4444"}15`,
-                  color: activeSecLevelObj?.color || "#ef4444",
+                  backgroundColor: `${activeDeptObj?.color || "#ef4444"}15`,
+                  color: activeDeptObj?.color || "#ef4444",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
@@ -1812,143 +1775,87 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
               </div>
 
               <div>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", marginBottom: "10px" }}>
-                  <div
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "5px",
-                      padding: "3px 10px",
-                      borderRadius: "12px",
-                      backgroundColor: `${activeSecLevelObj?.color || "#ef4444"}15`,
-                      border: `1px solid ${activeSecLevelObj?.color || "#ef4444"}40`,
-                      color: activeSecLevelObj?.color || "#ef4444",
-                      fontSize: "11px",
-                      fontWeight: 700,
-                    }}
-                  >
-                    <Shield size={12} />
-                    {activeSecLevelObj?.name || `Nível ${docSecLevel}`} &bull; Level {activeSecLevelObj?.level ?? activeSecLevelObj?.rank ?? docSecLevel}
-                  </div>
-
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", marginBottom: "12px", flexWrap: "wrap" }}>
                   {activeDeptObj && (
                     <div
                       style={{
                         display: "inline-flex",
                         alignItems: "center",
-                        gap: "5px",
-                        padding: "3px 10px",
-                        borderRadius: "12px",
-                        backgroundColor: `${activeDeptObj.color}15`,
-                        border: `1px solid ${activeDeptObj.color}40`,
+                        gap: "6px",
+                        padding: "4px 12px",
+                        borderRadius: "16px",
+                        backgroundColor: `${activeDeptObj.color}18`,
+                        border: `1px solid ${activeDeptObj.color}45`,
                         color: activeDeptObj.color,
-                        fontSize: "11px",
+                        fontSize: "12px",
                         fontWeight: 700,
                       }}
                     >
-                      <span className="material-symbols-outlined" style={{ fontSize: "13px" }}>
+                      <span className="material-symbols-outlined" style={{ fontSize: "15px" }}>
                         {activeDeptObj.icon || "folder"}
                       </span>
-                      {activeDeptObj.name}
+                      Cofre: {activeDeptObj.name}
                     </div>
                   )}
                 </div>
+
                 <h3
                   style={{
                     margin: "0 0 8px 0",
-                    fontSize: "18px",
+                    fontSize: "19px",
                     fontWeight: 700,
                     color: "var(--color-on-surface, #0f172a)",
                   }}
                 >
-                  Documento Protegido por Chave de Acesso
+                  Documento Protegido por Criptografia de Ponta a Ponta
                 </h3>
                 <p
                   style={{
-                    margin: 0,
+                    margin: "0 0 16px 0",
                     fontSize: "13px",
                     color: "var(--color-outline, #64748b)",
+                    lineHeight: "1.6",
+                  }}
+                >
+                  Este documento pertence à pasta segura{" "}
+                  <strong style={{ color: activeDeptObj?.color || "#6366f1" }}>
+                    {activeDeptObj?.name || fileMetadata?.department || "Restrita"}
+                  </strong>{" "}
+                  e está criptografado com chaves assimétricas X25519 no Git. Sua chave pública local ainda não recebeu autorização dos administradores neste cofre.
+                </p>
+
+                <div
+                  style={{
+                    background: "rgba(99, 102, 241, 0.05)",
+                    border: "1px solid rgba(99, 102, 241, 0.15)",
+                    borderRadius: "10px",
+                    padding: "12px 14px",
+                    fontSize: "12px",
+                    color: "var(--color-outline, #64748b)",
+                    textAlign: "left",
+                    marginBottom: "16px",
                     lineHeight: "1.5",
                   }}
                 >
-                  Este documento confidencial requer a frase-chave de acesso do nível{" "}
-                  <strong style={{ color: activeSecLevelObj?.color || "#ef4444" }}>
-                    {activeSecLevelObj?.name}
-                  </strong>{" "}
-                  ou a Chave-Mestra Root para ser visualizado e editado.
-                </p>
-              </div>
-
-              <form
-                onSubmit={handleUnlockDocument}
-                style={{
-                  width: "100%",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "10px",
-                }}
-              >
-                <div style={{ position: "relative", width: "100%" }}>
-                  <input
-                    type={showUnlockPass ? "text" : "password"}
-                    placeholder="Digite a frase-chave do nível..."
-                    value={unlockPassphrase}
-                    onChange={(e) => setUnlockPassphrase(e.target.value)}
-                    style={{
-                      width: "100%",
-                      padding: "10px 38px 10px 12px",
-                      borderRadius: "8px",
-                      border: "1px solid var(--color-outline-variant, #cbd5e1)",
-                      fontSize: "13px",
-                      background: "#fff",
-                      outline: "none",
-                      boxSizing: "border-box",
-                    }}
-                    autoFocus
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowUnlockPass(!showUnlockPass)}
-                    style={{
-                      position: "absolute",
-                      right: "8px",
-                      top: "50%",
-                      transform: "translateY(-50%)",
-                      background: "transparent",
-                      border: "none",
-                      cursor: "pointer",
-                      color: "#94a3b8",
-                      display: "flex",
-                      alignItems: "center",
-                    }}
-                    title={showUnlockPass ? "Ocultar frase-chave" : "Exibir frase-chave"}
-                  >
-                    {showUnlockPass ? <EyeOff size={16} /> : <Eye size={16} />}
-                  </button>
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px", fontWeight: 700, color: "#6366f1", marginBottom: "4px" }}>
+                    <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>vpn_key</span>
+                    Como obter acesso a este documento:
+                  </div>
+                  <div>
+                    1. Solicite permissão para o cofre <strong>{activeDeptObj?.name || fileMetadata?.department}</strong> ao Administrador do repositório.<br />
+                    2. O Administrador pode liberar seu acesso no menu <strong>Governança & Equipe &rarr; Cofres</strong>.<br />
+                    3. Após a liberação, clique abaixo para atualizar suas permissões.
+                  </div>
                 </div>
 
-                {unlockError && (
-                  <div
-                    style={{
-                      fontSize: "12px",
-                      color: "#dc2626",
-                      fontWeight: 500,
-                      textAlign: "left",
-                      background: "rgba(220, 38, 38, 0.08)",
-                      padding: "6px 10px",
-                      borderRadius: "6px",
-                    }}
-                  >
-                    {unlockError}
-                  </div>
-                )}
-
                 <button
-                  type="submit"
+                  type="button"
+                  onClick={handleSyncVaultAccess}
+                  disabled={isSyncingVault}
                   className="btn btn-primary"
-                  disabled={!unlockPassphrase.trim() || isUnlocking}
                   style={{
-                    padding: "10px 16px",
+                    width: "100%",
+                    padding: "11px 16px",
                     borderRadius: "8px",
                     fontWeight: 600,
                     fontSize: "13px",
@@ -1956,17 +1863,19 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
                     alignItems: "center",
                     justifyContent: "center",
                     gap: "8px",
-                    backgroundColor: activeSecLevelObj?.color || "#2563eb",
-                    borderColor: activeSecLevelObj?.color || "#2563eb",
+                    backgroundColor: activeDeptObj?.color || "#6366f1",
+                    borderColor: activeDeptObj?.color || "#6366f1",
                     color: "#ffffff",
-                    cursor: !unlockPassphrase.trim() || isUnlocking ? "not-allowed" : "pointer",
-                    opacity: !unlockPassphrase.trim() || isUnlocking ? 0.7 : 1,
+                    cursor: isSyncingVault ? "not-allowed" : "pointer",
+                    opacity: isSyncingVault ? 0.7 : 1,
                   }}
                 >
-                  <Unlock size={15} />
-                  {isUnlocking ? "Desbloqueando..." : "Desbloquear Documento"}
+                  <span className="material-symbols-outlined" style={{ fontSize: "16px", animation: isSyncingVault ? "spin 1s linear infinite" : "none" }}>
+                    sync
+                  </span>
+                  {isSyncingVault ? "Sincronizando Cofres..." : "Verificar e Sincronizar Meu Acesso"}
                 </button>
-              </form>
+              </div>
             </div>
           </div>
         ) : isGitMode ? (

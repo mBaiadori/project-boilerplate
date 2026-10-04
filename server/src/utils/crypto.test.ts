@@ -50,7 +50,6 @@ describe('Criptografia Assimétrica X25519 & 3-Way Merge', () => {
     const originalText = '# Relatório Financeiro Confidencial\n\nReceita Q3: R$ 5.000.000,00';
 
     const encContent = encryptFileToEnc(originalText, dek, {
-      level: 1,
       department: 'finance',
       title: 'Relatório Q3',
     });
@@ -62,7 +61,6 @@ describe('Criptografia Assimétrica X25519 & 3-Way Merge', () => {
     assert.strictEqual(dec.success, true);
     assert.strictEqual(dec.content, originalText);
     assert.strictEqual(dec.header?.department, 'finance');
-    assert.strictEqual(dec.header?.security_level, 1);
   });
 
   it('Deve falhar ao tentar descriptografar com DEK incorreta', () => {

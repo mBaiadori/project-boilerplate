@@ -726,8 +726,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
               ...n,
               title: partialMeta.title !== undefined ? partialMeta.title : n.title,
               status: partialMeta.status !== undefined ? partialMeta.status : n.status,
-              security_level: partialMeta.security_level !== undefined ? partialMeta.security_level : n.security_level,
-              security_level_id: partialMeta.security_level_id !== undefined ? partialMeta.security_level_id : n.security_level_id,
+              department: partialMeta.department !== undefined ? partialMeta.department : (n as any).department,
             };
           }
           if (n.children && n.children.length > 0) {

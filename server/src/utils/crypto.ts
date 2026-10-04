@@ -3,12 +3,11 @@ import os from 'node:os';
 import fs from 'node:fs';
 import path from 'node:path';
 import { execSync } from 'node:child_process';
-import type { DynamicSecurityLevel, LevelCanaryProbe, UserKeySlot, SecretScanResult, SecretScanViolation } from '../modules/governance/governance.types.js';
+import type { SecretScanResult, SecretScanViolation } from '../modules/governance/governance.types.js';
 
 export interface EncryptedEnvelopeHeader {
   title?: string;
-  security_level: number;
-  security_level_id?: string;
+  department?: string;
   encrypted: true;
   algorithm: 'AES-256-GCM';
   key_id?: string;
@@ -21,8 +20,6 @@ export interface EncryptedPayloadData {
   iv: string; // Base64
   authTag: string; // Base64
   payload: string; // Base64 ciphertext
-  security_level?: number;
-  level?: number;
   department?: string;
   key_id?: string;
   [key: string]: any;
@@ -32,93 +29,62 @@ export const CANARY_PLAINTEXT_PREFIX = 'CONTEXT_OS_VALID_CANARY_';
 export const ENVELOPE_BEGIN_TAG = '-----BEGIN CONTEXT ENCRYPTED PAYLOAD-----';
 export const ENVELOPE_END_TAG = '-----END CONTEXT ENCRYPTED PAYLOAD-----';
 
-export const SECURITY_LEVELS = {
-  LEVEL_0_ROOT: 0,
-  LEVEL_1_STRATEGIC: 1,
-  LEVEL_2_ENGINEERING: 2,
-  LEVEL_3_OPERATIONAL: 3,
-  PUBLIC: 999,
-} as const;
-
-// In-memory cache for derived PBKDF2 keys to guarantee sub-millisecond encryption/decryption
-const derivedKeyCache = new Map<string, Buffer>();
-
-/**
- * Derives a 256-bit AES symmetric key from a passphrase and salt using PBKDF2-SHA512.
- * Caches derived keys in memory to avoid repeating 100k hash rounds for the same session.
- */
-export function deriveLevelKey(passphrase: string, salt: string = 'context-os-default-salt'): Buffer {
-  const cacheKey = `${salt}:${passphrase}`;
-  const cached = derivedKeyCache.get(cacheKey);
-  if (cached) {
-    return cached;
-  }
-  const derived = crypto.pbkdf2Sync(passphrase, salt, 100_000, 32, 'sha512');
-  derivedKeyCache.set(cacheKey, derived);
-  return derived;
-}
-
-/**
- * Checks if a user rank has clearance to access a document rank.
- * Reverse Hierarchy: Lower number means higher privilege (Rank 0 has access to everything).
- */
-export function canAccessRank(userRank: number, docRank: number): boolean {
-  if (docRank === 999 || isNaN(docRank)) {
-    return true; // Public is open to everyone
-  }
-  if (isNaN(userRank)) {
-    return false;
-  }
-  return userRank <= docRank;
-}
-
-export const canAccessLevel = canAccessRank;
-
 /**
  * Checks multidimensional access clearance for a collaborator against a document's security metadata.
  * Evaluates:
- * 1. Root / Wildcard bypass (user.level === 0 or user.departments includes '*')
- * 2. Public clearance (doc.security_level === 999)
- * 3. Vertical Level clearance (user.level <= doc.security_level)
- * 4. Horizontal Department clearance (user.departments includes doc.department)
+ * 1. Root / Wildcard bypass (user.departments includes '*' or user.allowed_paths includes '*')
+ * 2. Public clearance (doc.department is 'public' | 'general' | empty)
+ * 3. Horizontal Compartment / Department clearance (user.departments includes doc.department)
+ * 4. Path/Route check (if user has allowed_paths configured and doc has a path)
  */
 export function canAccessDocument(
-  user: { level?: number; security_level?: number; departments?: string[]; allowed_paths?: string[] },
-  doc: { security_level?: number; level?: number; department?: string; path?: string }
+  user: {
+    departments?: string[];
+    allowed_paths?: string[];
+    denied_paths?: string[];
+    isOwner?: boolean;
+    role?: string;
+  },
+  doc: { department?: string; path?: string }
 ): boolean {
-  const userLevel =
-    user.level !== undefined
-      ? Number(user.level)
-      : user.security_level !== undefined
-      ? Number(user.security_level)
-      : 999;
-  const docLevel =
-    doc.security_level !== undefined
-      ? Number(doc.security_level)
-      : doc.level !== undefined
-      ? Number(doc.level)
-      : 999;
+  // 1. Root or owner bypass
+  if (user.isOwner || user.role === 'owner') {
+    return true;
+  }
 
-  // 1. Root or wildcard bypass
+  // 2. Denied Paths check: Explicit deny ALWAYS overrides allow & wildcards
+  if (Array.isArray(user.denied_paths) && user.denied_paths.length > 0 && doc.path) {
+    const cleanDocPath = doc.path.replace(/\\/g, '/').replace(/^\/+/, '').toLowerCase();
+    const isExplicitlyDenied = user.denied_paths.some((pattern) => {
+      if (!pattern) return false;
+      const cleanPattern = pattern
+        .replace(/\\/g, '/')
+        .replace(/^\/+/, '')
+        .replace(/\/\*+$/, '')
+        .toLowerCase();
+      return cleanDocPath === cleanPattern || cleanDocPath.startsWith(cleanPattern + '/');
+    });
+    if (isExplicitlyDenied) {
+      return false;
+    }
+  }
+
+  // 3. Wildcard bypass in departments or allowed_paths
   if (
-    userLevel === 0 ||
     (Array.isArray(user.departments) && user.departments.includes('*')) ||
     (Array.isArray(user.allowed_paths) && user.allowed_paths.includes('*'))
   ) {
     return true;
   }
 
-  // 2. Public documents are open to everyone
-  if (docLevel === 999 || isNaN(docLevel)) {
-    return true;
+  // 4. Compartment / Department check
+  if (doc.department && doc.department !== 'general' && doc.department !== 'public') {
+    if (!Array.isArray(user.departments) || !user.departments.includes(doc.department)) {
+      return false;
+    }
   }
 
-  // 3. Vertical check: user must have level <= docLevel (lower number = higher clearance)
-  if (isNaN(userLevel) || userLevel > docLevel) {
-    return false;
-  }
-
-  // 4. Path/Route check: if user has allowed_paths configured and doc has a path
+  // 5. Path/Route check: if user has allowed_paths configured and doc has a path
   if (Array.isArray(user.allowed_paths) && user.allowed_paths.length > 0 && doc.path) {
     const cleanDocPath = doc.path.replace(/\\/g, '/').replace(/^\/+/, '').toLowerCase();
     const hasPathAccess = user.allowed_paths.some((pattern) => {
@@ -132,13 +98,6 @@ export function canAccessDocument(
     });
     if (!hasPathAccess) {
       return false;
-    }
-  }
-
-  // 5. Horizontal check: department matching (retrocompatibilidade)
-  if (doc.department && doc.department !== 'general' && doc.department !== 'public') {
-    if (Array.isArray(user.departments) && user.departments.length > 0) {
-      return user.departments.includes(doc.department);
     }
   }
 
@@ -193,82 +152,7 @@ export function decryptAES256GCM(ciphertextBase64: string, ivBase64: string, aut
   return decrypted.toString('utf-8');
 }
 
-/**
- * Generates a verification Canary probe for a security level.
- */
-export function generateLevelCanary(levelId: string, levelKey: Buffer): LevelCanaryProbe {
-  const probePlaintext = `${CANARY_PLAINTEXT_PREFIX}${levelId}`;
-  const enc = encryptAES256GCM(probePlaintext, levelKey);
-  return {
-    level_id: levelId,
-    iv: enc.iv,
-    auth_tag: enc.authTag,
-    probe_ciphertext: enc.ciphertext,
-  };
-}
 
-/**
- * Verifies if a given key decrypts the Canary probe accurately.
- */
-export function verifyLevelCanary(levelKey: Buffer, canary: LevelCanaryProbe): boolean {
-  try {
-    const decrypted = decryptAES256GCM(
-      canary.probe_ciphertext,
-      canary.iv,
-      canary.auth_tag,
-      levelKey
-    );
-    return decrypted === `${CANARY_PLAINTEXT_PREFIX}${canary.level_id}`;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Creates a User Key Slot protecting a Level DEK with the user's individual passphrase.
- */
-export function createUserKeySlot(
-  user: string,
-  userPassphrase: string,
-  levelId: string,
-  levelKey: Buffer,
-  salt: string
-): UserKeySlot {
-  const userKey = deriveLevelKey(userPassphrase, `${salt}:${user}`);
-  const enc = encryptAES256GCM(levelKey.toString('base64'), userKey);
-  return {
-    user,
-    level_id: levelId,
-    encrypted_dek: enc.ciphertext,
-    iv: enc.iv,
-    auth_tag: enc.authTag,
-    updated_at: new Date().toISOString(),
-  };
-}
-
-/**
- * Unlocks a Level DEK from a User Key Slot using the user's individual passphrase.
- */
-export function unlockUserKeySlot(
-  user: string,
-  userPassphrase: string,
-  slot: UserKeySlot,
-  salt: string
-): { success: boolean; dek?: Buffer; error?: string } {
-  try {
-    const userKey = deriveLevelKey(userPassphrase, `${salt}:${user}`);
-    const dekBase64 = decryptAES256GCM(
-      slot.encrypted_dek,
-      slot.iv,
-      slot.auth_tag,
-      userKey
-    );
-    const dek = Buffer.from(dekBase64, 'base64');
-    return { success: true, dek };
-  } catch (err: any) {
-    return { success: false, error: 'Senha incorreta para o slot do usuário.' };
-  }
-}
 
 /**
  * Encapsulates encrypted payload cleanly without markdown YAML frontmatter pollution.
@@ -677,20 +561,55 @@ export function openDEKWithPrivateKey(slot: SealedDEKSlot, recipientPrivateKeyPe
 }
 
 /**
+ * Gera par de chaves Ed25519 para assinatura digital da governança / .keymap.json
+ */
+export function generateEd25519KeyPair(): { publicKeyPem: string; privateKeyPem: string; fingerprint: string } {
+  const kp = crypto.generateKeyPairSync('ed25519');
+  const publicKeyPem = kp.publicKey.export({ type: 'spki', format: 'pem' }) as string;
+  const privateKeyPem = kp.privateKey.export({ type: 'pkcs8', format: 'pem' }) as string;
+  const pubDer = kp.publicKey.export({ type: 'spki', format: 'der' });
+  const fingerprint = crypto.createHash('sha256').update(pubDer).digest('hex').slice(0, 16);
+  return { publicKeyPem, privateKeyPem, fingerprint };
+}
+
+/**
+ * Assina um payload string ou objeto com a chave privada Ed25519 do admin
+ */
+export function signKeymapPayload(payload: string | object, privateKeyPem: string): string {
+  const data = typeof payload === 'string' ? payload : JSON.stringify(payload);
+  const privKey = crypto.createPrivateKey(privateKeyPem);
+  const signature = crypto.sign(null, Buffer.from(data, 'utf-8'), privKey);
+  return signature.toString('base64');
+}
+
+/**
+ * Valida a assinatura de um payload com a chave pública Ed25519
+ */
+export function verifyKeymapSignature(payload: string | object, signatureBase64: string, publicKeyPem: string): boolean {
+  try {
+    const data = typeof payload === 'string' ? payload : JSON.stringify(payload);
+    const pubKey = crypto.createPublicKey(publicKeyPem);
+    const sig = Buffer.from(signatureBase64, 'base64');
+    return crypto.verify(null, Buffer.from(data, 'utf-8'), pubKey, sig);
+  } catch {
+    return false;
+  }
+}
+
+
+/**
  * Criptografa conteúdo de arquivo em texto plano diretamente para o formato de envelope .enc do Context OS.
  */
 export function encryptFileToEnc(
   plaintext: string,
   dek: Buffer,
-  meta: { level?: number; department?: string; title?: string; key_id?: string } = {}
+  meta: { department?: string; title?: string; key_id?: string } = {}
 ): string {
   const header: EncryptedEnvelopeHeader = {
     title: meta.title || 'Documento Protegido',
-    security_level: meta.level ?? 2,
-    security_level_id: String(meta.level ?? 2),
     encrypted: true,
     algorithm: 'AES-256-GCM',
-    key_id: meta.key_id || (meta.department ? `dept-${meta.department}` : `lvl-${meta.level ?? 2}`),
+    key_id: meta.key_id || (meta.department ? `dept-${meta.department}` : 'vault-default'),
     department: meta.department,
     updated_at: new Date().toISOString(),
   };
@@ -698,6 +617,8 @@ export function encryptFileToEnc(
   const enc = encryptAES256GCM(plaintext, dek);
   return buildEncryptedEnvelope(header, enc);
 }
+
+export const encryptEncFile = encryptFileToEnc;
 
 /**
  * Descriptografa um arquivo .enc utilizando a DEK fornecida.

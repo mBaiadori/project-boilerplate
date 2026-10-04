@@ -3,10 +3,8 @@ import path from 'node:path';
 import { PROJECTS_DIR } from '../../config/constants.js';
 import { validateJsonSchema } from '../../utils/schema.validator.js';
 import {
-  DEFAULT_DYNAMIC_SECURITY_LEVELS,
   DEFAULT_DEPARTMENTS,
   DepartmentConfig,
-  normalizeDynamicSecurityLevel,
 } from '../governance/governance.types.js';
 
 export interface DocumentMetadataItem {
@@ -225,43 +223,14 @@ export class DocsMetadataService {
     const tags = Array.isArray(config.tags) ? config.tags : [];
     const badges = Array.isArray(config.badges) ? config.badges : [];
 
-    let rawLevels: any[] = [];
-    if (Array.isArray(config.security_levels) && config.security_levels.length > 0) {
-      rawLevels = [...config.security_levels];
-    } else if (Array.isArray(config.governance_security_vault?.levels) && config.governance_security_vault.levels.length > 0) {
-      rawLevels = [...config.governance_security_vault.levels];
-    } else {
-      rawLevels = [...DEFAULT_DYNAMIC_SECURITY_LEVELS];
-    }
-
-    const seenIds = new Set<string>();
-    const security_levels: Array<{ id: string; rank: number; name: string; color: string; description?: string }> = rawLevels
-      .map((l, idx) => normalizeDynamicSecurityLevel(l, idx))
-      .filter((l) => {
-        if (seenIds.has(l.id)) return false;
-        seenIds.add(l.id);
-        return true;
-      });
-
-    if (!security_levels.some((l) => l.rank === 999 || l.id === 'public')) {
-      security_levels.push({
-        id: 'public',
-        rank: 999,
-        name: 'Público / Geral',
-        color: '#10b981',
-        description: 'Texto plano sem criptografia, acessível para todos os membros',
-      });
-    }
-    security_levels.sort((a, b) => a.rank - b.rank);
-
     const departments: DepartmentConfig[] = Array.isArray(config.departments) && config.departments.length > 0
       ? config.departments
       : DEFAULT_DEPARTMENTS;
 
-    return { statuses, categories, tags, badges, security_levels, departments };
+    return { statuses, categories, tags, badges, departments };
   }
 
-  inferDepartmentFromPath(filePath: string, repoName?: string): { department?: string; default_level?: number } {
+  inferDepartmentFromPath(filePath: string, repoName?: string): { department?: string } {
     if (!filePath) return {};
     const clean = filePath.replace(/\\/g, '/').replace(/^\/+/, '');
     const parts = clean.split('/');
@@ -282,7 +251,6 @@ export class DocsMetadataService {
     if (matched) {
       return {
         department: matched.id,
-        default_level: matched.default_level,
       };
     }
     return {};
@@ -708,27 +676,6 @@ export class DocsMetadataService {
     const inferred = cleanItem.path ? this.inferDepartmentFromPath(cleanItem.path, repoName) : {};
     const resolvedDept = cleanItem.department || inferred.department;
 
-    let secLevel = 999;
-    if (cleanItem.security_level !== undefined && cleanItem.security_level !== null && !isNaN(Number(cleanItem.security_level))) {
-      secLevel = Number(cleanItem.security_level);
-    } else if (cleanItem.level !== undefined && cleanItem.level !== null && !isNaN(Number(cleanItem.level))) {
-      secLevel = Number(cleanItem.level);
-    } else if (inferred.default_level !== undefined) {
-      secLevel = inferred.default_level;
-    }
-
-    const secLevelId =
-      cleanItem.security_level_id ||
-      (secLevel === 0
-        ? 'root'
-        : secLevel === 1
-        ? 'strategic'
-        : secLevel === 2
-        ? 'engineering'
-        : secLevel === 3
-        ? 'operational'
-        : 'public');
-
     return {
       id: cleanItem.id || generateDocId(cleanItem.path || 'doc'),
       name: cleanItem.name || path.basename(cleanItem.path || 'doc', path.extname(cleanItem.path || '')),
@@ -743,9 +690,6 @@ export class DocsMetadataService {
       links: Array.isArray(cleanItem.links) ? cleanItem.links : [],
       templateId: cleanItem.templateId || '',
       prompt: cleanItem.prompt || '',
-      security_level: secLevel,
-      level: secLevel,
-      security_level_id: secLevelId,
       department: resolvedDept,
     };
   }

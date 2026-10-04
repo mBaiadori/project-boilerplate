@@ -2,153 +2,56 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { API } from '../services/api';
 import { useWorkspace } from './WorkspaceContext';
 import { useAuth } from './AuthContext';
-import type { DynamicSecurityLevel, DepartmentConfig } from '../types';
+import type { DepartmentConfig } from '../types';
 
-export const DEFAULT_DEPARTMENTS: DepartmentConfig[] = [
-  { id: 'engineering', name: 'Engenharia', folder: 'engineering', color: '#6366f1', default_level: 2, icon: 'code' },
-  { id: 'finance', name: 'Financeiro', folder: 'finance', color: '#10b981', default_level: 1, icon: 'payments' },
-  { id: 'legal', name: 'Jurídico', folder: 'legal', color: '#a855f7', default_level: 1, icon: 'gavel' },
-  { id: 'hr', name: 'Recursos Humanos', folder: 'hr', color: '#ec4899', default_level: 2, icon: 'badge' },
-  { id: 'executive', name: 'Executivo', folder: 'executive', color: '#f43f5e', default_level: 0, icon: 'diamond' },
-];
+export const DEFAULT_DEPARTMENTS: DepartmentConfig[] = [];
 
-export const DEFAULT_SECURITY_LEVELS: DynamicSecurityLevel[] = [
-  {
-    id: 'root',
-    rank: 0,
-    name: 'Root / Executivo',
-    color: '#ef4444',
-    description: 'Acesso Irrestrito Supremo (Abre todos os níveis e documentos)',
-  },
-  {
-    id: 'strategic',
-    rank: 1,
-    name: 'Estratégico / Liderança',
-    color: '#f97316',
-    description: 'Acesso Amplo de Liderança, Arquitetura e Decisões Estratégicas',
-  },
-  {
-    id: 'engineering',
-    rank: 2,
-    name: 'Engenharia / Time Técnico',
-    color: '#eab308',
-    description: 'Acesso Técnico de Engenharia e Especificações de Features',
-  },
-  {
-    id: 'operational',
-    rank: 3,
-    name: 'Operacional / Restrito Básico',
-    color: '#3b82f6',
-    description: 'Acesso Básico Operacional para Colaboradores e Prestadores',
-  },
-  {
-    id: 'public',
-    rank: 999,
-    name: 'Público / Geral',
-    color: '#10b981',
-    description: 'Texto plano sem criptografia, acessível para todos os membros',
-  },
-];
+export interface VaultFolderItem {
+  id: string;
+  name: string;
+  folder: string;
+  color: string;
+  icon?: string;
+  fileCount: number;
+  authorizedMembers: string[];
+  hasAccess: boolean;
+}
+
+export interface UserVaultAccess {
+  login: string;
+  fingerprint: string;
+  publicKey: string;
+  status: 'active' | 'pending' | 'unregistered';
+  isOwner: boolean;
+  folders: VaultFolderItem[];
+}
 
 interface SecurityContextType {
   vaultConfig: any | null;
-  securityLevels: DynamicSecurityLevel[];
   departments: DepartmentConfig[];
-  unlockedLevels: number[];
-  unlockedLevelIds: string[];
-  passphrases: Record<string, string>;
-  activeAIToken: { token: string; expiresAt: string; authorizedLevel: number } | null;
+  myAccess: UserVaultAccess | null;
+  activeAIToken: { token: string; expires_at: string } | null;
   isLoadingVault: boolean;
   refreshVault: () => Promise<void>;
-  unlockLevel: (levelIdOrRank: string | number, passphrase: string) => Promise<{ success: boolean; error?: string }>;
-  setUserPassphrase: (levelId: string, passphrase: string) => Promise<{ success: boolean; error?: string }>;
-  lockLevel: (levelIdOrRank: string | number) => void;
-  lockAll: () => void;
-  isLevelUnlocked: (levelIdOrRank: string | number) => boolean;
-  canAccessDoc: (doc: { security_level?: number; level?: number; department?: string }) => boolean;
-  encryptContent: (content: string, level: number | string, metadata?: any) => Promise<{ success: boolean; envelope?: string; error?: string }>;
-  decryptContent: (envelope: string) => Promise<{ success: boolean; content?: string; level: number; error?: string }>;
-  generateAIToken: (level?: number, ttlMinutes?: number) => Promise<{ success: boolean; token?: string; error?: string }>;
+  hasFolderAccess: (folderName: string) => boolean;
+  canAccessDoc: (doc: { department?: string; path?: string }) => boolean;
+  grantFolderAccess: (user: string, folders: string[]) => Promise<{ success: boolean; message?: string; error?: string }>;
+  revokeFolderAccess: (user: string, folders: string[]) => Promise<{ success: boolean; message?: string; error?: string }>;
+  rotateFolderKey: (folder: string) => Promise<{ success: boolean; message?: string; error?: string }>;
+  generateAIToken: (ttlMinutes?: number) => Promise<{ success: boolean; token?: string; error?: string }>;
 }
-
-const STORAGE_KEY_PASSPHRASES = 'context_os_security_passphrases';
-const STORAGE_KEY_AI_TOKEN = 'context_os_ai_secure_token';
 
 const SecurityContext = createContext<SecurityContextType | undefined>(undefined);
 
 export const SecurityProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { activeRepo, projectConfig, projectMetaOptions } = useWorkspace();
+  const { activeRepo, projectConfig, projectMetaOptions, tree } = useWorkspace();
   const currentRepoName = activeRepo?.name;
   const { user } = useAuth();
 
   const [vaultConfig, setVaultConfig] = useState<any | null>(null);
-  const [unlockedLevels, setUnlockedLevels] = useState<number[]>([999]);
-  const [unlockedLevelIds, setUnlockedLevelIds] = useState<string[]>(['public']);
-  const [passphrases, setPassphrases] = useState<Record<string, string>>(() => {
-    try {
-      const saved = sessionStorage.getItem(STORAGE_KEY_PASSPHRASES);
-      return saved ? JSON.parse(saved) : {};
-    } catch {
-      return {};
-    }
-  });
-  const [activeAIToken, setActiveAIToken] = useState<SecurityContextType['activeAIToken']>(() => {
-    try {
-      const saved = sessionStorage.getItem(STORAGE_KEY_AI_TOKEN);
-      return saved ? JSON.parse(saved) : null;
-    } catch {
-      return null;
-    }
-  });
+  const [myAccess, setMyAccess] = useState<UserVaultAccess | null>(null);
+  const [activeAIToken, setActiveAIToken] = useState<{ token: string; expires_at: string } | null>(null);
   const [isLoadingVault, setIsLoadingVault] = useState(false);
-
-  // Dynamic security levels from project config / metadata options with fallback
-  const securityLevels = useMemo<DynamicSecurityLevel[]>(() => {
-    let rawList: any[] = [];
-    if (projectConfig?.security_levels && Array.isArray(projectConfig.security_levels) && projectConfig.security_levels.length > 0) {
-      rawList = [...projectConfig.security_levels];
-    } else if (projectMetaOptions?.security_levels && Array.isArray(projectMetaOptions.security_levels) && projectMetaOptions.security_levels.length > 0) {
-      rawList = [...projectMetaOptions.security_levels];
-    } else if (vaultConfig?.levels && Array.isArray(vaultConfig.levels) && vaultConfig.levels.length > 0) {
-      rawList = [...vaultConfig.levels];
-    } else {
-      rawList = [...DEFAULT_SECURITY_LEVELS];
-    }
-
-    const seenIds = new Set<string>();
-    const list: DynamicSecurityLevel[] = rawList.map((lvl: any, idx: number) => {
-      const rank = typeof lvl.rank === 'number' ? lvl.rank : (typeof lvl.level === 'number' ? lvl.level : idx);
-      const id = String(lvl.id || (rank === 0 ? 'root' : rank === 1 ? 'strategic' : rank === 2 ? 'engineering' : rank === 3 ? 'operational' : rank === 999 ? 'public' : `level_${rank}`));
-      const name = lvl.name || lvl.label || (rank === 999 ? 'Público / Geral' : `Level ${rank}`);
-      const color = lvl.color || (rank === 0 ? '#ef4444' : rank === 1 ? '#f97316' : rank === 2 ? '#eab308' : rank === 3 ? '#3b82f6' : '#10b981');
-      const description = lvl.description || (rank === 999 ? 'Texto plano sem criptografia, acessível para todos os membros' : '');
-      return {
-        id,
-        rank,
-        name,
-        color,
-        description,
-        created_at: lvl.created_at,
-        updated_at: lvl.updated_at,
-      };
-    }).filter((l) => {
-      if (seenIds.has(l.id)) return false;
-      seenIds.add(l.id);
-      return true;
-    });
-
-    if (!list.some((l) => l.rank === 999 || l.id === 'public')) {
-      list.push({
-        id: 'public',
-        rank: 999,
-        name: 'Público / Geral',
-        color: '#10b981',
-        description: 'Texto plano sem criptografia, acessível para todos os membros',
-      });
-    }
-
-    return list.sort((a, b) => a.rank - b.rank);
-  }, [projectConfig?.security_levels, projectMetaOptions?.security_levels, vaultConfig?.levels]);
 
   const departments = useMemo<DepartmentConfig[]>(() => {
     if (projectConfig?.departments && Array.isArray(projectConfig.departments) && projectConfig.departments.length > 0) {
@@ -157,213 +60,108 @@ export const SecurityProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (projectMetaOptions?.departments && Array.isArray(projectMetaOptions.departments) && projectMetaOptions.departments.length > 0) {
       return projectMetaOptions.departments;
     }
-    return DEFAULT_DEPARTMENTS;
-  }, [projectConfig?.departments, projectMetaOptions?.departments]);
+
+    // Extrai pastas dinâmicas da árvore de arquivos do workspace
+    const dynamicFolders: DepartmentConfig[] = [];
+    const colors = ['#6366f1', '#10b981', '#a855f7', '#ec4899', '#f59e0b', '#06b6d4', '#3b82f6'];
+    let colorIdx = 0;
+
+    const walk = (nodes: any[]) => {
+      for (const node of nodes || []) {
+        if (node.type === 'directory' || (node.children && node.children.length > 0)) {
+          const clean = (node.path || '').replace(/\\/g, '/').replace(/^\/+/, '');
+          if (!clean) continue;
+          if (!dynamicFolders.some((d) => d.folder === clean || d.id === clean.toLowerCase())) {
+            dynamicFolders.push({
+              id: clean.toLowerCase(),
+              name: node.name || clean.split('/').pop() || clean,
+              folder: clean,
+              color: colors[colorIdx % colors.length],
+              icon: 'folder',
+            });
+            colorIdx++;
+          }
+        }
+      }
+    };
+    walk(tree || []);
+
+    return dynamicFolders;
+  }, [projectConfig?.departments, projectMetaOptions?.departments, tree]);
 
   const refreshVault = useCallback(async () => {
     setIsLoadingVault(true);
     try {
-      const res = await API.getSecurityVault(currentRepoName);
-      if (res.ok && res.data) {
-        setVaultConfig(res.data);
+      const [vaultRes, accessRes] = await Promise.all([
+        API.getSecurityVault(currentRepoName),
+        API.getMyVaultAccess(currentRepoName, user?.login),
+      ]);
+      if (vaultRes.ok && vaultRes.data) {
+        setVaultConfig(vaultRes.data);
+      }
+      if (accessRes.ok && accessRes.data) {
+        setMyAccess(accessRes.data);
       }
     } catch (err) {
-      console.warn('[SecurityContext] Falha ao carregar cofre de segurança:', err);
+      console.warn('[SecurityContext] Falha ao sincronizar estado do cofre:', err);
     } finally {
       setIsLoadingVault(false);
     }
-  }, [currentRepoName]);
+  }, [currentRepoName, user?.login]);
 
   useEffect(() => {
     refreshVault();
   }, [refreshVault]);
 
-  // Recalculate unlocked levels based on stored passphrases, ranks, and hierarchy
-  useEffect(() => {
-    const unlockedRanks = new Set<number>([999]);
-    const unlockedIds = new Set<string>(['public']);
-
-    // Check every key in passphrases
-    Object.entries(passphrases).forEach(([key, pass]) => {
-      if (!pass) return;
-
-      // Find matching level by id or rank
-      const foundLevel = securityLevels.find(
-        (lvl) => lvl.id === key || String(lvl.rank) === key
+  /**
+   * Verifica se o usuário atual tem acesso à pasta segura/departamento
+   */
+  const hasFolderAccess = useCallback(
+    (folderName: string): boolean => {
+      if (!folderName || folderName === 'public' || folderName === 'docs/public') return true;
+      if (myAccess?.isOwner) return true;
+      const cleanFolder = folderName.replace(/\\/g, '/').replace(/^\/+/, '').split('/')[0].toLowerCase();
+      const folderItem = myAccess?.folders?.find(
+        (f) => f.folder.toLowerCase() === cleanFolder || f.id.toLowerCase() === cleanFolder
       );
-
-      if (foundLevel) {
-        // User unlocked this rank -> unlock this and all higher rank numbers (lower privilege)
-        const userRank = foundLevel.rank;
-        securityLevels.forEach((l) => {
-          if (l.rank >= userRank) {
-            unlockedRanks.add(l.rank);
-            unlockedIds.add(l.id);
-          }
-        });
-      } else {
-        // Fallback for numeric keys 0, 1, 2, 3
-        const numKey = Number(key);
-        if (!isNaN(numKey)) {
-          unlockedRanks.add(numKey);
-          securityLevels.forEach((l) => {
-            if (l.rank >= numKey) {
-              unlockedRanks.add(l.rank);
-              unlockedIds.add(l.id);
-            }
-          });
-        }
+      if (folderItem) {
+        return folderItem.hasAccess;
       }
-    });
-
-    setUnlockedLevels(Array.from(unlockedRanks).sort((a, b) => a - b));
-    setUnlockedLevelIds(Array.from(unlockedIds));
-
-    try {
-      sessionStorage.setItem(STORAGE_KEY_PASSPHRASES, JSON.stringify(passphrases));
-    } catch {}
-  }, [passphrases, securityLevels]);
-
-  const unlockLevel = async (
-    levelIdOrRank: string | number,
-    passphrase: string
-  ): Promise<{ success: boolean; error?: string }> => {
-    const cleanPass = passphrase.trim();
-    if (!cleanPass) {
-      return { success: false, error: 'A chave/senha não pode ser vazia.' };
-    }
-
-    const currentLevel = securityLevels.find(
-      (l) => l.id === levelIdOrRank || l.rank === Number(levelIdOrRank)
-    );
-    const targetLevelId = currentLevel?.id || String(levelIdOrRank);
-
-    // Cryptographic Canary Probe Verification via Backend
-    try {
-      const res = await API.unlockUserPassphrase({
-        user: user?.login || 'local_user',
-        passphrase: cleanPass,
-        levelId: targetLevelId,
-        repo: currentRepoName,
-      });
-
-      if (!res.ok || !res.data.success) {
-        return {
-          success: false,
-          error: res.data?.error || 'Passphrase incorreta. Verificação criptográfica falhou.',
-        };
-      }
-
-      // If valid, store passphrase
-      const updated: Record<string, string> = {
-        ...passphrases,
-        [targetLevelId]: cleanPass,
-      };
-      if (currentLevel) {
-        updated[String(currentLevel.rank)] = cleanPass;
-      }
-      setPassphrases(updated);
-
-      return { success: true };
-    } catch (err: any) {
-      return { success: false, error: err.message || 'Erro ao validar passphrase criptográfica.' };
-    }
-  };
-
-  const setUserPassphrase = async (
-    levelId: string,
-    passphrase: string
-  ): Promise<{ success: boolean; error?: string }> => {
-    const cleanPass = passphrase.trim();
-    if (!cleanPass) {
-      return { success: false, error: 'A senha não pode ser vazia.' };
-    }
-
-    try {
-      const res = await API.setUserPassphrase({
-        user: user?.login || 'local_user',
-        passphrase: cleanPass,
-        levelId,
-        repo: currentRepoName,
-      });
-
-      if (res.ok && res.data.success) {
-        await refreshVault();
-        // Automatically unlock in session as well
-        await unlockLevel(levelId, cleanPass);
-        return { success: true };
-      }
-      return { success: false, error: res.data.error || 'Falha ao definir chave de usuário.' };
-    } catch (err: any) {
-      return { success: false, error: err.message };
-    }
-  };
-
-  const lockLevel = (levelIdOrRank: string | number) => {
-    const updated = { ...passphrases };
-    delete updated[String(levelIdOrRank)];
-
-    const currentLevel = securityLevels.find(
-      (l) => l.id === levelIdOrRank || l.rank === Number(levelIdOrRank)
-    );
-    if (currentLevel) {
-      delete updated[currentLevel.id];
-      delete updated[String(currentLevel.rank)];
-    }
-
-    setPassphrases(updated);
-  };
-
-  const lockAll = () => {
-    setPassphrases({});
-    setActiveAIToken(null);
-    try {
-      sessionStorage.removeItem(STORAGE_KEY_PASSPHRASES);
-      sessionStorage.removeItem(STORAGE_KEY_AI_TOKEN);
-    } catch {}
-  };
-
-  const isLevelUnlocked = useCallback(
-    (levelIdOrRank: string | number): boolean => {
-      if (levelIdOrRank === 999 || levelIdOrRank === 'public' || levelIdOrRank === '999') {
-        return true;
-      }
-      if (typeof levelIdOrRank === 'number') {
-        return unlockedLevels.includes(levelIdOrRank);
-      }
-      if (typeof levelIdOrRank === 'string') {
-        if (unlockedLevelIds.includes(levelIdOrRank)) return true;
-        const num = Number(levelIdOrRank);
-        if (!isNaN(num)) return unlockedLevels.includes(num);
-      }
-      return false;
+      return true; // Se a pasta não for uma das pastas seguras configuradas, é livre
     },
-    [unlockedLevels, unlockedLevelIds]
+    [myAccess]
   );
 
+  /**
+   * Avalia autorização de acesso ao documento com base em cofre/departamento e rotas
+   */
   const canAccessDoc = useCallback(
-    (doc: { security_level?: number; level?: number; department?: string; path?: string }): boolean => {
-      const docLevel = doc.security_level !== undefined ? Number(doc.security_level) : (doc.level !== undefined ? Number(doc.level) : 999);
-      if (docLevel === 999 || isNaN(docLevel)) {
-        return true;
+    (doc: { department?: string; path?: string }): boolean => {
+      if (myAccess?.isOwner) return true;
+
+      // 1. Verifica acesso à pasta / departamento
+      if (doc.path) {
+        const folderPart = doc.path.replace(/\\/g, '/').replace(/^\/+/, '').split('/')[0];
+        if (!hasFolderAccess(folderPart)) {
+          return false;
+        }
+      } else if (doc.department) {
+        if (!hasFolderAccess(doc.department)) {
+          return false;
+        }
       }
 
-      // Check vertical level unlock
-      const isLevelOk = unlockedLevels.includes(docLevel) || unlockedLevels.some((l) => l <= docLevel);
-      if (!isLevelOk) {
-        return false;
-      }
-
+      // 2. Verifica rota permitida para o colaborador se houver restrição
       const userLogin = user?.login?.toLowerCase();
       const collabs = projectConfig?.governance_collaborators || {};
       const userMeta = Object.entries(collabs).find(([k]) => k.toLowerCase() === userLogin)?.[1] as any;
 
-      // Check path / route restriction
-      if (doc.path) {
-        const allowedPaths: string[] = Array.isArray(userMeta?.allowed_paths) ? userMeta.allowed_paths : ['*'];
+      if (doc.path && userMeta?.allowed_paths) {
+        const allowedPaths: string[] = Array.isArray(userMeta.allowed_paths) ? userMeta.allowed_paths : ['*'];
         if (!allowedPaths.includes('*') && !allowedPaths.includes('/**')) {
           const cleanDocPath = doc.path.replace(/\\/g, '/').replace(/^\/+/, '').toLowerCase();
           const hasPathAccess = allowedPaths.some((pattern) => {
+            if (pattern === '*' || pattern === '/**') return true;
             const cleanPattern = pattern
               .replace(/\\/g, '/')
               .replace(/^\/+/, '')
@@ -377,128 +175,62 @@ export const SecurityProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         }
       }
 
-      // Check horizontal department restriction (retrocompatibilidade)
-      if (doc.department && doc.department !== 'general' && doc.department !== 'public') {
-        const userDepts: string[] = Array.isArray(userMeta?.departments) ? userMeta.departments : ['*'];
-        if (userDepts.includes('*')) return true;
-        return userDepts.includes(doc.department);
-      }
-
       return true;
     },
-    [unlockedLevels, user?.login, projectConfig?.governance_collaborators]
+    [myAccess, hasFolderAccess, user?.login, projectConfig?.governance_collaborators]
   );
 
-  const encryptContent = async (
-    content: string,
-    level: number | string,
-    metadata?: any
-  ): Promise<{ success: boolean; envelope?: string; error?: string }> => {
-    try {
-      const currentLevel = securityLevels.find((l) => l.id === level || l.rank === Number(level));
-      const targetRank = currentLevel ? currentLevel.rank : typeof level === 'number' ? level : 2;
-      const pass =
-        passphrases[String(level)] ||
-        (currentLevel ? passphrases[currentLevel.id] : '') ||
-        passphrases['0'] ||
-        passphrases['root'] ||
-        `key-level-${targetRank}`;
-
-      const res = await API.encryptDoc({
-        content,
-        level: targetRank,
-        passphrase: pass,
-        metadata: {
-          ...metadata,
-          security_level_id: currentLevel?.id,
-          security_level: targetRank,
-        },
-        repo: currentRepoName,
-      });
-
-      if (res.ok && res.data.success && res.data.envelope) {
-        return { success: true, envelope: res.data.envelope };
-      }
-      return { success: false, error: res.data.error || 'Falha ao criptografar documento.' };
-    } catch (err: any) {
-      return { success: false, error: err.message };
+  const grantFolderAccess = async (targetUser: string, folders: string[]) => {
+    const res = await API.grantVaultAccess(targetUser, folders, currentRepoName);
+    if (res.ok && res.data.success) {
+      await refreshVault();
+      return { success: true, message: res.data.message };
     }
+    return { success: false, error: res.data?.error || 'Falha ao conceder acesso aos cofres.' };
   };
 
-  const decryptContent = async (
-    envelope: string
-  ): Promise<{ success: boolean; content?: string; level: number; error?: string }> => {
-    try {
-      const res = await API.decryptDoc({
-        envelope,
-        passphrases: passphrases as any,
-        repo: currentRepoName,
-      });
-
-      if (res.ok && res.data.success) {
-        return { success: true, content: res.data.content, level: res.data.level };
-      }
-      return {
-        success: false,
-        level: res.data?.level ?? 3,
-        error: res.data?.error || 'Acesso bloqueado: Chave de segurança não encontrada na sessão.',
-      };
-    } catch (err: any) {
-      return {
-        success: false,
-        level: 3,
-        error: err.message,
-      };
+  const revokeFolderAccess = async (targetUser: string, folders: string[]) => {
+    const res = await API.revokeVaultAccess(targetUser, folders, currentRepoName);
+    if (res.ok && res.data.success) {
+      await refreshVault();
+      return { success: true, message: res.data.message };
     }
+    return { success: false, error: res.data?.error || 'Falha ao revogar acesso aos cofres.' };
   };
 
-  const generateAIToken = async (
-    level?: number,
-    ttlMinutes: number = 60
-  ): Promise<{ success: boolean; token?: string; error?: string }> => {
-    try {
-      const targetLevel = level !== undefined ? level : (unlockedLevels.length > 0 ? unlockedLevels[0] : 2);
-      const res = await API.createSecureAIToken({
-        user: user?.login ? `@${user.login}` : 'Dev Local',
-        level: targetLevel,
-        passphrases: passphrases as any,
-        repo: currentRepoName,
-        ttlMinutes,
-      });
-
-      if (res.ok && res.data.token) {
-        setActiveAIToken(res.data);
-        try {
-          sessionStorage.setItem(STORAGE_KEY_AI_TOKEN, JSON.stringify(res.data));
-        } catch {}
-        return { success: true, token: res.data.token };
-      }
-      return { success: false, error: 'Falha ao gerar token efêmero de IA.' };
-    } catch (err: any) {
-      return { success: false, error: err.message };
+  const rotateFolderKey = async (folder: string) => {
+    const res = await API.rotateVaultKey(folder, currentRepoName);
+    if (res.ok && res.data.success) {
+      await refreshVault();
+      return { success: true, message: res.data.message };
     }
+    return { success: false, error: res.data?.error || 'Falha ao rotacionar chave do cofre.' };
+  };
+
+  const generateAIToken = async (ttlMinutes: number = 60) => {
+    const res = await API.createSecureAIToken({ ttlMinutes, repo: currentRepoName });
+    if (res.ok && res.data?.token) {
+      const tokenObj = { token: res.data.token, expires_at: res.data.expiresAt || '' };
+      setActiveAIToken(tokenObj);
+      return { success: true, token: res.data.token };
+    }
+    return { success: false, error: res.data?.error || 'Falha ao gerar token de IA' };
   };
 
   return (
     <SecurityContext.Provider
       value={{
         vaultConfig,
-        securityLevels,
         departments,
-        unlockedLevels,
-        unlockedLevelIds,
-        passphrases,
+        myAccess,
         activeAIToken,
         isLoadingVault,
         refreshVault,
-        unlockLevel,
-        setUserPassphrase,
-        lockLevel,
-        lockAll,
-        isLevelUnlocked,
+        hasFolderAccess,
         canAccessDoc,
-        encryptContent,
-        decryptContent,
+        grantFolderAccess,
+        revokeFolderAccess,
+        rotateFolderKey,
         generateAIToken,
       }}
     >
@@ -514,4 +246,3 @@ export const useSecurity = (): SecurityContextType => {
   }
   return context;
 };
-

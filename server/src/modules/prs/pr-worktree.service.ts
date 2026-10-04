@@ -117,7 +117,6 @@ export class PRWorktreeService {
     // Encrypt directly to .enc envelope
     const encContent = encryptFileToEnc(content, dek, {
       department,
-      level,
       title: path.basename(cleanPath, '.md'),
     });
 
