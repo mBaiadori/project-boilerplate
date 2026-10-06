@@ -8,6 +8,7 @@ import {
   Sparkles,
   HelpCircle,
   ExternalLink,
+  User,
 } from "lucide-react";
 
 interface TopHeaderProps {
@@ -28,7 +29,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
   onOpenTour = () => {},
 }) => {
   const { activeRepo, pendingChanges, isLoadingWorkspace } = useWorkspace();
-  const { provider, providerUrl } = useAuth();
+  const { user, provider, providerUrl } = useAuth();
   const providerLabel = provider === "forgejo" ? "Forgejo" : provider === "github" ? "GitHub" : "Modo Local";
 
   const getRepoWebUrl = () => {
@@ -83,6 +84,42 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
         >
           <ArrowLeft size={18} />
         </IconButton>
+
+        {user?.avatar_url ? (
+          <img
+            id="dash-user-avatar"
+            src={user.avatar_url}
+            alt={user.name || user.login || "Usuário"}
+            title={user.name || user.login || "Usuário"}
+            style={{
+              width: "28px",
+              height: "28px",
+              borderRadius: "50%",
+              objectFit: "cover",
+              flexShrink: 0,
+              display: "block",
+            }}
+          />
+        ) : (
+          <div
+            id="dash-user-avatar"
+            title={user?.name || user?.login || "Usuário"}
+            style={{
+              width: "28px",
+              height: "28px",
+              borderRadius: "50%",
+              backgroundColor: "var(--color-primary-container, #d2e3fc)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "var(--color-primary, #1a73e8)",
+              flexShrink: 0,
+            }}
+          >
+            <User size={15} />
+          </div>
+        )}
+
         <div className="dash-brand-divider"></div>
         <div className="dash-title-wrap">
           <div className="dash-title-row">
