@@ -179,6 +179,151 @@ export class AuthService {
     return { success: true };
   }
 
+  /**
+   * RFC 8628: Solicita o código do dispositivo (Device Authorization Grant)
+   */
+  async requestDeviceCode(customClientId?: string) {
+    const cfg = loadConfig();
+    const clientId = (
+      customClientId ||
+      process.env.GITHUB_CLIENT_ID ||
+      (cfg as any).github_client_id ||
+      'Iv1.b507a08c87ecfe98'
+    ).trim();
+
+    if (!clientId) {
+      throw new Error(
+        'Identificador da Aplicação (Client ID) do GitHub não configurado. Defina GITHUB_CLIENT_ID no ambiente ou na configuração.'
+      );
+    }
+
+    try {
+      const response = await fetch('https://github.com/login/device/code', {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'User-Agent': 'Context-OS-Spec-Driven',
+        },
+        body: JSON.stringify({
+          client_id: clientId,
+          scope: 'repo,read:org,admin:org,user,workflow',
+        }),
+      });
+
+      const data = (await response.json()) as any;
+
+      if (!response.ok || data.error) {
+        const errorMsg =
+          data.error_description ||
+          data.error ||
+          'Falha ao solicitar código de pareamento do dispositivo.';
+        throw new Error(errorMsg);
+      }
+
+      return {
+        success: true,
+        device_code: data.device_code,
+        user_code: data.user_code,
+        verification_uri: data.verification_uri || 'https://github.com/login/device',
+        expires_in: data.expires_in || 900,
+        interval: data.interval || 5,
+        client_id: clientId,
+      };
+    } catch (err: any) {
+      console.error('[AuthService] Erro ao solicitar device code:', err);
+      throw new Error(err.message || 'Erro de conexão com o servidor de autenticação.');
+    }
+  }
+
+  /**
+   * RFC 8628: Realiza polling do status de autorização do dispositivo
+   */
+  async pollDeviceToken(deviceCode: string, customClientId?: string) {
+    if (!deviceCode || typeof deviceCode !== 'string') {
+      throw new Error('Código do dispositivo (device_code) é obrigatório.');
+    }
+
+    const cfg = loadConfig();
+    const clientId = (
+      customClientId ||
+      process.env.GITHUB_CLIENT_ID ||
+      (cfg as any).github_client_id ||
+      'Iv1.b507a08c87ecfe98'
+    ).trim();
+
+    try {
+      const response = await fetch('https://github.com/login/oauth/access_token', {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'User-Agent': 'Context-OS-Spec-Driven',
+        },
+        body: JSON.stringify({
+          client_id: clientId,
+          device_code: deviceCode.trim(),
+          grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
+        }),
+      });
+
+      const data = (await response.json()) as any;
+
+      if (data.error) {
+        if (data.error === 'authorization_pending') {
+          return {
+            status: 'pending' as const,
+            message: 'Aguardando autorização no navegador...',
+          };
+        }
+        if (data.error === 'slow_down') {
+          return {
+            status: 'slow_down' as const,
+            interval: data.interval || 10,
+            message: 'Ajustando intervalo de verificação...',
+          };
+        }
+        if (data.error === 'expired_token') {
+          return {
+            status: 'expired' as const,
+            error: 'O código de conexão expirou. Por favor, solicite um novo código.',
+          };
+        }
+        if (data.error === 'access_denied') {
+          return {
+            status: 'denied' as const,
+            error: 'A autorização foi recusada pelo usuário.',
+          };
+        }
+        return {
+          status: 'error' as const,
+          error: data.error_description || data.error || 'Erro durante a verificação de acesso.',
+        };
+      }
+
+      if (data.access_token) {
+        // Autentica o usuário com o token recebido (já sincroniza com o cofre nativo de senhas)
+        const authResult = await this.authenticateWithToken(data.access_token);
+        return {
+          status: 'success' as const,
+          authenticated: true,
+          user: authResult.user,
+          orgs: authResult.orgs,
+          accounts: authResult.accounts,
+          token_type: data.token_type || 'bearer',
+        };
+      }
+
+      return {
+        status: 'pending' as const,
+        message: 'Aguardando confirmação...',
+      };
+    } catch (err: any) {
+      console.error('[AuthService] Erro durante o polling do device token:', err);
+      throw new Error(err.message || 'Erro ao consultar status da autorização.');
+    }
+  }
+
   getStatus() {
     const cfg = loadConfig();
     const activeRepo = cfg.active_repo;

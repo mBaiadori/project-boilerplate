@@ -3,23 +3,71 @@ import path from "node:path";
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
 import { isPathHidden, loadHiddenFiles, isSystemPath } from "./hidden-files.js";
+import { vaultService, VAULT_KEYS } from "../modules/vault/vault.service.js";
+import { loadConfig } from "../config/storage.js";
 
 const execAsync = promisify(exec);
+
+/**
+ * Obtém o Bearer Token ativo do cofre nativo de senhas ou configuração
+ */
+export function getActiveBearerToken(explicitToken?: string): string | null {
+  if (explicitToken === "local_mode") {
+    return null;
+  }
+  if (explicitToken && typeof explicitToken === "string" && explicitToken.trim()) {
+    return explicitToken.trim();
+  }
+  try {
+    const vaultToken = vaultService.getSecret(VAULT_KEYS.GITHUB_TOKEN);
+    if (vaultToken && vaultToken.trim() && vaultToken !== "local_mode") {
+      return vaultToken.trim();
+    }
+  } catch {}
+  try {
+    const cfg = loadConfig();
+    if (cfg?.token && cfg.token.trim() && cfg.token !== "local_mode") {
+      return cfg.token.trim();
+    }
+  } catch {}
+  return null;
+}
 
 export async function executeGitCommand(
   command: string,
   cwd: string,
+  explicitToken?: string,
 ): Promise<{ stdout: string; stderr: string; success: boolean }> {
+  let finalCommand = command;
+  const token = getActiveBearerToken(explicitToken);
+
+  // Injeção automática do Bearer Token nos cabeçalhos HTTP para comandos de rede Git
+  const isNetworkCmd = /\bgit\s+(clone|fetch|pull|push|ls-remote)\b/.test(command);
+  if (isNetworkCmd && token && !command.includes("http.extraHeader")) {
+    finalCommand = command.replace(
+      /^git\s+/,
+      `git -c http.extraHeader="Authorization: Bearer ${token}" `,
+    );
+  }
+
   try {
-    const { stdout, stderr } = await execAsync(command, {
+    const { stdout, stderr } = await execAsync(finalCommand, {
       cwd,
       maxBuffer: 10 * 1024 * 1024,
     });
-    return { stdout: stdout.trim(), stderr: stderr.trim(), success: true };
+
+    const safeStdout = token ? stdout.replaceAll(token, "[REDACTED_TOKEN]") : stdout;
+    const safeStderr = token ? stderr.replaceAll(token, "[REDACTED_TOKEN]") : stderr;
+
+    return { stdout: safeStdout.trim(), stderr: safeStderr.trim(), success: true };
   } catch (error: any) {
+    let errMessage = error.message || String(error);
+    if (token) {
+      errMessage = errMessage.replaceAll(token, "[REDACTED_TOKEN]");
+    }
     return {
       stdout: "",
-      stderr: error.message || String(error),
+      stderr: errMessage,
       success: false,
     };
   }
@@ -27,7 +75,7 @@ export async function executeGitCommand(
 
 export async function callGitHubAPI(
   endpoint: string,
-  token: string,
+  token?: string,
   method: string = "GET",
   data: any = null,
 ): Promise<{ statusCode: number; data: any }> {
@@ -40,8 +88,9 @@ export async function callGitHubAPI(
     "User-Agent": "Context-OS-Spec-Driven",
   };
 
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
+  const activeToken = getActiveBearerToken(token);
+  if (activeToken) {
+    headers["Authorization"] = `Bearer ${activeToken}`;
   }
 
   const options: RequestInit = {

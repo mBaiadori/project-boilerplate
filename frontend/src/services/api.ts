@@ -43,6 +43,41 @@ export const API = {
     return { ok: res.ok, data: await safeParseJson(res) };
   },
 
+  async requestDeviceCode(clientId?: string): Promise<ApiResponse<{
+    success: boolean;
+    device_code?: string;
+    user_code?: string;
+    verification_uri?: string;
+    expires_in?: number;
+    interval?: number;
+    error?: string;
+  }>> {
+    const res = await fetch('/api/auth/device/code', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ client_id: clientId })
+    });
+    return { ok: res.ok, data: await safeParseJson(res) };
+  },
+
+  async pollDeviceToken(deviceCode: string, clientId?: string): Promise<ApiResponse<{
+    status: 'pending' | 'slow_down' | 'expired' | 'denied' | 'success' | 'error';
+    interval?: number;
+    error?: string;
+    message?: string;
+    authenticated?: boolean;
+    user?: User;
+    orgs?: any[];
+    accounts?: SavedAccount[];
+  }>> {
+    const res = await fetch('/api/auth/device/poll', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ device_code: deviceCode, client_id: clientId })
+    });
+    return { ok: res.ok, data: await safeParseJson(res) };
+  },
+
   async getAccounts(): Promise<ApiResponse<{ accounts: SavedAccount[] }>> {
     const res = await fetch('/api/auth/accounts');
     return { ok: res.ok, data: await safeParseJson(res, { accounts: [] }) };

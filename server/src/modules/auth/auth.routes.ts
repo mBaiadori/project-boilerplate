@@ -16,6 +16,29 @@ export async function authRoutes(fastify: FastifyInstance) {
     }
   });
 
+  fastify.post('/api/auth/device/code', async (request, reply) => {
+    const body = (request.body as { client_id?: string }) || {};
+    try {
+      const result = await authService.requestDeviceCode(body.client_id);
+      return reply.send(result);
+    } catch (err: any) {
+      return reply.status(400).send({ error: err.message || 'Erro ao gerar código do dispositivo' });
+    }
+  });
+
+  fastify.post('/api/auth/device/poll', async (request, reply) => {
+    const body = (request.body as { device_code?: string; client_id?: string }) || {};
+    if (!body.device_code) {
+      return reply.status(400).send({ error: 'device_code é obrigatório' });
+    }
+    try {
+      const result = await authService.pollDeviceToken(body.device_code, body.client_id);
+      return reply.send(result);
+    } catch (err: any) {
+      return reply.status(400).send({ error: err.message || 'Erro ao verificar autorização' });
+    }
+  });
+
   fastify.get('/api/auth/accounts', async (_request, reply) => {
     return reply.send({ accounts: authService.getAccounts() });
   });
