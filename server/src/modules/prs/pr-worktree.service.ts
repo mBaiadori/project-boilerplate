@@ -1,11 +1,8 @@
-import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { PROJECTS_DIR } from '../../config/constants.js';
 import { loadConfig } from '../../config/storage.js';
 import { executeGitCommand } from '../../utils/git.js';
-import { encryptFileToEnc } from '../../utils/crypto.js';
-import { vaultEngineService } from '../vault/vault-engine.service.js';
 
 export class PRWorktreeService {
   private getRepoDir(repoName?: string): string {
@@ -80,60 +77,16 @@ export class PRWorktreeService {
     await executeGitCommand(`git worktree prune`, repoDir).catch(() => {});
   }
 
-  async writeEncryptedAtWorktree(
+  async writePlainAtWorktree(
     wtDir: string,
     relPlainPath: string,
-    content: string,
-    login: string,
-    repoName: string
-  ): Promise<{ relEncPath: string; isEncrypted: boolean }> {
+    content: string
+  ): Promise<{ relPlainPath: string }> {
     const cleanPath = relPlainPath.replace(/\\/g, '/').replace(/^\/+/, '');
-
-    // Public root documents are kept as plaintext
-    if (
-      cleanPath === 'README.md' ||
-      cleanPath === 'CHANGELOG.md' ||
-      cleanPath.startsWith('docs/public/')
-    ) {
-      const fullPath = path.join(wtDir, cleanPath);
-      fs.mkdirSync(path.dirname(fullPath), { recursive: true });
-      fs.writeFileSync(fullPath, content, 'utf-8');
-      return { relEncPath: cleanPath, isEncrypted: false };
-    }
-
-    // Determine compartment / department
-    const folderParts = cleanPath.split('/');
-    const department = folderParts.length > 1 ? folderParts[0] : 'default';
-    const level = department === 'executive' ? 0 : department === 'finance' || department === 'legal' ? 1 : 2;
-
-    let unlockedDEKs = vaultEngineService.getUnlockedDEKs(repoName, login);
-    let dek = unlockedDEKs[department] || unlockedDEKs['default'];
-    if (!dek) {
-      dek = crypto.randomBytes(32);
-      vaultEngineService.setCompartmentDEK(repoName, department, dek, [login]);
-      unlockedDEKs = vaultEngineService.getUnlockedDEKs(repoName, login);
-    }
-
-    // Encrypt directly to .enc envelope
-    const encContent = encryptFileToEnc(content, dek, {
-      department,
-      title: path.basename(cleanPath, '.md'),
-    });
-
-    const relEncPath = `${cleanPath}.enc`;
-    const fullEncPath = path.join(wtDir, relEncPath);
-    fs.mkdirSync(path.dirname(fullEncPath), { recursive: true });
-    fs.writeFileSync(fullEncPath, encContent, 'utf-8');
-
-    // Remove plain file if present in worktree to avoid accidental commit
-    const fullPlainPath = path.join(wtDir, cleanPath);
-    if (fs.existsSync(fullPlainPath)) {
-      try {
-        fs.unlinkSync(fullPlainPath);
-      } catch {}
-    }
-
-    return { relEncPath, isEncrypted: true };
+    const fullPath = path.join(wtDir, cleanPath);
+    fs.mkdirSync(path.dirname(fullPath), { recursive: true });
+    fs.writeFileSync(fullPath, content, 'utf-8');
+    return { relPlainPath: cleanPath };
   }
 
   async commitAndPushWorktree(

@@ -94,7 +94,7 @@ export interface Repo {
 export interface SavedAccount {
   id: string;
   user: User;
-  git_provider: 'github' | 'forgejo' | 'local' | string;
+  git_provider: 'github' | 'local' | string;
   git_provider_url?: string;
   orgs?: any[];
   is_active: boolean;
@@ -277,7 +277,6 @@ export interface PR {
   approvals: (string | PRApproval)[];
   min_approvals?: number;
   is_solo_mode?: boolean;
-  clearance_required?: number;
   created_at: string;
   merged_at?: string;
   closed_at?: string;

@@ -34,11 +34,11 @@ export const API = {
     return safeParseJson(res, { authenticated: false } as WorkspaceStatus);
   },
 
-  async loginWithToken(token: string, provider: 'github' | 'forgejo' = 'github', provider_url?: string): Promise<ApiResponse<{ success?: boolean; user?: User; error?: string }>> {
+  async loginWithToken(token: string): Promise<ApiResponse<{ success?: boolean; user?: User; error?: string }>> {
     const res = await fetch('/api/auth/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token, provider, provider_url })
+      body: JSON.stringify({ token })
     });
     return { ok: res.ok, data: await safeParseJson(res) };
   },
@@ -1413,36 +1413,7 @@ export const API = {
     return { ok: res.ok, data: await res.json() };
   },
 
-  async getSecurityVault(repo?: string): Promise<ApiResponse<{
-    salt: string;
-    levels: Array<{
-      level: number;
-      label: string;
-      description: string;
-      color: string;
-      key_hint?: string;
-    }>;
-    ai_privacy_policy?: {
-      allow_external_ai_for_level_0: boolean;
-      allow_external_ai_for_level_1: boolean;
-      allow_local_ai_only: boolean;
-    };
-  }>> {
-    const res = await fetch(`/api/governance/vault${repo ? `?repo=${encodeURIComponent(repo)}` : ''}`);
-    return { ok: res.ok, data: await res.json() };
-  },
 
-  async updateSecurityVault(payload: {
-    vault: any;
-    repo?: string;
-  }): Promise<ApiResponse<{ success: boolean; vault: any }>> {
-    const res = await fetch('/api/governance/vault', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    return { ok: res.ok, data: await res.json() };
-  },
 
   async getGovernanceAuditLogs(repo?: string): Promise<ApiResponse<{ logs: any[] }>> {
     const res = await fetch(`/api/governance/audit-logs${repo ? `?repo=${encodeURIComponent(repo)}` : ''}`);
@@ -1479,84 +1450,6 @@ export const API = {
 
   async scanSecrets(repo?: string): Promise<ApiResponse<{ hasSecrets: boolean; violations: any[] }>> {
     const res = await fetch(`/api/governance/scan-secrets${repo ? `?repo=${encodeURIComponent(repo)}` : ''}`);
-    return { ok: res.ok, data: await res.json() };
-  },
-
-  async getKeymap(repo?: string): Promise<ApiResponse<any>> {
-    const res = await fetch(`/api/governance/keymap${repo ? `?repo=${encodeURIComponent(repo)}` : ''}`);
-    return { ok: res.ok, data: await res.json() };
-  },
-
-  async registerVaultKey(user: string, profile?: any, repo?: string): Promise<ApiResponse<any>> {
-    const res = await fetch('/api/governance/keymap/register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user, ...profile, repo })
-    });
-    return { ok: res.ok, data: await res.json() };
-  },
-
-  async syncVault(repo?: string, user?: string): Promise<ApiResponse<{ success: boolean; decryptedCount: number; skippedCount: number; omittedCount: number }>> {
-    const res = await fetch('/api/governance/vault/sync', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ repo, user })
-    });
-    return { ok: res.ok, data: await res.json() };
-  },
-
-  async getMyVaultAccess(repo?: string, user?: string): Promise<ApiResponse<{
-    success: boolean;
-    login: string;
-    fingerprint: string;
-    publicKey: string;
-    status: 'active' | 'pending' | 'unregistered';
-    isOwner: boolean;
-    folders: Array<{
-      id: string;
-      name: string;
-      folder: string;
-      color: string;
-      icon?: string;
-      default_level: number;
-      fileCount: number;
-      authorizedMembers: string[];
-      hasAccess: boolean;
-    }>;
-  }>> {
-    const res = await fetch(`/api/governance/vault/my-access${repo ? `?repo=${encodeURIComponent(repo)}` : ''}${user ? `&user=${encodeURIComponent(user)}` : ''}`);
-    return { ok: res.ok, data: await res.json() };
-  },
-
-  async grantVaultAccess(user: string, folders: string[], repo?: string): Promise<ApiResponse<{ success: boolean; message: string; error?: string }>> {
-    const res = await fetch('/api/governance/vault/grant-access', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user, folders, repo })
-    });
-    return { ok: res.ok, data: await res.json() };
-  },
-
-  async revokeVaultAccess(user: string, folders: string[], repo?: string): Promise<ApiResponse<{ success: boolean; message: string; error?: string }>> {
-    const res = await fetch('/api/governance/vault/revoke-access', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user, folders, repo })
-    });
-    return { ok: res.ok, data: await res.json() };
-  },
-
-  async rotateVaultKey(folder: string, repo?: string): Promise<ApiResponse<{ success: boolean; message: string; error?: string }>> {
-    const res = await fetch('/api/governance/vault/rotate-key', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ folder, repo })
-    });
-    return { ok: res.ok, data: await res.json() };
-  },
-
-  async getVaultStatus(repo?: string, user?: string): Promise<ApiResponse<{ lastSync: string; cachedFilesCount: number; unlockedCompartments: string[]; registeredMembersCount: number }>> {
-    const res = await fetch(`/api/governance/vault/status${repo ? `?repo=${encodeURIComponent(repo)}` : ''}${user ? `&user=${encodeURIComponent(user)}` : ''}`);
     return { ok: res.ok, data: await res.json() };
   }
 };

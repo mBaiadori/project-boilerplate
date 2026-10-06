@@ -6,10 +6,10 @@ interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  provider: 'github' | 'forgejo' | 'local';
+  provider: 'github' | 'local';
   providerUrl?: string;
   accounts: SavedAccount[];
-  loginWithToken: (token: string, provider?: 'github' | 'forgejo', providerUrl?: string) => Promise<{ success: boolean; error?: string }>;
+  loginWithToken: (token: string) => Promise<{ success: boolean; error?: string }>;
   loginLocal: () => Promise<{ success: boolean }>;
   switchAccount: (accountId: string) => Promise<{ success: boolean; error?: string }>;
   removeAccount: (accountId: string) => Promise<{ success: boolean; error?: string }>;
@@ -21,8 +21,8 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [provider, setProvider] = useState<'github' | 'forgejo' | 'local'>('forgejo');
-  const [providerUrl, setProviderUrl] = useState<string | undefined>('http://localhost:3000/api/v1');
+  const [provider, setProvider] = useState<'github' | 'local'>('github');
+  const [providerUrl, setProviderUrl] = useState<string | undefined>(undefined);
   const [accounts, setAccounts] = useState<SavedAccount[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -55,17 +55,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     refreshAuth();
   }, []);
 
-  const loginWithToken = async (token: string, selectedProvider: 'github' | 'forgejo' = 'forgejo', selectedProviderUrl?: string) => {
+  const loginWithToken = async (token: string) => {
     try {
-      const res = await API.loginWithToken(token, selectedProvider, selectedProviderUrl);
+      const res = await API.loginWithToken(token);
       if (res.ok && res.data.user) {
         setUser(res.data.user);
-        setProvider(selectedProvider);
-        if (selectedProviderUrl) setProviderUrl(selectedProviderUrl);
+        setProvider('github');
         await refreshAuth();
         return { success: true };
       }
-      return { success: false, error: res.data.error || `Falha ao autenticar com token ${selectedProvider === 'forgejo' ? 'Forgejo' : 'GitHub'}` };
+      return { success: false, error: res.data.error || 'Falha ao autenticar com token GitHub' };
     } catch (err: any) {
       return { success: false, error: err.message || 'Erro de conexão com o servidor' };
     }

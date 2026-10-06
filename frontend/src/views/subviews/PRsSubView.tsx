@@ -65,7 +65,7 @@ const renderMarkdownDescription = (text: string) => {
 
 export const PRsSubView: React.FC<PRsSubViewProps> = () => {
   const { user, provider } = useAuth();
-  const providerLabel = provider === "forgejo" ? "Forgejo" : provider === "github" ? "GitHub" : "Modo Local";
+  const providerLabel = provider === "github" ? "GitHub" : "Modo Local";
   const navigate = useNavigate();
   const {
     activeRepo,

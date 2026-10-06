@@ -9,7 +9,6 @@ import {
   ensureGitRepo,
   executeGitCommand,
   isGitRepo,
-  resolveGitProviderBaseUrl,
 } from '../../utils/git.js';
 import { workspaceService } from '../workspace/workspace.service.js';
 
@@ -111,7 +110,7 @@ export class ReposService {
       };
     }
 
-    // Git Provider repositories (GitHub / Forgejo)
+    // Git Provider repositories (GitHub)
     const { statusCode, data } = await callGitProviderAPI('/user/repos?per_page=100&sort=updated', cfg.token);
     const remoteRepos = Array.isArray(data) ? data : [];
 
@@ -629,10 +628,8 @@ export class ReposService {
       const ownerLogin = (cfg.active_repo?.full_name?.split('/')[0]) || cfg.user?.login || 'admin';
       const codeownersContent = `# Context OS - Governança & Root of Trust
 # Arquivos críticos de controle de acesso exigem aprovação do proprietário
-.keymap.json @${ownerLogin}
 .project.config.json @${ownerLogin}
 .gitignore @${ownerLogin}
-.scripts/ @${ownerLogin}
 .github/ @${ownerLogin}
 `;
       fs.writeFileSync(path.join(githubDir, 'CODEOWNERS'), codeownersContent, 'utf-8');
@@ -661,7 +658,7 @@ export class ReposService {
       }
     }
 
-    // 8. Branch Protection no GitHub / Forgejo
+    // 8. Branch Protection no GitHub
     let protectionMessage = 'Não aplicável';
     const shouldEnableProtection = security?.enable_branch_protection ?? (preset === 'recommended');
     if (shouldEnableProtection && cfg.authenticated && cfg.token && cfg.active_repo?.full_name?.includes('/')) {
@@ -1021,69 +1018,37 @@ export class ReposService {
       };
     }
 
-    const { isForgejo } = resolveGitProviderBaseUrl();
+    // Provedor GitHub
+    const { statusCode, data } = await callGitProviderAPI('/user/orgs', cfg.token, 'POST', {
+      login: username,
+      admin: cfg.user?.login,
+      profile_name: payload.full_name || username,
+    });
 
-    if (isForgejo) {
-      const { statusCode, data } = await callGitProviderAPI('/orgs', cfg.token, 'POST', {
-        username: username,
-        full_name: payload.full_name || username,
-        description: payload.description || '',
-        visibility: payload.visibility || 'public',
-        repo_admin_change_team_access: true,
-      });
-
-      if (statusCode === 201 || statusCode === 200) {
-        const createdOrg = {
-          login: data.username || data.login || username,
-          full_name: data.full_name || username,
-          description: data.description || payload.description || '',
-          avatar_url: data.avatar_url,
-        };
-        if (!cfg.orgs.some((o: any) => o.login.toLowerCase() === createdOrg.login.toLowerCase())) {
-          cfg.orgs.push(createdOrg);
-        }
-        saveConfig(cfg);
-        return {
-          success: true,
-          org: createdOrg,
-          message: `Organização '${createdOrg.login}' criada com sucesso no Forgejo!`,
-        };
-      } else {
-        throw new Error(data?.message || `Erro ao criar organização no Forgejo (Status ${statusCode})`);
+    if (statusCode === 201 || statusCode === 200) {
+      const createdOrg = {
+        login: data.login || username,
+        full_name: data.name || payload.full_name || username,
+        description: data.description || payload.description || '',
+        avatar_url: data.avatar_url,
+      };
+      if (!cfg.orgs.some((o: any) => o.login.toLowerCase() === createdOrg.login.toLowerCase())) {
+        cfg.orgs.push(createdOrg);
       }
+      saveConfig(cfg);
+      return {
+        success: true,
+        org: createdOrg,
+        message: `Organização '${createdOrg.login}' criada com sucesso!`,
+      };
     } else {
-      // Provedor GitHub
-      const { statusCode, data } = await callGitProviderAPI('/user/orgs', cfg.token, 'POST', {
-        login: username,
-        admin: cfg.user?.login,
-        profile_name: payload.full_name || username,
-      });
-
-      if (statusCode === 201 || statusCode === 200) {
-        const createdOrg = {
-          login: data.login || username,
-          full_name: data.name || payload.full_name || username,
-          description: data.description || payload.description || '',
-          avatar_url: data.avatar_url,
-        };
-        if (!cfg.orgs.some((o: any) => o.login.toLowerCase() === createdOrg.login.toLowerCase())) {
-          cfg.orgs.push(createdOrg);
-        }
-        saveConfig(cfg);
-        return {
-          success: true,
-          org: createdOrg,
-          message: `Organização '${createdOrg.login}' criada com sucesso!`,
-        };
-      } else {
-        // Redirecionamento Web se o GitHub Cloud exigir fluxo com autenticação humana
-        return {
-          success: false,
-          requires_web_flow: true,
-          web_url: `https://github.com/account/organizations/new`,
-          message: 'No GitHub Cloud, novas organizações devem ser criadas pela interface web oficial.',
-        };
-      }
+      // Redirecionamento Web se o GitHub Cloud exigir fluxo com autenticação humana
+      return {
+        success: false,
+        requires_web_flow: true,
+        web_url: `https://github.com/account/organizations/new`,
+        message: 'No GitHub Cloud, novas organizações devem ser criadas pela interface web oficial.',
+      };
     }
   }
 }

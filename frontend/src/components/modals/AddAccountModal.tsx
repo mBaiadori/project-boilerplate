@@ -18,9 +18,7 @@ export const AddAccountModal: React.FC<AddAccountModalProps> = ({
   const { t } = useTranslation(['common', 'repos', 'auth']);
   const { loginWithToken } = useAuth();
 
-  const [selectedProvider] = useState<'forgejo' | 'github'>('github');
   const [token, setToken] = useState('');
-  const [forgejoUrl, setForgejoUrl] = useState('http://localhost:3000/api/v1');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -42,11 +40,7 @@ export const AddAccountModal: React.FC<AddAccountModalProps> = ({
     setIsSubmitting(true);
     setErrorMsg(null);
 
-    const res = await loginWithToken(
-      cleanToken,
-      selectedProvider,
-      selectedProvider === 'forgejo' ? forgejoUrl.trim() : undefined
-    );
+    const res = await loginWithToken(cleanToken);
 
     setIsSubmitting(false);
 
@@ -85,19 +79,6 @@ export const AddAccountModal: React.FC<AddAccountModalProps> = ({
       }
     >
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-        {/* Provider Selector Tabs (Forgejo hidden for future release) */}
-        {/* <div style={{ display: 'none' }}>...</div> */}
-
-        {selectedProvider === 'forgejo' && (
-          <FormField label="URL do Servidor Forgejo:">
-            <Input
-              value={forgejoUrl}
-              onChange={(e) => setForgejoUrl(e.target.value)}
-              placeholder="http://localhost:3000/api/v1"
-              required
-            />
-          </FormField>
-        )}
 
         <FormField label="Personal Access Token do GitHub:" required>
           <Input

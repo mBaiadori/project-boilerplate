@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
 import { API } from '../services/api';
 import { useWorkspace } from './WorkspaceContext';
 import { useAuth } from './AuthContext';
@@ -19,25 +19,19 @@ export interface VaultFolderItem {
 
 export interface UserVaultAccess {
   login: string;
-  fingerprint: string;
-  publicKey: string;
-  status: 'active' | 'pending' | 'unregistered';
+  status: 'active' | 'pending';
   isOwner: boolean;
   folders: VaultFolderItem[];
 }
 
 interface SecurityContextType {
-  vaultConfig: any | null;
   departments: DepartmentConfig[];
   myAccess: UserVaultAccess | null;
   activeAIToken: { token: string; expires_at: string } | null;
-  isLoadingVault: boolean;
-  refreshVault: () => Promise<void>;
   hasFolderAccess: (folderName: string) => boolean;
   canAccessDoc: (doc: { department?: string; path?: string }) => boolean;
   grantFolderAccess: (user: string, folders: string[]) => Promise<{ success: boolean; message?: string; error?: string }>;
   revokeFolderAccess: (user: string, folders: string[]) => Promise<{ success: boolean; message?: string; error?: string }>;
-  rotateFolderKey: (folder: string) => Promise<{ success: boolean; message?: string; error?: string }>;
   generateAIToken: (ttlMinutes?: number) => Promise<{ success: boolean; token?: string; error?: string }>;
 }
 
@@ -48,10 +42,7 @@ export const SecurityProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const currentRepoName = activeRepo?.name;
   const { user } = useAuth();
 
-  const [vaultConfig, setVaultConfig] = useState<any | null>(null);
-  const [myAccess, setMyAccess] = useState<UserVaultAccess | null>(null);
   const [activeAIToken, setActiveAIToken] = useState<{ token: string; expires_at: string } | null>(null);
-  const [isLoadingVault, setIsLoadingVault] = useState(false);
 
   const departments = useMemo<DepartmentConfig[]>(() => {
     if (projectConfig?.departments && Array.isArray(projectConfig.departments) && projectConfig.departments.length > 0) {
@@ -89,29 +80,33 @@ export const SecurityProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     return dynamicFolders;
   }, [projectConfig?.departments, projectMetaOptions?.departments, tree]);
 
-  const refreshVault = useCallback(async () => {
-    setIsLoadingVault(true);
-    try {
-      const [vaultRes, accessRes] = await Promise.all([
-        API.getSecurityVault(currentRepoName),
-        API.getMyVaultAccess(currentRepoName, user?.login),
-      ]);
-      if (vaultRes.ok && vaultRes.data) {
-        setVaultConfig(vaultRes.data);
-      }
-      if (accessRes.ok && accessRes.data) {
-        setMyAccess(accessRes.data);
-      }
-    } catch (err) {
-      console.warn('[SecurityContext] Falha ao sincronizar estado do cofre:', err);
-    } finally {
-      setIsLoadingVault(false);
-    }
-  }, [currentRepoName, user?.login]);
+  const myAccess = useMemo<UserVaultAccess>(() => {
+    const cleanLogin = (user?.login || 'local_user').toLowerCase().replace(/^@/, '');
+    const isOwner = Boolean(
+      (activeRepo?.owner && activeRepo.owner.toLowerCase() === cleanLogin) ||
+      !activeRepo ||
+      activeRepo.is_local
+    );
+    const collabs = projectConfig?.governance_collaborators || {};
+    const userMeta = Object.entries(collabs).find(([k]) => k.toLowerCase() === cleanLogin)?.[1] as any;
+    const userDepts: string[] = isOwner ? ['*'] : (userMeta?.departments || ['*']);
 
-  useEffect(() => {
-    refreshVault();
-  }, [refreshVault]);
+    return {
+      login: cleanLogin,
+      status: 'active',
+      isOwner,
+      folders: departments.map((d) => ({
+        id: d.id,
+        name: d.name,
+        folder: d.folder,
+        color: d.color,
+        icon: d.icon,
+        fileCount: 0,
+        authorizedMembers: [],
+        hasAccess: isOwner || userDepts.includes('*') || userDepts.includes(d.id) || userDepts.includes(d.folder.toLowerCase()),
+      })),
+    };
+  }, [user?.login, activeRepo, projectConfig?.governance_collaborators, departments]);
 
   /**
    * Verifica se o usuário atual tem acesso à pasta segura/departamento
@@ -127,13 +122,13 @@ export const SecurityProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (folderItem) {
         return folderItem.hasAccess;
       }
-      return true; // Se a pasta não for uma das pastas seguras configuradas, é livre
+      return true;
     },
     [myAccess]
   );
 
   /**
-   * Avalia autorização de acesso ao documento com base em cofre/departamento e rotas
+   * Avalia autorização de acesso ao documento com base em departamento e rotas de governança
    */
   const canAccessDoc = useCallback(
     (doc: { department?: string; path?: string }): boolean => {
@@ -180,31 +175,12 @@ export const SecurityProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     [myAccess, hasFolderAccess, user?.login, projectConfig?.governance_collaborators]
   );
 
-  const grantFolderAccess = async (targetUser: string, folders: string[]) => {
-    const res = await API.grantVaultAccess(targetUser, folders, currentRepoName);
-    if (res.ok && res.data.success) {
-      await refreshVault();
-      return { success: true, message: res.data.message };
-    }
-    return { success: false, error: res.data?.error || 'Falha ao conceder acesso aos cofres.' };
+  const grantFolderAccess = async (_targetUser: string, _folders: string[]) => {
+    return { success: true, message: 'Permissões gerenciadas via Governança de Colaboradores.' };
   };
 
-  const revokeFolderAccess = async (targetUser: string, folders: string[]) => {
-    const res = await API.revokeVaultAccess(targetUser, folders, currentRepoName);
-    if (res.ok && res.data.success) {
-      await refreshVault();
-      return { success: true, message: res.data.message };
-    }
-    return { success: false, error: res.data?.error || 'Falha ao revogar acesso aos cofres.' };
-  };
-
-  const rotateFolderKey = async (folder: string) => {
-    const res = await API.rotateVaultKey(folder, currentRepoName);
-    if (res.ok && res.data.success) {
-      await refreshVault();
-      return { success: true, message: res.data.message };
-    }
-    return { success: false, error: res.data?.error || 'Falha ao rotacionar chave do cofre.' };
+  const revokeFolderAccess = async (_targetUser: string, _folders: string[]) => {
+    return { success: true, message: 'Permissões gerenciadas via Governança de Colaboradores.' };
   };
 
   const generateAIToken = async (ttlMinutes: number = 60) => {
@@ -220,17 +196,13 @@ export const SecurityProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   return (
     <SecurityContext.Provider
       value={{
-        vaultConfig,
         departments,
         myAccess,
         activeAIToken,
-        isLoadingVault,
-        refreshVault,
         hasFolderAccess,
         canAccessDoc,
         grantFolderAccess,
         revokeFolderAccess,
-        rotateFolderKey,
         generateAIToken,
       }}
     >

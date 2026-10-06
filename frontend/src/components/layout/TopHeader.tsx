@@ -29,15 +29,11 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
   onOpenTour = () => {},
 }) => {
   const { activeRepo, pendingChanges, isLoadingWorkspace } = useWorkspace();
-  const { user, provider, providerUrl } = useAuth();
-  const providerLabel = provider === "forgejo" ? "Forgejo" : provider === "github" ? "GitHub" : "Modo Local";
+  const { user, provider } = useAuth();
+  const providerLabel = provider === "github" ? "GitHub" : "Modo Local";
 
   const getRepoWebUrl = () => {
     if (activeRepo?.html_url) return activeRepo.html_url;
-    if (provider === "forgejo") {
-      const base = (providerUrl || "http://localhost:3000/api/v1").replace(/\/api\/v1\/?$/, "");
-      return `${base}/${activeRepo?.full_name}`;
-    }
     return `https://github.com/${activeRepo?.full_name}`;
   };
 

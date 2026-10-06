@@ -16,13 +16,11 @@ export const CreateOrgModal: React.FC<CreateOrgModalProps> = ({
   onCreated,
 }) => {
   const { provider } = useAuth();
-  const isForgejo = provider === 'forgejo';
   const isGitHub = provider === 'github';
 
   const [username, setUsername] = useState('');
   const [fullName, setFullName] = useState('');
   const [description, setDescription] = useState('');
-  const [visibility, setVisibility] = useState<'public' | 'private' | 'limited'>('public');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [webFlowUrl, setWebFlowUrl] = useState<string | null>(null);
@@ -32,7 +30,6 @@ export const CreateOrgModal: React.FC<CreateOrgModalProps> = ({
       setUsername('');
       setFullName('');
       setDescription('');
-      setVisibility('public');
       setErrorMsg(null);
       setWebFlowUrl(null);
     }
@@ -54,7 +51,6 @@ export const CreateOrgModal: React.FC<CreateOrgModalProps> = ({
         username: cleanUsername,
         full_name: fullName.trim() || undefined,
         description: description.trim() || undefined,
-        visibility,
       });
 
       if (res.ok) {
@@ -137,7 +133,7 @@ export const CreateOrgModal: React.FC<CreateOrgModalProps> = ({
                 Nova Organização
               </h2>
               <span style={{ fontSize: '12px', color: 'var(--color-on-surface-variant, #64748b)' }}>
-                {isForgejo ? 'Criar organização no Forgejo' : isGitHub ? 'Registrar organização no GitHub' : 'Criar organização local'}
+                {isGitHub ? 'Registrar organização no GitHub' : 'Criar organização local'}
               </span>
             </div>
           </div>
@@ -243,21 +239,6 @@ export const CreateOrgModal: React.FC<CreateOrgModalProps> = ({
                   onChange={(e) => setDescription(e.target.value)}
                 />
               </FormField>
-
-              {isForgejo && (
-                <FormField label="Visibilidade no Forgejo:">
-                  <select
-                    id="org-visibility-select"
-                    className="ui-input"
-                    value={visibility}
-                    onChange={(e) => setVisibility(e.target.value as any)}
-                  >
-                    <option value="public">Pública (visível para todos)</option>
-                    <option value="limited">Limitada (visível para usuários autenticados)</option>
-                    <option value="private">Privada (visível apenas para membros)</option>
-                  </select>
-                </FormField>
-              )}
             </>
           )}
 

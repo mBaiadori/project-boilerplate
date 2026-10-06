@@ -19,7 +19,6 @@ import {
 import { translationsService } from "../translations/translations.service.js";
 import { governanceService } from "../governance/governance.service.js";
 import { canAccessDocument } from "../../utils/crypto.js";
-import { vaultEngineService } from "../vault/vault-engine.service.js";
 
 export interface TreeNode {
   name: string;
@@ -31,8 +30,6 @@ export interface TreeNode {
   category?: string;
   status?: string;
   last_modified?: number;
-  security_level?: number;
-  security_level_id?: string;
 }
 
 export { generateDocId, extractDocLinksFromMarkdown, extractFrontmatterMeta };
@@ -67,44 +64,6 @@ export class WorkspaceService {
     this.invalidateTreeCache(repoName);
   }
 
-  /**
-   * Verifica recursivamente se um diretório no disco contém EXCLUSIVAMENTE arquivos cifrados .enc
-   * que não puderam ser descriptografados (ou seja, é um compartimento fechado/bloqueado para o usuário).
-   * Pastas genuinamente vazias (criadas pelo usuário) retornam false para serem exibidas normalmente.
-   */
-  private isLockedEncryptedDirectory(dirPath: string, hiddenList: string[]): boolean {
-    if (!fs.existsSync(dirPath)) return false;
-    try {
-      const entries = fs.readdirSync(dirPath, { withFileTypes: true });
-      const visibleEntries = entries.filter((e) => !isPathHidden(e.name, hiddenList));
-      if (visibleEntries.length === 0) {
-        // Pasta genuinamente vazia (ex: nova pasta criada) -> NÃO é compartimento bloqueado
-        return false;
-      }
-
-      let hasAnyEnc = false;
-      for (const entry of visibleEntries) {
-        const full = path.join(dirPath, entry.name);
-        if (entry.isDirectory()) {
-          if (!this.isLockedEncryptedDirectory(full, hiddenList)) {
-            return false;
-          }
-          hasAnyEnc = true;
-        } else if (entry.isFile()) {
-          if (entry.name.endsWith(".enc")) {
-            hasAnyEnc = true;
-          } else {
-            // Contém pelo menos um arquivo em texto plano ou outro formato -> visível!
-            return false;
-          }
-        }
-      }
-      return hasAnyEnc;
-    } catch {
-      return false;
-    }
-  }
-
   buildTree(
     dir: string,
     baseDir: string,
@@ -134,11 +93,6 @@ export class WorkspaceService {
       if (isPathHidden(relPath, hiddenList) || isPathHidden(entry.name, hiddenList)) continue;
 
       if (entry.isDirectory()) {
-        // Se a pasta física no disco contém apenas arquivos .enc inacessíveis, omite-a
-        if (this.isLockedEncryptedDirectory(fullPath, hiddenList)) {
-          continue;
-        }
-
         const children = this.buildTree(fullPath, baseDir, metaMap, hiddenList);
 
         nodes.push({
@@ -148,10 +102,6 @@ export class WorkspaceService {
           children,
         });
       } else if (entry.isFile()) {
-        // Arquivos .enc nunca devem aparecer diretamente na árvore
-        if (entry.name.endsWith(".enc")) {
-          continue;
-        }
 
         const docMeta = metaMap.get(relPath);
 
@@ -166,18 +116,6 @@ export class WorkspaceService {
           categories: docMeta?.categories || "",
           category: docMeta?.categories || "",
           status: docMeta?.status || "",
-          security_level: docMeta?.security_level !== undefined ? docMeta.security_level : 999,
-          security_level_id:
-            docMeta?.security_level_id ||
-            (docMeta?.security_level === 0
-              ? "root"
-              : docMeta?.security_level === 1
-                ? "strategic"
-                : docMeta?.security_level === 2
-                  ? "engineering"
-                  : docMeta?.security_level === 3
-                    ? "operational"
-                    : "public"),
         });
       }
     }
@@ -217,15 +155,6 @@ export class WorkspaceService {
     }
 
     await ensureDefaultRepoFiles(repoName, false);
-
-    // Sincroniza e descriptografa arquivos .enc sob demanda se o usuário tem permissão
-    try {
-      if (repoDirExists) {
-        await vaultEngineService.syncLocalWorkspaceFromGit(repoName, cfg.user?.login);
-      }
-    } catch (err: any) {
-      console.warn("[WorkspaceService] Falha não impeditiva ao sincronizar cofre local:", err?.message);
-    }
 
     const docsMetadata = docsMetadataService.loadDocsMetadata(repoName);
     const metaMap = new Map(docsMetadata.map((d) => [d.path, d]));
@@ -366,7 +295,7 @@ export class WorkspaceService {
     const docDept = meta?.department || (docMeta as any)?.department || cleanPath.split('/')[0];
 
     if (!canAccessDocument(userProfile, { department: docDept, path: cleanPath })) {
-      throw new Error(`Acesso Negado: Você não possui autorização de cofre ou rota para acessar o documento '${cleanPath}'.`);
+      throw new Error(`Acesso Negado: Você não possui autorização de departamento ou rota para acessar o documento '${cleanPath}'.`);
     }
   }
 

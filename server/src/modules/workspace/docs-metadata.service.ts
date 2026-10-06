@@ -21,9 +21,6 @@ export interface DocumentMetadataItem {
   links: string[];
   templateId: string;
   prompt: string;
-  security_level?: number;
-  level?: number; // alias direto
-  security_level_id?: string;
   department?: string; // id do departamento (e.g. "engineering", "finance", "legal")
   [key: string]: any;
 }
@@ -33,7 +30,6 @@ export interface ProjectMetadataOptions {
   statuses: Array<{ key?: string; name?: string; label: string; badge?: string; color?: string }>;
   tags: Array<string | { name: string; color?: string }>;
   badges?: Array<string | { name: string; color?: string; description?: string }>;
-  security_levels?: Array<{ id: string; rank: number; level?: number; name: string; color: string; description?: string }>;
   departments?: DepartmentConfig[];
 }
 
@@ -50,8 +46,6 @@ export function extractFrontmatterMeta(content: string): {
   status?: string;
   categories?: string;
   tags?: string[];
-  security_level?: number;
-  security_level_id?: string;
   [key: string]: any;
 } {
   if (!content) return {};
@@ -68,12 +62,7 @@ export function extractFrontmatterMeta(content: string): {
     if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
       val = val.slice(1, -1);
     }
-    if (key === 'security_level') {
-      const num = Number(val);
-      if (!isNaN(num)) result.security_level = num;
-    } else if (key === 'security_level_id') {
-      result.security_level_id = val;
-    } else if (key === 'status') {
+    if (key === 'status') {
       result.status = val;
     } else if (key === 'title') {
       result.title = val;
@@ -385,14 +374,6 @@ export class DocsMetadataService {
               item.title = extractedTitle;
               itemModified = true;
             }
-            if (frontmatterMeta.security_level !== undefined && item.security_level !== frontmatterMeta.security_level) {
-              item.security_level = frontmatterMeta.security_level;
-              itemModified = true;
-            }
-            if (frontmatterMeta.security_level_id && item.security_level_id !== frontmatterMeta.security_level_id) {
-              item.security_level_id = frontmatterMeta.security_level_id;
-              itemModified = true;
-            }
             if (itemModified) {
               changed = true;
             }
@@ -413,8 +394,6 @@ export class DocsMetadataService {
                 approvers: [],
                 links: extractedLinks,
                 templateId: '',
-                security_level: frontmatterMeta.security_level,
-                security_level_id: frontmatterMeta.security_level_id,
               })
             );
             changed = true;

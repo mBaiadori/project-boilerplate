@@ -651,15 +651,13 @@ const FolderTreePicker: React.FC<FolderTreePickerProps> = ({
 
 export const GovernanceMembersSubView: React.FC = () => {
   const { user, provider } = useAuth();
-  const providerLabel = provider === "forgejo" ? "Forgejo" : provider === "github" ? "GitHub" : "Modo Local";
+  const providerLabel = provider === "github" ? "GitHub" : "Modo Local";
   const { activeRepo, tree } = useWorkspace();
   const currentRepoName = activeRepo?.name;
   const {
     departments,
     myAccess,
     activeAIToken,
-    rotateFolderKey,
-    refreshVault,
     generateAIToken,
   } = useSecurity();
 
@@ -714,12 +712,8 @@ export const GovernanceMembersSubView: React.FC = () => {
     message: string;
   } | null>(null);
 
-  // Rotating folder key state
-  const [rotatingFolderId, setRotatingFolderId] = useState<string | null>(null);
-
   // Quorum & Branch Protection State
   const [quorumRules, setQuorumRules] = useState<any>(null);
-  const [keymap, setKeymap] = useState<any>(null);
   const [branchProtection, setBranchProtection] = useState<any>(null);
   const [isSavingQuorum, setIsSavingQuorum] = useState<boolean>(false);
   const [isApplyingProtection, setIsApplyingProtection] =
@@ -731,7 +725,6 @@ export const GovernanceMembersSubView: React.FC = () => {
 
   const [isGeneratingToken, setIsGeneratingToken] = useState<boolean>(false);
   const [copiedToken, setCopiedToken] = useState<boolean>(false);
-  const [copiedFingerprint, setCopiedFingerprint] = useState<boolean>(false);
 
   // Secret Scanning State
   const [isScanningSecrets, setIsScanningSecrets] = useState<boolean>(false);
@@ -755,12 +748,6 @@ export const GovernanceMembersSubView: React.FC = () => {
         setIsSoloMode(res.data.isSoloMode);
         setGithubAuthError(res.data.githubAuthError || null);
       }
-      try {
-        const kmRes = await API.getKeymap(currentRepoName);
-        if (kmRes.ok && kmRes.data) {
-          setKeymap(kmRes.data);
-        }
-      } catch {}
     } catch (err) {
       console.warn("[GovernanceSubView] Erro ao carregar colaboradores:", err);
     } finally {
@@ -977,27 +964,6 @@ export const GovernanceMembersSubView: React.FC = () => {
     }
   };
 
-  const handleRotateFolderKey = async (folderId: string) => {
-    setRotatingFolderId(folderId);
-    try {
-      const res = await rotateFolderKey(folderId);
-      if (res.success) {
-        await fetchCollaborators();
-        await refreshVault();
-      }
-    } catch (err) {
-      console.warn("[GovernanceSubView] Erro ao rotacionar chave do cofre:", err);
-    } finally {
-      setRotatingFolderId(null);
-    }
-  };
-
-  const handleCopyFingerprint = (fingerprint: string) => {
-    navigator.clipboard.writeText(fingerprint);
-    setCopiedFingerprint(true);
-    setTimeout(() => setCopiedFingerprint(false), 2000);
-  };
-
   // Handle Generate AI Token
   const handleGenerateToken = async () => {
     setIsGeneratingToken(true);
@@ -1078,7 +1044,7 @@ export const GovernanceMembersSubView: React.FC = () => {
                 color: "var(--color-outline, #a6adc8)",
               }}
             >
-              Controle de acesso, proteção de branch e cofres criptográficos
+              Controle de acesso, proteção de branch e governança de pastas
             </p>
           </div>
         </div>
@@ -1188,8 +1154,8 @@ export const GovernanceMembersSubView: React.FC = () => {
             fontSize: "14px",
           }}
         >
-          <Key size={16} />
-          <span>Chaves Criptográficas</span>
+          <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>folder</span>
+          <span>Departamentos & Pastas</span>
           {myAccess?.folders && myAccess.folders.filter((f) => f.hasAccess).length > 0 && (
             <Badge variant="success" size="xs">
               {myAccess.folders.filter((f) => f.hasAccess).length} autorizados
@@ -1367,14 +1333,14 @@ export const GovernanceMembersSubView: React.FC = () => {
                   flexShrink: 0,
                 }}
               >
-                <Key size={18} />
+                <ShieldCheck size={18} />
               </div>
               <div>
                 <div style={{ fontSize: "11px", color: "var(--color-outline, #a6adc8)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                  Cofre Criptográfico
+                  Governança de Pastas
                 </div>
                 <div style={{ fontSize: "13px", fontWeight: 600, color: "#10b981" }}>
-                  Zero-Trust X25519 & AES
+                  RBAC / ABAC Ativo
                 </div>
               </div>
             </div>
@@ -1427,7 +1393,6 @@ export const GovernanceMembersSubView: React.FC = () => {
                   <th style={{ padding: "10px 16px" }}>Cargo / Função</th>
                   <th style={{ padding: "10px 16px" }}>Permissão Git</th>
                   <th style={{ padding: "10px 16px" }}>Pastas & Rotas Permitidas</th>
-                  <th style={{ padding: "10px 16px" }}>Chave X25519</th>
                   {isAdmin && (
                     <th style={{ padding: "10px 16px", textAlign: "right" }}>
                       Ações
@@ -1608,47 +1573,6 @@ export const GovernanceMembersSubView: React.FC = () => {
                               </span>
                             ))}
                         </div>
-                      </td>
-
-                      <td style={{ padding: "10px 16px" }}>
-                        {keymap?.members?.[collab.login]?.fingerprint ? (
-                          <span
-                            style={{
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: "4px",
-                              padding: "2px 8px",
-                              borderRadius: "12px",
-                              backgroundColor: "rgba(16, 185, 129, 0.1)",
-                              border: "1px solid rgba(16, 185, 129, 0.3)",
-                              color: "#10b981",
-                              fontSize: "11px",
-                              fontFamily: "monospace",
-                            }}
-                            title={`Chave Pública X25519: ${keymap.members[collab.login].fingerprint}`}
-                          >
-                            <span className="material-symbols-outlined" style={{ fontSize: "13px" }}>
-                              key
-                            </span>
-                            {keymap.members[collab.login].fingerprint}
-                          </span>
-                        ) : (
-                          <span
-                            style={{
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: "4px",
-                              padding: "2px 8px",
-                              borderRadius: "12px",
-                              backgroundColor: "rgba(255, 255, 255, 0.05)",
-                              border: "1px solid rgba(255, 255, 255, 0.1)",
-                              color: "var(--color-outline)",
-                              fontSize: "11px",
-                            }}
-                          >
-                            Pendente
-                          </span>
-                        )}
                       </td>
 
                       {isAdmin && (
@@ -1877,7 +1801,7 @@ export const GovernanceMembersSubView: React.FC = () => {
                 margin: "0 0 14px 0",
               }}
             >
-              Gera token efêmero de 1 hora para ferramentas CLI locais (Antigravity CLI, Cursor, Claude Code) acessarem memórias cifradas via localhost sem expor senhas em texto plano.
+              Gera token efêmero de 1 hora para ferramentas CLI locais (Antigravity CLI, Cursor, Claude Code) acessarem o contexto do projeto via localhost com segurança.
             </p>
 
             {activeAIToken ? (
@@ -1948,89 +1872,7 @@ export const GovernanceMembersSubView: React.FC = () => {
             )}
           </Card>
 
-          {/* Identidade Criptográfica do Usuário */}
-          <Card variant="flat" padding="md">
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                marginBottom: "8px",
-              }}
-            >
-              <div
-                style={{ display: "flex", alignItems: "center", gap: "8px" }}
-              >
-                <Key size={18} color="#10b981" />
-                <h3 style={{ fontSize: "15px", fontWeight: 600, margin: 0 }}>
-                  Minha Identidade Criptográfica (X25519)
-                </h3>
-              </div>
-
-              <Badge variant="success" size="xs" style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                <CheckCircle2 size={12} />
-                <span>Keychain Nativo do SO Ativo</span>
-              </Badge>
-            </div>
-
-            <p
-              style={{
-                fontSize: "13px",
-                color: "var(--color-outline, #a6adc8)",
-                margin: "0 0 14px 0",
-              }}
-            >
-              Suas chaves assimétricas de 256 bits são geradas e protegidas pelo cofre seguro do seu sistema operacional. As operações de cifragem e decifragem ocorrem de forma 100% transparente e sem senhas.
-            </p>
-
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "10px",
-                background: "var(--color-surface-container-high, #1e1e2e)",
-                padding: "8px 12px",
-                borderRadius: "6px",
-                border:
-                  "1px solid var(--color-outline-variant, rgba(255, 255, 255, 0.1))",
-              }}
-            >
-              <span className="material-symbols-outlined" style={{ fontSize: "16px", color: "#10b981" }}>
-                fingerprint
-              </span>
-              <div style={{ flex: 1, display: "flex", alignItems: "center", gap: "8px" }}>
-                <span style={{ fontSize: "12px", color: "var(--color-outline, #a6adc8)" }}>Fingerprint da Chave Pública:</span>
-                <code
-                  style={{
-                    fontSize: "12px",
-                    fontFamily: "monospace",
-                    color: "#a6e3a1",
-                    fontWeight: 600,
-                  }}
-                >
-                  {myAccess?.fingerprint || "Detectando..."}
-                </code>
-              </div>
-
-              {myAccess?.fingerprint && (
-                <Button
-                  variant="outline"
-                  size="xs"
-                  onClick={() => handleCopyFingerprint(myAccess.fingerprint)}
-                  style={{ display: "flex", alignItems: "center", gap: "4px" }}
-                >
-                  {copiedFingerprint ? (
-                    <Check size={13} color="#10b981" />
-                  ) : (
-                    <Copy size={13} />
-                  )}
-                  <span>{copiedFingerprint ? "Copiado!" : "Copiar"}</span>
-                </Button>
-              )}
-            </div>
-          </Card>
-
-          {/* Cofres e Pastas Seguras do Repositório */}
+          {/* Pastas e Departamentos do Repositório */}
           <Card variant="flat" padding="none" style={{ overflow: "hidden" }}>
             <div
               style={{
@@ -2044,7 +1886,7 @@ export const GovernanceMembersSubView: React.FC = () => {
             >
               <div>
                 <h3 style={{ fontSize: "14px", fontWeight: 600, margin: 0 }}>
-                  Criptografia & Chaves de Pastas (Zero-Knowledge)
+                  Departamentos & Pastas do Workspace
                 </h3>
                 <span
                   style={{
@@ -2052,19 +1894,9 @@ export const GovernanceMembersSubView: React.FC = () => {
                     color: "var(--color-outline, #a6adc8)",
                   }}
                 >
-                  Chaves simétricas (DEKs) vinculadas dinamicamente às pastas do repositório
+                  Governança e controle de acesso por rotas e pastas configuradas no projeto
                 </span>
               </div>
-
-              <Button
-                variant="outline"
-                size="xs"
-                onClick={refreshVault}
-                style={{ display: "flex", alignItems: "center", gap: "6px" }}
-              >
-                <RefreshCw size={12} />
-                <span>Atualizar Chaves</span>
-              </Button>
             </div>
 
             {(!myAccess?.folders || myAccess.folders.length === 0) && departments.length === 0 ? (
@@ -2084,9 +1916,6 @@ export const GovernanceMembersSubView: React.FC = () => {
                   folder_open
                 </span>
                 Nenhuma pasta personalizada criada ainda no repositório.
-                <div style={{ fontSize: "11.5px", marginTop: "4px", color: "var(--color-outline, #6c7086)" }}>
-                  As chaves criptográficas são geradas e vinculadas automaticamente conforme pastas e arquivos são adicionados ao projeto.
-                </div>
               </div>
             ) : (
             <table
@@ -2107,11 +1936,9 @@ export const GovernanceMembersSubView: React.FC = () => {
                     textTransform: "uppercase",
                   }}
                 >
-                  <th style={{ padding: "10px 16px" }}>Pasta do Repositório</th>
+                  <th style={{ padding: "10px 16px" }}>Pasta / Departamento</th>
                   <th style={{ padding: "10px 16px" }}>Meu Acesso</th>
-                  <th style={{ padding: "10px 16px" }}>Arquivos Cifrados</th>
-                  <th style={{ padding: "10px 16px" }}>Membros com Chave</th>
-                  {isAdmin && <th style={{ padding: "10px 16px", textAlign: "right" }}>Ações</th>}
+                  <th style={{ padding: "10px 16px" }}>Membros com Permissão</th>
                 </tr>
               </thead>
               <tbody>
@@ -2125,7 +1952,6 @@ export const GovernanceMembersSubView: React.FC = () => {
                     }))
                 ).map((folder) => {
                   const hasAccess = folder.hasAccess;
-                  const isRotating = rotatingFolderId === folder.id;
 
                   return (
                     <tr
@@ -2136,7 +1962,7 @@ export const GovernanceMembersSubView: React.FC = () => {
                         fontSize: "13px",
                       }}
                     >
-                      <td style={{ padding: "12px 16px", width: "240px" }}>
+                      <td style={{ padding: "12px 16px", width: "280px" }}>
                         <div
                           style={{
                             display: "flex",
@@ -2186,17 +2012,10 @@ export const GovernanceMembersSubView: React.FC = () => {
                           ) : (
                             <>
                               <Lock size={12} />
-                              <span>Sem Chave</span>
+                              <span>Restrito</span>
                             </>
                           )}
                         </Badge>
-                      </td>
-
-                      <td style={{ padding: "12px 16px", width: "160px", color: "var(--color-outline, #a6adc8)" }}>
-                        <span style={{ fontFamily: "monospace", fontWeight: 600, color: "var(--color-on-surface)" }}>
-                          {folder.fileCount}
-                        </span>{" "}
-                        documentos
                       </td>
 
                       <td style={{ padding: "12px 16px" }}>
@@ -2219,27 +2038,11 @@ export const GovernanceMembersSubView: React.FC = () => {
                             ))
                           ) : (
                             <span style={{ fontSize: "11px", color: "var(--color-outline, #a6adc8)", fontStyle: "italic" }}>
-                              Nenhum membro específico
+                              Acesso por herança ou aberto
                             </span>
                           )}
                         </div>
                       </td>
-
-                      {isAdmin && (
-                        <td style={{ padding: "12px 16px", textAlign: "right" }}>
-                          <Button
-                            variant="outline"
-                            size="xs"
-                            onClick={() => handleRotateFolderKey(folder.id)}
-                            disabled={isRotating}
-                            title="Gera uma nova DEK aleatória, recifra os arquivos e re-sela apenas para os membros ativos autorizados."
-                            style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}
-                          >
-                            <RefreshCw size={11} className={isRotating ? "animate-spin" : ""} />
-                            <span>{isRotating ? "Rotacionando..." : "Rotacionar Chave"}</span>
-                          </Button>
-                        </td>
-                      )}
                     </tr>
                   );
                 })}
@@ -2290,7 +2093,7 @@ export const GovernanceMembersSubView: React.FC = () => {
                   margin: "0 0 12px 0",
                 }}
               >
-                Verifica se existem tokens de API, chaves privadas ou documentos marcados como confidenciais sem criptografia no repositório.
+                Verifica se existem tokens de API, chaves privadas ou segredos expostos no repositório.
               </p>
 
               {secretScanResult && (

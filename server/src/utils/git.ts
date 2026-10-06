@@ -25,52 +25,15 @@ export async function executeGitCommand(
   }
 }
 
-import { loadConfig } from "../config/storage.js";
-
-export function resolveGitProviderBaseUrl(customUrl?: string, provider?: string): { baseUrl: string; isForgejo: boolean } {
-  if (provider === 'github') {
-    return { baseUrl: 'https://api.github.com', isForgejo: false };
-  }
-  if (customUrl && customUrl.startsWith('http')) {
-    const isForgejo = !customUrl.includes('api.github.com') && !customUrl.includes('github.com');
-    return { baseUrl: customUrl.replace(/\/$/, ''), isForgejo };
-  }
-  if (provider === 'forgejo' || provider === 'gitea') {
-    const baseUrl = (customUrl || 'http://localhost:3000/api/v1').replace(/\/$/, '');
-    return { baseUrl, isForgejo: true };
-  }
-  const cfg = loadConfig();
-  if (
-    cfg.git_provider === 'forgejo' ||
-    cfg.git_provider === 'gitea' ||
-    (cfg.git_provider_url && !cfg.git_provider_url.includes('api.github.com')) ||
-    (cfg.active_repo?.html_url && !cfg.active_repo.html_url.includes('github.com'))
-  ) {
-    const baseUrl = (cfg.git_provider_url || 'http://localhost:3000/api/v1').replace(/\/$/, '');
-    return { baseUrl, isForgejo: true };
-  }
-  return { baseUrl: 'https://api.github.com', isForgejo: false };
-}
-
 export async function callGitHubAPI(
   endpoint: string,
   token: string,
   method: string = "GET",
   data: any = null,
-  customBaseUrl?: string,
-  provider?: string,
 ): Promise<{ statusCode: number; data: any }> {
-  let url: string;
-  let isForgejo = false;
-
-  if (endpoint.startsWith("http://") || endpoint.startsWith("https://")) {
-    url = endpoint;
-    isForgejo = !endpoint.includes("api.github.com") && !endpoint.includes("github.com");
-  } else {
-    const resolved = resolveGitProviderBaseUrl(customBaseUrl, provider);
-    url = `${resolved.baseUrl}${endpoint.startsWith("/") ? "" : "/"}${endpoint}`;
-    isForgejo = resolved.isForgejo;
-  }
+  const url = endpoint.startsWith("http://") || endpoint.startsWith("https://")
+    ? endpoint
+    : `https://api.github.com${endpoint.startsWith("/") ? "" : "/"}${endpoint}`;
 
   const headers: Record<string, string> = {
     Accept: "application/json, application/vnd.github+json",
@@ -78,7 +41,7 @@ export async function callGitHubAPI(
   };
 
   if (token) {
-    headers["Authorization"] = isForgejo ? `token ${token}` : `Bearer ${token}`;
+    headers["Authorization"] = `Bearer ${token}`;
   }
 
   const options: RequestInit = {
@@ -104,7 +67,7 @@ export async function callGitHubAPI(
   } catch (err: any) {
     return {
       statusCode: 500,
-      data: { message: err.message || "Erro de conexão com o Provedor Git" },
+      data: { message: err.message || "Erro de conexão com o GitHub" },
     };
   }
 }
@@ -117,29 +80,6 @@ export async function applyBranchProtection(
   token: string,
   requiredApprovals: number = 1,
 ): Promise<{ statusCode: number; data: any }> {
-  const { isForgejo } = resolveGitProviderBaseUrl();
-
-  if (isForgejo) {
-    const endpoint = `/repos/${repoFullName}/branch_protections`;
-    const body = {
-      branch_name: branch,
-      enable_push: false,
-      enable_push_whitelist: false,
-      required_approvals: requiredApprovals,
-      enable_approvals_whitelist: false,
-      protected_file_patterns: ".keymap.json;.project.config.json;.gitignore;.scripts/**;.github/**",
-    };
-    const res = await callGitHubAPI(endpoint, token, "POST", body);
-    if (res.statusCode === 200 || res.statusCode === 201) {
-      return res;
-    }
-    if (res.statusCode === 409 || (res.data?.message && res.data.message.includes("already exists"))) {
-      const patchEndpoint = `/repos/${repoFullName}/branch_protections/${encodeURIComponent(branch)}`;
-      return await callGitHubAPI(patchEndpoint, token, "PATCH", body);
-    }
-    return res;
-  }
-
   const endpoint = `/repos/${repoFullName}/branches/${branch}/protection`;
   const body = {
     required_status_checks: null,
@@ -163,23 +103,7 @@ export async function checkBranchProtection(
   if (!token || !repoFullName) {
     return { isProtected: false };
   }
-  const { isForgejo } = resolveGitProviderBaseUrl();
   try {
-    if (isForgejo) {
-      const endpoint = `/repos/${repoFullName}/branch_protections`;
-      const res = await callGitHubAPI(endpoint, token, "GET");
-      if (res.statusCode === 200 && Array.isArray(res.data)) {
-        const found = res.data.some(
-          (p: any) => p.branch_name === branch || p.rule_name === branch,
-        );
-        return {
-          isProtected: found,
-          details: found ? "Proteção ativa no Forgejo" : "Sem proteção ativa",
-        };
-      }
-      return { isProtected: false, details: "Sem proteção ativa" };
-    }
-
     const endpoint = `/repos/${repoFullName}/branches/${branch}/protection`;
     const res = await callGitHubAPI(endpoint, token, "GET");
     if (res.statusCode === 200) {
@@ -316,29 +240,14 @@ async function internalEnsureGitRepo(
   // Auto-resolve remoteUrl if missing and token exists (only for real remote repositories, never for 'local' or 'default')
   let targetRemoteUrl = remoteUrl;
   const isExplicitLocal = !repoName || repoName === "local" || repoName === "default" || repoName === "_default";
-  const { baseUrl, isForgejo } = resolveGitProviderBaseUrl();
   if (!targetRemoteUrl && token && user?.login && repoName && !isExplicitLocal) {
-    if (isForgejo) {
-      const rootUrl = baseUrl.replace(/\/api\/v1\/?$/, '');
-      targetRemoteUrl = `${rootUrl}/${user.login}/${repoName}.git`;
-    } else {
-      targetRemoteUrl = `https://github.com/${user.login}/${repoName}.git`;
-    }
+    targetRemoteUrl = `https://github.com/${user.login}/${repoName}.git`;
   }
 
   // Form authenticated clone URL if applicable
   let authRemoteUrl = targetRemoteUrl || "";
   if (targetRemoteUrl && token) {
-    if (isForgejo) {
-      try {
-        const u = new URL(targetRemoteUrl);
-        u.username = user?.login || 'token';
-        u.password = token;
-        authRemoteUrl = u.toString();
-      } catch {
-        authRemoteUrl = targetRemoteUrl;
-      }
-    } else if (targetRemoteUrl.startsWith("https://github.com/")) {
+    if (targetRemoteUrl.startsWith("https://github.com/")) {
       const repoPath = targetRemoteUrl
         .replace("https://github.com/", "")
         .replace(/\.git$/, "");

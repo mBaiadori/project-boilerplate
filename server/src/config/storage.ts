@@ -22,10 +22,10 @@ export interface WorkspaceChange {
 }
 
 export interface SavedAccount {
-  id: string; // e.g. "forgejo:marcosbaiadori" or "github:mBaiadori"
+  id: string; // e.g. "github:mBaiadori"
   user: any;
   token: string;
-  git_provider: 'github' | 'forgejo' | 'gitea';
+  git_provider: 'github' | 'local';
   git_provider_url?: string;
   orgs?: any[];
   last_active?: string;
@@ -58,7 +58,7 @@ export interface AppConfig {
   workspace_changes: Record<string, WorkspaceChange[]>;
   templates?: any[];
   workflows?: any[];
-  git_provider?: 'github' | 'forgejo' | 'gitea';
+  git_provider?: 'github' | 'local';
   git_provider_url?: string;
   governance?: {
     min_approvals: number;
@@ -193,16 +193,14 @@ export function loadConfig(): AppConfig {
 
   // Auto-seed active user into accounts if missing
   if (cfg.user?.login) {
-    const currentId = cfg.git_provider === 'forgejo'
-      ? `forgejo:${cfg.git_provider_url || 'localhost'}:${cfg.user.login}`
-      : `github:${cfg.user.login}`;
+    const currentId = `github:${cfg.user.login}`;
 
     if (!cfg.accounts.some((a: any) => a.id === currentId || a.user?.login === cfg.user.login)) {
       cfg.accounts.push({
         id: currentId,
         user: cfg.user,
         token: cfg.token || '',
-        git_provider: cfg.git_provider || 'forgejo',
+        git_provider: cfg.git_provider || 'github',
         git_provider_url: cfg.git_provider_url,
         orgs: cfg.orgs || [],
         last_active: new Date().toISOString(),
@@ -283,7 +281,7 @@ export function saveConfig(cfg: AppConfig): void {
           }
         : undefined,
       settings: cfg.settings || {},
-      git_provider: cfg.git_provider || "forgejo",
+      git_provider: cfg.git_provider || "github",
       git_provider_url: cfg.git_provider_url || undefined,
       governance: cfg.governance,
       workflows: cfg.workflows || [],
@@ -884,7 +882,7 @@ export async function ensureDefaultRepoFiles(
     );
   }
 
-  // .github/CODEOWNERS: gera o arquivo de propriedade dos arquivos do cofre
+  // .github/CODEOWNERS: gera o arquivo de propriedade dos arquivos do repositório
   const githubDir = path.join(targetDir, ".github");
   const codeownersPath = path.join(githubDir, "CODEOWNERS");
   if (!fs.existsSync(codeownersPath)) {
@@ -895,10 +893,8 @@ export async function ensureDefaultRepoFiles(
       const ownerLogin = (cfg.active_repo?.full_name?.split("/")[0]) || cfg.user?.login || "admin";
       const codeownersContent = `# Context OS - Governança & Root of Trust
 # Arquivos críticos de controle de acesso exigem aprovação do proprietário
-.keymap.json @${ownerLogin}
 .project.config.json @${ownerLogin}
 .gitignore @${ownerLogin}
-.scripts/ @${ownerLogin}
 .github/ @${ownerLogin}
 `;
       fs.writeFileSync(codeownersPath, codeownersContent, "utf-8");

@@ -20,7 +20,6 @@ import { governanceService } from '../governance/governance.service.js';
 import { prSecurityService } from './pr-security.service.js';
 import { prWorktreeService } from './pr-worktree.service.js';
 import { prConflictsService } from './pr-conflicts.service.js';
-import { vaultEngineService } from '../vault/vault-engine.service.js';
 import { workspaceService } from '../workspace/workspace.service.js';
 
 export interface PRApprovalAudit {
@@ -229,13 +228,12 @@ export class PRsService {
               const additions = parseInt(parts[0], 10) || 0;
               const deletions = parseInt(parts[1], 10) || 0;
               const filePath = parts[2];
-              const cleanP = filePath.endsWith('.enc') ? filePath.slice(0, -4) : filePath;
               return {
-                path: cleanP,
+                path: filePath,
                 type: additions > 0 && deletions === 0 ? 'ADDED' : deletions > 0 && additions === 0 ? 'DELETED' : 'MODIFIED',
                 additions,
                 deletions,
-                is_encrypted: filePath.endsWith('.enc'),
+                is_encrypted: false,
               };
             }
             return null;
@@ -295,7 +293,7 @@ export class PRsService {
                 additions: 0,
                 deletions: 0,
                 restricted: true,
-                is_encrypted: true,
+                is_encrypted: false,
               };
             }
 
@@ -305,7 +303,7 @@ export class PRsService {
               additions: f.additions || 0,
               deletions: f.deletions || 0,
               restricted: false,
-              is_encrypted: clearance.isEncrypted,
+              is_encrypted: false,
             };
           })
         );
@@ -588,7 +586,7 @@ export class PRsService {
         details: `Criação de PR bloqueada por violações de segredos: ${violationSummary}`,
       });
       throw new Error(
-        `[Secret Guard] Criação de PR bloqueada! Foram detectados segredos ou documentos confidenciais não criptografados: ${violationSummary}`
+        `[Secret Guard] Criação de PR bloqueada! Foram detectados segredos (chaves de API ou credenciais): ${violationSummary}`
       );
     }
 
@@ -988,13 +986,11 @@ export class PRsService {
       throw new Error(`[Secret Guard] Edição bloqueada: foram detectados segredos não criptografados: ${violationSummary}`);
     }
 
-    // 5. Encrypt and write to isolated worktree
-    await prWorktreeService.writeEncryptedAtWorktree(
+    // 5. Write to isolated worktree
+    await prWorktreeService.writePlainAtWorktree(
       wtDir,
       payload.filePath,
-      finalPlainContent,
-      login,
-      repoName
+      finalPlainContent
     );
 
     // 6. Commit and push from worktree
@@ -1290,13 +1286,6 @@ export class PRsService {
         } catch (ghMergeErr) {
           console.warn(`[PRsService] Aviso ao executar merge no GitHub remoto:`, ghMergeErr);
         }
-      }
-
-      // 6. Sincroniza cofre e descriptografa arquivos após o merge
-      try {
-        await vaultEngineService.syncLocalWorkspaceFromGit(repoName, cfg.user?.login);
-      } catch (vaultErr: any) {
-        console.warn(`[PRsService] Aviso ao sincronizar cofre após merge:`, vaultErr?.message);
       }
 
       workspaceService.invalidateTreeCache(repoName);

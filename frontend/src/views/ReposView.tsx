@@ -57,11 +57,9 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
   const navigate = useNavigate();
   const { user, logout, provider } = useAuth();
   const providerLabel =
-    provider === "forgejo"
-      ? "Forgejo"
-      : provider === "github"
-        ? "GitHub"
-        : t("repos:providerLocal");
+    provider === "github"
+      ? "GitHub"
+      : t("repos:providerLocal");
   const { repos, loadRepos, selectRepo, isLoading } = useWorkspace();
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedOrg, setSelectedOrg] = useState("all");

@@ -7,9 +7,9 @@ export async function authRoutes(fastify: FastifyInstance) {
   });
 
   fastify.post('/api/auth/token', async (request, reply) => {
-    const body = (request.body as { token?: string; provider?: 'github' | 'forgejo'; provider_url?: string }) || {};
+    const body = (request.body as { token?: string }) || {};
     try {
-      const result = await authService.authenticateWithToken(body.token || '', body.provider || 'github', body.provider_url);
+      const result = await authService.authenticateWithToken(body.token || '');
       return reply.send(result);
     } catch (err: any) {
       return reply.status(401).send({ error: err.message || 'Falha na autenticação' });

@@ -4,7 +4,6 @@ import crypto from "node:crypto";
 import { PROJECTS_DIR } from "../../config/constants.js";
 import { loadConfig, saveConfig } from "../../config/storage.js";
 import { callGitHubAPI } from "../../utils/git.js";
-import { vaultEngineService } from "../vault/vault-engine.service.js";
 import {
   CollaboratorInfo,
   GitHubPermission,
@@ -16,13 +15,7 @@ import {
   SecretScanResult,
   SecretScanViolation,
 } from "./governance.types.js";
-import {
-  isEncryptedEnvelope,
-  parseEncryptedEnvelope,
-  buildEncryptedEnvelope,
-  decryptEncFile,
-  scanContentForSecrets,
-} from "../../utils/crypto.js";
+import { scanContentForSecrets } from "../../utils/crypto.js";
 
 // In-memory Ephemeral Token Store for Secure AI Context Pipe
 interface EphemeralAIToken {
@@ -246,13 +239,9 @@ export class GovernanceService {
             };
           });
         } else if (ghRes.statusCode === 401) {
-          const providerName =
-            cfg.git_provider === "forgejo" ? "Forgejo" : "GitHub";
-          githubAuthError = `Token do ${providerName} expirado ou inválido (401 Bad credentials). Atualize suas credenciais para sincronizar os membros.`;
+          githubAuthError = `Token do GitHub expirado ou inválido (401 Bad credentials). Atualize suas credenciais para sincronizar os membros.`;
         } else if (ghRes.statusCode === 403) {
-          const providerName =
-            cfg.git_provider === "forgejo" ? "Forgejo" : "GitHub";
-          githubAuthError = `Sem permissão de acesso ao repositório ${resolvedFullName} no ${providerName} (${ghRes.statusCode}).`;
+          githubAuthError = `Sem permissão de acesso ao repositório ${resolvedFullName} no GitHub (${ghRes.statusCode}).`;
         } else if (ghRes.statusCode === 404) {
           // Repositório ainda não publicado no servidor remoto -> opera localmente sem erro
           githubAuthError = null;
@@ -468,36 +457,12 @@ export class GovernanceService {
     };
     this.writeProjectConfig(targetRepoName, pConfig);
 
-    // 3. Registra chave e provisiona slots de pastas no .keymap.json
-    try {
-      vaultEngineService.registerUserPublicKey(targetRepoName, cleanUsername, {
-        departments,
-        allowed_paths: allowedPaths,
-        denied_paths: deniedPaths,
-        status: "active",
-      });
-      // Concede acesso aos compartimentos iniciais
-      const initialFolders = departments.includes("*")
-        ? vaultEngineService.getVaultFolders(targetRepoName).map((f) => f.id)
-        : departments;
-      vaultEngineService.grantFolderAccess(
-        targetRepoName,
-        cleanUsername,
-        initialFolders,
-      );
-    } catch (err: any) {
-      console.warn(
-        `[GovernanceService] Aviso ao provisionar chaves no keymap para @${cleanUsername}:`,
-        err?.message || err,
-      );
-    }
-
     const actor = cfg.user?.login ? `@${cfg.user.login}` : "Tech Lead";
     this.logAudit(targetRepoName, {
       action: "COLLABORATOR_INVITED",
       actor,
       target: `@${cleanUsername}`,
-      details: `Convidado com permissão Git '${permission}', cargo '${roleName}', cofres: [${departments.join(", ")}] e rotas: [${allowedPaths.join(", ")}]. Chaves de cofres provisionadas.`,
+      details: `Convidado com permissão Git '${permission}', cargo '${roleName}', departamentos: [${departments.join(", ")}] e rotas: [${allowedPaths.join(", ")}].`,
     });
 
     const colInfo: CollaboratorInfo = {
@@ -517,7 +482,7 @@ export class GovernanceService {
 
     return {
       success: true,
-      message: `Convite enviado com sucesso para @${cleanUsername} com cargo '${roleName}', permissão '${permission}'! Chaves de acesso aos cofres liberadas.`,
+      message: `Convite enviado com sucesso para @${cleanUsername} com cargo '${roleName}', permissão '${permission}'! Permissões de acesso aos departamentos configuradas.`,
       collaborator: colInfo,
     };
   }
@@ -559,32 +524,17 @@ export class GovernanceService {
       this.writeProjectConfig(targetRepoName, pConfig);
     }
 
-    // Revoga membro no .keymap.json e rotaciona as DEKs das pastas afetadas
-    let rotatedFolders: string[] = [];
-    try {
-      const res = vaultEngineService.revokeMember(
-        targetRepoName,
-        cleanUsername,
-      );
-      rotatedFolders = res.rotatedFolders;
-    } catch (err: any) {
-      console.warn(
-        `[GovernanceService] Erro ao revogar chaves do VaultEngine para @${cleanUsername}:`,
-        err?.message || err,
-      );
-    }
-
     const actor = cfg.user?.login ? `@${cfg.user.login}` : "Tech Lead";
     this.logAudit(targetRepoName, {
       action: "COLLABORATOR_REMOVED",
       actor,
       target: `@${cleanUsername}`,
-      details: `Colaborador removido da governança e do repositório. Chaves criptográficas revogadas${rotatedFolders.length > 0 ? ` e DEKs rotacionadas para: [${rotatedFolders.join(", ")}]` : ""}.`,
+      details: `Colaborador removido da governança e do repositório. Permissões revogadas com sucesso.`,
     });
 
     return {
       success: true,
-      message: `Colaborador @${cleanUsername} removido com sucesso. Chaves de cofres revogadas.`,
+      message: `Colaborador @${cleanUsername} removido com sucesso do repositório.`,
     };
   }
 
@@ -661,31 +611,9 @@ export class GovernanceService {
     };
     this.writeProjectConfig(targetRepoName, pConfig);
 
-    // Sincroniza também no .keymap.json do repositório
-    try {
-      const keymap = vaultEngineService.getKeymap(targetRepoName);
-      if (keymap.members[cleanUsername]) {
-        if (Array.isArray(payload.departments)) {
-          keymap.members[cleanUsername].departments = payload.departments;
-        }
-        if (Array.isArray(allowedPaths)) {
-          keymap.members[cleanUsername].allowed_paths = allowedPaths;
-        }
-        if (Array.isArray(deniedPaths)) {
-          keymap.members[cleanUsername].denied_paths = deniedPaths;
-        }
-        vaultEngineService.saveKeymap(targetRepoName, keymap);
-      }
-    } catch (err: any) {
-      console.warn(
-        "[GovernanceService] Aviso ao sincronizar .keymap.json:",
-        err?.message || err,
-      );
-    }
-
     const actor = cfg.user?.login ? `@${cfg.user.login}` : "Tech Lead";
     this.logAudit(targetRepoName, {
-      action: "KEY_ROTATED",
+      action: "COLLABORATOR_UPDATED",
       actor,
       target: `@${cleanUsername}`,
       details: `Perfil de acesso de @${cleanUsername} atualizado:${role ? ` Cargo '${role}',` : ""} Permissão '${permission}'${allowedPaths ? `, Rotas: [${allowedPaths.join(", ")}]` : ""}.`,
@@ -781,7 +709,7 @@ export class GovernanceService {
     if (Array.isArray(pConfig.departments) && pConfig.departments.length > 0) {
       return pConfig.departments;
     }
-    return vaultEngineService.getVaultFolders(targetRepoName);
+    return DEFAULT_DEPARTMENTS;
   }
 
   async saveDepartments(
@@ -916,7 +844,7 @@ export class GovernanceService {
               msg.includes("pricing plans"))
           ) {
             console.info(
-              "[GovernanceService] Repositório privado em plano GitHub Free: O GitHub exige plano Pro/Team para regras de nuvem em repositórios privados. Governança local e cofre criptográfico Zero-Trust mantidos 100% ativos.",
+              "[GovernanceService] Repositório privado em plano GitHub Free: O GitHub exige plano Pro/Team para regras de nuvem em repositórios privados. Governança local mantida 100% ativa.",
             );
           } else {
             console.warn(
@@ -1153,44 +1081,10 @@ export class GovernanceService {
     }
 
     const rawContent = fs.readFileSync(fullPath, "utf-8");
-    if (!isEncryptedEnvelope(rawContent)) {
-      return {
-        success: true,
-        filePath: payload.filePath,
-        content: rawContent,
-      };
-    }
-
-    const parsed = parseEncryptedEnvelope(rawContent);
-    const dept = parsed.header?.department || "default";
-    const unlockedDEKs = vaultEngineService.getUnlockedDEKs(
-      targetRepoName,
-      ephemeral.user,
-    );
-    const dek = unlockedDEKs[dept] || unlockedDEKs["default"];
-
-    if (!dek) {
-      return {
-        success: false,
-        filePath: payload.filePath,
-        error: `Acesso negado: Não há chave de cofre autorizada para descriptografar o cofre '${dept}'.`,
-      };
-    }
-
-    const decResult = decryptEncFile(rawContent, dek);
-    if (!decResult.success || decResult.content === undefined) {
-      return {
-        success: false,
-        filePath: payload.filePath,
-        error:
-          decResult.error || "Falha ao descriptografar documento para a IA.",
-      };
-    }
-
     return {
       success: true,
       filePath: payload.filePath,
-      content: decResult.content,
+      content: rawContent,
     };
   }
 }

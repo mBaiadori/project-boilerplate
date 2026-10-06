@@ -66,8 +66,6 @@ export interface CollaboratorInfo {
   departments?: string[];
   allowed_paths?: string[];
   denied_paths?: string[];
-  public_key?: string;
-  key_fingerprint?: string;
 }
 
 export interface QuorumRule {
@@ -106,6 +104,7 @@ export interface GovernanceAuditLogEntry {
   timestamp: string;
   action:
     | 'COLLABORATOR_INVITED'
+    | 'COLLABORATOR_UPDATED'
     | 'COLLABORATOR_REMOVED'
     | 'BRANCH_PROTECTED'
     | 'QUORUM_UPDATED'
@@ -114,24 +113,12 @@ export interface GovernanceAuditLogEntry {
     | 'PR_REJECTED'
     | 'PR_EDITED'
     | 'PR_CONFLICT_RESOLVED'
-    | 'KEY_ROTATED'
-    | 'VAULT_ACCESS_GRANTED'
-    | 'VAULT_ACCESS_REVOKED'
     | 'DEPARTMENT_CONFIG_UPDATED'
     | 'SECRET_BLOCKED';
   actor: string;
   target?: string;
   details: string;
   commit_hash?: string;
-}
-
-export interface SecurityVaultConfig {
-  salt: string;
-  departments: DepartmentConfig[];
-  ai_privacy_policy?: {
-    allow_external_ai: boolean;
-    allow_local_ai_only: boolean;
-  };
 }
 
 export interface SecretScanViolation {

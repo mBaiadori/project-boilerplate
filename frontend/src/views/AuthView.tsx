@@ -21,8 +21,6 @@ interface AuthViewProps {
 export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
   const { t } = useTranslation(["auth", "common", "repos"]);
   const { loginWithToken, loginLocal, accounts, switchAccount, removeAccount } = useAuth();
-  const [provider] = useState<"forgejo" | "github">("github");
-  const [forgejoUrl, setForgejoUrl] = useState("http://localhost:3000/api/v1");
   const [token, setToken] = useState("");
   const [showTokenForm, setShowTokenForm] = useState(accounts.length === 0);
   const [isLoading, setIsLoading] = useState(false);
@@ -31,15 +29,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
     type: "error" | "info" | "success";
   } | null>(null);
 
-  const getForgejoBaseWebUrl = (apiUrl: string) => {
-    try {
-      return apiUrl.replace(/\/api\/v1\/?$/, "").replace(/\/api\/?$/, "");
-    } catch {
-      return "http://localhost:3000";
-    }
-  };
-
-  const currentProviderName = provider === "forgejo" ? "Forgejo" : "GitHub";
+  const currentProviderName = "GitHub";
 
   const handleSelectAccount = async (accountId: string) => {
     setIsLoading(true);
@@ -78,11 +68,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
     });
 
     try {
-      const activeUrl =
-        provider === "forgejo"
-          ? forgejoUrl.trim() || "http://localhost:3000/api/v1"
-          : undefined;
-      const result = await loginWithToken(token.trim(), provider, activeUrl);
+      const result = await loginWithToken(token.trim());
       if (result.success) {
         setStatusMessage({ text: t("auth:statusSuccess"), type: "success" });
         onLoginSuccess();
@@ -111,8 +97,6 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
       setIsLoading(false);
     }
   };
-
-  const forgejoWebBase = getForgejoBaseWebUrl(forgejoUrl);
 
   return (
     <div
@@ -338,7 +322,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
                           >
                             <span>@{acc.user?.login}</span>
                             <Badge variant="subtle" size="sm">
-                              {acc.git_provider === "forgejo" ? "Forgejo" : "GitHub"}
+                              {acc.git_provider === "local" ? "Modo Local" : "GitHub"}
                             </Badge>
                           </div>
                         </div>
@@ -453,72 +437,29 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
                   )}
                 </div>
 
-                {provider === "forgejo" ? (
-                  <>
-                    <FormField
-                      label={t("auth:forgejoUrlLabel")}
-                      helperText={t("auth:forgejoUrlHelper")}
-                    >
-                      <Input
-                        type="text"
-                        id="forgejo-url-input"
-                        placeholder="http://localhost:3000/api/v1"
-                        value={forgejoUrl}
-                        onChange={(e) => setForgejoUrl(e.target.value)}
-                      />
-                    </FormField>
-
-                    <a
-                      id="btn-open-forgejo-token"
-                      href={`${forgejoWebBase}/user/settings/applications`}
-                      target="_blank"
-                      rel="noreferrer"
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        gap: "6px",
-                        padding: "7px 12px",
-                        borderRadius: "var(--radius-md, 6px)",
-                        background: "var(--color-surface-container-high)",
-                        color: "var(--color-on-surface)",
-                        fontWeight: 600,
-                        fontSize: "12px",
-                        textDecoration: "none",
-                        border: "1px solid var(--color-outline-variant)",
-                      }}
-                    >
-                      <span>{t("auth:generateTokenForgejo")}</span>
-                      <ExternalLink size={13} />
-                    </a>
-                  </>
-                ) : (
-                  <>
-                    <a
-                      id="btn-open-github-token"
-                      href="https://github.com/settings/tokens/new?scopes=repo,read:org,user&description=Context+OS"
-                      target="_blank"
-                      rel="noreferrer"
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        gap: "6px",
-                        padding: "7px 12px",
-                        borderRadius: "var(--radius-md, 6px)",
-                        background: "var(--color-surface-container-high)",
-                        color: "var(--color-on-surface)",
-                        fontWeight: 600,
-                        fontSize: "12px",
-                        textDecoration: "none",
-                        border: "1px solid var(--color-outline-variant)",
-                      }}
-                    >
-                      <span>{t("auth:generateTokenGithub")}</span>
-                      <ExternalLink size={13} />
-                    </a>
-                  </>
-                )}
+                <a
+                  id="btn-open-github-token"
+                  href="https://github.com/settings/tokens/new?scopes=repo,read:org,user&description=Context+OS"
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "6px",
+                    padding: "7px 12px",
+                    borderRadius: "var(--radius-md, 6px)",
+                    background: "var(--color-surface-container-high)",
+                    color: "var(--color-on-surface)",
+                    fontWeight: 600,
+                    fontSize: "12px",
+                    textDecoration: "none",
+                    border: "1px solid var(--color-outline-variant)",
+                  }}
+                >
+                  <span>{t("auth:generateTokenGithub")}</span>
+                  <ExternalLink size={13} />
+                </a>
 
                 <form
                   onSubmit={handleTokenLogin}
@@ -532,20 +473,12 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
                     label={t("auth:tokenLabel", {
                       provider: currentProviderName,
                     })}
-                    helperText={
-                      provider === "forgejo"
-                        ? t("auth:tokenHelperForgejo")
-                        : t("auth:tokenHelperGithub")
-                    }
+                    helperText={t("auth:tokenHelperGithub")}
                   >
                     <Input
                       type="password"
                       id="pat-token-input"
-                      placeholder={
-                        provider === "forgejo"
-                          ? t("auth:tokenPlaceholderForgejo")
-                          : t("auth:tokenPlaceholderGithub")
-                      }
+                      placeholder={t("auth:tokenPlaceholderGithub")}
                       autoComplete="off"
                       value={token}
                       onChange={(e) => setToken(e.target.value)}

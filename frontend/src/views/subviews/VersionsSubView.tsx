@@ -43,7 +43,7 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
   onOpenFile,
 }) => {
   const { provider } = useAuth();
-  const providerLabel = provider === "forgejo" ? "Forgejo" : provider === "github" ? "GitHub" : "Modo Local";
+  const providerLabel = provider === "github" ? "GitHub" : "Modo Local";
   const {
     activeRepo,
     gitStatus,

@@ -1,22 +1,12 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
-import crypto from 'node:crypto';
 import {
   canAccessDocument,
-  encryptAES256GCM,
-  decryptAES256GCM,
-  encryptEncFile,
-  decryptEncFile,
-  isEncryptedEnvelope,
-  parseEncryptedEnvelope,
   scanContentForSecrets,
 } from '../../utils/crypto.js';
 
-describe('Governança de Acesso por Cofres e Departamentos', () => {
-  const financeDEK = crypto.randomBytes(32);
-  const engineeringDEK = crypto.randomBytes(32);
-
-  describe('Controle por Cofre / Departamento (canAccessDocument)', () => {
+describe('Governança de Acesso por Departamentos e Rotas', () => {
+  describe('Controle por Departamento (canAccessDocument)', () => {
     const ownerUser = { isOwner: true, departments: ['*'], allowed_paths: ['*'] };
     const devUser = { role: 'collaborator', departments: ['engineering'], allowed_paths: ['docs/engenharia/**', 'docs/geral/**'] };
     const cfoUser = { role: 'collaborator', departments: ['finance'], allowed_paths: ['docs/financeiro/**'] };
@@ -27,7 +17,7 @@ describe('Governança de Acesso por Cofres e Departamentos', () => {
       assert.strictEqual(canAccessDocument(ownerUser, { department: 'engineering', path: 'docs/engenharia/api.md' }), true);
     });
 
-    it('Dev da Engenharia deve acessar documentos da engenharia, mas ser bloqueado no cofre do Financeiro', () => {
+    it('Dev da Engenharia deve acessar documentos da engenharia, mas ser bloqueado no departamento do Financeiro', () => {
       assert.strictEqual(canAccessDocument(devUser, { department: 'engineering', path: 'docs/engenharia/api.md' }), true);
       assert.strictEqual(canAccessDocument(devUser, { department: 'finance', path: 'docs/financeiro/dre.md' }), false);
     });
@@ -72,41 +62,6 @@ describe('Governança de Acesso por Cofres e Departamentos', () => {
     });
   });
 
-  describe('Criptografia e Descriptografia de Arquivos do Cofre (.enc)', () => {
-    const confidentialPlaintext = `# Especificação Confidencial de Engenharia
-Esta é uma arquitetura técnica interna de microsserviços.`;
-
-    it('Deve criptografar arquivo com DEK do cofre e produzir envelope seguro', () => {
-      const encrypted = encryptEncFile(confidentialPlaintext, engineeringDEK, { department: 'engineering' });
-
-      assert.strictEqual(isEncryptedEnvelope(encrypted), true);
-      assert.strictEqual(encrypted.includes('-----BEGIN CONTEXT ENCRYPTED PAYLOAD-----'), true);
-      assert.strictEqual(encrypted.includes('-----END CONTEXT ENCRYPTED PAYLOAD-----'), true);
-      assert.strictEqual(encrypted.includes('microsserviços'), false);
-
-      const parsed = parseEncryptedEnvelope(encrypted);
-      assert.strictEqual(parsed.isEncrypted, true);
-      assert.strictEqual(parsed.header?.department, 'engineering');
-      assert.strictEqual(parsed.payloadData?.alg, 'AES-256-GCM');
-    });
-
-    it('Deve descriptografar perfeitamente com a DEK do cofre', () => {
-      const encrypted = encryptEncFile(confidentialPlaintext, engineeringDEK, { department: 'engineering' });
-      const decResult = decryptEncFile(encrypted, engineeringDEK);
-
-      assert.strictEqual(decResult.success, true);
-      assert.strictEqual(decResult.content, confidentialPlaintext);
-    });
-
-    it('Deve falhar ao tentar abrir arquivo de engenharia com DEK de outro cofre (financeiro)', () => {
-      const encrypted = encryptEncFile(confidentialPlaintext, engineeringDEK, { department: 'engineering' });
-      const decResult = decryptEncFile(encrypted, financeDEK);
-
-      assert.strictEqual(decResult.success, false);
-      assert.strictEqual(decResult.content, undefined);
-    });
-  });
-
   describe('Pre-Commit / Pre-PR Secret Scanner', () => {
     it('Deve detectar GitHub PATs e bloquear', () => {
       const badCode = `const token = "ghp_1234567890abcdefghijklmnopqrstuvwx";`;
@@ -120,13 +75,6 @@ Esta é uma arquitetura técnica interna de microsserviços.`;
       const res = scanContentForSecrets(badCode, 'src/ai.ts');
       assert.strictEqual(res.hasSecrets, true);
       assert.strictEqual(res.violations.some((v: any) => v.rule === 'AI_API_KEY_DETECTED'), true);
-    });
-
-    it('Deve aceitar documentos quando devidamente criptografados no cofre', () => {
-      const encrypted = encryptEncFile('Segredo comercial', financeDEK, { department: 'finance' });
-      const res = scanContentForSecrets(encrypted, 'specs/finances.md.enc');
-      assert.strictEqual(res.hasSecrets, false);
-      assert.strictEqual(res.violations.length, 0);
     });
   });
 });

@@ -71,10 +71,9 @@ export class PRConflictsService {
 
       const uniqueConflictPaths = Array.from(new Set(conflictLines));
       for (const p of uniqueConflictPaths) {
-        const cleanP = p.endsWith('.enc') ? p.slice(0, -4) : p;
         conflicts.push({
-          path: cleanP,
-          is_encrypted: p.endsWith('.enc'),
+          path: p,
+          is_encrypted: false,
         });
       }
     }
@@ -151,8 +150,8 @@ export class PRConflictsService {
 
     const wtDir = await prWorktreeService.ensurePRWorktree(repoName, pr);
 
-    // Write resolved plaintext as encrypted or plain
-    await prWorktreeService.writeEncryptedAtWorktree(wtDir, filePath, resolvedContent, login, repoName);
+    // Write resolved plaintext directly
+    await prWorktreeService.writePlainAtWorktree(wtDir, filePath, resolvedContent);
 
     const commitMsg = `fix(conflict): resolução de conflito em ${filePath} por ${login}`;
     const { commitHash } = await prWorktreeService.commitAndPushWorktree(

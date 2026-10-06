@@ -165,9 +165,8 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
     };
   }, [prId, filePath, activeRepo?.name]);
 
-  // Security Vault & Document Access Gate State
-  const { departments, canAccessDoc, refreshVault } = useSecurity();
-  const [isSyncingVault, setIsSyncingVault] = useState(false);
+  // Security & Document Access Gate State
+  const { departments, canAccessDoc } = useSecurity();
 
   const activeDeptObj = departments.find(
     (d) => d.id === fileMetadata?.department || d.folder.toLowerCase() === fileMetadata?.department?.toLowerCase()
@@ -175,26 +174,6 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
 
   const isAllowedByDept = canAccessDoc(fileMetadata || {});
   const isDocumentLocked = !isAllowedByDept;
-
-  const handleSyncVaultAccess = async () => {
-    setIsSyncingVault(true);
-    try {
-      await refreshVault();
-      setEditorToast({
-        text: "Permissões de cofres sincronizadas com o repositório.",
-        type: "success",
-      });
-      setTimeout(() => setEditorToast(null), 3000);
-    } catch (err: any) {
-      setEditorToast({
-        text: err.message || "Erro ao sincronizar cofres.",
-        type: "warning",
-      });
-      setTimeout(() => setEditorToast(null), 3000);
-    } finally {
-      setIsSyncingVault(false);
-    }
-  };
 
   // Link Insertion Modal State
   const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
@@ -1794,7 +1773,7 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
                       <span className="material-symbols-outlined" style={{ fontSize: "15px" }}>
                         {activeDeptObj.icon || "folder"}
                       </span>
-                      Cofre: {activeDeptObj.name}
+                      Departamento: {activeDeptObj.name}
                     </div>
                   )}
                 </div>
@@ -1807,7 +1786,7 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
                     color: "var(--color-on-surface, #0f172a)",
                   }}
                 >
-                  Documento Protegido por Criptografia de Ponta a Ponta
+                  Documento Restrito por Governança de Acesso
                 </h3>
                 <p
                   style={{
@@ -1817,11 +1796,11 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
                     lineHeight: "1.6",
                   }}
                 >
-                  Este documento pertence à pasta segura{" "}
+                  Este documento pertence à pasta restrita{" "}
                   <strong style={{ color: activeDeptObj?.color || "#6366f1" }}>
                     {activeDeptObj?.name || fileMetadata?.department || "Restrita"}
                   </strong>{" "}
-                  e está criptografado com chaves assimétricas X25519 no Git. Sua chave pública local ainda não recebeu autorização dos administradores neste cofre.
+                  e seu usuário não possui autorização de leitura para este departamento ou rota no projeto.
                 </p>
 
                 <div
@@ -1838,43 +1817,15 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
                   }}
                 >
                   <div style={{ display: "flex", alignItems: "center", gap: "6px", fontWeight: 700, color: "#6366f1", marginBottom: "4px" }}>
-                    <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>vpn_key</span>
+                    <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>lock</span>
                     Como obter acesso a este documento:
                   </div>
                   <div>
-                    1. Solicite permissão para o cofre <strong>{activeDeptObj?.name || fileMetadata?.department}</strong> ao Administrador do repositório.<br />
-                    2. O Administrador pode liberar seu acesso no menu <strong>Governança & Equipe &rarr; Cofres</strong>.<br />
-                    3. Após a liberação, clique abaixo para atualizar suas permissões.
+                    1. Solicite permissão para o departamento <strong>{activeDeptObj?.name || fileMetadata?.department}</strong> ao Administrador do repositório.<br />
+                    2. O Administrador pode liberar seu acesso no menu <strong>Governança & Equipe &rarr; Departamentos & Pastas</strong>.<br />
+                    3. As permissões são aplicadas automaticamente com base no seu perfil.
                   </div>
                 </div>
-
-                <button
-                  type="button"
-                  onClick={handleSyncVaultAccess}
-                  disabled={isSyncingVault}
-                  className="btn btn-primary"
-                  style={{
-                    width: "100%",
-                    padding: "11px 16px",
-                    borderRadius: "8px",
-                    fontWeight: 600,
-                    fontSize: "13px",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: "8px",
-                    backgroundColor: activeDeptObj?.color || "#6366f1",
-                    borderColor: activeDeptObj?.color || "#6366f1",
-                    color: "#ffffff",
-                    cursor: isSyncingVault ? "not-allowed" : "pointer",
-                    opacity: isSyncingVault ? 0.7 : 1,
-                  }}
-                >
-                  <span className="material-symbols-outlined" style={{ fontSize: "16px", animation: isSyncingVault ? "spin 1s linear infinite" : "none" }}>
-                    sync
-                  </span>
-                  {isSyncingVault ? "Sincronizando Cofres..." : "Verificar e Sincronizar Meu Acesso"}
-                </button>
               </div>
             </div>
           </div>
