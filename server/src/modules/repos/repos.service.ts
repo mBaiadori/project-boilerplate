@@ -333,8 +333,8 @@ export class ReposService {
     const cfg = loadConfig();
     let htmlUrl = repo.html_url || '';
 
-    // If html_url is missing but we are authenticated, resolve from provider
-    if (!htmlUrl && cfg.authenticated && cfg.token && repo.name !== 'default') {
+    // If html_url is missing but we are authenticated, resolve from provider (only if not local)
+    if (!htmlUrl && !repo.is_local && cfg.authenticated && cfg.token && repo.name !== 'default' && repo.name !== '_default' && repo.name !== 'local') {
       try {
         const { data: userRepos } = await callGitProviderAPI('/user/repos?per_page=100', cfg.token);
         if (Array.isArray(userRepos)) {
@@ -731,8 +731,8 @@ export class ReposService {
     const cfg = loadConfig();
     let remoteDeleted = false;
 
-    // Delete remote if requested and authenticated
-    if (delete_remote && cfg.authenticated && cfg.token && name !== 'default' && name !== '_default') {
+    // Delete remote if requested and authenticated (never for default/local repos)
+    if (delete_remote && cfg.authenticated && cfg.token && name !== 'default' && name !== '_default' && name !== 'local') {
       const repoOwner = owner || cfg.user?.login;
       if (!repoOwner) {
         throw new Error('Proprietário do repositório não encontrado para exclusão remota');
@@ -798,7 +798,7 @@ export class ReposService {
     let updatedFullName = cfg.active_repo?.full_name || `${repoOwner}/${targetName}`;
 
     // 1. Atualizar no Provedor Remoto se aplicável
-    if (!isLocal && cfg.token && current_name !== 'default' && current_name !== '_default') {
+    if (!isLocal && cfg.token && current_name !== 'default' && current_name !== '_default' && current_name !== 'local') {
       const endpoint = `/repos/${repoOwner}/${current_name}`;
       const updatePayload: any = {};
       if (new_name && new_name !== current_name) {

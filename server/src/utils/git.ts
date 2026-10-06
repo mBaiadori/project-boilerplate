@@ -313,10 +313,11 @@ async function internalEnsureGitRepo(
 ): Promise<{ success: boolean; message: string }> {
   const gitExists = await isGitRepo(repoDir);
 
-  // Auto-resolve remoteUrl if missing and token exists
+  // Auto-resolve remoteUrl if missing and token exists (only for real remote repositories, never for 'local' or 'default')
   let targetRemoteUrl = remoteUrl;
+  const isExplicitLocal = !repoName || repoName === "local" || repoName === "default" || repoName === "_default";
   const { baseUrl, isForgejo } = resolveGitProviderBaseUrl();
-  if (!targetRemoteUrl && token && user?.login && repoName && repoName !== "default" && repoName !== "_default") {
+  if (!targetRemoteUrl && token && user?.login && repoName && !isExplicitLocal) {
     if (isForgejo) {
       const rootUrl = baseUrl.replace(/\/api\/v1\/?$/, '');
       targetRemoteUrl = `${rootUrl}/${user.login}/${repoName}.git`;

@@ -753,15 +753,21 @@ export async function ensureDefaultRepoFiles(
 
   // 1. If remote repo is missing or has no .git, clone and pull FIRST ONLY IF allowed
   if (allowAutoCloneOrInit) {
+    const isLocalRepo =
+      (cfg.active_repo?.name === repoName && Boolean(cfg.active_repo?.is_local)) ||
+      repoName === "local" ||
+      repoName === "default" ||
+      repoName === "_default";
     const isRemote =
-      (cfg.active_repo?.name === repoName && Boolean(cfg.active_repo?.html_url)) ||
-      (Boolean(cfg.token) && repoName !== "default" && repoName !== "_default");
+      !isLocalRepo &&
+      ((cfg.active_repo?.name === repoName && Boolean(cfg.active_repo?.html_url)) ||
+       Boolean(cfg.token));
     let remoteUrl =
-      cfg.active_repo?.name === repoName ? cfg.active_repo?.html_url : undefined;
-    if (!remoteUrl && cfg.token && cfg.user?.login && repoName !== "default" && repoName !== "_default") {
+      !isLocalRepo && cfg.active_repo?.name === repoName ? cfg.active_repo?.html_url : undefined;
+    if (!remoteUrl && !isLocalRepo && cfg.token && cfg.user?.login) {
       remoteUrl = `https://github.com/${cfg.user.login}/${repoName}.git`;
     }
-    const token = cfg.token;
+    const token = isLocalRepo ? undefined : cfg.token;
 
     if (
       isRemote &&

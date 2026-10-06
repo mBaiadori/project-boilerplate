@@ -33,12 +33,13 @@ export class GitService {
     const cfg = loadConfig();
     const repoName = cfg.active_repo?.name || 'local';
     const repoDir = this.getRepoDir(repoName);
-    let remoteUrl = cfg.active_repo?.html_url;
-    if (!remoteUrl && cfg.token && cfg.user?.login && repoName !== "default" && repoName !== "_default") {
+    const isLocal = Boolean(cfg.active_repo?.is_local) || repoName === 'local' || repoName === 'default' || repoName === '_default';
+    let remoteUrl = isLocal ? undefined : cfg.active_repo?.html_url;
+    if (!remoteUrl && !isLocal && cfg.token && cfg.user?.login) {
       remoteUrl = `https://github.com/${cfg.user.login}/${repoName}.git`;
     }
-    const token = cfg.token;
-    const res = await ensureGitRepo(repoDir, cfg.user, remoteUrl, token, repoName, true);
+    const token = isLocal ? undefined : cfg.token;
+    const res = await ensureGitRepo(repoDir, cfg.user, remoteUrl, token, repoName, !isLocal);
     // Sincroniza cofre transparente no repositório ativo
     try {
       await vaultEngineService.syncLocalWorkspaceFromGit(repoName, cfg.user?.login);
