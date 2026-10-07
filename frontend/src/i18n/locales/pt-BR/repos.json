@@ -23,6 +23,7 @@
   "createPrivateLabel": "Repositório Privado no {{provider}}",
   "createPrivateDesc": "Visível apenas para você e colaboradores autorizados",
   "createSubmitButton": "Criar Repositório",
+  "orgsSectionTitle": "Organizações",
   "sectionTitle": "Seus Repositórios",
   "reposCount_one": "{{count}} repositório",
   "reposCount_other": "{{count}} repositórios",

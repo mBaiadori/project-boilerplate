@@ -23,6 +23,7 @@
   "createPrivateLabel": "Private Repository on {{provider}}",
   "createPrivateDesc": "Visible only to you and authorized collaborators",
   "createSubmitButton": "Create Repository",
+  "orgsSectionTitle": "Organizations",
   "sectionTitle": "Your Repositories",
   "reposCount_one": "{{count}} repository",
   "reposCount_other": "{{count}} repositories",

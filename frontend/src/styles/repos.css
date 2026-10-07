@@ -193,57 +193,144 @@
   flex-wrap: wrap;
 }
 
-.repos-org-chips {
+/* ------------------------------------------------------------------------- */
+/* ORGANIZATIONS & ACCOUNTS CARDS SECTION (GOOGLE M3 CARDS)                  */
+/* ------------------------------------------------------------------------- */
+.orgs-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.orgs-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.orgs-section-title {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
 }
 
-.chip-filter-btn {
-  display: inline-flex;
+.orgs-section-title h3 {
+  font-family: var(--md-sys-typescale-font-brand, 'Outfit', sans-serif);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--md-sys-color-on-surface, #202124);
+  letter-spacing: -0.1px;
+}
+
+.orgs-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.org-card {
+  display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border-radius: var(--md-shape-corner-full, 20px);
-  font-size: 12.5px;
-  font-weight: 500;
-  border: 1px solid var(--border-color, #dadce0);
-  background: var(--bg-surface, #ffffff);
-  color: var(--text-secondary, #5f6368);
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--md-sys-color-surface, #ffffff);
+  border: 1px solid var(--md-sys-color-outline-variant, #dadce0);
+  border-radius: var(--md-shape-corner-lg, 14px);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all var(--md-sys-motion-duration-short, 150ms) var(--md-sys-motion-easing-standard);
+  position: relative;
+  text-align: left;
   user-select: none;
+  box-shadow: var(--md-sys-elevation-1, 0 1px 3px rgba(60, 64, 67, 0.06));
 }
 
-.chip-filter-btn:hover {
-  background: var(--bg-surface-hover, rgba(255, 255, 255, 0.06));
-  color: var(--text-primary, #202124);
-  border-color: var(--primary, #1a73e8);
+.org-card:hover {
+  border-color: var(--md-sys-color-primary, #1a73e8);
+  box-shadow: var(--md-sys-elevation-2, 0 3px 8px rgba(60, 64, 67, 0.1));
+  transform: translateY(-2px);
 }
 
-.chip-filter-btn.active {
-  background: var(--primary, #1a73e8);
-  color: #ffffff;
-  border-color: var(--primary, #1a73e8);
+.org-card.active {
+  border-color: var(--md-sys-color-primary, #1a73e8);
+  background: var(--md-sys-color-surface-container-low, #f8fafd);
+  box-shadow: 0 0 0 1.5px var(--md-sys-color-primary, #1a73e8), 0 3px 10px rgba(26, 115, 232, 0.12);
 }
 
-.chip-filter-btn .chip-count {
+.org-card-avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: var(--md-shape-corner-md, 10px);
+  object-fit: cover;
+  flex-shrink: 0;
+  border: 1px solid var(--md-sys-color-outline-variant, #dadce0);
+}
+
+.org-card-icon-wrap {
+  width: 38px;
+  height: 38px;
+  border-radius: var(--md-shape-corner-md, 10px);
+  background: var(--md-sys-color-surface-container, #f1f3f4);
+  color: var(--md-sys-color-on-surface-variant, #5f6368);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.org-card.active .org-card-icon-wrap {
+  background: var(--md-sys-color-primary-container, #d2e3fc);
+  color: var(--md-sys-color-primary, #1a73e8);
+}
+
+.org-card-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.org-card-title {
+  font-family: var(--md-sys-typescale-font-brand, 'Outfit', sans-serif);
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--md-sys-color-on-surface, #202124);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.org-card.active .org-card-title {
+  color: var(--md-sys-color-primary, #1a73e8);
+}
+
+.org-card-subtitle {
+  font-size: 11.5px;
+  color: var(--md-sys-color-on-surface-variant, #5f6368);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.org-card-count {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
   border-radius: 9999px;
   font-size: 11px;
   font-weight: 600;
-  background: rgba(0, 0, 0, 0.08);
-  color: inherit;
+  background: var(--md-sys-color-surface-container-high, #e8eaed);
+  color: var(--md-sys-color-on-surface-variant, #3c4043);
+  flex-shrink: 0;
 }
 
-.chip-filter-btn.active .chip-count {
-  background: rgba(255, 255, 255, 0.25);
+.org-card.active .org-card-count {
+  background: var(--md-sys-color-primary, #1a73e8);
   color: #ffffff;
 }
 

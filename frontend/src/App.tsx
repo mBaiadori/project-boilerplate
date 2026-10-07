@@ -6,6 +6,7 @@ import { WorkspaceProvider } from './context/WorkspaceContext';
 import { SecurityProvider } from './context/SecurityContext';
 import { AIProvider } from './context/AIContext';
 import { AuthView } from './views/AuthView';
+import { AdminAuthView } from './views/AdminAuthView';
 import { ReposView } from './views/ReposView';
 import { DashboardView } from './views/DashboardView';
 
@@ -38,7 +39,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   return <>{children}</>;
 };
 
-const AuthRoute: React.FC = () => {
+const CollaboratorAuthRoute: React.FC = () => {
   const { isAuthenticated, isLoading } = useAuth();
   const { t } = useTranslation('common');
   const navigate = useNavigate();
@@ -53,7 +54,7 @@ const AuthRoute: React.FC = () => {
           height: '100vh',
           background: 'var(--color-surface, #1e1e2e)',
           color: 'var(--color-outline, #a6adc8)',
-          fontFamily: 'var(--font-sans, system-ui)'
+          fontFamily: 'var(--font-sans, system-ui)',
         }}
       >
         {t('loadingPlatform')}
@@ -66,6 +67,36 @@ const AuthRoute: React.FC = () => {
   }
 
   return <AuthView onLoginSuccess={() => navigate('/repos')} />;
+};
+
+const AdminAuthRoute: React.FC = () => {
+  const { isAuthenticated, isLoading } = useAuth();
+  const { t } = useTranslation('common');
+  const navigate = useNavigate();
+
+  if (isLoading) {
+    return (
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          height: '100vh',
+          background: 'var(--color-surface, #1e1e2e)',
+          color: 'var(--color-outline, #a6adc8)',
+          fontFamily: 'var(--font-sans, system-ui)',
+        }}
+      >
+        {t('loadingPlatform')}
+      </div>
+    );
+  }
+
+  if (isAuthenticated) {
+    return <Navigate to="/repos" replace />;
+  }
+
+  return <AdminAuthView onLoginSuccess={() => navigate('/repos')} />;
 };
 
 const RepoRedirect: React.FC = () => {
@@ -82,8 +113,10 @@ export const App: React.FC = () => {
             <AIProvider>
               <div style={{ width: '100%', height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
                 <Routes>
-                  {/* Rotas de Autenticação */}
-                  <Route path="/login" element={<AuthRoute />} />
+                  {/* Rotas de Autenticação Separadas */}
+                  <Route path="/login" element={<CollaboratorAuthRoute />} />
+                  <Route path="/admin" element={<AdminAuthRoute />} />
+                  <Route path="/login/admin" element={<AdminAuthRoute />} />
                   <Route path="/auth" element={<Navigate to="/login" replace />} />
 
                   {/* Seleção de Repositórios */}

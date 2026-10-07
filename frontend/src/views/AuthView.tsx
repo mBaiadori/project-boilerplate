@@ -1,17 +1,14 @@
-import { 
-  Building2, 
-  ExternalLink, 
-  Monitor, 
-  Sparkles, 
-  User as UserIcon, 
-  Trash2, 
-  LogIn, 
-  Copy, 
-  Check, 
-  Loader2, 
-  ArrowRight, 
-  KeyRound,
-  ShieldCheck
+import {
+  Building2,
+  ExternalLink,
+  Sparkles,
+  User as UserIcon,
+  Trash2,
+  LogIn,
+  Copy,
+  Check,
+  Loader2,
+  ArrowRight,
 } from "lucide-react";
 import React, { useState, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
@@ -33,7 +30,7 @@ interface AuthViewProps {
   onLoginSuccess: () => void;
 }
 
-type AuthMode = "initial" | "device_pairing" | "org_onboarding" | "manual_token";
+type AuthMode = "initial" | "device_pairing" | "org_onboarding";
 
 interface DeviceCodeData {
   device_code: string;
@@ -45,14 +42,7 @@ interface DeviceCodeData {
 
 export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
   const { t } = useTranslation(["auth", "common", "repos"]);
-  const { 
-    loginWithToken, 
-    loginLocal, 
-    accounts, 
-    switchAccount, 
-    removeAccount, 
-    refreshAuth 
-  } = useAuth();
+  const { accounts, switchAccount, removeAccount, refreshAuth } = useAuth();
 
   const [mode, setMode] = useState<AuthMode>("initial");
   const [isLoading, setIsLoading] = useState(false);
@@ -72,9 +62,6 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
   const [orgName, setOrgName] = useState("");
   const [isCreatingOrg, setIsCreatingOrg] = useState(false);
   const [orgWebFlowUrl, setOrgWebFlowUrl] = useState<string | null>(null);
-
-  // Manual Token Fallback (Opção Avançada Oculta por Padrão)
-  const [manualToken, setManualToken] = useState("");
 
   // Limpeza de timers de polling ao desmontar
   useEffect(() => {
@@ -114,14 +101,20 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
       const data: DeviceCodeData = {
         device_code: res.data.device_code,
         user_code: res.data.user_code || "",
-        verification_uri: res.data.verification_uri || "https://github.com/login/device",
+        verification_uri:
+          res.data.verification_uri || "https://github.com/login/device",
         expires_in: res.data.expires_in || 900,
         interval: res.data.interval || 5,
       };
 
       setDeviceData(data);
       setMode("device_pairing");
-      setPollingStatus(t("auth:waitingAuthorization", "Aguardando confirmação no navegador..."));
+      setPollingStatus(
+        t(
+          "auth:waitingAuthorization",
+          "Aguardando confirmação no navegador...",
+        ),
+      );
 
       // Tenta copiar código para clipboard imediatamente
       if (data.user_code) {
@@ -158,7 +151,12 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
         const data = res.data;
 
         if (data.status === "pending") {
-          setPollingStatus(t("auth:waitingAuthorization", "Aguardando confirmação no navegador..."));
+          setPollingStatus(
+            t(
+              "auth:waitingAuthorization",
+              "Aguardando confirmação no navegador...",
+            ),
+          );
         } else if (data.status === "slow_down") {
           stopPolling();
           currentInterval = ((data.interval || 10) + 2) * 1000;
@@ -166,7 +164,8 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
         } else if (data.status === "expired") {
           stopPolling();
           setStatusMessage({
-            text: data.error || "O código expirou. Por favor, inicie novamente.",
+            text:
+              data.error || "O código expirou. Por favor, inicie novamente.",
             type: "error",
           });
           setMode("initial");
@@ -183,11 +182,12 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
 
           const orgs = Array.isArray(data.orgs) ? data.orgs : [];
           if (orgs.length > 0) {
-            // Usuário já pertence a uma organização da empresa -> vai direto para projetos!
-            setStatusMessage({ text: t("auth:statusSuccess"), type: "success" });
+            setStatusMessage({
+              text: t("auth:statusSuccess"),
+              type: "success",
+            });
             onLoginSuccess();
           } else {
-            // Primeiro acesso da empresa / sem organizações -> Onboarding de Organização!
             setCreatedUser(data.user || null);
             setMode("org_onboarding");
           }
@@ -197,7 +197,6 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
       }
     };
 
-    // Primeiro disparo após o intervalo inicial
     pollTimerRef.current = setInterval(poll, currentInterval);
   };
 
@@ -231,27 +230,29 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
         full_name: orgName.trim(),
       });
 
-      if (res.ok) {
-        if (res.data?.requires_web_flow && res.data.web_url) {
+      if (res.ok && res.data?.success) {
+        await refreshAuth();
+        if (res.data?.requires_web_flow && res.data?.web_url) {
           setOrgWebFlowUrl(res.data.web_url);
-        } else if (res.data?.success) {
-          await refreshAuth();
+        } else {
           onLoginSuccess();
+        }
+      } else {
+        if (res.data?.requires_web_flow && res.data?.web_url) {
+          setOrgWebFlowUrl(res.data.web_url);
         } else {
           setStatusMessage({
-            text: res.data?.error || res.data?.message || "Erro ao registrar organização",
+            text:
+              res.data?.error ||
+              res.data?.message ||
+              "Erro ao registrar organização",
             type: "error",
           });
         }
-      } else {
-        setStatusMessage({
-          text: res.data?.error || "Erro ao registrar organização",
-          type: "error",
-        });
       }
     } catch (err: any) {
       setStatusMessage({
-        text: err.message || "Erro de conexão",
+        text: err.message || "Erro de conexão ao criar organização",
         type: "error",
       });
     } finally {
@@ -259,6 +260,9 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
     }
   };
 
+  /**
+   * Seleção de Conta Salva
+   */
   const handleSelectAccount = async (accountId: string) => {
     setIsLoading(true);
     setStatusMessage(null);
@@ -274,42 +278,6 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
       }
     } catch {
       setStatusMessage({ text: t("auth:statusServerError"), type: "error" });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleManualTokenLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!manualToken.trim()) return;
-
-    setIsLoading(true);
-    setStatusMessage(null);
-
-    try {
-      const result = await loginWithToken(manualToken.trim());
-      if (result.success) {
-        onLoginSuccess();
-      } else {
-        setStatusMessage({
-          text: result.error || t("auth:statusDefaultError"),
-          type: "error",
-        });
-      }
-    } catch {
-      setStatusMessage({ text: t("auth:statusServerError"), type: "error" });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleLocalModeLogin = async () => {
-    setIsLoading(true);
-    try {
-      await loginLocal();
-      onLoginSuccess();
-    } catch {
-      setStatusMessage({ text: t("auth:statusLocalError"), type: "error" });
     } finally {
       setIsLoading(false);
     }
@@ -333,7 +301,9 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
       }}
     >
       {/* Botão de Idioma Superior Direito */}
-      <div style={{ position: "absolute", top: "16px", right: "20px", zIndex: 10 }}>
+      <div
+        style={{ position: "absolute", top: "16px", right: "20px", zIndex: 10 }}
+      >
         <LanguageSwitcher />
       </div>
 
@@ -369,7 +339,8 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
               fontWeight: 700,
               letterSpacing: "0.04em",
               textTransform: "uppercase",
-              border: "1px solid rgba(var(--color-primary-rgb, 59, 130, 246), 0.2)",
+              border:
+                "1px solid rgba(var(--color-primary-rgb, 59, 130, 246), 0.2)",
             }}
           >
             <Sparkles size={13} />
@@ -387,8 +358,8 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
             }}
           >
             {mode === "org_onboarding"
-              ? t("auth:onboardingOrgTitle", "Configurar Espaço da Empresa")
-              : "Bem-vindo ao Context OS"}
+              ? "Configurar Espaço da Empresa"
+              : "Conectar com a Empresa"}
           </h1>
           <p
             style={{
@@ -399,19 +370,22 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
             }}
           >
             {mode === "org_onboarding"
-              ? t(
-                  "auth:onboardingOrgSubtitle",
-                  "Vamos criar o espaço da sua organização para centralizar projetos e especificações com o time."
-                )
-              : t(
-                  "auth:connectCompanySubtitle",
-                  "Acesso corporativo integrado, sem necessidade de tokens técnicos."
-                )}
+              ? "Vamos criar o espaço da sua organização para centralizar projetos e especificações com o time."
+              : "Acesso corporativo integrado para membros do time."}
           </p>
         </div>
 
         {/* Card Principal */}
-        <Card style={{ width: "100%", display: "flex", flexDirection: "column" }}>
+        <Card
+          style={{
+            width: "100%",
+            display: "flex",
+            flexDirection: "column",
+            borderRadius: "16px",
+            boxShadow:
+              "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05)",
+          }}
+        >
           <CardContent
             style={{
               padding: "28px",
@@ -428,9 +402,15 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
               />
             )}
 
-            {/* MODO 1: TELA INICIAL COM BOTÃO ÚNICO "CONECTAR COM A EMPRESA" */}
+            {/* MODO INICIAL: BOTÃO "CONECTAR COM A EMPRESA" */}
             {mode === "initial" && (
-              <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "16px",
+                }}
+              >
                 {/* Botão Principal Hero */}
                 <Button
                   id="btn-connect-company"
@@ -448,58 +428,32 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
                     alignItems: "center",
                     justifyContent: "center",
                     gap: "10px",
-                    boxShadow: "0 4px 14px 0 rgba(var(--color-primary-rgb, 59, 130, 246), 0.39)",
+                    boxShadow:
+                      "0 4px 14px 0 rgba(var(--color-primary-rgb, 59, 130, 246), 0.39)",
                   }}
                 >
                   <Building2 size={20} />
-                  <span>{t("auth:connectCompany", "Conectar com a Empresa")}</span>
+                  <span>Conectar com a Empresa</span>
                   <ArrowRight size={18} style={{ marginLeft: "auto" }} />
                 </Button>
 
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    padding: "10px 14px",
-                    borderRadius: "8px",
-                    background: "var(--color-surface-container-low)",
-                    border: "1px solid var(--color-outline-variant)",
-                    fontSize: "12px",
-                    color: "var(--color-on-surface-variant)",
-                  }}
-                >
-                  <ShieldCheck size={16} style={{ color: "var(--color-primary)", flexShrink: 0 }} />
-                  <span>Autenticação silenciosa e segura com credenciais protegidas no cofre do sistema.</span>
-                </div>
-
                 {/* Contas Salvas no Cofre (se houver) */}
                 {accounts.length > 0 && (
-                  <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "4px" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "10px",
+                      marginTop: "4px",
+                    }}
+                  >
                     <div
                       style={{
                         display: "flex",
-                        alignItems: "center",
+                        flexDirection: "column",
                         gap: "8px",
-                        margin: "4px 0",
                       }}
                     >
-                      <div style={{ flex: 1, height: "1px", background: "var(--color-outline-variant)" }} />
-                      <span
-                        style={{
-                          fontSize: "10.5px",
-                          fontWeight: 700,
-                          color: "var(--color-outline)",
-                          textTransform: "uppercase",
-                          letterSpacing: "0.05em",
-                        }}
-                      >
-                        {t("auth:savedAccountsTitle", "Ou entrar com perfil salvo")}
-                      </span>
-                      <div style={{ flex: 1, height: "1px", background: "var(--color-outline-variant)" }} />
-                    </div>
-
-                    <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                       {accounts.map((acc) => (
                         <div
                           key={acc.id}
@@ -508,12 +462,20 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
                             alignItems: "center",
                             justifyContent: "space-between",
                             padding: "10px 12px",
-                            backgroundColor: "var(--color-surface-container-low)",
+                            backgroundColor:
+                              "var(--color-surface-container-low)",
                             border: "1px solid var(--color-outline-variant)",
                             borderRadius: "8px",
                           }}
                         >
-                          <div style={{ display: "flex", alignItems: "center", gap: "10px", minWidth: 0 }}>
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "10px",
+                              minWidth: 0,
+                            }}
+                          >
                             {acc.user?.avatar_url ? (
                               <img
                                 src={acc.user.avatar_url}
@@ -531,7 +493,8 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
                                   width: "32px",
                                   height: "32px",
                                   borderRadius: "50%",
-                                  backgroundColor: "var(--color-primary-container)",
+                                  backgroundColor:
+                                    "var(--color-primary-container)",
                                   display: "flex",
                                   alignItems: "center",
                                   justifyContent: "center",
@@ -554,13 +517,24 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
                               >
                                 {acc.user?.name || acc.user?.login}
                               </div>
-                              <span style={{ fontSize: "11px", color: "var(--color-on-surface-variant)" }}>
+                              <span
+                                style={{
+                                  fontSize: "11px",
+                                  color: "var(--color-on-surface-variant)",
+                                }}
+                              >
                                 @{acc.user?.login}
                               </span>
                             </div>
                           </div>
 
-                          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "6px",
+                            }}
+                          >
                             <Button
                               variant="secondary"
                               size="sm"
@@ -575,7 +549,10 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
                               tooltip="Remover"
                               onClick={() => removeAccount(acc.id)}
                             >
-                              <Trash2 size={14} style={{ color: "var(--color-error)" }} />
+                              <Trash2
+                                size={14}
+                                style={{ color: "var(--color-error)" }}
+                              />
                             </IconButton>
                           </div>
                         </div>
@@ -583,46 +560,34 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
                     </div>
                   </div>
                 )}
-
-                {/* Rodapé Alternativo Discreto */}
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    paddingTop: "10px",
-                    borderTop: "1px solid var(--color-outline-variant)",
-                    marginTop: "6px",
-                  }}
-                >
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setMode("manual_token")}
-                    style={{ fontSize: "11.5px", color: "var(--color-outline)" }}
-                  >
-                    <KeyRound size={13} />
-                    <span>{t("auth:advancedTokenTitle", "Token Manual (Avançado)")}</span>
-                  </Button>
-
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleLocalModeLogin}
-                    style={{ fontSize: "11.5px", color: "var(--color-outline)" }}
-                  >
-                    <Monitor size={13} />
-                    <span>Modo Local</span>
-                  </Button>
-                </div>
               </div>
             )}
 
-            {/* MODO 2: PAREAMENTO SILENCIOSO (DEVICE FLOW RFC 8628) */}
+            {/* MODO PAREAMENTO (DEVICE FLOW RFC 8628) */}
             {mode === "device_pairing" && deviceData && (
-              <div style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
-                <div style={{ textAlign: "center", display: "flex", flexDirection: "column", gap: "4px" }}>
-                  <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--color-primary)", textTransform: "uppercase" }}>
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "18px",
+                }}
+              >
+                <div
+                  style={{
+                    textAlign: "center",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "4px",
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      color: "var(--color-primary)",
+                      textTransform: "uppercase",
+                    }}
+                  >
                     Código de Conexão
                   </span>
                   <div
@@ -647,39 +612,52 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
                       size="sm"
                       tooltip={copiedCode ? "Copiado!" : "Copiar Código"}
                       onClick={async () => {
-                        await navigator.clipboard.writeText(deviceData.user_code);
+                        await navigator.clipboard.writeText(
+                          deviceData.user_code,
+                        );
                         setCopiedCode(true);
                       }}
                     >
-                      {copiedCode ? <Check size={18} style={{ color: "var(--color-primary)" }} /> : <Copy size={18} />}
+                      {copiedCode ? (
+                        <Check
+                          size={18}
+                          style={{ color: "var(--color-primary)" }}
+                        />
+                      ) : (
+                        <Copy size={18} />
+                      )}
                     </IconButton>
                   </div>
                   {copiedCode && (
-                    <span style={{ fontSize: "11.5px", color: "var(--color-primary)", fontWeight: 600 }}>
+                    <span
+                      style={{
+                        fontSize: "11.5px",
+                        color: "var(--color-primary)",
+                        fontWeight: 600,
+                      }}
+                    >
                       ✓ Código copiado para a área de transferência!
                     </span>
                   )}
                 </div>
 
-                {/* Botão de Ação Primária: Copiar e Abrir Navegador */}
+                {/* Botão de Abrir Navegador */}
                 <Button
-                  id="btn-open-device-auth"
                   variant="primary"
                   size="lg"
                   fullWidth
                   onClick={handleCopyAndOpenBrowser}
                   style={{
                     padding: "14px",
-                    fontSize: "15px",
                     fontWeight: 700,
                     borderRadius: "10px",
                   }}
                 >
                   <ExternalLink size={18} />
-                  <span>{t("auth:copyAndOpenBrowser", "Copiar Código e Abrir Navegador")}</span>
+                  <span>Copiar Código e Abrir Navegador</span>
                 </Button>
 
-                {/* Passo a Passo Intuitivo Sem Jargões */}
+                {/* Instruções */}
                 <div
                   style={{
                     display: "flex",
@@ -690,77 +668,70 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
                     background: "var(--color-surface-container-low)",
                     border: "1px solid var(--color-outline-variant)",
                     fontSize: "12.5px",
-                    lineHeight: 1.5,
                     color: "var(--color-on-surface-variant)",
                   }}
                 >
-                  <div style={{ display: "flex", alignItems: "flex-start", gap: "8px" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: "8px",
+                    }}
+                  >
                     <div
                       style={{
                         width: "20px",
                         height: "20px",
                         borderRadius: "50%",
-                        background: "var(--color-primary-container)",
-                        color: "var(--color-primary)",
+                        background: "var(--color-primary)",
+                        color: "var(--color-on-primary)",
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
-                        fontWeight: 700,
                         fontSize: "11px",
+                        fontWeight: 700,
                         flexShrink: 0,
                       }}
                     >
                       1
                     </div>
-                    <span>Cole o código <strong>{deviceData.user_code}</strong> na página que se abriu.</span>
+                    <span>
+                      Cole o código <strong>{deviceData.user_code}</strong> na
+                      página que se abriu.
+                    </span>
                   </div>
 
-                  <div style={{ display: "flex", alignItems: "flex-start", gap: "8px" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: "8px",
+                    }}
+                  >
                     <div
                       style={{
                         width: "20px",
                         height: "20px",
                         borderRadius: "50%",
-                        background: "var(--color-primary-container)",
-                        color: "var(--color-primary)",
+                        background: "var(--color-primary)",
+                        color: "var(--color-on-primary)",
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
-                        fontWeight: 700,
                         fontSize: "11px",
+                        fontWeight: 700,
                         flexShrink: 0,
                       }}
                     >
                       2
                     </div>
                     <span>
-                      Se ainda não tiver cadastro, basta clicar em <strong>"Criar conta"</strong> na mesma página.
+                      Após autorizar, o aplicativo entrará{" "}
+                      <strong>automaticamente</strong>!
                     </span>
-                  </div>
-
-                  <div style={{ display: "flex", alignItems: "flex-start", gap: "8px" }}>
-                    <div
-                      style={{
-                        width: "20px",
-                        height: "20px",
-                        borderRadius: "50%",
-                        background: "var(--color-primary-container)",
-                        color: "var(--color-primary)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        fontWeight: 700,
-                        fontSize: "11px",
-                        flexShrink: 0,
-                      }}
-                    >
-                      3
-                    </div>
-                    <span>Após autorizar, o aplicativo entrará <strong>automaticamente</strong>!</span>
                   </div>
                 </div>
 
-                {/* Status do Polling */}
                 <div
                   style={{
                     display: "flex",
@@ -769,14 +740,17 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
                     gap: "8px",
                     padding: "8px 12px",
                     borderRadius: "8px",
-                    background: "rgba(var(--color-primary-rgb, 59, 130, 246), 0.08)",
+                    background:
+                      "rgba(var(--color-primary-rgb, 59, 130, 246), 0.08)",
                     color: "var(--color-primary)",
                     fontSize: "12px",
                     fontWeight: 600,
                   }}
                 >
                   <Loader2 size={14} className="animate-spin" />
-                  <span>{pollingStatus || "Aguardando confirmação no navegador..."}</span>
+                  <span>
+                    {pollingStatus || "Aguardando confirmação no navegador..."}
+                  </span>
                 </div>
 
                 <div style={{ display: "flex", justifyContent: "center" }}>
@@ -787,17 +761,23 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
                       stopPolling();
                       setMode("initial");
                     }}
-                    style={{ fontSize: "12px", color: "var(--color-outline)" }}
+                    style={{ color: "var(--color-outline)" }}
                   >
-                    Cancelar e voltar
+                    Voltar
                   </Button>
                 </div>
               </div>
             )}
 
-            {/* MODO 3: ONBOARDING DA ORGANIZAÇÃO (PRIMEIRO ACESSO DA EMPRESA) */}
+            {/* MODO ONBOARDING DA ORGANIZAÇÃO */}
             {mode === "org_onboarding" && (
-              <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "16px",
+                }}
+              >
                 <div
                   style={{
                     display: "flex",
@@ -813,14 +793,29 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
                     <img
                       src={createdUser.avatar_url}
                       alt={createdUser.login}
-                      style={{ width: "38px", height: "38px", borderRadius: "50%" }}
+                      style={{
+                        width: "38px",
+                        height: "38px",
+                        borderRadius: "50%",
+                      }}
                     />
                   )}
                   <div>
-                    <div style={{ fontSize: "14px", fontWeight: 700, color: "var(--color-on-surface)" }}>
+                    <div
+                      style={{
+                        fontSize: "14px",
+                        fontWeight: 700,
+                        color: "var(--color-on-surface)",
+                      }}
+                    >
                       Olá, {createdUser?.name || createdUser?.login}!
                     </div>
-                    <div style={{ fontSize: "12px", color: "var(--color-on-surface-variant)" }}>
+                    <div
+                      style={{
+                        fontSize: "12px",
+                        color: "var(--color-on-surface-variant)",
+                      }}
+                    >
                       Autenticado com sucesso. Vamos configurar seu time.
                     </div>
                   </div>
@@ -831,15 +826,23 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
                     style={{
                       display: "flex",
                       flexDirection: "column",
-                      gap: "12px",
-                      padding: "14px",
-                      borderRadius: "10px",
-                      background: "var(--color-surface-container-high)",
+                      gap: "14px",
+                      padding: "16px",
+                      borderRadius: "12px",
+                      background: "var(--color-primary-container)",
                       border: "1px solid var(--color-primary)",
                     }}
                   >
-                    <p style={{ margin: 0, fontSize: "13px", color: "var(--color-on-surface)", lineHeight: 1.4 }}>
-                      Para criar uma nova organização corporativa oficial, conclua o passo simples na página do provedor:
+                    <p
+                      style={{
+                        margin: 0,
+                        fontSize: "13px",
+                        color: "var(--color-on-surface)",
+                        lineHeight: 1.4,
+                      }}
+                    >
+                      Para criar uma nova organização corporativa oficial,
+                      conclua o passo simples na página do provedor:
                     </p>
                     <a
                       href={orgWebFlowUrl}
@@ -849,39 +852,48 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
-                        gap: "6px",
-                        padding: "10px",
+                        gap: "8px",
+                        padding: "12px 16px",
                         borderRadius: "8px",
-                        background: "var(--color-primary)",
-                        color: "var(--color-on-primary, #ffffff)",
-                        fontWeight: 700,
-                        fontSize: "13px",
+                        backgroundColor: "var(--color-primary)",
+                        color: "var(--color-on-primary)",
                         textDecoration: "none",
+                        fontWeight: 700,
+                        fontSize: "13.5px",
                       }}
                     >
-                      <span>Abrir Criação de Organização</span>
-                      <ExternalLink size={14} />
+                      <ExternalLink size={16} />
+                      <span>Concluir Criação no GitHub</span>
                     </a>
                     <Button
-                      variant="secondary"
-                      size="md"
+                      variant="outline"
+                      size="sm"
+                      fullWidth
                       onClick={async () => {
                         await refreshAuth();
                         onLoginSuccess();
                       }}
                     >
-                      Já criei a organização, continuar!
+                      Já criei a organização, avançar
                     </Button>
                   </div>
                 ) : (
-                  <form onSubmit={handleCreateOrg} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                  <form
+                    onSubmit={handleCreateOrg}
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "14px",
+                    }}
+                  >
                     <FormField
-                      label={t("auth:orgNameLabel", "Nome da Empresa ou Time")}
+                      label="Nome da Empresa ou Time"
                       helperText="Este nome identificará o repositório central de especificações e governança."
+                      required
                     >
                       <Input
                         id="org-name-input"
-                        placeholder={t("auth:orgNamePlaceholder", "ex: minha-empresa")}
+                        placeholder="ex: minha-empresa"
                         value={orgName}
                         onChange={(e) => setOrgName(e.target.value)}
                         autoFocus
@@ -889,75 +901,30 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
                     </FormField>
 
                     <Button
-                      id="btn-create-org"
                       variant="primary"
-                      size="md"
+                      size="lg"
                       fullWidth
                       type="submit"
                       loading={isCreatingOrg}
                       disabled={!orgName.trim()}
                     >
                       <Building2 size={16} />
-                      <span>{t("auth:createOrgButton", "Criar Espaço da Empresa")}</span>
+                      <span>Criar Espaço da Empresa</span>
                     </Button>
 
                     <Button
-                      variant="ghost"
                       size="sm"
                       type="button"
                       onClick={() => onLoginSuccess()}
-                      style={{ color: "var(--color-outline)", fontSize: "12px" }}
+                      style={{
+                        color: "var(--color-outline)",
+                        fontSize: "12px",
+                      }}
                     >
-                      {t("auth:skipOrgButton", "Continuar no espaço individual por enquanto")}
+                      Continuar no espaço individual por enquanto
                     </Button>
                   </form>
                 )}
-              </div>
-            )}
-
-            {/* MODO 4: TOKEN MANUAL (OPÇÃO AVANÇADA / FALLBACK) */}
-            {mode === "manual_token" && (
-              <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <span style={{ fontSize: "14px", fontWeight: 700, color: "var(--color-on-surface)" }}>
-                    Conectar com Token Manual
-                  </span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setMode("initial")}
-                    style={{ fontSize: "12px" }}
-                  >
-                    Voltar
-                  </Button>
-                </div>
-
-                <form onSubmit={handleManualTokenLogin} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                  <FormField
-                    label="Personal Access Token (PAT)"
-                    helperText="Escopos necessários: repo, read:org, user"
-                  >
-                    <Input
-                      type="password"
-                      id="pat-token-input"
-                      placeholder="ghp_xxxxxxxxxxxx"
-                      value={manualToken}
-                      onChange={(e) => setManualToken(e.target.value)}
-                      autoComplete="off"
-                    />
-                  </FormField>
-
-                  <Button
-                    variant="primary"
-                    size="md"
-                    fullWidth
-                    type="submit"
-                    loading={isLoading}
-                    disabled={!manualToken.trim()}
-                  >
-                    Autenticar com Token
-                  </Button>
-                </form>
               </div>
             )}
           </CardContent>
