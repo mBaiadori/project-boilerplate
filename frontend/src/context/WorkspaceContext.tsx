@@ -8,6 +8,7 @@ import React, {
 } from "react";
 import type {
   Repo,
+  Organization,
   RepoDiagnosis,
   WorkspaceChange,
   TreeNode,
@@ -43,6 +44,10 @@ export type AutoSaveStatus =
   | "Erro";
 
 interface WorkspaceContextType {
+  activeOrg: Organization | null;
+  orgs: Organization[];
+  loadOrgs: () => Promise<void>;
+  selectOrg: (orgLogin: string) => Promise<void>;
   activeRepo: Repo | null;
   repos: Repo[];
   tree: TreeNode[];
@@ -129,6 +134,16 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
   const { user, isAuthenticated } = useAuth();
+  const [activeOrg, setActiveOrg] = useState<Organization | null>(() => {
+    try {
+      const saved = localStorage.getItem("spec_active_org_login");
+      if (saved) {
+        return { login: saved, full_name: saved };
+      }
+    } catch {}
+    return null;
+  });
+  const [orgs, setOrgs] = useState<Organization[]>([]);
   const [activeRepo, setActiveRepo] = useState<Repo | null>(null);
   const [repos, setRepos] = useState<Repo[]>([]);
   const [tree, setTree] = useState<TreeNode[]>([]);
@@ -192,6 +207,34 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const hasUnsavedChanges = fileContent !== originalContent;
 
+  const loadOrgs = useCallback(async () => {
+    try {
+      const res = await API.getOrgs();
+      if (res.ok && res.data?.orgs) {
+        setOrgs(res.data.orgs);
+        const savedLogin = localStorage.getItem("spec_active_org_login");
+        if (savedLogin) {
+          const found = res.data.orgs.find(
+            (o) => o.login.toLowerCase() === savedLogin.toLowerCase(),
+          );
+          if (found) {
+            setActiveOrg(found);
+            return;
+          }
+        }
+        if (res.data.orgs.length > 0) {
+          setActiveOrg((prev) => {
+            if (prev) return prev;
+            localStorage.setItem("spec_active_org_login", res.data.orgs[0].login);
+            return res.data.orgs[0];
+          });
+        }
+      }
+    } catch (e) {
+      console.warn("[WorkspaceContext] Erro ao carregar organizações:", e);
+    }
+  }, []);
+
   const loadRepos = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -206,6 +249,25 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
       setIsLoading(false);
     }
   }, []);
+
+  const selectOrg = useCallback(
+    async (orgLogin: string) => {
+      const found = orgs.find(
+        (o) => o.login.toLowerCase() === orgLogin.toLowerCase(),
+      );
+      const orgToSet = found || { login: orgLogin, full_name: orgLogin };
+      setActiveOrg(orgToSet);
+      try {
+        localStorage.setItem("spec_active_org_login", orgToSet.login);
+      } catch {}
+      await loadRepos();
+    },
+    [orgs, loadRepos],
+  );
+
+  useEffect(() => {
+    loadOrgs().catch(() => {});
+  }, [loadOrgs]);
 
   const refreshGitStatus = useCallback(async () => {
     if (!activeRepoRef.current) return;
@@ -1086,6 +1148,10 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
   return (
     <WorkspaceContext.Provider
       value={{
+        activeOrg,
+        orgs,
+        loadOrgs,
+        selectOrg,
         activeRepo,
         repos,
         tree,

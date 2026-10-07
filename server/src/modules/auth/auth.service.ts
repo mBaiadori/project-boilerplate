@@ -21,8 +21,46 @@ export class AuthService {
       throw new Error(`Falha na autenticação com GitHub (${statusCode})${msg}.`);
     }
 
-    const { data: orgs } = await callGitHubAPI('/user/orgs', token, 'GET');
-    const orgList = Array.isArray(orgs) ? orgs : [];
+    const orgsMap = new Map<string, any>();
+
+    try {
+      const { data: orgs } = await callGitHubAPI('/user/orgs?per_page=100', token, 'GET');
+      if (Array.isArray(orgs)) {
+        for (const o of orgs) {
+          if (o?.login) {
+            orgsMap.set(o.login.toLowerCase(), {
+              login: o.login,
+              avatar_url: o.avatar_url,
+              description: o.description || '',
+              full_name: o.full_name || o.name || o.login,
+            });
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[AuthService] Erro ao buscar /user/orgs:', e);
+    }
+
+    try {
+      const { data: memData } = await callGitHubAPI('/user/memberships/orgs?state=active&per_page=100', token, 'GET');
+      if (Array.isArray(memData)) {
+        for (const item of memData) {
+          const org = item.organization;
+          if (org?.login) {
+            orgsMap.set(org.login.toLowerCase(), {
+              login: org.login,
+              avatar_url: org.avatar_url,
+              description: org.description || '',
+              full_name: org.name || org.login,
+            });
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[AuthService] Erro ao buscar /user/memberships/orgs:', e);
+    }
+
+    const orgList = Array.from(orgsMap.values());
 
     const cfg = loadConfig();
     cfg.authenticated = true;
@@ -36,11 +74,7 @@ export class AuthService {
       html_url: user.html_url,
       email: user.email,
     };
-    cfg.orgs = orgList.map((o: any) => ({
-      login: o.login,
-      avatar_url: o.avatar_url,
-      description: o.description,
-    }));
+    cfg.orgs = orgList;
 
     const accountId = `github:${user.login}`;
 

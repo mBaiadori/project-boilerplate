@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import type { Repo, RepoDiagnosis } from "../types";
@@ -9,23 +9,14 @@ import { LanguageSwitcher } from "../components/common/LanguageSwitcher";
 import { AccountSwitcherMenu } from "../components/auth/AccountSwitcherMenu";
 import {
   Button,
-  IconButton,
-  Card,
-  CardHeader,
-  CardContent,
-  CardFooter,
-  FormField,
-  Input,
   SearchInput,
   Badge,
   EmptyState,
   Spinner,
-  Switch,
 } from "../components/ui";
 import {
   Plus,
   LogOut,
-  X,
   FolderGit2,
   Lock,
   Globe,
@@ -38,15 +29,19 @@ import {
   User,
   Users,
   HardDrive,
+  RefreshCw,
   Edit3,
   Copy,
+  Link2,
 } from "lucide-react";
 import { FirstRunWizard } from "../components/onboarding/FirstRunWizard";
 import { DeleteRepoModal } from "../components/modals/DeleteRepoModal";
 import { EditRepoModal } from "../components/modals/EditRepoModal";
 import { CloneRepoModal } from "../components/modals/CloneRepoModal";
 import { RepoSetupWizardModal } from "../components/modals/RepoSetupWizardModal";
+import { CreateRepoModal } from "../components/modals/CreateRepoModal";
 import { CreateOrgModal } from "../components/modals/CreateOrgModal";
+import { LinkOrgModal } from "../components/modals/LinkOrgModal";
 
 interface ReposViewProps {
   onSelectRepo?: (repo: Repo) => void;
@@ -55,12 +50,8 @@ interface ReposViewProps {
 export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
   const { t } = useTranslation(["repos", "common"]);
   const navigate = useNavigate();
-  const { user, logout, provider } = useAuth();
-  const providerLabel =
-    provider === "github"
-      ? "GitHub"
-      : t("repos:providerLocal");
-  const { repos, loadRepos, selectRepo, isLoading } = useWorkspace();
+  const { user, logout } = useAuth();
+  const { repos, loadRepos, selectRepo, isLoading, orgs: contextOrgs, loadOrgs } = useWorkspace();
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedOrg, setSelectedOrg] = useState("all");
   const [openingRepoName, setOpeningRepoName] = useState<string | null>(null);
@@ -69,6 +60,8 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
   const [modalMode, setModalMode] = useState<"delete" | "unlink">("delete");
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isCreateOrgModalOpen, setIsCreateOrgModalOpen] = useState(false);
+  const [isLinkOrgModalOpen, setIsLinkOrgModalOpen] = useState(false);
+  const [isReloading, setIsReloading] = useState(false);
 
   // Edit & Clone Repo Modals State
   const [repoToEdit, setRepoToEdit] = useState<Repo | null>(null);
@@ -92,14 +85,17 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
       .catch(() => {});
   }, []);
 
-  // Create Repo State
-  const [isCreatingRepo, setIsCreatingRepo] = useState(false);
-  const [newRepoName, setNewRepoName] = useState("");
-  const [newRepoDesc, setNewRepoDesc] = useState("Repositório com regras de Governança");
-  const [newRepoApprovals, setNewRepoApprovals] = useState(1);
-  const [newRepoProtection, setNewRepoProtection] = useState(true);
-  const [newRepoPrivate, setNewRepoPrivate] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  // Create Repo Modal State
+  const [isCreateRepoModalOpen, setIsCreateRepoModalOpen] = useState(false);
+
+  const handleReloadAll = async () => {
+    setIsReloading(true);
+    try {
+      await Promise.all([loadRepos(), loadOrgs?.()]);
+    } finally {
+      setIsReloading(false);
+    }
+  };
 
   const handleOpenRepo = async (repo: Repo) => {
     if (openingRepoName) return;
@@ -123,39 +119,7 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
     }
   };
 
-  const handleCreateRepo = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newRepoName.trim()) return;
-    setIsSubmitting(true);
 
-    try {
-      const res = await API.createRepo({
-        name: newRepoName.trim(),
-        owner: selectedOrg === "all" ? user?.login : selectedOrg,
-        description: newRepoDesc,
-        required_approvals: newRepoApprovals,
-        enable_protection: newRepoProtection,
-        is_private: newRepoPrivate,
-      });
-
-      if (res.ok && res.data?.repo) {
-        await loadRepos();
-        setIsCreatingRepo(false);
-        setNewRepoName("");
-        if (res.data.is_ready === false) {
-          setWizardRepo(res.data.repo);
-          setWizardDiagnosis(res.data.diagnosis || null);
-          setIsWizardOpen(true);
-        } else {
-          await handleOpenRepo(res.data.repo);
-        }
-      }
-    } catch (err) {
-      console.error("[ReposView] Erro ao criar repositório:", err);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
 
   const handleWizardComplete = async (activeRepo: Repo) => {
     setIsWizardOpen(false);
@@ -166,13 +130,21 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
   };
 
   // Get list of unique organizations/owners
-  const orgs = Array.from(
-    new Set(
-      repos
-        .map((r) => r.owner || (r.full_name ? r.full_name.split("/")[0] : ""))
-        .filter((o) => o && o.toLowerCase() !== (user?.login || "").toLowerCase() && o !== "local"),
-    ),
-  );
+  const orgs = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const o of contextOrgs || []) {
+      if (o.login && o.login.toLowerCase() !== (user?.login || "").toLowerCase()) {
+        map.set(o.login.toLowerCase(), o.login);
+      }
+    }
+    for (const r of repos) {
+      const owner = r.owner || (r.full_name ? r.full_name.split("/")[0] : "");
+      if (owner && owner.toLowerCase() !== (user?.login || "").toLowerCase() && owner !== "local") {
+        map.set(owner.toLowerCase(), owner);
+      }
+    }
+    return Array.from(map.values());
+  }, [contextOrgs, repos, user?.login]);
 
   const hasLocalRepos = repos.some((r) => r.is_local);
 
@@ -265,150 +237,7 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
             width: "100%",
           }}
         >
-          {/* Card de Criação de Repositório */}
-          {isCreatingRepo && (
-            <Card
-              id="create-repo-card"
-              variant="elevated"
-              style={{ marginBottom: 24 }}
-            >
-              <CardHeader
-                title={t("repos:createCardTitle")}
-                subtitle={t("repos:createCardSubtitle")}
-                actions={
-                  <IconButton
-                    size="sm"
-                    tooltip={t("common:close")}
-                    onClick={() => setIsCreatingRepo(false)}
-                  >
-                    <X size={16} />
-                  </IconButton>
-                }
-              />
-              <form onSubmit={handleCreateRepo}>
-                <CardContent
-                  style={{ display: "flex", flexDirection: "column", gap: 14 }}
-                >
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "1fr 2fr",
-                      gap: 16,
-                    }}
-                  >
-                    <FormField label={t("repos:createOwnerLabel")}>
-                      <select
-                        id="create-repo-owner"
-                        className="ui-input"
-                        value={selectedOrg}
-                        onChange={(e) => setSelectedOrg(e.target.value)}
-                      >
-                        <option value="all">
-                          {t("repos:createOwnerPersonal", { user: user?.login })}
-                        </option>
-                        {orgs.map((o) => (
-                          <option key={o} value={o}>
-                            {t("repos:createOwnerOrg", { org: o })}
-                          </option>
-                        ))}
-                      </select>
-                    </FormField>
 
-                    <FormField label={t("repos:createNameLabel")} required>
-                      <Input
-                        id="create-repo-name"
-                        placeholder={t("repos:createNamePlaceholder")}
-                        value={newRepoName}
-                        onChange={(e) => setNewRepoName(e.target.value)}
-                        required
-                        autoFocus
-                      />
-                    </FormField>
-                  </div>
-
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "2fr 1fr",
-                      gap: 16,
-                    }}
-                  >
-                    <FormField label={t("repos:createDescLabel")}>
-                      <Input
-                        id="create-repo-desc"
-                        value={newRepoDesc}
-                        onChange={(e) => setNewRepoDesc(e.target.value)}
-                      />
-                    </FormField>
-
-                    <FormField label={t("repos:createApprovalsLabel")}>
-                      <select
-                        id="create-repo-approvals"
-                        className="ui-input"
-                        value={newRepoApprovals}
-                        onChange={(e) =>
-                          setNewRepoApprovals(Number(e.target.value))
-                        }
-                      >
-                        <option value="1">{t("repos:createApprovals1")}</option>
-                        <option value="2">{t("repos:createApprovals2")}</option>
-                      </select>
-                    </FormField>
-                  </div>
-
-                  <div
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: 10,
-                      marginTop: 4,
-                    }}
-                  >
-                    <Switch
-                      id="create-repo-protection"
-                      checked={newRepoProtection}
-                      onChange={setNewRepoProtection}
-                      label={
-                        <span>
-                          Bloquear branch <code>main</code> (Exige PR obrigatório)
-                        </span>
-                      }
-                      description={t("repos:createProtectionDesc", "Garante que nenhuma alteração direta seja feita sem revisão")}
-                    />
-
-                    <Switch
-                      id="create-repo-private"
-                      checked={newRepoPrivate}
-                      onChange={setNewRepoPrivate}
-                      label={t("repos:createPrivateLabel", { provider: providerLabel })}
-                      description={t("repos:createPrivateDesc")}
-                    />
-                  </div>
-                </CardContent>
-
-                <CardFooter>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setIsCreatingRepo(false)}
-                  >
-                    {t("common:cancel")}
-                  </Button>
-                  <Button
-                    id="btn-submit-create-repo"
-                    type="submit"
-                    variant="primary"
-                    size="sm"
-                    isLoading={isSubmitting}
-                    disabled={!newRepoName.trim()}
-                  >
-                    {t("repos:createSubmitButton")}
-                  </Button>
-                </CardFooter>
-              </form>
-            </Card>
-          )}
 
           {/* Cabeçalho da Seção de Repositórios & Barra de Ferramentas */}
           <div className="repos-section-header" style={{ marginBottom: 20 }}>
@@ -431,7 +260,7 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
               </div>
             </div>
 
-            {/* Ações: Novo Repositório e Nova Organização */}
+            {/* Ações: Novo Repositório, Vincular Organização, Criar no GitHub e Recarregar */}
             <div
               className="repos-actions-row"
               style={{
@@ -444,21 +273,40 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
             >
               <Button
                 id="btn-open-create-repo"
-                variant={isCreatingRepo ? "secondary" : "primary"}
+                variant="primary"
                 size="sm"
-                leftIcon={isCreatingRepo ? <X size={15} /> : <Plus size={15} />}
-                onClick={() => setIsCreatingRepo(!isCreatingRepo)}
+                leftIcon={<Plus size={15} />}
+                onClick={() => setIsCreateRepoModalOpen(true)}
               >
-                {isCreatingRepo ? t("repos:navClosePanel") : t("repos:navNewRepo")}
+                {t("repos:navNewRepo")}
+              </Button>
+              <Button
+                id="btn-open-link-org"
+                variant="secondary"
+                size="sm"
+                leftIcon={<Link2 size={15} />}
+                onClick={() => setIsLinkOrgModalOpen(true)}
+              >
+                Vincular Organização
               </Button>
               <Button
                 id="btn-open-create-org"
-                variant="secondary"
+                variant="outline"
                 size="sm"
                 leftIcon={<Building2 size={15} />}
                 onClick={() => setIsCreateOrgModalOpen(true)}
               >
-                {t("repos:navNewOrg")}
+                Criar no GitHub
+              </Button>
+              <Button
+                id="btn-reload-repos-orgs"
+                variant="ghost"
+                size="sm"
+                leftIcon={<RefreshCw size={14} className={isReloading || isLoading ? "animate-spin" : ""} />}
+                onClick={handleReloadAll}
+                disabled={isReloading || isLoading}
+              >
+                Recarregar
               </Button>
             </div>
 
@@ -554,7 +402,7 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
                       variant="primary"
                       size="sm"
                       leftIcon={<Plus size={15} />}
-                      onClick={() => setIsCreatingRepo(true)}
+                      onClick={() => setIsCreateRepoModalOpen(true)}
                     >
                       {t("repos:emptyAction")}
                     </Button>
@@ -927,12 +775,35 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
         }}
       />
 
+      <LinkOrgModal
+        isOpen={isLinkOrgModalOpen}
+        onClose={() => setIsLinkOrgModalOpen(false)}
+        onOpenCreate={() => setIsCreateOrgModalOpen(true)}
+        onLinked={async (linkedOrg) => {
+          await Promise.all([loadOrgs?.(), loadRepos()]);
+          setSelectedOrg(linkedOrg.login);
+        }}
+      />
+
       <CreateOrgModal
         isOpen={isCreateOrgModalOpen}
         onClose={() => setIsCreateOrgModalOpen(false)}
-        onCreated={async (newOrg) => {
+        onOpenLinkModal={() => setIsLinkOrgModalOpen(true)}
+      />
+
+      <CreateRepoModal
+        isOpen={isCreateRepoModalOpen}
+        onClose={() => setIsCreateRepoModalOpen(false)}
+        defaultOwner={selectedOrg}
+        onCreated={async (newRepo, isReady, diagnosis) => {
           await loadRepos();
-          setSelectedOrg(newOrg.login);
+          if (isReady === false) {
+            setWizardRepo(newRepo);
+            setWizardDiagnosis(diagnosis || null);
+            setIsWizardOpen(true);
+          } else {
+            await handleOpenRepo(newRepo);
+          }
         }}
       />
 

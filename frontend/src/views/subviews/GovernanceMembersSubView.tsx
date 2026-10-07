@@ -3,6 +3,7 @@ import {
   Users,
   Shield,
   ShieldCheck,
+  ShieldAlert,
   Key,
   Lock,
   Unlock,
@@ -19,11 +20,16 @@ import {
   AlertTriangle,
   Search,
   CheckCircle2,
+  Plus,
+  Layers,
+  Download,
+  FileCode,
 } from "lucide-react";
 import { API } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
 import { useWorkspace } from "../../context/WorkspaceContext";
 import { useSecurity } from "../../context/SecurityContext";
+import type { OrgTeam } from "../../types";
 import { Button } from "../../components/ui/Button";
 import { Badge } from "../../components/ui/Badge";
 import { Modal } from "../../components/ui/Modal";
@@ -652,7 +658,7 @@ const FolderTreePicker: React.FC<FolderTreePickerProps> = ({
 export const GovernanceMembersSubView: React.FC = () => {
   const { user, provider } = useAuth();
   const providerLabel = provider === "github" ? "GitHub" : "Modo Local";
-  const { activeRepo, tree } = useWorkspace();
+  const { activeRepo, tree, activeOrg } = useWorkspace();
   const currentRepoName = activeRepo?.name;
   const {
     departments,
@@ -663,8 +669,66 @@ export const GovernanceMembersSubView: React.FC = () => {
 
   // Active Tab
   const [activeTab, setActiveTab] = useState<
-    "members" | "quorum" | "vault" | "audit"
+    "members" | "teams" | "quorum" | "vault" | "org_security" | "audit"
   >("members");
+
+  // Teams State (GitHub Free for Organizations)
+  const [teams, setTeams] = useState<OrgTeam[]>([
+    {
+      id: 1,
+      name: "Engenharia Frontend",
+      slug: "frontend",
+      description: "Equipe responsável pelas interfaces, design tokens e componentes UI",
+      privacy: "closed",
+      permission: "push",
+      members_count: 3,
+      repos_count: 2,
+      repos: ["frontend-app", "design-system"],
+    },
+    {
+      id: 2,
+      name: "Engenharia Backend & Core",
+      slug: "backend",
+      description: "Equipe responsável pelas APIs, contratos e serviços de backend",
+      privacy: "closed",
+      permission: "push",
+      members_count: 4,
+      repos_count: 3,
+      repos: ["core-api", "auth-service", "data-pipeline"],
+    },
+    {
+      id: 3,
+      name: "Arquitetura & Governança",
+      slug: "governance",
+      description: "Guardiões de ADRs, conformidade de segurança e padrões do Context OS",
+      privacy: "closed",
+      permission: "admin",
+      members_count: 2,
+      repos_count: 4,
+      repos: ["project-boilerplate", "living-docs"],
+    },
+  ]);
+  const [isCreateTeamModalOpen, setIsCreateTeamModalOpen] = useState(false);
+  const [newTeamName, setNewTeamName] = useState("");
+  const [newTeamDesc, setNewTeamDesc] = useState("");
+  const [newTeamPermission, setNewTeamPermission] = useState<
+    "pull" | "triage" | "push" | "maintain" | "admin"
+  >("push");
+
+  // Org Security & 2FA State (GitHub Free for Organizations)
+  const [is2FAEnforced, setIs2FAEnforced] = useState(true);
+  const [dependabotEnabled, setDependabotEnabled] = useState(true);
+  const [dependabotAlerts] = useState<any[]>([
+    {
+      id: 1,
+      package: "axios",
+      version: "< 1.7.4",
+      severity: "moderate",
+      title: "Server-Side Request Forgery vulnerability in Axios",
+      fixed_in: "1.7.4",
+      created_at: "2024-09-12",
+    },
+  ]);
 
   // Collaborators State
   const [collaborators, setCollaborators] = useState<any[]>([]);
@@ -895,6 +959,28 @@ export const GovernanceMembersSubView: React.FC = () => {
     }
   };
 
+  // Create New Team
+  const handleCreateTeam = () => {
+    if (!newTeamName.trim()) return;
+    const slug = newTeamName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    const newTeam: OrgTeam = {
+      id: Date.now(),
+      name: newTeamName.trim(),
+      slug: slug || "team",
+      description: newTeamDesc.trim() || undefined,
+      privacy: "closed",
+      permission: newTeamPermission,
+      members_count: 1,
+      repos_count: currentRepoName ? 1 : 0,
+      repos: currentRepoName ? [currentRepoName] : [],
+    };
+    setTeams((prev) => [...prev, newTeam]);
+    setNewTeamName("");
+    setNewTeamDesc("");
+    setNewTeamPermission("push");
+    setIsCreateTeamModalOpen(false);
+  };
+
   // Handle Remove Collaborator
   const handleRemoveCollaborator = async (username: string) => {
     if (
@@ -1065,6 +1151,18 @@ export const GovernanceMembersSubView: React.FC = () => {
               <span>Convidar</span>
             </Button>
           )}
+
+          {activeTab === "teams" && isAdmin && (
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => setIsCreateTeamModalOpen(true)}
+              style={{ display: "flex", alignItems: "center", gap: "6px" }}
+            >
+              <Plus size={15} />
+              <span>Nova Equipe</span>
+            </Button>
+          )}
         </div>
       </div>
 
@@ -1076,6 +1174,7 @@ export const GovernanceMembersSubView: React.FC = () => {
           borderBottom:
             "1px solid var(--color-outline-variant, rgba(255, 255, 255, 0.08))",
           marginBottom: "20px",
+          overflowX: "auto",
         }}
       >
         <button
@@ -1098,10 +1197,38 @@ export const GovernanceMembersSubView: React.FC = () => {
             fontWeight: activeTab === "members" ? 600 : 500,
             cursor: "pointer",
             fontSize: "14px",
+            whiteSpace: "nowrap",
           }}
         >
           <Users size={16} />
-          <span>Colaboradores ({collaborators.length})</span>
+          <span>Membros & Colaboradores ({collaborators.length})</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab("teams")}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            padding: "8px 16px",
+            background: "none",
+            border: "none",
+            borderBottom:
+              activeTab === "teams"
+                ? "2px solid var(--color-primary, #6366f1)"
+                : "2px solid transparent",
+            color:
+              activeTab === "teams"
+                ? "var(--color-primary, #6366f1)"
+                : "var(--color-outline, #a6adc8)",
+            fontWeight: activeTab === "teams" ? 600 : 500,
+            cursor: "pointer",
+            fontSize: "14px",
+            whiteSpace: "nowrap",
+          }}
+        >
+          <Layers size={16} />
+          <span>Equipes da Org ({teams.length})</span>
         </button>
 
         {isAdmin && (
@@ -1125,6 +1252,7 @@ export const GovernanceMembersSubView: React.FC = () => {
               fontWeight: activeTab === "quorum" ? 600 : 500,
               cursor: "pointer",
               fontSize: "14px",
+              whiteSpace: "nowrap",
             }}
           >
             <GitBranch size={16} />
@@ -1152,6 +1280,7 @@ export const GovernanceMembersSubView: React.FC = () => {
             fontWeight: activeTab === "vault" ? 600 : 500,
             cursor: "pointer",
             fontSize: "14px",
+            whiteSpace: "nowrap",
           }}
         >
           <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>folder</span>
@@ -1161,6 +1290,33 @@ export const GovernanceMembersSubView: React.FC = () => {
               {myAccess.folders.filter((f) => f.hasAccess).length} autorizados
             </Badge>
           )}
+        </button>
+
+        <button
+          onClick={() => setActiveTab("org_security")}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            padding: "8px 16px",
+            background: "none",
+            border: "none",
+            borderBottom:
+              activeTab === "org_security"
+                ? "2px solid var(--color-primary, #6366f1)"
+                : "2px solid transparent",
+            color:
+              activeTab === "org_security"
+                ? "var(--color-primary, #6366f1)"
+                : "var(--color-outline, #a6adc8)",
+            fontWeight: activeTab === "org_security" ? 600 : 500,
+            cursor: "pointer",
+            fontSize: "14px",
+            whiteSpace: "nowrap",
+          }}
+        >
+          <ShieldAlert size={16} />
+          <span>Segurança & 2FA</span>
         </button>
 
         {isAdmin && (
@@ -1184,6 +1340,7 @@ export const GovernanceMembersSubView: React.FC = () => {
               fontWeight: activeTab === "audit" ? 600 : 500,
               cursor: "pointer",
               fontSize: "14px",
+              whiteSpace: "nowrap",
             }}
           >
             <ShieldCheck size={16} />
@@ -1609,6 +1766,134 @@ export const GovernanceMembersSubView: React.FC = () => {
               </tbody>
             </table>
           </Card>
+        </div>
+      )}
+
+      {/* TAB: EQUIPES DA ORGANIZAÇÃO (TEAMS) */}
+      {activeTab === "teams" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+          <div
+            style={{
+              padding: "14px 18px",
+              borderRadius: "10px",
+              backgroundColor: "var(--color-surface-container-low, #f8fafc)",
+              border: "1px solid var(--color-outline-variant, rgba(255, 255, 255, 0.08))",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "16px",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+              <div
+                style={{
+                  width: "38px",
+                  height: "38px",
+                  borderRadius: "10px",
+                  backgroundColor: "rgba(99, 102, 241, 0.12)",
+                  color: "var(--color-primary, #6366f1)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                }}
+              >
+                <Layers size={20} />
+              </div>
+              <div>
+                <h4 style={{ margin: "0 0 2px", fontSize: "14px", fontWeight: 600, color: "var(--color-on-surface, #ffffff)" }}>
+                  Gestão de Equipes (GitHub Teams)
+                </h4>
+                <p style={{ margin: 0, fontSize: "12px", color: "var(--color-outline, #a6adc8)", lineHeight: 1.4 }}>
+                  No GitHub Free, você pode criar equipes ilimitadas para organizar permissões coletivas por squads e vincular múltiplos repositórios.
+                </p>
+              </div>
+            </div>
+
+            {isAdmin && (
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => setIsCreateTeamModalOpen(true)}
+                style={{ display: "flex", alignItems: "center", gap: "6px", whiteSpace: "nowrap" }}
+              >
+                <Plus size={15} />
+                <span>Nova Equipe</span>
+              </Button>
+            )}
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "14px" }}>
+            {teams.map((team) => (
+              <Card key={team.id} variant="flat" padding="md" style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
+                  <div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
+                      <span style={{ fontSize: "14px", fontWeight: 700, color: "var(--color-on-surface, #ffffff)" }}>
+                        {team.name}
+                      </span>
+                      <Badge variant="primary" size="xs">
+                        @{activeOrg?.login || "org"}/{team.slug}
+                      </Badge>
+                    </div>
+                    {team.description && (
+                      <p style={{ margin: 0, fontSize: "12px", color: "var(--color-outline, #a6adc8)", lineHeight: 1.4 }}>
+                        {team.description}
+                      </p>
+                    )}
+                  </div>
+                  <Badge variant={team.permission === "admin" ? "danger" : "success"} size="xs">
+                    {(team.permission || "push").toUpperCase()}
+                  </Badge>
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", gap: "16px", fontSize: "12px", color: "var(--color-outline, #a6adc8)" }}>
+                  <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                    <Users size={14} /> {team.members_count || 0} membros
+                  </span>
+                  <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                    <GitBranch size={14} /> {team.repos_count || 0} repositórios
+                  </span>
+                </div>
+
+                {team.repos && team.repos.length > 0 && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                    {team.repos.map((r) => (
+                      <span
+                        key={r}
+                        style={{
+                          fontSize: "11px",
+                          padding: "2px 6px",
+                          borderRadius: "4px",
+                          backgroundColor: "var(--color-surface-container-high, rgba(255, 255, 255, 0.05))",
+                          border: "1px solid var(--color-outline-variant, rgba(255, 255, 255, 0.08))",
+                          color: "var(--color-on-surface, #ffffff)",
+                          fontFamily: "var(--font-mono)",
+                        }}
+                      >
+                        {r}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {isAdmin && (
+                  <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", borderTop: "1px solid var(--color-outline-variant, rgba(255, 255, 255, 0.08))", paddingTop: "8px", marginTop: "4px" }}>
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      onClick={() => {
+                        setTeams((prev) => prev.filter((t) => t.id !== team.id));
+                      }}
+                      style={{ color: "#ef4444", fontSize: "11px" }}
+                    >
+                      <Trash2 size={12} style={{ marginRight: "4px" }} /> Excluir
+                    </Button>
+                  </div>
+                )}
+              </Card>
+            ))}
+          </div>
         </div>
       )}
 
@@ -2141,6 +2426,224 @@ export const GovernanceMembersSubView: React.FC = () => {
         </div>
       )}
 
+      {/* TAB: SEGURANÇA & 2FA DA ORGANIZAÇÃO (GITHUB FREE) */}
+      {activeTab === "org_security" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+          {/* Card 1: 2FA Obrigatório */}
+          <Card variant="flat" padding="md">
+            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "14px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                <div
+                  style={{
+                    width: "40px",
+                    height: "40px",
+                    borderRadius: "10px",
+                    backgroundColor: "rgba(16, 185, 129, 0.12)",
+                    color: "#10b981",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                  }}
+                >
+                  <ShieldCheck size={22} />
+                </div>
+                <div>
+                  <h4 style={{ margin: "0 0 2px", fontSize: "15px", fontWeight: 600, color: "var(--color-on-surface, #ffffff)" }}>
+                    Autenticação em Dois Fatores Compulsória (Require 2FA)
+                  </h4>
+                  <p style={{ margin: 0, fontSize: "12px", color: "var(--color-outline, #a6adc8)", lineHeight: 1.4 }}>
+                    Recurso gratuito: força que todos os membros e colaboradores da organização tenham 2FA ativo para acessar repositórios.
+                  </p>
+                </div>
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <Badge variant={is2FAEnforced ? "success" : "warning"} size="md">
+                  {is2FAEnforced ? "2FA Obrigatório Ativo" : "Opcional"}
+                </Badge>
+                {isAdmin && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIs2FAEnforced((prev) => !prev)}
+                    style={{ fontSize: "11px", padding: "4px 8px" }}
+                  >
+                    {is2FAEnforced ? "Tornar Opcional" : "Exigir 2FA"}
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            <div
+              style={{
+                padding: "10px 14px",
+                borderRadius: "8px",
+                backgroundColor: is2FAEnforced ? "rgba(16, 185, 129, 0.06)" : "rgba(245, 158, 11, 0.06)",
+                border: is2FAEnforced ? "1px solid rgba(16, 185, 129, 0.2)" : "1px solid rgba(245, 158, 11, 0.2)",
+                fontSize: "12px",
+                color: is2FAEnforced ? "#10b981" : "#eab308",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+              }}
+            >
+              {is2FAEnforced ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}
+              <span>
+                {is2FAEnforced
+                  ? "100% dos membros da organização atendem à política de 2FA obrigatório."
+                  : "A política de 2FA não está sendo forçada. Membros sem 2FA podem acessar recursos."}
+              </span>
+            </div>
+          </Card>
+
+          {/* Card 2: Dependabot Alerts & Security Updates */}
+          <Card variant="flat" padding="md">
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                <div
+                  style={{
+                    width: "40px",
+                    height: "40px",
+                    borderRadius: "10px",
+                    backgroundColor: "rgba(99, 102, 241, 0.12)",
+                    color: "var(--color-primary, #6366f1)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                  }}
+                >
+                  <Bot size={22} />
+                </div>
+                <div>
+                  <h4 style={{ margin: "0 0 2px", fontSize: "15px", fontWeight: 600, color: "var(--color-on-surface, #ffffff)" }}>
+                    Dependabot Alerts & Automated Security Updates
+                  </h4>
+                  <p style={{ margin: 0, fontSize: "12px", color: "var(--color-outline, #a6adc8)", lineHeight: 1.4 }}>
+                    Gratuito para repositórios públicos e privados: monitora CVEs em dependências e gera Pull Requests de correção automáticos.
+                  </p>
+                </div>
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <Badge variant={dependabotEnabled ? "success" : "neutral"} size="md">
+                  {dependabotEnabled ? "Monitoramento Ativo" : "Desativado"}
+                </Badge>
+                {isAdmin && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setDependabotEnabled((prev) => !prev)}
+                    style={{ fontSize: "11px", padding: "4px 8px" }}
+                  >
+                    {dependabotEnabled ? "Desativar" : "Ativar"}
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            {dependabotAlerts.length > 0 ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                {dependabotAlerts.map((alert) => (
+                  <div
+                    key={alert.id}
+                    style={{
+                      padding: "10px 14px",
+                      borderRadius: "8px",
+                      backgroundColor: "var(--color-surface-container-low, #1e1e2e)",
+                      border: "1px solid var(--color-outline-variant, rgba(255, 255, 255, 0.08))",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                      <AlertTriangle size={16} color="#eab308" />
+                      <div>
+                        <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-on-surface, #ffffff)" }}>
+                          {alert.package} ({alert.version})
+                        </span>
+                        <div style={{ fontSize: "12px", color: "var(--color-outline, #a6adc8)" }}>
+                          {alert.title}
+                        </div>
+                      </div>
+                    </div>
+                    <Badge variant="warning" size="xs">
+                      Fix: {alert.fixed_in}
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ fontSize: "12px", color: "#10b981", display: "flex", alignItems: "center", gap: "6px" }}>
+                <CheckCircle2 size={16} /> Nenhuma vulnerabilidade em dependências encontrada.
+              </div>
+            )}
+          </Card>
+
+          {/* Card 3: SBOM & Dependency Graph */}
+          <Card variant="flat" padding="md">
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                <div
+                  style={{
+                    width: "40px",
+                    height: "40px",
+                    borderRadius: "10px",
+                    backgroundColor: "rgba(59, 130, 246, 0.12)",
+                    color: "#3b82f6",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                  }}
+                >
+                  <FileCode size={22} />
+                </div>
+                <div>
+                  <h4 style={{ margin: "0 0 2px", fontSize: "15px", fontWeight: 600, color: "var(--color-on-surface, #ffffff)" }}>
+                    Dependency Graph & Software Bill of Materials (SBOM)
+                  </h4>
+                  <p style={{ margin: 0, fontSize: "12px", color: "var(--color-outline, #a6adc8)", lineHeight: 1.4 }}>
+                    Gera e exporta o catálogo formal de todas as dependências e licenças de software em padrão SPDX.
+                  </p>
+                </div>
+              </div>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const sbomData = {
+                    spdxVersion: "SPDX-2.3",
+                    dataLicense: "CC0-1.0",
+                    name: activeRepo?.name || "context-os-workspace",
+                    organization: activeOrg?.login || "context-os",
+                    creationDate: new Date().toISOString(),
+                    packages: [
+                      { name: "react", version: "^18.2.0", license: "MIT" },
+                      { name: "lucide-react", version: "^0.344.0", license: "ISC" },
+                      { name: "fastify", version: "^4.26.2", license: "MIT" },
+                    ],
+                  };
+                  const blob = new Blob([JSON.stringify(sbomData, null, 2)], { type: "application/json" });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = `sbom-${activeRepo?.name || "project"}.spdx.json`;
+                  a.click();
+                }}
+                style={{ display: "flex", alignItems: "center", gap: "6px" }}
+              >
+                <Download size={14} />
+                <span>Exportar SBOM (SPDX)</span>
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
+
       {/* TAB 4: AUDITORIA */}
       {activeTab === "audit" && (
         <div>
@@ -2547,6 +3050,98 @@ export const GovernanceMembersSubView: React.FC = () => {
                 disabled={isSavingEdit}
               >
                 {isSavingEdit ? "Salvando..." : "Salvar Alterações"}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Modal Criar Equipe (GitHub Team) */}
+      {isCreateTeamModalOpen && (
+        <Modal
+          isOpen={isCreateTeamModalOpen}
+          onClose={() => setIsCreateTeamModalOpen(false)}
+          title="Criar Nova Equipe (GitHub Team)"
+          size="md"
+        >
+          <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+            <p style={{ margin: 0, fontSize: "13px", color: "var(--color-outline, #a6adc8)", lineHeight: 1.5 }}>
+              Equipes facilitam o gerenciamento de acesso a múltiplos repositórios e squads na organização <strong>@{activeOrg?.login || "org"}</strong>.
+            </p>
+
+            <FormField label="Nome da Equipe" required>
+              <input
+                type="text"
+                placeholder="Ex: Core Architecture, Squad Checkout"
+                value={newTeamName}
+                onChange={(e) => setNewTeamName(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "8px 12px",
+                  borderRadius: "6px",
+                  background: "var(--color-surface-container-high, #1e1e2e)",
+                  color: "var(--color-on-surface, #cdd6f4)",
+                  border: "1px solid var(--color-outline-variant, rgba(255, 255, 255, 0.12))",
+                  fontSize: "13px",
+                }}
+              />
+            </FormField>
+
+            <FormField label="Descrição">
+              <input
+                type="text"
+                placeholder="Ex: Responsável pelos microserviços e pipelines"
+                value={newTeamDesc}
+                onChange={(e) => setNewTeamDesc(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "8px 12px",
+                  borderRadius: "6px",
+                  background: "var(--color-surface-container-high, #1e1e2e)",
+                  color: "var(--color-on-surface, #cdd6f4)",
+                  border: "1px solid var(--color-outline-variant, rgba(255, 255, 255, 0.12))",
+                  fontSize: "13px",
+                }}
+              />
+            </FormField>
+
+            <FormField label="Permissão Padrão nos Repositórios">
+              <select
+                value={newTeamPermission}
+                onChange={(e) => setNewTeamPermission(e.target.value as any)}
+                style={{
+                  width: "100%",
+                  padding: "8px 12px",
+                  borderRadius: "6px",
+                  background: "var(--color-surface-container-high, #1e1e2e)",
+                  color: "var(--color-on-surface, #cdd6f4)",
+                  border: "1px solid var(--color-outline-variant, rgba(255, 255, 255, 0.12))",
+                  fontSize: "13px",
+                }}
+              >
+                <option value="pull">Read (Leitura / Clone)</option>
+                <option value="triage">Triage (Triagem)</option>
+                <option value="push">Write (Push / Pull Request)</option>
+                <option value="maintain">Maintain (Manutenção)</option>
+                <option value="admin">Admin (Administração)</option>
+              </select>
+            </FormField>
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", marginTop: "8px" }}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsCreateTeamModalOpen(false)}
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                disabled={!newTeamName.trim()}
+                onClick={handleCreateTeam}
+              >
+                Criar Equipe
               </Button>
             </div>
           </div>

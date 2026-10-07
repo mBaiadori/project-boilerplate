@@ -89,6 +89,8 @@ export interface Repo {
   forks?: number;
   updated_at?: string;
   permissions?: RepoPermissions;
+  has_access?: boolean;
+  is_locked?: boolean;
 }
 
 export interface SavedAccount {
@@ -681,7 +683,25 @@ export interface SyncToMainPreview {
   summary: string;
 }
 
+export interface Organization {
+  login: string;
+  full_name?: string;
+  avatar_url?: string;
+  description?: string;
+  is_owner?: boolean;
+  role?: 'admin' | 'member';
+  public_repos?: number;
+  total_private_repos?: number;
+}
 
-
-
-
+export interface OrgTeam {
+  id: number | string;
+  name: string;
+  slug: string;
+  description?: string;
+  privacy?: 'closed' | 'secret';
+  permission?: 'pull' | 'triage' | 'push' | 'maintain' | 'admin';
+  members_count?: number;
+  repos_count?: number;
+  repos?: string[];
+}

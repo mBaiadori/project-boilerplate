@@ -1,139 +1,84 @@
-import React, { useState } from 'react';
-import { Building2, X, Globe, ExternalLink, AlertCircle } from 'lucide-react';
-import { Button, IconButton, FormField, Input } from '../ui';
-import { API } from '../../services/api';
-import { useAuth } from '../../context/AuthContext';
+import React from "react";
+import { Building2, X, ExternalLink, ArrowRight, ShieldCheck, CheckCircle2 } from "lucide-react";
+import { Button, IconButton } from "../ui";
 
 interface CreateOrgModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onCreated: (org: { login: string; full_name?: string }) => void;
+  onOpenLinkModal?: () => void;
 }
 
 export const CreateOrgModal: React.FC<CreateOrgModalProps> = ({
   isOpen,
   onClose,
-  onCreated,
+  onOpenLinkModal,
 }) => {
-  const { provider } = useAuth();
-  const isGitHub = provider === 'github';
-
-  const [username, setUsername] = useState('');
-  const [fullName, setFullName] = useState('');
-  const [description, setDescription] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [webFlowUrl, setWebFlowUrl] = useState<string | null>(null);
-
-  React.useEffect(() => {
-    if (isOpen) {
-      setUsername('');
-      setFullName('');
-      setDescription('');
-      setErrorMsg(null);
-      setWebFlowUrl(null);
-    }
-  }, [isOpen]);
-
   if (!isOpen) return null;
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const cleanUsername = username.trim().toLowerCase().replace(/\s+/g, '-');
-    if (!cleanUsername) return;
-
-    setIsSubmitting(true);
-    setErrorMsg(null);
-    setWebFlowUrl(null);
-
-    try {
-      const res = await API.createOrg({
-        username: cleanUsername,
-        full_name: fullName.trim() || undefined,
-        description: description.trim() || undefined,
-      });
-
-      if (res.ok) {
-        if (res.data?.requires_web_flow && res.data.web_url) {
-          setWebFlowUrl(res.data.web_url);
-        } else if (res.data?.success && res.data.org) {
-          onCreated(res.data.org);
-          onClose();
-        } else {
-          setErrorMsg(res.data?.error || res.data?.message || 'Erro ao registrar organização');
-        }
-      } else {
-        setErrorMsg(res.data?.error || res.data?.message || 'Erro ao processar requisição');
-      }
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Erro de conexão com o servidor');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
 
   return (
     <div
       style={{
-        position: 'fixed',
+        position: "fixed",
         inset: 0,
-        backgroundColor: 'rgba(15, 23, 42, 0.75)',
-        backdropFilter: 'blur(8px)',
+        backgroundColor: "rgba(15, 23, 42, 0.75)",
+        backdropFilter: "blur(8px)",
         zIndex: 9999,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '24px',
-        boxSizing: 'border-box',
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "24px",
+        boxSizing: "border-box",
       }}
+      onClick={onClose}
     >
       <div
         style={{
-          width: '100%',
-          maxWidth: '540px',
-          backgroundColor: 'var(--color-surface, #ffffff)',
-          color: 'var(--color-on-surface, #1e293b)',
-          borderRadius: '16px',
-          border: '1px solid var(--color-outline-variant, #e2e8f0)',
-          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-          animation: 'fadeIn 0.2s ease-out',
+          width: "100%",
+          maxWidth: "540px",
+          backgroundColor: "var(--color-surface, #ffffff)",
+          color: "var(--color-on-surface, #1e293b)",
+          borderRadius: "16px",
+          border: "1px solid var(--color-outline-variant, #e2e8f0)",
+          boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+          animation: "fadeIn 0.2s ease-out",
         }}
+        onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div
           style={{
-            padding: '20px 24px',
-            borderBottom: '1px solid var(--color-outline-variant, #e2e8f0)',
-            backgroundColor: 'var(--color-surface-container-low, #f8fafc)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
+            padding: "20px 24px",
+            borderBottom: "1px solid var(--color-outline-variant, #e2e8f0)",
+            backgroundColor: "var(--color-surface-container-low, #f8fafc)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
             <div
               style={{
-                width: '38px',
-                height: '38px',
-                borderRadius: '10px',
-                background: 'linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#ffffff',
+                width: "40px",
+                height: "40px",
+                borderRadius: "10px",
+                background: "linear-gradient(135deg, #1a73e8 0%, #6366f1 100%)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#ffffff",
               }}
             >
-              <Building2 size={20} />
+              <Building2 size={22} />
             </div>
             <div>
-              <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: 'var(--color-on-surface, #0f172a)' }}>
-                Nova Organização
+              <h2 style={{ margin: 0, fontSize: "17px", fontWeight: 600, color: "var(--color-on-surface, #0f172a)" }}>
+                Criar Organização no GitHub
               </h2>
-              <span style={{ fontSize: '12px', color: 'var(--color-on-surface-variant, #64748b)' }}>
-                {isGitHub ? 'Registrar organização no GitHub' : 'Criar organização local'}
+              <span style={{ fontSize: "12px", color: "var(--color-on-surface-variant, #64748b)" }}>
+                Fluxo oficial de criação de organização gratuita no GitHub
               </span>
             </div>
           </div>
@@ -144,122 +89,109 @@ export const CreateOrgModal: React.FC<CreateOrgModalProps> = ({
         </div>
 
         {/* Content */}
-        <form onSubmit={handleSubmit} style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-          {errorMsg && (
-            <div
-              style={{
-                padding: '10px 14px',
-                borderRadius: '8px',
-                backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                border: '1px solid #ef4444',
-                color: '#ef4444',
-                fontSize: '13px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-              }}
-            >
-              <AlertCircle size={16} />
-              <span>{errorMsg}</span>
+        <div style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "18px" }}>
+          <div
+            style={{
+              padding: "14px 16px",
+              borderRadius: "10px",
+              backgroundColor: "rgba(26, 115, 232, 0.06)",
+              border: "1px solid rgba(26, 115, 232, 0.18)",
+              display: "flex",
+              flexDirection: "column",
+              gap: "8px",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "var(--color-primary, #1a73e8)", fontWeight: 600, fontSize: "13.5px" }}>
+              <ShieldCheck size={18} />
+              <span>Plano GitHub Free for Organizations</span>
             </div>
-          )}
-
-          {webFlowUrl && (
-            <div
-              style={{
-                padding: '14px',
-                borderRadius: '10px',
-                backgroundColor: 'rgba(26, 115, 232, 0.08)',
-                border: '1px solid var(--color-primary, #1a73e8)',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '10px',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--color-primary, #1a73e8)', fontWeight: 600, fontSize: '13px' }}>
-                <Globe size={16} />
-                <span>Fluxo Oficial do GitHub</span>
-              </div>
-              <p style={{ margin: 0, fontSize: '12px', color: 'var(--color-on-surface, #334155)', lineHeight: 1.4 }}>
-                O GitHub exige que novas organizações sejam criadas pela sua interface web oficial para definição de faturamento e membros.
-              </p>
-              <a
-                href={webFlowUrl}
-                target="_blank"
-                rel="noreferrer"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  padding: '8px 14px',
-                  borderRadius: '6px',
-                  backgroundColor: 'var(--color-primary, #1a73e8)',
-                  color: '#ffffff',
-                  fontSize: '13px',
-                  fontWeight: 500,
-                  textDecoration: 'none',
-                  alignSelf: 'flex-start',
-                }}
-              >
-                <span>Abrir Criador de Organizações do GitHub</span>
-                <ExternalLink size={14} />
-              </a>
-            </div>
-          )}
-
-          {!webFlowUrl && (
-            <>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <FormField label="Identificador / Nome de Usuário:" required>
-                  <Input
-                    id="org-username-input"
-                    placeholder="ex: acme-corp"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    required
-                    autoFocus
-                  />
-                </FormField>
-
-                <FormField label="Nome de Exibição:">
-                  <Input
-                    id="org-fullname-input"
-                    placeholder="ex: Acme Corporation"
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                  />
-                </FormField>
-              </div>
-
-              <FormField label="Descrição:">
-                <Input
-                  id="org-description-input"
-                  placeholder="ex: Projetos e especificações de engenharia"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                />
-              </FormField>
-            </>
-          )}
-
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
-            <Button type="button" variant="ghost" size="sm" onClick={onClose}>
-              {webFlowUrl ? 'Fechar' : 'Cancelar'}
-            </Button>
-            {!webFlowUrl && (
-              <Button
-                id="btn-submit-create-org"
-                type="submit"
-                variant="primary"
-                size="sm"
-                isLoading={isSubmitting}
-                disabled={!username.trim()}
-              >
-                Criar Organização
-              </Button>
-            )}
+            <p style={{ margin: 0, fontSize: "12.5px", color: "var(--color-on-surface, #334155)", lineHeight: 1.5 }}>
+              O GitHub exige que a criação inicial de novas organizações seja realizada diretamente na sua interface web oficial para aceite de Termos de Serviço e definição do plano (o plano <strong>Free</strong> é 100% gratuito e ilimitado para repositórios públicos e privados).
+            </p>
           </div>
-        </form>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: "10px", fontSize: "13px", color: "var(--color-on-surface-variant, #64748b)" }}>
+            <div style={{ display: "flex", alignItems: "flex-start", gap: "8px" }}>
+              <CheckCircle2 size={16} color="#10b981" style={{ flexShrink: 0, marginTop: "2px" }} />
+              <span>Clique no botão abaixo para abrir a página de criação no GitHub.</span>
+            </div>
+            <div style={{ display: "flex", alignItems: "flex-start", gap: "8px" }}>
+              <CheckCircle2 size={16} color="#10b981" style={{ flexShrink: 0, marginTop: "2px" }} />
+              <span>Defina o nome da sua organização e selecione o plano <strong>Free</strong>.</span>
+            </div>
+            <div style={{ display: "flex", alignItems: "flex-start", gap: "8px" }}>
+              <CheckCircle2 size={16} color="#10b981" style={{ flexShrink: 0, marginTop: "2px" }} />
+              <span>Após criar, volte aqui e clique em <strong>Vincular Organização</strong> para importá-la imediatamente.</span>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", gap: "12px", marginTop: "6px" }}>
+            <a
+              href="https://github.com/account/organizations/new"
+              target="_blank"
+              rel="noreferrer"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "8px",
+                padding: "10px 18px",
+                borderRadius: "8px",
+                backgroundColor: "var(--color-primary, #1a73e8)",
+                color: "#ffffff",
+                fontSize: "13.5px",
+                fontWeight: 600,
+                textDecoration: "none",
+                flex: 1,
+                boxShadow: "0 2px 6px rgba(26, 115, 232, 0.3)",
+              }}
+            >
+              <span>Abrir Criador no GitHub</span>
+              <ExternalLink size={15} />
+            </a>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div
+          style={{
+            padding: "16px 24px",
+            borderTop: "1px solid var(--color-outline-variant, #e2e8f0)",
+            backgroundColor: "var(--color-surface-container-low, #f8fafc)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          {onOpenLinkModal && (
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                onOpenLinkModal();
+              }}
+              style={{
+                background: "none",
+                border: "none",
+                color: "var(--color-primary, #1a73e8)",
+                fontSize: "13px",
+                fontWeight: 600,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "4px",
+                padding: 0,
+              }}
+            >
+              <span>Já criou? Vincular agora</span>
+              <ArrowRight size={14} />
+            </button>
+          )}
+
+          <Button variant="ghost" size="sm" onClick={onClose} style={{ marginLeft: "auto" }}>
+            Fechar
+          </Button>
+        </div>
       </div>
     </div>
   );

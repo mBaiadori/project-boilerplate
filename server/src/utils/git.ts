@@ -84,7 +84,8 @@ export async function callGitHubAPI(
     : `https://api.github.com${endpoint.startsWith("/") ? "" : "/"}${endpoint}`;
 
   const headers: Record<string, string> = {
-    Accept: "application/json, application/vnd.github+json",
+    Accept: "application/vnd.github+json",
+    "X-GitHub-Api-Version": "2022-11-28",
     "User-Agent": "Context-OS-Spec-Driven",
   };
 
@@ -112,7 +113,19 @@ export async function callGitHubAPI(
     } catch {
       resData = { message: text };
     }
-    return { statusCode: res.status, data: resData };
+    const oauthScopes = res.headers.get("x-oauth-scopes");
+    const acceptedScopes = res.headers.get("x-accepted-oauth-scopes");
+    if (res.status >= 400) {
+      console.warn(`[GitHub API ${res.status}] ${method} ${url}:`, {
+        error: resData,
+        oauthScopes,
+        acceptedScopes,
+      });
+    }
+    return {
+      statusCode: res.status,
+      data: resData,
+    };
   } catch (err: any) {
     return {
       statusCode: 500,

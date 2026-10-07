@@ -1,8 +1,11 @@
-import React, { useState, useMemo, useRef, useEffect } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
   Folder,
   FolderOpen,
   ChevronRight,
+  ChevronDown,
+  Building2,
+  Plus,
   FilePlus,
   FolderPlus,
   Trash2,
@@ -22,12 +25,16 @@ import {
   Laptop,
   Shield,
   Lock,
+  Link2,
 } from "lucide-react";
-import type { TreeNode, TemplateItem } from "../../types";
+import type { TreeNode, TemplateItem, Repo } from "../../types";
 import { useWorkspace } from "../../context/WorkspaceContext";
 import { useSecurity } from "../../context/SecurityContext";
 import { API } from "../../services/api";
 import { TemplatePickerModal } from "../modals/TemplatePickerModal";
+import { CreateOrgModal } from "../modals/CreateOrgModal";
+import { LinkOrgModal } from "../modals/LinkOrgModal";
+import { LockedRepoModal } from "../modals/LockedRepoModal";
 
 interface FileTreeProps {
   onOpenFile: (path: string) => void;
@@ -239,6 +246,11 @@ export const FileTree: React.FC<FileTreeProps> = ({
     tree,
     activeFile,
     activeRepo,
+    repos,
+    selectRepo,
+    activeOrg,
+    orgs,
+    selectOrg,
     loadTree,
     gitStatus,
     pendingChanges,
@@ -251,6 +263,10 @@ export const FileTree: React.FC<FileTreeProps> = ({
   const repoName = activeRepo?.name || "default";
   const isTreeLoading = Boolean(isLoadingWorkspace || isLoadingTree);
   const [searchTerm, setSearchTerm] = useState("");
+  const [isOrgDropdownOpen, setIsOrgDropdownOpen] = useState(false);
+  const [isCreateOrgModalOpen, setIsCreateOrgModalOpen] = useState(false);
+  const [isLinkOrgModalOpen, setIsLinkOrgModalOpen] = useState(false);
+  const [lockedRepoTarget, setLockedRepoTarget] = useState<Repo | null>(null);
   const [collapsedFolders, setCollapsedFolders] = useState<
     Record<string, boolean>
   >(() => {
@@ -1196,6 +1212,30 @@ export const FileTree: React.FC<FileTreeProps> = ({
     return map;
   }, [pendingChanges]);
 
+  // Repositórios pertencentes à Organização Ativa
+  const orgRepos = useMemo(() => {
+    if (!repos || repos.length === 0) {
+      if (activeRepo) return [activeRepo];
+      return [];
+    }
+    const currentOrgLogin = activeOrg?.login?.toLowerCase();
+    if (!currentOrgLogin) return repos;
+    const filtered = repos.filter((r) => {
+      if (!r.owner) return true;
+      return (
+        r.owner.toLowerCase() === currentOrgLogin ||
+        r.full_name?.toLowerCase().startsWith(`${currentOrgLogin}/`)
+      );
+    });
+    if (
+      activeRepo &&
+      !filtered.some((r) => r.name.toLowerCase() === activeRepo.name.toLowerCase())
+    ) {
+      filtered.unshift(activeRepo);
+    }
+    return filtered.length > 0 ? filtered : repos;
+  }, [repos, activeOrg, activeRepo]);
+
   // Build display nodes based on search query (displaying ALL files, searching by name and title)
   const displayNodes = useMemo(() => {
     if (!tree || tree.length === 0) return [];
@@ -1773,12 +1813,213 @@ export const FileTree: React.FC<FileTreeProps> = ({
         onDragEnter={handlePaneDragEnter}
         onDragLeave={handlePaneDragLeave}
       >
-        {/* TOP SECTION: Search Bar on Top + Actions Toolbar Below */}
+        {/* TOP SECTION: Active Org Selector + Search Bar + Actions Toolbar */}
         <div
           className="tree-top-container"
           onClick={(e) => e.stopPropagation()}
         >
-          {/* Search Input Bar at Top */}
+          {/* Active Organization Root Header */}
+          <div className="tree-org-header" style={{ position: "relative", marginBottom: "8px" }}>
+            <div
+              id="btn-tree-org-selector"
+              onClick={() => setIsOrgDropdownOpen((prev) => !prev)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "8px 10px",
+                backgroundColor: "var(--color-surface-container-low, #f8fafc)",
+                borderRadius: "8px",
+                border: "1px solid var(--color-outline-variant, #e2e8f0)",
+                cursor: "pointer",
+                transition: "all 0.15s ease",
+              }}
+              title="Clique para alternar ou criar organizações"
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", minWidth: 0 }}>
+                {activeOrg?.avatar_url ? (
+                  <img
+                    src={activeOrg.avatar_url}
+                    alt={activeOrg.login}
+                    style={{ width: "20px", height: "20px", borderRadius: "4px", objectFit: "cover" }}
+                  />
+                ) : (
+                  <div
+                    style={{
+                      width: "20px",
+                      height: "20px",
+                      borderRadius: "4px",
+                      backgroundColor: "var(--color-primary, #1a73e8)",
+                      color: "#ffffff",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <Building2 size={12} />
+                  </div>
+                )}
+                <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+                  <span
+                    style={{
+                      fontSize: "12px",
+                      fontWeight: 700,
+                      color: "var(--color-on-surface, #0f172a)",
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      lineHeight: 1.2,
+                    }}
+                  >
+                    {activeOrg?.full_name || activeOrg?.login || "Organização"}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: "10px",
+                      color: "var(--color-on-surface-variant, #64748b)",
+                      lineHeight: 1,
+                    }}
+                  >
+                    Workspace Root
+                  </span>
+                </div>
+              </div>
+              <ChevronDown
+                size={14}
+                color="var(--color-on-surface-variant, #64748b)"
+                style={{
+                  transform: isOrgDropdownOpen ? "rotate(180deg)" : "none",
+                  transition: "transform 0.15s ease",
+                }}
+              />
+            </div>
+
+            {/* Dropdown Menu de Organizações */}
+            {isOrgDropdownOpen && (
+              <div
+                style={{
+                  position: "absolute",
+                  top: "100%",
+                  left: 0,
+                  right: 0,
+                  backgroundColor: "var(--color-surface, #ffffff)",
+                  borderRadius: "8px",
+                  border: "1px solid var(--color-outline-variant, #e2e8f0)",
+                  boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.2)",
+                  zIndex: 100,
+                  marginTop: "4px",
+                  overflow: "hidden",
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div style={{ padding: "4px" }}>
+                  <div
+                    style={{
+                      padding: "6px 8px",
+                      fontSize: "10px",
+                      fontWeight: 700,
+                      textTransform: "uppercase",
+                      color: "var(--color-on-surface-variant, #64748b)",
+                    }}
+                  >
+                    Minhas Organizações
+                  </div>
+                  {orgs.map((o) => {
+                    const isSelected = activeOrg?.login === o.login;
+                    return (
+                      <div
+                        key={o.login}
+                        onClick={() => {
+                          selectOrg(o.login);
+                          setIsOrgDropdownOpen(false);
+                        }}
+                        style={{
+                          padding: "6px 8px",
+                          borderRadius: "6px",
+                          fontSize: "12px",
+                          fontWeight: isSelected ? 600 : 500,
+                          backgroundColor: isSelected
+                            ? "var(--color-primary-container, #e8f0fe)"
+                            : "transparent",
+                          color: isSelected
+                            ? "var(--color-primary, #1a73e8)"
+                            : "var(--color-on-surface, #0f172a)",
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
+                          transition: "background-color 0.1s ease",
+                        }}
+                      >
+                        <Building2 size={13} />
+                        <span
+                          style={{
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                            flex: 1,
+                          }}
+                        >
+                          {o.full_name || o.login}
+                        </span>
+                        {isSelected && (
+                          <span style={{ fontSize: "11px", fontWeight: 700 }}>✓</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                  <div
+                    style={{
+                      height: "1px",
+                      backgroundColor: "var(--color-outline-variant, #e2e8f0)",
+                      margin: "4px 0",
+                    }}
+                  />
+                  <div
+                    onClick={() => {
+                      setIsOrgDropdownOpen(false);
+                      setIsLinkOrgModalOpen(true);
+                    }}
+                    style={{
+                      padding: "6px 8px",
+                      borderRadius: "6px",
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      color: "var(--color-primary, #1a73e8)",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                    }}
+                  >
+                    <Link2 size={13} /> Vincular Organização
+                  </div>
+                  <div
+                    onClick={() => {
+                      setIsOrgDropdownOpen(false);
+                      setIsCreateOrgModalOpen(true);
+                    }}
+                    style={{
+                      padding: "6px 8px",
+                      borderRadius: "6px",
+                      fontSize: "12px",
+                      fontWeight: 500,
+                      color: "var(--color-on-surface-variant, #64748b)",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                    }}
+                  >
+                    <Plus size={13} /> Criar no GitHub
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Search Input Bar */}
           <div className="tree-search-wrapper">
             <span className="tree-search-icon">
               <Search size={13} color="#94a3b8" />
@@ -2087,7 +2328,155 @@ export const FileTree: React.FC<FileTreeProps> = ({
                 </div>
               </div>
             ) : (
-              displayNodes.map((node) => renderTreeNode(node))
+              <>
+                {/* Seção de Repositórios da Organização no 1º Nível */}
+                {orgRepos.length > 1 && (
+                  <div style={{ marginBottom: "12px", borderBottom: "1px solid var(--color-outline-variant, #e2e8f0)", paddingBottom: "8px" }}>
+                    <div
+                      style={{
+                        fontSize: "10px",
+                        fontWeight: 700,
+                        textTransform: "uppercase",
+                        color: "var(--color-on-surface-variant, #64748b)",
+                        padding: "2px 8px 6px",
+                        letterSpacing: "0.05em",
+                      }}
+                    >
+                      Repositórios da Org
+                    </div>
+
+                    {orgRepos.map((r) => {
+                      const isActive = r.name.toLowerCase() === activeRepo?.name.toLowerCase();
+                      const isLocked =
+                        Boolean(r.is_locked) ||
+                        (r.permissions && !r.permissions.pull && !r.permissions.admin);
+
+                      if (isActive) {
+                        return (
+                          <div
+                            key={`org-repo-active-${r.name}`}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              padding: "6px 8px",
+                              borderRadius: "6px",
+                              backgroundColor: "var(--color-primary-container, #e8f0fe)",
+                              color: "var(--color-primary, #1a73e8)",
+                              marginBottom: "4px",
+                              fontWeight: 600,
+                              fontSize: "12px",
+                            }}
+                          >
+                            <div style={{ display: "flex", alignItems: "center", gap: "6px", minWidth: 0 }}>
+                              <FolderOpen size={14} style={{ flexShrink: 0 }} />
+                              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                {r.name}
+                              </span>
+                            </div>
+                            <span
+                              style={{
+                                fontSize: "9px",
+                                fontWeight: 700,
+                                padding: "1px 5px",
+                                borderRadius: "6px",
+                                backgroundColor: "var(--color-primary, #1a73e8)",
+                                color: "#ffffff",
+                              }}
+                            >
+                              Ativo
+                            </span>
+                          </div>
+                        );
+                      }
+
+                      if (isLocked) {
+                        return (
+                          <div
+                            key={`org-repo-locked-${r.name}`}
+                            onClick={() => setLockedRepoTarget(r)}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              padding: "5px 8px",
+                              borderRadius: "6px",
+                              cursor: "pointer",
+                              opacity: 0.75,
+                              marginBottom: "3px",
+                              backgroundColor: "rgba(239, 68, 68, 0.05)",
+                              border: "1px dashed rgba(239, 68, 68, 0.25)",
+                              fontSize: "12px",
+                            }}
+                            title={`Repositório restrito: ${r.name}. Clique para detalhes.`}
+                          >
+                            <div style={{ display: "flex", alignItems: "center", gap: "6px", minWidth: 0 }}>
+                              <Lock size={13} color="#ef4444" style={{ flexShrink: 0 }} />
+                              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--color-on-surface, #0f172a)" }}>
+                                {r.name}
+                              </span>
+                            </div>
+                            <span
+                              style={{
+                                fontSize: "9px",
+                                fontWeight: 700,
+                                padding: "1px 5px",
+                                borderRadius: "6px",
+                                backgroundColor: "rgba(239, 68, 68, 0.12)",
+                                color: "#ef4444",
+                              }}
+                            >
+                              Sem Acesso
+                            </span>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div
+                          key={`org-repo-sibling-${r.name}`}
+                          onClick={() => selectRepo(r)}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            padding: "5px 8px",
+                            borderRadius: "6px",
+                            cursor: "pointer",
+                            marginBottom: "3px",
+                            fontSize: "12px",
+                            color: "var(--color-on-surface, #0f172a)",
+                          }}
+                          className="tree-repo-row"
+                          title={`Abrir repositório ${r.name}`}
+                        >
+                          <div style={{ display: "flex", alignItems: "center", gap: "6px", minWidth: 0 }}>
+                            <Folder size={13} color="#64748b" style={{ flexShrink: 0 }} />
+                            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              {r.name}
+                            </span>
+                          </div>
+                          <span
+                            style={{
+                              fontSize: "9px",
+                              fontWeight: 500,
+                              padding: "1px 4px",
+                              borderRadius: "4px",
+                              backgroundColor: "var(--color-surface-container-high, #e2e8f0)",
+                              color: "var(--color-on-surface-variant, #64748b)",
+                            }}
+                          >
+                            {r.is_private ? "Privado" : "Público"}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Nós de Arquivos e Pastas do Repositório Ativo */}
+                {displayNodes.map((node) => renderTreeNode(node))}
+              </>
             )}
           </div>
 
@@ -2175,6 +2564,36 @@ export const FileTree: React.FC<FileTreeProps> = ({
           </div>
         )}
       </aside>
+
+      {/* Modais Globais de Organização e Repositório Bloqueado */}
+      <LinkOrgModal
+        isOpen={isLinkOrgModalOpen}
+        onClose={() => setIsLinkOrgModalOpen(false)}
+        onLinked={(org) => {
+          selectOrg(org.login);
+          setIsLinkOrgModalOpen(false);
+        }}
+        onOpenCreate={() => {
+          setIsLinkOrgModalOpen(false);
+          setIsCreateOrgModalOpen(true);
+        }}
+      />
+
+      <CreateOrgModal
+        isOpen={isCreateOrgModalOpen}
+        onClose={() => setIsCreateOrgModalOpen(false)}
+        onOpenLinkModal={() => {
+          setIsCreateOrgModalOpen(false);
+          setIsLinkOrgModalOpen(true);
+        }}
+      />
+
+      <LockedRepoModal
+        isOpen={Boolean(lockedRepoTarget)}
+        onClose={() => setLockedRepoTarget(null)}
+        repo={lockedRepoTarget}
+        orgName={activeOrg?.login}
+      />
     </>
   );
 };
