@@ -1076,10 +1076,96 @@ export class NotionEditorEngine {
     return htmlFragments.join('\n');
   }
 
-  setMarkdown(markdown = '') {
+  isFocused(): boolean {
+    if (typeof document === 'undefined') return false;
+    const active = document.activeElement;
+    return !!(active && this.canvas && (this.canvas === active || this.canvas.contains(active)));
+  }
+
+  saveCursorPosition(): { blockIndex: number; offset: number } | null {
+    if (typeof window === 'undefined') return null;
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return null;
+    const range = sel.getRangeAt(0);
+    const startContainer = range.startContainer;
+    if (!this.canvas.contains(startContainer)) return null;
+
+    let block: Node | null = startContainer;
+    while (block && block.parentNode !== this.canvas) {
+      block = block.parentNode;
+    }
+    if (!block) return null;
+
+    const blockIndex = Array.from(this.canvas.children).indexOf(block as Element);
+    if (blockIndex === -1) return null;
+
+    let offset = 0;
+    const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT, null);
+    let currentNode = walker.nextNode();
+    while (currentNode) {
+      if (currentNode === startContainer) {
+        offset += range.startOffset;
+        break;
+      }
+      offset += currentNode.textContent?.length || 0;
+      currentNode = walker.nextNode();
+    }
+
+    return { blockIndex, offset };
+  }
+
+  restoreCursorPosition(saved: { blockIndex: number; offset: number } | null) {
+    if (!saved || typeof window === 'undefined') return;
+    const blocks = Array.from(this.canvas.children);
+    if (saved.blockIndex < 0 || saved.blockIndex >= blocks.length) return;
+    const block = blocks[saved.blockIndex] as HTMLElement;
+    if (!block) return;
+
+    let currentOffset = 0;
+    const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT, null);
+    let currentNode = walker.nextNode();
+    let targetNode: Node | null = null;
+    let targetOffset = 0;
+
+    while (currentNode) {
+      const len = currentNode.textContent?.length || 0;
+      if (currentOffset + len >= saved.offset) {
+        targetNode = currentNode;
+        targetOffset = saved.offset - currentOffset;
+        break;
+      }
+      currentOffset += len;
+      targetNode = currentNode;
+      targetOffset = len;
+      currentNode = walker.nextNode();
+    }
+
+    if (targetNode) {
+      try {
+        const sel = window.getSelection();
+        if (sel) {
+          const range = document.createRange();
+          range.setStart(targetNode, Math.min(targetOffset, targetNode.textContent?.length || 0));
+          range.collapse(true);
+          sel.removeAllRanges();
+          sel.addRange(range);
+        }
+      } catch (e) {}
+    } else {
+      this.placeCursorIn(block);
+    }
+  }
+
+  setMarkdown(markdown = '', preserveCursor = false) {
+    let savedCursor = null;
+    if (preserveCursor) {
+      savedCursor = this.saveCursorPosition();
+    }
+
     if (!markdown.trim()) {
       this.canvas.innerHTML = '<p><br></p>';
       this.pushSnapshot(true);
+      if (savedCursor) this.restoreCursorPosition(savedCursor);
       return;
     }
 
@@ -1089,6 +1175,10 @@ export class NotionEditorEngine {
     this.renderAllMermaidBlocks();
     this.attachInteractiveListeners();
     this.pushSnapshot(true);
+
+    if (savedCursor) {
+      this.restoreCursorPosition(savedCursor);
+    }
 
     if (typeof window !== 'undefined') {
       const hash = window.location.hash;

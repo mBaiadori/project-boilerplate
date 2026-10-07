@@ -7,6 +7,16 @@ import type { StatusItem, TaxonomyItem } from "../../types";
 interface DocConnectivityBarProps {
   filePath: string;
   onNavigateFile: (path: string) => void;
+  onCopyDoc?: () => void;
+  onExportDoc?: () => void;
+  onImportDoc?: () => void;
+  isGitMode?: boolean;
+  onToggleGitMode?: () => void;
+  isHistoryDrawerOpen?: boolean;
+  onToggleHistoryDrawer?: () => void;
+  onSave?: () => void;
+  saveStatus?: string;
+  isDirty?: boolean;
 }
 
 const TAG_PALETTES: Record<
@@ -100,6 +110,16 @@ function getTagStyle(tagName: string, customColor?: string) {
 export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
   filePath,
   onNavigateFile,
+  onCopyDoc,
+  onExportDoc,
+  onImportDoc,
+  isGitMode = false,
+  onToggleGitMode,
+  isHistoryDrawerOpen = false,
+  onToggleHistoryDrawer,
+  onSave,
+  saveStatus,
+  isDirty = false,
 }) => {
   const { fileMetadata, updateFileMetadata, projectMetaOptions } =
     useWorkspace();
@@ -162,8 +182,6 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
     return () => document.removeEventListener("mousedown", handleOutsideClick);
   }, []);
 
-  const cleanPath = filePath.split("#")[0];
-  const segments = cleanPath.split("/").filter(Boolean);
   const consumers = contextData?.consumers || [];
   const dependencies = contextData?.dependencies || [];
 
@@ -277,6 +295,14 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
     color: "#64748b",
   };
 
+  const activeCatObj = categoryOptions.find(
+    (c) =>
+      c.name.toLowerCase() === String(currentCategories || "").toLowerCase() ||
+      c.name.toLowerCase() ===
+        (Array.isArray(currentCategories) ? currentCategories[0] : "").toLowerCase(),
+  );
+  const catColor = activeCatObj?.color || "#3b82f6";
+
   return (
     <div
       ref={barRef}
@@ -285,31 +311,29 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
-        padding: "6px 16px",
+        padding: "5px 16px",
         background: "var(--color-surface-container-lowest, #ffffff)",
         borderBottom: "1px solid var(--color-outline-variant, #e2e8f0)",
         fontSize: "12px",
         position: "relative",
+        minHeight: "38px",
       }}
     >
-      {/* Left: Status + Categoria + Nível de Segurança + Departamento + Breadcrumbs */}
-      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+      {/* Left: Status + Categoria + Departamento + Conectividade (Propriedades, Consumidores, Dependências) */}
+      <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "nowrap" }}>
         {/* Status Badge */}
         <span
-          className={`badge ${
-            currentStatus === "approved"
-              ? "badge-success-subtle"
-              : currentStatus === "review"
-                ? "badge-info-subtle"
-                : currentStatus === "proposed"
-                  ? "badge-warning-subtle"
-                  : "badge-neutral-subtle"
-          }`}
           style={{
-            fontSize: "10.5px",
-            padding: "2px 7px",
+            fontSize: "11px",
+            padding: "2.5px 8px",
             borderRadius: "4px",
             fontWeight: 600,
+            backgroundColor: `${activeStatusObj.color}15`,
+            color: activeStatusObj.color,
+            border: `1px solid ${activeStatusObj.color}40`,
+            display: "inline-flex",
+            alignItems: "center",
+            letterSpacing: "0.02em",
           }}
           title={`Status de governança: ${activeStatusObj.label}`}
         >
@@ -319,15 +343,20 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
         {/* Categoria Badge */}
         {currentCategories && (
           <span
-            className="badge badge-primary-subtle"
             style={{
-              fontSize: "10.5px",
-              padding: "2px 7px",
+              fontSize: "11px",
+              padding: "2.5px 8px",
               borderRadius: "4px",
+              fontWeight: 500,
+              backgroundColor: `${catColor}15`,
+              color: catColor,
+              border: `1px solid ${catColor}40`,
+              display: "inline-flex",
+              alignItems: "center",
             }}
             title="Categoria funcional do documento"
           >
-            {currentCategories}
+            {Array.isArray(currentCategories) ? currentCategories.join(", ") : currentCategories}
           </span>
         )}
 
@@ -362,36 +391,8 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
           </span>
         )}
 
-        {/* Breadcrumb Path */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "4px",
-            color: "var(--color-outline, #64748b)",
-          }}
-        >
-          {segments.map((seg, idx) => (
-            <React.Fragment key={idx}>
-              {idx > 0 && <span style={{ opacity: 0.5 }}>/</span>}
-              <span
-                style={{
-                  fontWeight: idx === segments.length - 1 ? 600 : 400,
-                  color:
-                    idx === segments.length - 1
-                      ? "var(--color-on-surface, #0f172a)"
-                      : "var(--color-outline, #64748b)",
-                }}
-              >
-                {seg}
-              </span>
-            </React.Fragment>
-          ))}
-        </div>
-      </div>
+        <div style={{ width: "1px", height: "16px", background: "var(--color-outline-variant, #e2e8f0)", margin: "0 2px" }} />
 
-      {/* Right: Propriedades (Dropdown), Consumidores & Dependências */}
-      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
         {/* 1. Botão Dropdown / Popover de Propriedades (Metadados) */}
         <div style={{ position: "relative" }} ref={propDropdownRef}>
           <button
@@ -454,7 +455,7 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
               style={{
                 position: "absolute",
                 top: "calc(100% + 6px)",
-                right: 0,
+                left: 0,
                 background: "var(--color-surface, #ffffff)",
                 border: "1px solid var(--color-outline-variant, #cbd5e1)",
                 borderRadius: "10px",
@@ -1081,7 +1082,7 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
               style={{
                 position: "absolute",
                 top: "calc(100% + 4px)",
-                right: 0,
+                left: 0,
                 background: "var(--color-surface, #ffffff)",
                 border: "1px solid var(--color-outline-variant, #cbd5e1)",
                 borderRadius: "8px",
@@ -1248,7 +1249,7 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
               style={{
                 position: "absolute",
                 top: "calc(100% + 4px)",
-                right: 0,
+                left: 0,
                 background: "var(--color-surface, #ffffff)",
                 border: "1px solid var(--color-outline-variant, #cbd5e1)",
                 borderRadius: "8px",
@@ -1367,6 +1368,317 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
             </div>
           )}
         </div>
+      </div>
+
+      {/* Right: Ações do Editor (Copiar, Baixar, Upload, Raw, Histórico, Salvar) */}
+      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+        {onCopyDoc && (
+          <button
+            id="btn-copy-doc-full"
+            className="btn-icon-action"
+            type="button"
+            title="Copiar Markdown completo"
+            onClick={onCopyDoc}
+            style={{
+              width: "28px",
+              height: "28px",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              borderRadius: "6px",
+              border: "1px solid var(--color-outline-variant, #e2e8f0)",
+              background: "transparent",
+              cursor: "pointer",
+              color: "var(--color-outline, #64748b)",
+              transition: "all 0.15s ease",
+            }}
+          >
+            <svg
+              width="13"
+              height="13"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+          </button>
+        )}
+
+        {onExportDoc && (
+          <button
+            id="btn-export-md-file"
+            className="btn-icon-action"
+            type="button"
+            title="Exportar arquivo .md (Baixar)"
+            onClick={onExportDoc}
+            style={{
+              width: "28px",
+              height: "28px",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              borderRadius: "6px",
+              border: "1px solid var(--color-outline-variant, #e2e8f0)",
+              background: "transparent",
+              cursor: "pointer",
+              color: "var(--color-outline, #64748b)",
+              transition: "all 0.15s ease",
+            }}
+          >
+            <svg
+              width="13"
+              height="13"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+          </button>
+        )}
+
+        {onImportDoc && (
+          <button
+            id="btn-import-doc"
+            className="btn-icon-action"
+            type="button"
+            title="Importar documento (.md ou colar)"
+            onClick={onImportDoc}
+            style={{
+              width: "28px",
+              height: "28px",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              borderRadius: "6px",
+              border: "1px solid var(--color-outline-variant, #e2e8f0)",
+              background: "transparent",
+              cursor: "pointer",
+              color: "var(--color-outline, #64748b)",
+              transition: "all 0.15s ease",
+            }}
+          >
+            <svg
+              width="13"
+              height="13"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="17 8 12 3 7 8"></polyline>
+              <line x1="12" y1="3" x2="12" y2="15"></line>
+            </svg>
+          </button>
+        )}
+
+        {onToggleGitMode && (
+          <button
+            id="btn-toggle-git-mode"
+            className={`btn-icon-action ${isGitMode ? "active" : ""}`}
+            type="button"
+            title={
+              isGitMode
+                ? "Voltar para Modo de Edição"
+                : "Modo Comparativo & Auditoria (Diffs / Raw)"
+            }
+            onClick={onToggleGitMode}
+            style={{
+              width: "28px",
+              height: "28px",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              borderRadius: "6px",
+              border: "1px solid",
+              borderColor: isGitMode
+                ? "var(--primary, #2563eb)"
+                : "var(--color-outline-variant, #e2e8f0)",
+              background: isGitMode
+                ? "var(--color-primary-container, #eff6ff)"
+                : "transparent",
+              cursor: "pointer",
+              color: isGitMode
+                ? "var(--primary, #2563eb)"
+                : "var(--color-outline, #64748b)",
+              transition: "all 0.15s ease",
+            }}
+          >
+            <span
+              className="material-symbols-outlined icon-xs"
+              style={{ fontSize: "16px" }}
+            >
+              visibility
+            </span>
+          </button>
+        )}
+
+        {onToggleHistoryDrawer && (
+          <button
+            id="btn-toggle-history-drawer"
+            className={`btn-icon-action ${isHistoryDrawerOpen ? "active" : ""}`}
+            type="button"
+            title="Linha do Tempo de Versões & Auditoria deste documento"
+            onClick={onToggleHistoryDrawer}
+            style={{
+              width: "28px",
+              height: "28px",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              borderRadius: "6px",
+              border: "1px solid",
+              borderColor: isHistoryDrawerOpen
+                ? "var(--primary, #2563eb)"
+                : "var(--color-outline-variant, #e2e8f0)",
+              background: isHistoryDrawerOpen
+                ? "var(--color-primary-container, #eff6ff)"
+                : "transparent",
+              cursor: "pointer",
+              color: isHistoryDrawerOpen
+                ? "var(--primary, #2563eb)"
+                : "var(--color-outline, #64748b)",
+              transition: "all 0.15s ease",
+            }}
+          >
+            <span
+              className="material-symbols-outlined icon-xs"
+              style={{ fontSize: "16px" }}
+            >
+              history
+            </span>
+          </button>
+        )}
+
+        {onSave && !isGitMode && (
+          <button
+            id="btn-save-draft"
+            className={`btn-icon-action ${
+              saveStatus === "Salvando..."
+                ? "is-saving"
+                : saveStatus === "Salvo no disco"
+                  ? "saved-success"
+                  : saveStatus === "Erro"
+                    ? "has-error"
+                    : isDirty
+                      ? "has-unsaved"
+                      : ""
+            }`}
+            type="button"
+            title={
+              saveStatus === "Salvando..."
+                ? "Gravando alterações no disco da máquina..."
+                : saveStatus === "Salvo no disco"
+                  ? "Salvo no disco com sucesso!"
+                  : saveStatus === "Erro"
+                    ? "Erro ao gravar no disco. Rascunho preservado."
+                    : isDirty
+                      ? "Gravando automaticamente no disco (ou clique/Ctrl+S para forçar gravação imediata)"
+                      : "Arquivo sincronizado no disco (Ctrl+S)"
+            }
+            onClick={onSave}
+            disabled={saveStatus === "Salvando..."}
+            style={{
+              height: "28px",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "5px",
+              padding: "0 10px",
+              borderRadius: "6px",
+              fontSize: "11.5px",
+              fontWeight: 600,
+              cursor: saveStatus === "Salvando..." ? "not-allowed" : "pointer",
+              border: "1px solid",
+              borderColor:
+                saveStatus === "Salvo no disco"
+                  ? "rgba(16, 185, 129, 0.4)"
+                  : saveStatus === "Erro"
+                    ? "rgba(239, 68, 68, 0.4)"
+                    : isDirty
+                      ? "rgba(37, 99, 235, 0.4)"
+                      : "var(--color-outline-variant, #cbd5e1)",
+              background:
+                saveStatus === "Salvo no disco"
+                  ? "rgba(16, 185, 129, 0.08)"
+                  : saveStatus === "Erro"
+                    ? "rgba(239, 68, 68, 0.08)"
+                    : isDirty
+                      ? "var(--color-primary-container, #eff6ff)"
+                      : "var(--color-surface, #ffffff)",
+              color:
+                saveStatus === "Salvo no disco"
+                  ? "#059669"
+                  : saveStatus === "Erro"
+                    ? "#dc2626"
+                    : isDirty
+                      ? "var(--color-primary, #2563eb)"
+                      : "var(--color-on-surface, #0f172a)",
+              transition: "all 0.15s ease",
+            }}
+          >
+            {saveStatus === "Salvando..." ? (
+              <span
+                className="material-symbols-outlined icon-xs"
+                style={{
+                  animation: "spin 1s linear infinite",
+                  fontSize: "15px",
+                  color: "var(--primary, #2563eb)",
+                }}
+              >
+                progress_activity
+              </span>
+            ) : saveStatus === "Salvo no disco" ? (
+              <span
+                className="material-symbols-outlined icon-xs"
+                style={{ color: "#10b981", fontSize: "15px" }}
+              >
+                check
+              </span>
+            ) : saveStatus === "Erro" ? (
+              <span
+                className="material-symbols-outlined icon-xs"
+                style={{ color: "#ef4444", fontSize: "15px" }}
+              >
+                error
+              </span>
+            ) : (
+              <svg
+                width="13"
+                height="13"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                <polyline points="7 3 7 8 15 8"></polyline>
+              </svg>
+            )}
+            <span>
+              {saveStatus === "Salvando..."
+                ? "Salvando..."
+                : saveStatus === "Salvo no disco"
+                  ? "Salvo"
+                  : "Salvar"}
+            </span>
+          </button>
+        )}
       </div>
     </div>
   );

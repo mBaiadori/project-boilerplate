@@ -2,6 +2,7 @@ import { FileText, FolderGit2, FolderTree, Lock, Plus } from "lucide-react";
 import React, {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -797,7 +798,7 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
   handleSaveRef.current = handleSave;
 
   // Initialize & Mount NotionEditorEngine
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!canvasRef.current || isGitMode) return;
 
     const engine = new NotionEditorEngine({
@@ -884,7 +885,7 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
     }
   }, [dictionaryTerms]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (engineRef.current) {
       engineRef.current.filePath = filePath;
       const targetText = editorTab === "document" ? docBody : effectivePrompt;
@@ -955,6 +956,10 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
       isInternalChangeRef.current = false;
       return;
     }
+    // Se o usuário estiver ativamente digitando ou com foco no editor, NUNCA sobrescreve com props defasadas
+    if (engineRef.current?.isFocused()) {
+      return;
+    }
     // Se estiver em modo tradução, NÃO sobrescreve o canvas com o documento oficial externo!
     if (
       activeLanguageRef.current.toLowerCase() !==
@@ -972,10 +977,15 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
         .replace(/\r\n/g, "\n")
         .trim();
 
-      // Só recarrega o DOM se a mudança for externa real e diferente do que foi digitado
-      if (normEngine !== normTarget && normLastEmitted !== normTarget) {
+      // Se o que veio de fora for idêntico ao que emitimos por último localmente, não é uma alteração externa nova
+      if (normTarget === normLastEmitted) {
+        return;
+      }
+
+      // Só recarrega o DOM se a mudança for externa real e diferente do que está no engine
+      if (normEngine !== normTarget) {
         lastEmittedMarkdownRef.current = targetText;
-        engineRef.current.setMarkdown(targetText);
+        engineRef.current.setMarkdown(targetText, true);
         const hash = window.location.hash;
         if (hash && (hash.includes(":~:text=") || hash.startsWith("#"))) {
           setTimeout(() => {
@@ -1016,12 +1026,6 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
         handleFileLoadError,
       );
   }, []);
-
-  const handleCopyPath = () => {
-    if (filePath) {
-      navigator.clipboard.writeText(filePath);
-    }
-  };
 
   const handleRevealInTree = useCallback(() => {
     if (!filePath) return;
@@ -1170,78 +1174,98 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
               className="doc-breadcrumbs-container"
               style={{ display: "flex", alignItems: "center", gap: "6px" }}
             >
-              {/* Repo Badge */}
+              {/* Unified Path Display and Input */}
               <div
-                className="doc-repo-badge"
-                title={`Repositório: ${activeRepo?.name || "local"}`}
+                className="unified-doc-path-field"
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
-                  gap: "5px",
-                  padding: "3px 8px",
+                  gap: "6px",
+                  background: "var(--color-surface-container-high, #f1f5f9)",
+                  padding: "4px 8px",
                   borderRadius: "6px",
-                  background: "var(--color-primary-container, #eff6ff)",
-                  border: "1px solid var(--color-primary-fixed, #dbeafe)",
-                  color: "var(--color-primary, #1d4ed8)",
-                  fontSize: "11.5px",
-                  fontWeight: 600,
-                  flexShrink: 0,
+                  border: "1px solid var(--color-outline-variant, #e2e8f0)",
+                  fontSize: "12px",
+                  maxWidth: "520px",
+                  minWidth: "260px",
                 }}
               >
                 <FolderGit2
-                  size={13}
-                  style={{ color: "var(--color-primary, #2563eb)" }}
+                  size={14}
+                  style={{ color: "var(--color-primary, #2563eb)", flexShrink: 0 }}
                 />
-                <span>{activeRepo?.name || "local"}</span>
-              </div>
-
-              <span style={{ color: "#94a3b8", fontSize: "12px" }}>/</span>
-
-              {/* Breadcrumb Path Input / Display */}
-              <div
-                className="doc-breadcrumbs"
-                style={{ display: "flex", alignItems: "center", gap: "4px" }}
-              >
                 <input
                   type="text"
                   id="doc-path-input"
                   className="doc-path-input"
-                  value={filePath || ""}
+                  value={
+                    filePath
+                      ? `${activeRepo?.name || "local"}/${filePath.replace(/^\/+/, "")}`
+                      : ""
+                  }
                   readOnly
                   placeholder="Selecione ou crie um documento..."
                   spellCheck="false"
-                  title={`Caminho: ${activeRepo?.name || "local"}/${filePath || ""}`}
+                  title={`Caminho unificado: ${
+                    filePath
+                      ? `${activeRepo?.name || "local"}/${filePath.replace(/^\/+/, "")}`
+                      : ""
+                  }`}
+                  style={{
+                    border: "none",
+                    background: "transparent",
+                    outline: "none",
+                    fontSize: "12px",
+                    fontFamily: "var(--font-mono, monospace)",
+                    color: "var(--color-on-surface, #0f172a)",
+                    width: "100%",
+                    textOverflow: "ellipsis",
+                  }}
                 />
 
-                {/* Action: Copiar Caminho */}
+                {/* Action: Copiar Caminho Completo */}
                 <button
                   id="btn-copy-doc-path"
                   className="btn-icon-subtle"
                   type="button"
-                  title="Copiar caminho do arquivo (Clique para caminho simples, segure Alt para incluir repositório)"
+                  title="Copiar caminho completo (repositório/pasta/arquivo). Segure Alt para copiar URL web completa."
                   onClick={(e) => {
-                    if (e.altKey && activeRepo?.name && filePath) {
-                      navigator.clipboard.writeText(
-                        `${activeRepo.name}:${filePath}`,
-                      );
+                    const fullPath = filePath
+                      ? `${activeRepo?.name || "local"}/${filePath.replace(/^\/+/, "")}`
+                      : "";
+                    if (e.altKey && filePath) {
+                      const currentUrl = window.location.href;
+                      navigator.clipboard.writeText(currentUrl);
                       setEditorToast({
-                        text: `Caminho completo copiado: ${activeRepo.name}:${filePath}`,
+                        text: `URL completa copiada: ${currentUrl}`,
                         type: "info",
                       });
-                    } else {
-                      handleCopyPath();
+                    } else if (fullPath) {
+                      navigator.clipboard.writeText(fullPath);
                       setEditorToast({
-                        text: "Caminho copiado para a área de transferência!",
+                        text: `Caminho completo copiado: ${fullPath}`,
                         type: "info",
                       });
                     }
                     setTimeout(() => setEditorToast(null), 2500);
                   }}
                   disabled={!filePath}
+                  style={{
+                    border: "none",
+                    background: "transparent",
+                    cursor: "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: "2px",
+                    borderRadius: "4px",
+                    color: "var(--color-outline, #64748b)",
+                    flexShrink: 0,
+                  }}
                 >
                   <svg
-                    width="12.5"
-                    height="12.5"
+                    width="13"
+                    height="13"
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
@@ -1269,8 +1293,20 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
                   title="Expandir pastas e revelar na árvore de documentos"
                   onClick={handleRevealInTree}
                   disabled={!filePath}
+                  style={{
+                    border: "none",
+                    background: "transparent",
+                    cursor: "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: "2px",
+                    borderRadius: "4px",
+                    color: "var(--color-outline, #64748b)",
+                    flexShrink: 0,
+                  }}
                 >
-                  <FolderTree size={13} />
+                  <FolderTree size={14} />
                 </button>
               </div>
             </div>
@@ -1394,171 +1430,6 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
                 }}
               />
             )}
-
-            <div className="doc-icon-actions">
-              <button
-                id="btn-copy-doc-full"
-                className="btn-icon-action"
-                type="button"
-                title="Copiar Markdown completo"
-                onClick={handleCopyFullDoc}
-              >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                </svg>
-              </button>
-              <button
-                id="btn-export-md-file"
-                className="btn-icon-action"
-                type="button"
-                title="Exportar arquivo .md"
-                onClick={handleExportMarkdown}
-              >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                  <polyline points="7 10 12 15 17 10"></polyline>
-                  <line x1="12" y1="15" x2="12" y2="3"></line>
-                </svg>
-              </button>
-              <button
-                id="btn-import-doc"
-                className="btn-icon-action"
-                type="button"
-                title="Importar documento (.md ou colar)"
-                onClick={() => setIsImportModalOpen(true)}
-              >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                  <polyline points="17 8 12 3 7 8"></polyline>
-                  <line x1="12" y1="3" x2="12" y2="15"></line>
-                </svg>
-              </button>
-            </div>
-
-            <div className="toolbar-divider"></div>
-
-            {/* Alternador de Modo Comparativo & Versões ("Olhinho" / Diffs) */}
-            <button
-              id="btn-toggle-git-mode"
-              className={`btn-icon-action ${isGitMode ? "active" : ""}`}
-              type="button"
-              title={
-                isGitMode
-                  ? "Voltar para Modo de Edição"
-                  : "Modo Comparativo & Auditoria (Ver evolução do conteúdo, quem editou e versões)"
-              }
-              onClick={() => {
-                const nextMode = !isGitMode;
-                setIsGitMode(nextMode);
-                if (nextMode) setIsHistoryDrawerOpen(true);
-              }}
-            >
-              <span className="material-symbols-outlined icon-xs">
-                visibility
-              </span>
-            </button>
-
-            {/* Botão Gaveta de Histórico */}
-            <button
-              id="btn-toggle-history-drawer"
-              className={`btn-icon-action ${isHistoryDrawerOpen ? "active" : ""}`}
-              type="button"
-              title="Linha do Tempo de Versões & Evolução deste documento"
-              onClick={() => setIsHistoryDrawerOpen(!isHistoryDrawerOpen)}
-            >
-              <span className="material-symbols-outlined icon-xs">history</span>
-            </button>
-
-            {/* Botão Sincronizar / Salvar no Disco */}
-            {!isGitMode && (
-              <button
-                id="btn-save-draft"
-                className={`btn-icon-action ${saveStatus === "Salvando..." ? "is-saving" : saveStatus === "Salvo no disco" ? "saved-success" : saveStatus === "Erro" ? "has-error" : isDirty ? "has-unsaved" : ""}`}
-                type="button"
-                title={
-                  saveStatus === "Salvando..."
-                    ? "Gravando alterações no disco da máquina..."
-                    : saveStatus === "Salvo no disco"
-                      ? "Salvo no disco com sucesso!"
-                      : saveStatus === "Erro"
-                        ? "Erro ao gravar no disco. Rascunho preservado."
-                        : isDirty
-                          ? "Gravando automaticamente no disco (ou clique/Ctrl+S para forçar gravação imediata)"
-                          : "Arquivo sincronizado no disco (Ctrl+S)"
-                }
-                onClick={handleSave}
-                disabled={saveStatus === "Salvando..."}
-              >
-                {saveStatus === "Salvando..." ? (
-                  <span
-                    className="material-symbols-outlined icon-xs"
-                    style={{
-                      animation: "spin 1s linear infinite",
-                      color: "var(--primary, #2563eb)",
-                    }}
-                  >
-                    progress_activity
-                  </span>
-                ) : saveStatus === "Salvo no disco" ? (
-                  <span
-                    className="material-symbols-outlined icon-xs"
-                    style={{ color: "#10b981" }}
-                  >
-                    check
-                  </span>
-                ) : saveStatus === "Erro" ? (
-                  <span
-                    className="material-symbols-outlined icon-xs"
-                    style={{ color: "#ef4444" }}
-                  >
-                    error
-                  </span>
-                ) : (
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
-                    <polyline points="17 21 17 13 7 13 7 21"></polyline>
-                    <polyline points="7 3 7 8 15 8"></polyline>
-                  </svg>
-                )}
-              </button>
-            )}
           </div>
         </div>
 
@@ -1598,6 +1469,20 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
           <DocConnectivityBar
             filePath={filePath}
             onNavigateFile={onNavigateFile || (() => {})}
+            onCopyDoc={handleCopyFullDoc}
+            onExportDoc={handleExportMarkdown}
+            onImportDoc={() => setIsImportModalOpen(true)}
+            isGitMode={isGitMode}
+            onToggleGitMode={() => {
+              const nextMode = !isGitMode;
+              setIsGitMode(nextMode);
+              if (nextMode) setIsHistoryDrawerOpen(true);
+            }}
+            isHistoryDrawerOpen={isHistoryDrawerOpen}
+            onToggleHistoryDrawer={() => setIsHistoryDrawerOpen(!isHistoryDrawerOpen)}
+            onSave={handleSave}
+            saveStatus={saveStatus}
+            isDirty={isDirty}
           />
         )}
 

@@ -251,6 +251,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
     reposRef.current = repos;
   }, [repos]);
   const inFlightRepoRef = useRef<string | null>(null);
+  const inFlightFileRef = useRef<string | null>(null);
   const treesByRepoRef = useRef<Record<string, TreeNode[]>>({});
   const pendingChangesByRepoRef = useRef<Record<string, any[]>>({});
   const remoteUpdatesByRepoRef = useRef<Record<string, boolean>>({});
@@ -593,65 +594,95 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
         return;
       }
 
+      const cacheKey = `${currentRepoName}:${cleanPath}`;
+      if (inFlightFileRef.current === cacheKey) {
+        return;
+      }
+      inFlightFileRef.current = cacheKey;
+
       // 1. Flush de segurança se o arquivo anterior possuía alterações não salvas
       await flushPendingSave();
 
-      const cacheKey = `${currentRepoName}:${cleanPath}`;
       const cached = fileCacheRef.current.get(cacheKey);
       const draft = DraftStore.getDocDraft(currentRepoName, cleanPath);
 
-      // Se já temos rascunho ou cache deste arquivo, aplica imediatamente sem piscar a tela
-      if (draft) {
-        setActiveDocRepo(currentRepoName);
-        activeDocRepoRef.current = currentRepoName;
-        setActiveFile(cleanPath);
-        activeFileRef.current = cleanPath;
-        setFileContentState(draft.rawContent);
-        fileContentRef.current = draft.rawContent;
-      } else if (cached) {
-        setActiveDocRepo(currentRepoName);
-        activeDocRepoRef.current = currentRepoName;
-        setActiveFile(cleanPath);
-        activeFileRef.current = cleanPath;
-        setFileContentState(cached.content);
-        fileContentRef.current = cached.content;
-        setOriginalContent(cached.originalContent);
-        originalContentRef.current = cached.originalContent;
-        setFileMetadataState(cached.meta);
-        fileMetadataRef.current = cached.meta;
-      }
-
+      // Mostra a barra de progresso linear no topo enquanto carrega, mantendo o arquivo anterior 100% visível na tela
       setIsLoadingFile(true);
-      try {
-        const data = await API.getProjectFile(cleanPath, currentRepoName);
-        if (!data || (data as any).error) {
-          throw new Error((data as any).error || "Arquivo não encontrado");
-        }
-        const activeDraft = DraftStore.getDocDraft(
-          currentRepoName,
-          cleanPath,
-        );
 
-        const content = activeDraft ? activeDraft.rawContent : data.content || "";
-        // Atualiza repositório, documento e conteúdo atomicamente no mesmo ciclo para evitar flash
+      try {
+        let content = "";
+        let original = "";
+        let meta: Record<string, any> = {};
+
+        if (draft) {
+          content = draft.rawContent;
+          original = cached ? cached.originalContent : draft.rawContent;
+          meta = cached ? cached.meta : {};
+        } else if (cached) {
+          content = cached.content;
+          original = cached.originalContent;
+          meta = cached.meta;
+        }
+
+        // Se não tiver cache em memória, busca na API antes de trocar de arquivo
+        if (!content && !draft && !cached) {
+          const data = await API.getProjectFile(cleanPath, currentRepoName);
+          if (!data || (data as any).error) {
+            throw new Error((data as any).error || "Arquivo não encontrado");
+          }
+          const activeDraft = DraftStore.getDocDraft(
+            currentRepoName,
+            cleanPath,
+          );
+          content = activeDraft ? activeDraft.rawContent : data.content || "";
+          original = data.content || "";
+          meta = data.meta || {};
+
+          fileCacheRef.current.set(cacheKey, {
+            content,
+            originalContent: original,
+            meta,
+          });
+        }
+
+        // Transição atômica de repositório, caminho, conteúdo e metadados no mesmo ciclo de render
         setActiveDocRepo(currentRepoName);
         activeDocRepoRef.current = currentRepoName;
         setActiveFile(cleanPath);
         activeFileRef.current = cleanPath;
         setFileContentState(content);
         fileContentRef.current = content;
-        setOriginalContent(data.content || "");
-        originalContentRef.current = data.content || "";
-        setFileMetadataState(data.meta || {});
-        fileMetadataRef.current = data.meta || {};
+        setOriginalContent(original);
+        originalContentRef.current = original;
+        setFileMetadataState(meta);
+        fileMetadataRef.current = meta;
         setSaveStatus("Pronto");
 
-        // Atualiza o cache local em memória
-        fileCacheRef.current.set(cacheKey, {
-          content,
-          originalContent: data.content || "",
-          meta: data.meta || {},
-        });
+        // Atualização em background se veio de cache/draft para garantir integridade com o backend
+        if (draft || cached) {
+          API.getProjectFile(cleanPath, currentRepoName)
+            .then((data) => {
+              if (
+                data &&
+                !(data as any).error &&
+                activeFileRef.current === cleanPath
+              ) {
+                const freshOriginal = data.content || "";
+                setOriginalContent(freshOriginal);
+                originalContentRef.current = freshOriginal;
+                if (data.meta) {
+                  setFileMetadataState(data.meta);
+                  fileMetadataRef.current = data.meta;
+                }
+                fileCacheRef.current.set(cacheKey, {
+                  content: fileContentRef.current,
+                  originalContent: freshOriginal,
+                  meta: data.meta || meta,
+                });
+              }
+            })
+            .catch(() => {});
+        }
 
         if (hash) {
           setTimeout(() => {
@@ -674,6 +705,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
         );
       } finally {
         setIsLoadingFile(false);
+        inFlightFileRef.current = null;
       }
     },
     [flushPendingSave],
