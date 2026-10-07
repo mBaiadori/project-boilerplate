@@ -625,7 +625,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
         }
 
         // Se não tiver cache em memória, busca na API antes de trocar de arquivo
-        if (!content && !draft && !cached) {
+        if (!draft && !cached) {
           const data = await API.getProjectFile(cleanPath, currentRepoName);
           if (!data || (data as any).error) {
             throw new Error((data as any).error || "Arquivo não encontrado");

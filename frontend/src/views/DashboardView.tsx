@@ -86,9 +86,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onBackToRepos }) =
   useEffect(() => {
     if (fileParam && fileParam !== activeFile && activeRepo) {
       const currentHash = window.location.hash || '';
-      loadFile(`${fileParam}${currentHash}`);
+      loadFile(`${fileParam}${currentHash}`, repoName || activeRepo.name);
     }
-  }, [fileParam, activeFile, activeRepo?.name, loadFile]);
+  }, [fileParam, activeFile, activeRepo?.name, repoName, loadFile]);
 
   const [aiWidth, setAiWidth] = useState<number>(() => {
     try {

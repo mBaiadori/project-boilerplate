@@ -153,7 +153,6 @@ export const EditorSubView: React.FC<EditorSubViewProps> = ({
             </div>
           ) : (
             <WorkbenchCanvas
-              key={activeFile || 'empty'}
               filePath={activeFile}
               content={fileContent}
               onChange={setFileContent}

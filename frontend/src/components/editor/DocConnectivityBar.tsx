@@ -299,7 +299,10 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
     (c) =>
       c.name.toLowerCase() === String(currentCategories || "").toLowerCase() ||
       c.name.toLowerCase() ===
-        (Array.isArray(currentCategories) ? currentCategories[0] : "").toLowerCase(),
+        (Array.isArray(currentCategories)
+          ? currentCategories[0]
+          : ""
+        ).toLowerCase(),
   );
   const catColor = activeCatObj?.color || "#3b82f6";
 
@@ -320,7 +323,14 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
       }}
     >
       {/* Left: Status + Categoria + Departamento + Conectividade (Propriedades, Consumidores, Dependências) */}
-      <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "nowrap" }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "8px",
+          flexWrap: "nowrap",
+        }}
+      >
         {/* Status Badge */}
         <span
           style={{
@@ -356,7 +366,9 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
             }}
             title="Categoria funcional do documento"
           >
-            {Array.isArray(currentCategories) ? currentCategories.join(", ") : currentCategories}
+            {Array.isArray(currentCategories)
+              ? currentCategories.join(", ")
+              : currentCategories}
           </span>
         )}
 
@@ -391,7 +403,14 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
           </span>
         )}
 
-        <div style={{ width: "1px", height: "16px", background: "var(--color-outline-variant, #e2e8f0)", margin: "0 2px" }} />
+        <div
+          style={{
+            width: "1px",
+            height: "16px",
+            background: "var(--color-outline-variant, #e2e8f0)",
+            margin: "0 2px",
+          }}
+        />
 
         {/* 1. Botão Dropdown / Popover de Propriedades (Metadados) */}
         <div style={{ position: "relative" }} ref={propDropdownRef}>
@@ -1593,13 +1612,14 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
             disabled={saveStatus === "Salvando..."}
             style={{
               height: "28px",
+              width: "auto",
               display: "inline-flex",
               alignItems: "center",
+              justifyContent: "center",
               gap: "5px",
-              padding: "0 10px",
+              padding: "0 6px",
               borderRadius: "6px",
               fontSize: "11.5px",
-              fontWeight: 600,
               cursor: saveStatus === "Salvando..." ? "not-allowed" : "pointer",
               border: "1px solid",
               borderColor:
@@ -1636,6 +1656,7 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
                   animation: "spin 1s linear infinite",
                   fontSize: "15px",
                   color: "var(--primary, #2563eb)",
+                  flexShrink: 0,
                 }}
               >
                 progress_activity
@@ -1643,40 +1664,25 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
             ) : saveStatus === "Salvo no disco" ? (
               <span
                 className="material-symbols-outlined icon-xs"
-                style={{ color: "#10b981", fontSize: "15px" }}
+                style={{ color: "#10b981", fontSize: "15px", flexShrink: 0 }}
               >
                 check
               </span>
             ) : saveStatus === "Erro" ? (
               <span
                 className="material-symbols-outlined icon-xs"
-                style={{ color: "#ef4444", fontSize: "15px" }}
+                style={{ color: "#ef4444", fontSize: "15px", flexShrink: 0 }}
               >
                 error
               </span>
             ) : (
-              <svg
-                width="13"
-                height="13"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
+              <span
+                className="material-symbols-outlined icon-xs"
+                style={{ fontSize: "15px", flexShrink: 0 }}
               >
-                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
-                <polyline points="17 21 17 13 7 13 7 21"></polyline>
-                <polyline points="7 3 7 8 15 8"></polyline>
-              </svg>
+                save
+              </span>
             )}
-            <span>
-              {saveStatus === "Salvando..."
-                ? "Salvando..."
-                : saveStatus === "Salvo no disco"
-                  ? "Salvo"
-                  : "Salvar"}
-            </span>
           </button>
         )}
       </div>

@@ -1,4 +1,4 @@
-import { FileText, FolderGit2, FolderTree, Lock, Plus } from "lucide-react";
+import { FileText, FolderTree, Lock, Plus } from "lucide-react";
 import React, {
   useCallback,
   useEffect,
@@ -1174,26 +1174,11 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
               className="doc-breadcrumbs-container"
               style={{ display: "flex", alignItems: "center", gap: "6px" }}
             >
-              {/* Unified Path Display and Input */}
+              {/* Breadcrumb Path Input / Display */}
               <div
-                className="unified-doc-path-field"
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  background: "var(--color-surface-container-high, #f1f5f9)",
-                  padding: "4px 8px",
-                  borderRadius: "6px",
-                  border: "1px solid var(--color-outline-variant, #e2e8f0)",
-                  fontSize: "12px",
-                  maxWidth: "520px",
-                  minWidth: "260px",
-                }}
+                className="doc-breadcrumbs"
+                style={{ display: "flex", alignItems: "center", gap: "4px" }}
               >
-                <FolderGit2
-                  size={14}
-                  style={{ color: "var(--color-primary, #2563eb)", flexShrink: 0 }}
-                />
                 <input
                   type="text"
                   id="doc-path-input"
@@ -1212,14 +1197,8 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
                       : ""
                   }`}
                   style={{
-                    border: "none",
-                    background: "transparent",
-                    outline: "none",
-                    fontSize: "12px",
-                    fontFamily: "var(--font-mono, monospace)",
-                    color: "var(--color-on-surface, #0f172a)",
-                    width: "100%",
-                    textOverflow: "ellipsis",
+                    width: "280px",
+                    minWidth: "180px",
                   }}
                 />
 
@@ -1250,18 +1229,6 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
                     setTimeout(() => setEditorToast(null), 2500);
                   }}
                   disabled={!filePath}
-                  style={{
-                    border: "none",
-                    background: "transparent",
-                    cursor: "pointer",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    padding: "2px",
-                    borderRadius: "4px",
-                    color: "var(--color-outline, #64748b)",
-                    flexShrink: 0,
-                  }}
                 >
                   <svg
                     width="13"
@@ -1293,18 +1260,6 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
                   title="Expandir pastas e revelar na árvore de documentos"
                   onClick={handleRevealInTree}
                   disabled={!filePath}
-                  style={{
-                    border: "none",
-                    background: "transparent",
-                    cursor: "pointer",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    padding: "2px",
-                    borderRadius: "4px",
-                    color: "var(--color-outline, #64748b)",
-                    flexShrink: 0,
-                  }}
                 >
                   <FolderTree size={14} />
                 </button>

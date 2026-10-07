@@ -58,7 +58,6 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
   if (category === 'markdown') {
     return (
       <NotionEditor
-        key={filePath}
         content={content}
         onChange={onChange}
         filePath={filePath}
