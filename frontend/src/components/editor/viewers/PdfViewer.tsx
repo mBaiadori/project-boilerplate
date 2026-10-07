@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { FileText, Download, ExternalLink, Copy, Check, RefreshCw, Laptop } from 'lucide-react';
+import { FileText, Download, ExternalLink, Copy, Check, RefreshCw, Laptop, FolderGit2 } from 'lucide-react';
+import { useWorkspace } from '../../../context/WorkspaceContext';
 import { API } from '../../../services/api';
 
 interface PdfViewerProps {
@@ -7,6 +8,7 @@ interface PdfViewerProps {
 }
 
 export const PdfViewer: React.FC<PdfViewerProps> = ({ filePath }) => {
+  const { activeRepo } = useWorkspace();
   const [isExtracting, setIsExtracting] = useState(false);
   const [copied, setCopied] = useState(false);
   const [openedInOS, setOpenedInOS] = useState(false);
@@ -110,6 +112,25 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({ filePath }) => {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              padding: '2px 8px',
+              borderRadius: '4px',
+              background: '#eff6ff',
+              border: '1px solid #dbeafe',
+              color: '#1d4ed8',
+              fontSize: '11.5px',
+              fontWeight: 600,
+              flexShrink: 0,
+            }}
+          >
+            <FolderGit2 size={12} />
+            <span>{activeRepo?.name || 'local'}</span>
+          </div>
+          <span style={{ color: '#94a3b8', fontSize: '12px' }}>/</span>
           <FileText size={16} style={{ color: '#d93025' }} />
           <span style={{ fontWeight: 600, color: '#1e293b' }}>{filePath}</span>
           <span

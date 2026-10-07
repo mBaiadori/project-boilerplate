@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import Papa from 'papaparse';
-import { Table, Plus, Trash2, Search, Code, Save, Download, Laptop } from 'lucide-react';
+import { Table, Plus, Trash2, Search, Code, Save, Download, Laptop, FolderGit2 } from 'lucide-react';
 import { useWorkspace } from '../../../context/WorkspaceContext';
 import { API } from '../../../services/api';
 import CodeMirrorEditor from './CodeMirrorEditor';
@@ -16,7 +16,7 @@ export const CsvEditor: React.FC<CsvEditorProps> = ({
   content,
   onChange,
 }) => {
-  const { saveStatus, isSaving, saveCurrentFile, hasUnsavedChanges } = useWorkspace();
+  const { saveStatus, isSaving, saveCurrentFile, hasUnsavedChanges, activeRepo } = useWorkspace();
   const [mode, setMode] = useState<'table' | 'raw'>('table');
   const [data, setData] = useState<string[][]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -167,6 +167,25 @@ export const CsvEditor: React.FC<CsvEditorProps> = ({
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              padding: '2px 8px',
+              borderRadius: '4px',
+              background: '#eff6ff',
+              border: '1px solid #dbeafe',
+              color: '#1d4ed8',
+              fontSize: '11.5px',
+              fontWeight: 600,
+              flexShrink: 0,
+            }}
+          >
+            <FolderGit2 size={12} />
+            <span>{activeRepo?.name || 'local'}</span>
+          </div>
+          <span style={{ color: '#94a3b8', fontSize: '12px' }}>/</span>
           <Table size={16} style={{ color: '#16a34a' }} />
           <span style={{ fontWeight: 600, color: '#1e293b' }}>{filePath}</span>
           <span

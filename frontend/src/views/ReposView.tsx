@@ -31,6 +31,7 @@ import {
   HardDrive,
   Edit3,
   Copy,
+  Shield,
 } from "lucide-react";
 import { FirstRunWizard } from "../components/onboarding/FirstRunWizard";
 import { DeleteRepoModal } from "../components/modals/DeleteRepoModal";
@@ -38,6 +39,8 @@ import { EditRepoModal } from "../components/modals/EditRepoModal";
 import { CloneRepoModal } from "../components/modals/CloneRepoModal";
 import { RepoSetupWizardModal } from "../components/modals/RepoSetupWizardModal";
 import { CreateRepoModal } from "../components/modals/CreateRepoModal";
+import { OrgGovernanceModal } from "../components/modals/OrgGovernanceModal";
+import { RepoGovernanceModal } from "../components/modals/RepoGovernanceModal";
 
 interface ReposViewProps {
   onSelectRepo?: (repo: Repo) => void;
@@ -69,6 +72,10 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
 
   // Create Repo Modal State
   const [isCreateRepoModalOpen, setIsCreateRepoModalOpen] = useState(false);
+
+  // Governance Modals State
+  const [orgGovernanceTarget, setOrgGovernanceTarget] = useState<string | null>(null);
+  const [repoGovernanceTarget, setRepoGovernanceTarget] = useState<{ orgLogin: string; repoName: string } | null>(null);
 
   // Check if onboarding is needed
   useEffect(() => {
@@ -311,6 +318,30 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
                         </div>
                       ) : (
                         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <button
+                            type="button"
+                            title={`Gerenciar Governança da Organização @${org.login}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOrgGovernanceTarget(org.login);
+                            }}
+                            style={{
+                              background: "rgba(99, 102, 241, 0.1)",
+                              border: "1px solid rgba(99, 102, 241, 0.3)",
+                              color: "#4f46e5",
+                              padding: "4px 8px",
+                              borderRadius: "6px",
+                              fontSize: "11px",
+                              fontWeight: 600,
+                              cursor: "pointer",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "4px",
+                            }}
+                          >
+                            <Shield size={12} />
+                            Governança
+                          </button>
                           <span className="org-card-count" title={`${count} repositórios`}>{count}</span>
                           <ArrowRight size={14} style={{ color: "var(--text-muted)" }} />
                         </div>
@@ -580,6 +611,38 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
 
                               <button
                                 type="button"
+                                className="btn-gov-repo-card"
+                                style={{
+                                  background: "transparent",
+                                  border: "none",
+                                  cursor: "pointer",
+                                  padding: "5px 6px",
+                                  borderRadius: "6px",
+                                  color: "var(--text-muted)",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  transition: "color 0.15s ease, background 0.15s ease",
+                                }}
+                                title="Governança, Times e Acessos do Repositório"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const orgLogin = owner || "local";
+                                  setRepoGovernanceTarget({ orgLogin, repoName: repo.name });
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.color = "#4f46e5";
+                                  e.currentTarget.style.backgroundColor = "rgba(99, 102, 241, 0.08)";
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.color = "var(--text-muted)";
+                                  e.currentTarget.style.backgroundColor = "transparent";
+                                }}
+                              >
+                                <Shield size={14} />
+                              </button>
+
+                              <button
+                                type="button"
                                 className="btn-clone-repo-card"
                                 style={{
                                   background: "transparent",
@@ -793,6 +856,23 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
           navigate(`/repo/${encodeURIComponent(repoName)}/editor`);
         }}
       />
+
+      {orgGovernanceTarget && (
+        <OrgGovernanceModal
+          isOpen={Boolean(orgGovernanceTarget)}
+          onClose={() => setOrgGovernanceTarget(null)}
+          orgLogin={orgGovernanceTarget}
+        />
+      )}
+
+      {repoGovernanceTarget && (
+        <RepoGovernanceModal
+          isOpen={Boolean(repoGovernanceTarget)}
+          onClose={() => setRepoGovernanceTarget(null)}
+          orgLogin={repoGovernanceTarget.orgLogin}
+          repoName={repoGovernanceTarget.repoName}
+        />
+      )}
     </div>
   );
 };

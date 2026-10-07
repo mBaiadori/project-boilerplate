@@ -247,6 +247,57 @@ export interface RepoTeamInfo {
   };
 }
 
+export interface OrgTeamMemberInfo {
+  id: number;
+  login: string;
+  avatar_url: string;
+  html_url: string;
+  role: 'member' | 'maintainer' | string;
+}
+
+export interface CreateOrgTeamPayload {
+  org: string;
+  name: string;
+  description?: string;
+  privacy?: 'closed' | 'secret';
+}
+
+export interface OrgInvitePayload {
+  org: string;
+  username?: string;
+  email?: string;
+  role?: 'admin' | 'direct_member' | 'billing_manager';
+  team_ids?: number[];
+}
+
+export interface EffectiveUserPermission {
+  login: string;
+  isOrgOwner: boolean;
+  isOrgMember: boolean;
+  isOutsideCollaborator: boolean;
+  repoPermission: 'admin' | 'maintain' | 'push' | 'triage' | 'pull' | 'none';
+  roleName: string;
+  allowedActions: {
+    canRead: boolean;
+    canWrite: boolean;
+    canTriage: boolean;
+    canMaintain: boolean;
+    canAdmin: boolean;
+    canManageGovernance: boolean;
+    canManageTeams: boolean;
+    canDeleteRepo: boolean;
+    canManageBranchProtection: boolean;
+  };
+  teamMemberships: string[];
+}
+
+export interface GovernanceActionWorkflowStatus {
+  installed: boolean;
+  path: string;
+  content?: string;
+}
+
+
 export interface ProjectMetadataOptions {
   categories: CategoryOption[];
   statuses: StatusItem[];

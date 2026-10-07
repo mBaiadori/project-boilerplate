@@ -240,6 +240,41 @@ export class TranslationsService {
   }
 
   /**
+   * Migra arquivos de tradução correspondentes entre repositórios distintos
+   */
+  migrateTranslations(sourceRepo: string, targetRepo: string, oldPath: string, newPath: string): void {
+    const sourceRepoDir = this.getRepoDir(sourceRepo);
+    const targetRepoDir = this.getRepoDir(targetRepo);
+    const sourceTransBase = path.join(sourceRepoDir, '.translations');
+    const targetTransBase = path.join(targetRepoDir, '.translations');
+
+    if (!fs.existsSync(sourceTransBase)) return;
+
+    const cleanOld = (oldPath || '').trim().replace(/^\/+/, '').replace(/\/+$/, '');
+    const cleanNew = (newPath || '').trim().replace(/^\/+/, '').replace(/\/+$/, '');
+    if (!cleanOld || !cleanNew) return;
+
+    try {
+      const langEntries = fs.readdirSync(sourceTransBase, { withFileTypes: true });
+      for (const entry of langEntries) {
+        if (!entry.isDirectory()) continue;
+        const langCode = entry.name;
+        const langOldFullPath = path.join(sourceTransBase, langCode, cleanOld);
+        const langNewFullPath = path.join(targetTransBase, langCode, cleanNew);
+
+        if (fs.existsSync(langOldFullPath)) {
+          fs.mkdirSync(path.dirname(langNewFullPath), { recursive: true });
+          fs.cpSync(langOldFullPath, langNewFullPath, { recursive: true, force: true });
+          fs.rmSync(langOldFullPath, { recursive: true, force: true });
+          this.cleanEmptyParentDirs(path.dirname(langOldFullPath), path.join(sourceTransBase, langCode));
+        }
+      }
+    } catch (err) {
+      console.warn(`[TranslationsService] Erro ao migrar traduções de '${sourceRepo}:${cleanOld}' para '${targetRepo}:${cleanNew}':`, err);
+    }
+  }
+
+  /**
    * Remove arquivos de tradução correspondentes quando um arquivo ou diretório é excluído da árvore
    */
   deleteTranslationsForPath(repoName: string, filePath: string): void {

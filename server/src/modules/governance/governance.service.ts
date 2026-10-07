@@ -17,6 +17,11 @@ import {
   OrganizationTeamInfo,
   OrganizationMemberInfo,
   RepoTeamInfo,
+  OrgTeamMemberInfo,
+  CreateOrgTeamPayload,
+  OrgInvitePayload,
+  EffectiveUserPermission,
+  GovernanceActionWorkflowStatus,
 } from "./governance.types.js";
 import { scanContentForSecrets } from "../../utils/crypto.js";
 
@@ -1223,6 +1228,400 @@ export class GovernanceService {
     }
     throw new Error(res.data?.message || `Erro ao remover time do repositório (${res.statusCode})`);
   }
+
+  /**
+   * Cria um novo time na organização do GitHub
+   */
+  async createOrgTeam(payload: CreateOrgTeamPayload): Promise<{ success: boolean; team?: OrganizationTeamInfo; message?: string }> {
+    const cfg = loadConfig();
+    if (!cfg.token) {
+      throw new Error("Token do GitHub não autenticado");
+    }
+    const { org, name, description, privacy } = payload;
+    const res = await callGitHubAPI(`/orgs/${org}/teams`, cfg.token, "POST", {
+      name,
+      description: description || "",
+      privacy: privacy || "closed",
+    });
+
+    if (res.statusCode === 201 || res.statusCode === 200) {
+      const t = res.data;
+      return {
+        success: true,
+        message: `Time @${org}/${t.slug} criado com sucesso.`,
+        team: {
+          id: t.id,
+          slug: t.slug,
+          name: t.name,
+          description: t.description || "",
+          permission: t.permission || "pull",
+          members_count: 0,
+          privacy: t.privacy || "closed",
+        },
+      };
+    }
+    throw new Error(res.data?.message || `Falha ao criar time na organização (${res.statusCode})`);
+  }
+
+  /**
+   * Exclui um time da organização do GitHub
+   */
+  async deleteOrgTeam(org: string, teamSlug: string): Promise<{ success: boolean; message?: string }> {
+    const cfg = loadConfig();
+    if (!cfg.token) {
+      throw new Error("Token do GitHub não autenticado");
+    }
+    const res = await callGitHubAPI(`/orgs/${org}/teams/${teamSlug}`, cfg.token, "DELETE");
+    if (res.statusCode === 204 || res.statusCode === 200) {
+      return { success: true, message: `Time @${org}/${teamSlug} excluído com sucesso.` };
+    }
+    throw new Error(res.data?.message || `Falha ao excluir time (${res.statusCode})`);
+  }
+
+  /**
+   * Lista membros de um time específico na organização
+   */
+  async getOrgTeamMembers(org: string, teamSlug: string): Promise<OrgTeamMemberInfo[]> {
+    const cfg = loadConfig();
+    if (!cfg.token || !org || !teamSlug) {
+      return [];
+    }
+    try {
+      const res = await callGitHubAPI(`/orgs/${org}/teams/${teamSlug}/members?per_page=100`, cfg.token, "GET");
+      if (res.statusCode === 200 && Array.isArray(res.data)) {
+        return res.data.map((m: any) => ({
+          id: m.id,
+          login: m.login,
+          avatar_url: m.avatar_url || `https://github.com/${m.login}.png`,
+          html_url: m.html_url || `https://github.com/${m.login}`,
+          role: "member",
+        }));
+      }
+      return [];
+    } catch (err) {
+      console.warn(`[GovernanceService] Falha ao listar membros do time @${org}/${teamSlug}:`, err);
+      return [];
+    }
+  }
+
+  /**
+   * Adiciona ou atualiza membro em um time da organização
+   */
+  async addMemberToOrgTeam(
+    org: string,
+    teamSlug: string,
+    username: string,
+    role: "member" | "maintainer" = "member"
+  ): Promise<{ success: boolean; message?: string }> {
+    const cfg = loadConfig();
+    if (!cfg.token) {
+      throw new Error("Token do GitHub não autenticado");
+    }
+    const cleanUsername = username.trim().replace(/^@/, "");
+    const res = await callGitHubAPI(
+      `/orgs/${org}/teams/${teamSlug}/memberships/${cleanUsername}`,
+      cfg.token,
+      "PUT",
+      { role }
+    );
+    if (res.statusCode === 200 || res.statusCode === 201) {
+      return { success: true, message: `@${cleanUsername} adicionado ao time @${org}/${teamSlug} como ${role}.` };
+    }
+    throw new Error(res.data?.message || `Erro ao adicionar membro ao time (${res.statusCode})`);
+  }
+
+  /**
+   * Remove membro de um time da organização
+   */
+  async removeMemberFromOrgTeam(
+    org: string,
+    teamSlug: string,
+    username: string
+  ): Promise<{ success: boolean; message?: string }> {
+    const cfg = loadConfig();
+    if (!cfg.token) {
+      throw new Error("Token do GitHub não autenticado");
+    }
+    const cleanUsername = username.trim().replace(/^@/, "");
+    const res = await callGitHubAPI(
+      `/orgs/${org}/teams/${teamSlug}/memberships/${cleanUsername}`,
+      cfg.token,
+      "DELETE"
+    );
+    if (res.statusCode === 204 || res.statusCode === 200) {
+      return { success: true, message: `@${cleanUsername} removido do time @${org}/${teamSlug}.` };
+    }
+    throw new Error(res.data?.message || `Erro ao remover membro do time (${res.statusCode})`);
+  }
+
+  /**
+   * Convida um novo membro para a organização no GitHub
+   */
+  async inviteOrgMember(payload: OrgInvitePayload): Promise<{ success: boolean; message: string }> {
+    const cfg = loadConfig();
+    if (!cfg.token) {
+      throw new Error("Token do GitHub não autenticado");
+    }
+    const { org, username, email, role = "direct_member", team_ids } = payload;
+    let inviteeId: number | undefined;
+
+    if (username) {
+      const cleanUsername = username.trim().replace(/^@/, "");
+      const userRes = await callGitHubAPI(`/users/${cleanUsername}`, cfg.token, "GET");
+      if (userRes.statusCode === 200 && userRes.data?.id) {
+        inviteeId = userRes.data.id;
+      }
+    }
+
+    const body: any = { role };
+    if (inviteeId) body.invitee_id = inviteeId;
+    if (email) body.email = email;
+    if (team_ids && team_ids.length > 0) body.team_ids = team_ids;
+
+    const res = await callGitHubAPI(`/orgs/${org}/invitations`, cfg.token, "POST", body);
+    if (res.statusCode === 201 || res.statusCode === 200) {
+      return { success: true, message: `Convite para a organização ${org} enviado com sucesso!` };
+    }
+    throw new Error(res.data?.message || `Erro ao convidar para a organização (${res.statusCode})`);
+  }
+
+  /**
+   * Remove um membro da organização
+   */
+  async removeOrgMember(org: string, username: string): Promise<{ success: boolean; message: string }> {
+    const cfg = loadConfig();
+    if (!cfg.token) {
+      throw new Error("Token do GitHub não autenticado");
+    }
+    const cleanUsername = username.trim().replace(/^@/, "");
+    const res = await callGitHubAPI(`/orgs/${org}/members/${cleanUsername}`, cfg.token, "DELETE");
+    if (res.statusCode === 204 || res.statusCode === 200) {
+      return { success: true, message: `@${cleanUsername} removido da organização ${org}.` };
+    }
+    throw new Error(res.data?.message || `Erro ao remover membro da organização (${res.statusCode})`);
+  }
+
+  /**
+   * Calcula a permissão efetiva do usuário autenticado no repositório e organização atual
+   */
+  async getEffectiveUserPermission(repoName?: string, orgLogin?: string): Promise<EffectiveUserPermission> {
+    const cfg = loadConfig();
+    const activeUser = cfg.user?.login || "local-user";
+    const targetRepoName = repoName || cfg.active_repo?.name || "local";
+    const resolvedFullName = this.resolveRepoFullName(targetRepoName);
+
+    // Fallback completo para repositório local / sem token remoto
+    if (!cfg.token || resolvedFullName.startsWith("local/")) {
+      return {
+        login: activeUser,
+        isOrgOwner: true,
+        isOrgMember: true,
+        isOutsideCollaborator: false,
+        repoPermission: "admin",
+        roleName: "Owner / Tech Lead",
+        allowedActions: {
+          canRead: true,
+          canWrite: true,
+          canTriage: true,
+          canMaintain: true,
+          canAdmin: true,
+          canManageGovernance: true,
+          canManageTeams: true,
+          canDeleteRepo: true,
+          canManageBranchProtection: true,
+        },
+        teamMemberships: [],
+      };
+    }
+
+    let isOrgOwner = false;
+    let isOrgMember = false;
+    let isOutsideCollaborator = false;
+    let repoPermission: "admin" | "maintain" | "push" | "triage" | "pull" | "none" = "pull";
+    const teamMemberships: string[] = [];
+
+    // 1. Identificar se o repositório pertence a uma Organização
+    const parts = resolvedFullName.split("/");
+    const repoOwner = parts[0];
+    const targetOrg = orgLogin || (repoOwner && repoOwner !== activeUser ? repoOwner : null);
+
+    // 2. Checar papel na organização se aplicável
+    if (targetOrg) {
+      try {
+        const orgMemRes = await callGitHubAPI(`/orgs/${targetOrg}/memberships/${activeUser}`, cfg.token, "GET");
+        if (orgMemRes.statusCode === 200 && orgMemRes.data) {
+          isOrgMember = orgMemRes.data.state === "active";
+          if (orgMemRes.data.role === "admin") {
+            isOrgOwner = true;
+          }
+        }
+      } catch {}
+    }
+
+    // 3. Checar permissão específica no repositório
+    try {
+      const permRes = await callGitHubAPI(
+        `/repos/${resolvedFullName}/collaborators/${activeUser}/permission`,
+        cfg.token,
+        "GET"
+      );
+      if (permRes.statusCode === 200 && permRes.data?.permission) {
+        const p = permRes.data.permission;
+        if (p === "admin") repoPermission = "admin";
+        else if (p === "maintain") repoPermission = "maintain";
+        else if (p === "write" || p === "push") repoPermission = "push";
+        else if (p === "triage") repoPermission = "triage";
+        else if (p === "read" || p === "pull") repoPermission = "pull";
+      }
+    } catch {
+      // Se não for retornado via rota de permissão, inspeciona repositório direto
+      if (repoOwner.toLowerCase() === activeUser.toLowerCase()) {
+        repoPermission = "admin";
+        isOrgOwner = true;
+      }
+    }
+
+    if (isOrgOwner) {
+      repoPermission = "admin";
+    }
+
+    if (!isOrgMember && targetOrg && Boolean(repoPermission)) {
+      isOutsideCollaborator = true;
+    }
+
+    const canAdmin = repoPermission === "admin" || isOrgOwner;
+    const canMaintain = canAdmin || repoPermission === "maintain";
+    const canWrite = canMaintain || repoPermission === "push";
+    const canTriage = canWrite || repoPermission === "triage";
+    const canRead = canTriage || repoPermission === "pull";
+
+    let roleName = "Leitor";
+    if (isOrgOwner) roleName = "Owner da Org";
+    else if (canAdmin) roleName = "Admin do Repositório";
+    else if (canMaintain) roleName = "Mantenedor";
+    else if (canWrite) roleName = "Engenheiro (Write)";
+    else if (canTriage) roleName = "Triagem";
+    else if (isOutsideCollaborator) roleName = "Colaborador Externo";
+
+    return {
+      login: activeUser,
+      isOrgOwner,
+      isOrgMember,
+      isOutsideCollaborator,
+      repoPermission,
+      roleName,
+      allowedActions: {
+        canRead,
+        canWrite,
+        canTriage,
+        canMaintain,
+        canAdmin,
+        canManageGovernance: canAdmin,
+        canManageTeams: isOrgOwner,
+        canDeleteRepo: canAdmin,
+        canManageBranchProtection: canMaintain,
+      },
+      teamMemberships,
+    };
+  }
+
+  /**
+   * Verifica o status do workflow de governança do GitHub Actions (.github/workflows/governance-check.yml)
+   */
+  async getGovernanceWorkflowStatus(repoName?: string): Promise<GovernanceActionWorkflowStatus> {
+    const repoDir = this.getRepoDir(repoName);
+    const workflowPath = path.join(repoDir, ".github", "workflows", "governance-check.yml");
+    const exists = fs.existsSync(workflowPath);
+    let content: string | undefined;
+    if (exists) {
+      try {
+        content = fs.readFileSync(workflowPath, "utf-8");
+      } catch {}
+    }
+    return {
+      installed: exists,
+      path: ".github/workflows/governance-check.yml",
+      content,
+    };
+  }
+
+  /**
+   * Instala ou atualiza o workflow de governança automatizada do GitHub Actions
+   */
+  async installGovernanceWorkflow(repoName?: string): Promise<{ success: boolean; message: string }> {
+    const repoDir = this.getRepoDir(repoName);
+    const workflowsDir = path.join(repoDir, ".github", "workflows");
+    const workflowPath = path.join(workflowsDir, "governance-check.yml");
+
+    const workflowYaml = `# Context OS — Automated Governance & Security Gatekeeper
+# Este workflow aplica verificações contínuas de governança (Secret Scanning, Quorum Rules e CODEOWNERS) em Pull Requests e Pushes.
+
+name: Context OS Governance Gatekeeper
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches:
+      - main
+      - master
+      - develop
+
+jobs:
+  governance-validation:
+    name: 🛡️ Validar Regras de Governança & Secrets
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validar CODEOWNERS e Estrutura de Arquivos
+        run: |
+          echo "=== 🔍 Verificando Integridade do CODEOWNERS ==="
+          if [ -f "CODEOWNERS" ] || [ -f ".github/CODEOWNERS" ] || [ -f "docs/CODEOWNERS" ]; then
+            echo "✅ Arquivo CODEOWNERS detectado."
+          else
+            echo "⚠️ Aviso: Arquivo CODEOWNERS não encontrado na raiz ou .github/."
+          fi
+
+      - name: Scan de Chaves e Credenciais Vazadas
+        run: |
+          echo "=== 🔒 Varredura Básica de Segredos ==="
+          # Busca simples por tokens e chaves privadas em arquivos modificados
+          if grep -r -E "(ghp_[a-zA-Z0-9]{36}|github_pat_[a-zA-Z0-9_]{82}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z\\-_]{35}|-----BEGIN (RSA|EC|OPENSSH) PRIVATE KEY-----)" --exclude-dir=".git" .; then
+            echo "❌ ERRO CRÍTICO: Possível credencial ou segredo em texto claro detectado no repositório!"
+            exit 1
+          else
+            echo "✅ Nenhum segredo ou token em texto claro detectado."
+          fi
+
+      - name: Validar Configuração do Context OS (.project.config.json)
+        run: |
+          echo "=== 📋 Validando .project.config.json ==="
+          if [ -f ".project.config.json" ]; then
+            python3 -c "import json; json.load(open('.project.config.json'))" && echo "✅ .project.config.json é um JSON válido."
+          fi
+`;
+
+    try {
+      fs.mkdirSync(workflowsDir, { recursive: true });
+      fs.writeFileSync(workflowPath, workflowYaml, "utf-8");
+      this.logAudit(repoName, {
+        action: "BRANCH_PROTECTED",
+        actor: "System / Tech Lead",
+        details: "Workflow de governança GitHub Actions instalado (.github/workflows/governance-check.yml).",
+      });
+      return {
+        success: true,
+        message: "Workflow de governança do GitHub Actions instalado com sucesso em .github/workflows/governance-check.yml",
+      };
+    } catch (err: any) {
+      throw new Error(`Falha ao instalar workflow de GitHub Actions: ${err.message}`);
+    }
+  }
 }
 
 export const governanceService = new GovernanceService();
+

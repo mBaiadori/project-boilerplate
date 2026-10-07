@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { useWorkspace } from "../../context/WorkspaceContext";
 import { useAuth } from "../../context/AuthContext";
 import { isPathHidden } from "../../utils/hidden-files";
@@ -9,8 +9,11 @@ import {
   HelpCircle,
   ExternalLink,
   User,
+  Shield,
 } from "lucide-react";
 import { OrgSelectorDropdown } from "./OrgSelectorDropdown";
+import { API } from "../../services/api";
+import type { EffectiveUserPermission } from "../../types";
 
 interface TopHeaderProps {
   onBackToRepos: () => void;
@@ -32,6 +35,20 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
   const { activeRepo, pendingChanges, isLoadingWorkspace } = useWorkspace();
   const { user, provider } = useAuth();
   const providerLabel = provider === "github" ? "GitHub" : "Modo Local";
+
+  const [effectivePerm, setEffectivePerm] = useState<EffectiveUserPermission | null>(null);
+
+  useEffect(() => {
+    if (activeRepo?.name) {
+      API.getEffectiveUserPermission(activeRepo.name, activeRepo.owner)
+        .then((res) => {
+          if (res.ok && res.data) {
+            setEffectivePerm(res.data);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [activeRepo?.name, activeRepo?.owner]);
 
   const getRepoWebUrl = () => {
     if (activeRepo?.html_url) return activeRepo.html_url;
@@ -121,6 +138,51 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
         <div className="dash-title-wrap">
           <div className="dash-title-row">
             <h1 id="dash-repo-title">{activeRepo?.name || "Projeto"}</h1>
+
+            {effectivePerm && (
+              <span
+                id="dash-user-perm-badge"
+                title={`Seu papel efetivo: ${effectivePerm.roleName} (Permissão: ${effectivePerm.repoPermission})`}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "4px",
+                  fontSize: "11px",
+                  fontWeight: 600,
+                  padding: "2px 8px",
+                  borderRadius: "9999px",
+                  backgroundColor:
+                    effectivePerm.isOrgOwner || effectivePerm.allowedActions.canAdmin
+                      ? "rgba(236, 72, 153, 0.12)"
+                      : effectivePerm.allowedActions.canMaintain
+                      ? "rgba(139, 92, 246, 0.12)"
+                      : effectivePerm.allowedActions.canWrite
+                      ? "rgba(16, 185, 129, 0.12)"
+                      : "rgba(2, 132, 199, 0.12)",
+                  color:
+                    effectivePerm.isOrgOwner || effectivePerm.allowedActions.canAdmin
+                      ? "#ec4899"
+                      : effectivePerm.allowedActions.canMaintain
+                      ? "#8b5cf6"
+                      : effectivePerm.allowedActions.canWrite
+                      ? "#10b981"
+                      : "#0284c7",
+                  border: `1px solid ${
+                    effectivePerm.isOrgOwner || effectivePerm.allowedActions.canAdmin
+                      ? "rgba(236, 72, 153, 0.3)"
+                      : effectivePerm.allowedActions.canMaintain
+                      ? "rgba(139, 92, 246, 0.3)"
+                      : effectivePerm.allowedActions.canWrite
+                      ? "rgba(16, 185, 129, 0.3)"
+                      : "rgba(2, 132, 199, 0.3)"
+                  }`,
+                }}
+              >
+                <Shield size={11} />
+                {effectivePerm.roleName}
+              </span>
+            )}
+
             {activeRepo?.full_name && !activeRepo.is_local && (
               <a
                 id="dash-repo-github-link"

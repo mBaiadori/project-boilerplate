@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import * as XLSX from 'xlsx';
-import { FileSpreadsheet, Download, Search, RefreshCw, AlertCircle, Laptop } from 'lucide-react';
+import { FileSpreadsheet, Download, Search, RefreshCw, AlertCircle, Laptop, FolderGit2 } from 'lucide-react';
+import { useWorkspace } from '../../../context/WorkspaceContext';
 import { API } from '../../../services/api';
 
 interface ExcelViewerProps {
@@ -8,6 +9,7 @@ interface ExcelViewerProps {
 }
 
 export const ExcelViewer: React.FC<ExcelViewerProps> = ({ filePath }) => {
+  const { activeRepo } = useWorkspace();
   const [workbook, setWorkbook] = useState<XLSX.WorkBook | null>(null);
   const [sheetNames, setSheetNames] = useState<string[]>([]);
   const [activeSheet, setActiveSheet] = useState<string>('');
@@ -122,6 +124,25 @@ export const ExcelViewer: React.FC<ExcelViewerProps> = ({ filePath }) => {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              padding: '2px 8px',
+              borderRadius: '4px',
+              background: '#eff6ff',
+              border: '1px solid #dbeafe',
+              color: '#1d4ed8',
+              fontSize: '11.5px',
+              fontWeight: 600,
+              flexShrink: 0,
+            }}
+          >
+            <FolderGit2 size={12} />
+            <span>{activeRepo?.name || 'local'}</span>
+          </div>
+          <span style={{ color: '#94a3b8', fontSize: '12px' }}>/</span>
           <FileSpreadsheet size={16} style={{ color: '#16a34a' }} />
           <span style={{ fontWeight: 600, color: '#1e293b' }}>{filePath}</span>
           <span

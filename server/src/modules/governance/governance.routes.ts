@@ -227,5 +227,138 @@ export async function governanceRoutes(fastify: FastifyInstance) {
       return reply.status(400).send({ error: err.message });
     }
   });
+
+  // 16. Create Organization Team
+  fastify.post('/api/governance/orgs/:org/teams', async (request, reply) => {
+    const params = request.params as { org: string };
+    const body = request.body as any;
+    try {
+      const result = await governanceService.createOrgTeam({
+        org: params.org,
+        name: body.name,
+        description: body.description,
+        privacy: body.privacy,
+      });
+      return reply.send(result);
+    } catch (err: any) {
+      return reply.status(400).send({ error: err.message });
+    }
+  });
+
+  // 17. Delete Organization Team
+  fastify.delete('/api/governance/orgs/:org/teams/:team_slug', async (request, reply) => {
+    const params = request.params as { org: string; team_slug: string };
+    try {
+      const result = await governanceService.deleteOrgTeam(params.org, params.team_slug);
+      return reply.send(result);
+    } catch (err: any) {
+      return reply.status(400).send({ error: err.message });
+    }
+  });
+
+  // 18. List Team Members
+  fastify.get('/api/governance/orgs/:org/teams/:team_slug/members', async (request, reply) => {
+    const params = request.params as { org: string; team_slug: string };
+    try {
+      const members = await governanceService.getOrgTeamMembers(params.org, params.team_slug);
+      return reply.send({ members });
+    } catch (err: any) {
+      return reply.status(400).send({ error: err.message });
+    }
+  });
+
+  // 19. Add Member to Team
+  fastify.put('/api/governance/orgs/:org/teams/:team_slug/members/:username', async (request, reply) => {
+    const params = request.params as { org: string; team_slug: string; username: string };
+    const body = (request.body as any) || {};
+    try {
+      const result = await governanceService.addMemberToOrgTeam(
+        params.org,
+        params.team_slug,
+        params.username,
+        body.role
+      );
+      return reply.send(result);
+    } catch (err: any) {
+      return reply.status(400).send({ error: err.message });
+    }
+  });
+
+  // 20. Remove Member from Team
+  fastify.delete('/api/governance/orgs/:org/teams/:team_slug/members/:username', async (request, reply) => {
+    const params = request.params as { org: string; team_slug: string; username: string };
+    try {
+      const result = await governanceService.removeMemberFromOrgTeam(
+        params.org,
+        params.team_slug,
+        params.username
+      );
+      return reply.send(result);
+    } catch (err: any) {
+      return reply.status(400).send({ error: err.message });
+    }
+  });
+
+  // 21. Invite Member to Organization
+  fastify.post('/api/governance/orgs/:org/invitations', async (request, reply) => {
+    const params = request.params as { org: string };
+    const body = request.body as any;
+    try {
+      const result = await governanceService.inviteOrgMember({
+        org: params.org,
+        username: body.username,
+        email: body.email,
+        role: body.role,
+        team_ids: body.team_ids,
+      });
+      return reply.send(result);
+    } catch (err: any) {
+      return reply.status(400).send({ error: err.message });
+    }
+  });
+
+  // 22. Remove Member from Organization
+  fastify.delete('/api/governance/orgs/:org/members/:username', async (request, reply) => {
+    const params = request.params as { org: string; username: string };
+    try {
+      const result = await governanceService.removeOrgMember(params.org, params.username);
+      return reply.send(result);
+    } catch (err: any) {
+      return reply.status(400).send({ error: err.message });
+    }
+  });
+
+  // 23. Effective User Permission
+  fastify.get('/api/governance/effective-permission', async (request, reply) => {
+    const query = request.query as { repo?: string; org?: string };
+    try {
+      const result = await governanceService.getEffectiveUserPermission(query.repo, query.org);
+      return reply.send(result);
+    } catch (err: any) {
+      return reply.status(400).send({ error: err.message });
+    }
+  });
+
+  // 24. GitHub Actions Governance Workflow Status & Install
+  fastify.get('/api/governance/actions-workflow', async (request, reply) => {
+    const query = request.query as { repo?: string };
+    try {
+      const result = await governanceService.getGovernanceWorkflowStatus(query.repo);
+      return reply.send(result);
+    } catch (err: any) {
+      return reply.status(400).send({ error: err.message });
+    }
+  });
+
+  fastify.post('/api/governance/actions-workflow', async (request, reply) => {
+    const body = request.body as { repo?: string };
+    try {
+      const result = await governanceService.installGovernanceWorkflow(body?.repo);
+      return reply.send(result);
+    } catch (err: any) {
+      return reply.status(400).send({ error: err.message });
+    }
+  });
 }
+
 

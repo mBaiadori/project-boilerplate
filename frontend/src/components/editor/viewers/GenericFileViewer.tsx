@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { FileQuestion, Download, Laptop } from 'lucide-react';
+import { FileQuestion, Download, Laptop, FolderGit2 } from 'lucide-react';
 import { getFileExtension, getLanguageLabel } from '../../../utils/file-types';
+import { useWorkspace } from '../../../context/WorkspaceContext';
 import { API } from '../../../services/api';
 
 interface GenericFileViewerProps {
@@ -8,6 +9,7 @@ interface GenericFileViewerProps {
 }
 
 export const GenericFileViewer: React.FC<GenericFileViewerProps> = ({ filePath }) => {
+  const { activeRepo } = useWorkspace();
   const [openedInOS, setOpenedInOS] = useState(false);
   const ext = getFileExtension(filePath);
   const label = getLanguageLabel(filePath);
@@ -63,6 +65,27 @@ export const GenericFileViewer: React.FC<GenericFileViewerProps> = ({ filePath }
         }}
       >
         <FileQuestion size={36} style={{ color: '#1a73e8' }} />
+      </div>
+
+      <div
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '6px',
+          padding: '3px 10px',
+          borderRadius: '6px',
+          background: '#eff6ff',
+          border: '1px solid #dbeafe',
+          color: '#1d4ed8',
+          fontSize: '12px',
+          fontWeight: 600,
+          marginBottom: '16px',
+        }}
+      >
+        <FolderGit2 size={13} />
+        <span>{activeRepo?.name || 'local'}</span>
+        <span style={{ color: '#94a3b8' }}>/</span>
+        <span style={{ color: '#334155' }}>{filePath}</span>
       </div>
 
       <h3 style={{ margin: '0 0 8px 0', fontSize: '18px', fontWeight: 600, color: '#1e293b' }}>

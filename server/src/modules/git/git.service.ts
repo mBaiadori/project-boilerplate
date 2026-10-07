@@ -28,46 +28,49 @@ export class GitService {
     return path.join(PROJECTS_DIR, activeRepoName);
   }
 
-  async ensureActiveRepoGit() {
+  async ensureActiveRepoGit(repoNameParam?: string) {
     const cfg = loadConfig();
-    const repoName = cfg.active_repo?.name || 'local';
+    const repoName = repoNameParam || cfg.active_repo?.name || 'local';
     const repoDir = this.getRepoDir(repoName);
-    const isLocal = Boolean(cfg.active_repo?.is_local) || repoName === 'local' || repoName === 'default' || repoName === '_default';
-    let remoteUrl = isLocal ? undefined : cfg.active_repo?.html_url;
-    if (!remoteUrl && !isLocal && cfg.token && cfg.user?.login) {
-      remoteUrl = `https://github.com/${cfg.user.login}/${repoName}.git`;
+    const repoObj = cfg.repos?.find((r: any) => r.name === repoName) || (cfg.active_repo?.name === repoName ? cfg.active_repo : undefined);
+    const isLocal = Boolean(repoObj?.is_local) || repoName === 'local' || repoName === 'default' || repoName === '_default';
+    let remoteUrl = isLocal ? undefined : repoObj?.html_url;
+    if (!remoteUrl && !isLocal && cfg.token && (repoObj?.owner?.login || cfg.user?.login)) {
+      const owner = repoObj?.owner?.login || cfg.user?.login;
+      remoteUrl = `https://github.com/${owner}/${repoName}.git`;
     }
     const token = isLocal ? undefined : cfg.token;
     const res = await ensureGitRepo(repoDir, cfg.user, remoteUrl, token, repoName, !isLocal);
     return res;
   }
 
-  async getStatus() {
-    await this.ensureActiveRepoGit();
+  async getStatus(repoNameParam?: string) {
     const cfg = loadConfig();
-    const repoName = cfg.active_repo?.name || 'local';
+    const repoName = repoNameParam || cfg.active_repo?.name || 'local';
+    await this.ensureActiveRepoGit(repoName);
     const repoDir = this.getRepoDir(repoName);
     const status = await getGitStatus(repoDir);
+    const repoObj = cfg.repos?.find((r: any) => r.name === repoName) || (cfg.active_repo?.name === repoName ? cfg.active_repo : { name: repoName, full_name: repoName, is_local: true });
 
     return {
       repo_name: repoName,
-      active_repo: cfg.active_repo,
+      active_repo: repoObj,
       ...status,
     };
   }
 
-  async getDiff(filePath?: string) {
-    await this.ensureActiveRepoGit();
+  async getDiff(filePath?: string, repoNameParam?: string) {
     const cfg = loadConfig();
-    const repoName = cfg.active_repo?.name || 'local';
+    const repoName = repoNameParam || cfg.active_repo?.name || 'local';
+    await this.ensureActiveRepoGit(repoName);
     const repoDir = this.getRepoDir(repoName);
     return await getGitDiff(repoDir, filePath);
   }
 
-  async getLog(limit: number = 20) {
-    await this.ensureActiveRepoGit();
+  async getLog(limit: number = 20, repoNameParam?: string) {
     const cfg = loadConfig();
-    const repoName = cfg.active_repo?.name || 'local';
+    const repoName = repoNameParam || cfg.active_repo?.name || 'local';
+    await this.ensureActiveRepoGit(repoName);
     const repoDir = this.getRepoDir(repoName);
     const commits = await getGitLog(repoDir, limit);
 
@@ -77,10 +80,10 @@ export class GitService {
     };
   }
 
-  async getFileHistory(filePath: string, limit: number = 30) {
-    await this.ensureActiveRepoGit();
+  async getFileHistory(filePath: string, limit: number = 30, repoNameParam?: string) {
     const cfg = loadConfig();
-    const repoName = cfg.active_repo?.name || 'local';
+    const repoName = repoNameParam || cfg.active_repo?.name || 'local';
+    await this.ensureActiveRepoGit(repoName);
     const repoDir = this.getRepoDir(repoName);
     const commits = await getFileGitLog(repoDir, filePath, limit);
 
@@ -91,26 +94,26 @@ export class GitService {
     };
   }
 
-  async getFileVersion(filePath: string, commitHash: string) {
-    await this.ensureActiveRepoGit();
+  async getFileVersion(filePath: string, commitHash: string, repoNameParam?: string) {
     const cfg = loadConfig();
-    const repoName = cfg.active_repo?.name || 'local';
+    const repoName = repoNameParam || cfg.active_repo?.name || 'local';
+    await this.ensureActiveRepoGit(repoName);
     const repoDir = this.getRepoDir(repoName);
     return await getFileContentAtCommit(repoDir, filePath, commitHash);
   }
 
-  async getBranches() {
-    await this.ensureActiveRepoGit();
+  async getBranches(repoNameParam?: string) {
     const cfg = loadConfig();
-    const repoName = cfg.active_repo?.name || 'local';
+    const repoName = repoNameParam || cfg.active_repo?.name || 'local';
+    await this.ensureActiveRepoGit(repoName);
     const repoDir = this.getRepoDir(repoName);
     return await getGitBranches(repoDir);
   }
 
-  async switchOrCreateBranch(branchName: string) {
-    await this.ensureActiveRepoGit();
+  async switchOrCreateBranch(branchName: string, repoNameParam?: string) {
     const cfg = loadConfig();
-    const repoName = cfg.active_repo?.name || 'local';
+    const repoName = repoNameParam || cfg.active_repo?.name || 'local';
+    await this.ensureActiveRepoGit(repoName);
     const repoDir = this.getRepoDir(repoName);
     const res = await createAndCheckoutBranch(repoDir, branchName);
     workspaceService.invalidateTreeCache(repoName);
@@ -118,9 +121,9 @@ export class GitService {
   }
 
   async commit(message: string, files?: string[], _userLogin?: string, repo?: string) {
-    await this.ensureActiveRepoGit();
     const cfg = loadConfig();
     const repoName = repo || cfg.active_repo?.name || 'local';
+    await this.ensureActiveRepoGit(repoName);
     const repoDir = this.getRepoDir(repoName);
 
     // Executa commit diretamente com os arquivos em texto plano
@@ -129,12 +132,13 @@ export class GitService {
     return res;
   }
 
-  async sync(branch?: string) {
-    await this.ensureActiveRepoGit();
+  async sync(branch?: string, repoNameParam?: string) {
     const cfg = loadConfig();
-    const repoName = cfg.active_repo?.name || 'local';
+    const repoName = repoNameParam || cfg.active_repo?.name || 'local';
+    await this.ensureActiveRepoGit(repoName);
     const repoDir = this.getRepoDir(repoName);
-    const targetBranch = branch || cfg.active_repo?.default_branch || 'main';
+    const repoObj = cfg.repos?.find((r: any) => r.name === repoName) || (cfg.active_repo?.name === repoName ? cfg.active_repo : undefined);
+    const targetBranch = branch || repoObj?.default_branch || 'main';
 
     // Executa sync direto (pull + push)
     const result = await syncGit(repoDir, 'origin', targetBranch);
@@ -151,26 +155,26 @@ export class GitService {
     return result;
   }
 
-  async getBlame(filePath: string) {
-    await this.ensureActiveRepoGit();
+  async getBlame(filePath: string, repoNameParam?: string) {
     const cfg = loadConfig();
-    const repoName = cfg.active_repo?.name || 'local';
+    const repoName = repoNameParam || cfg.active_repo?.name || 'local';
+    await this.ensureActiveRepoGit(repoName);
     const repoDir = this.getRepoDir(repoName);
     return await getFileBlameDetails(repoDir, filePath);
   }
 
-  async getWhatsNew(lastSeenHash?: string) {
-    await this.ensureActiveRepoGit();
+  async getWhatsNew(lastSeenHash?: string, repoNameParam?: string) {
     const cfg = loadConfig();
-    const repoName = cfg.active_repo?.name || 'local';
+    const repoName = repoNameParam || cfg.active_repo?.name || 'local';
+    await this.ensureActiveRepoGit(repoName);
     const repoDir = this.getRepoDir(repoName);
     return await getWhatsNewSummary(repoDir, lastSeenHash);
   }
 
-  async getWhatsNewDiff(filePath: string, lastSeenHash?: string) {
-    await this.ensureActiveRepoGit();
+  async getWhatsNewDiff(filePath: string, lastSeenHash?: string, repoNameParam?: string) {
     const cfg = loadConfig();
-    const repoName = cfg.active_repo?.name || 'local';
+    const repoName = repoNameParam || cfg.active_repo?.name || 'local';
+    await this.ensureActiveRepoGit(repoName);
     const repoDir = this.getRepoDir(repoName);
     return await getWhatsNewFileDiff(repoDir, filePath, lastSeenHash);
   }

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { renderAsync } from 'docx-preview';
-import { FileText, Download, RefreshCw, AlertCircle, Copy, Check, Laptop } from 'lucide-react';
+import { FileText, Download, RefreshCw, AlertCircle, Copy, Check, Laptop, FolderGit2 } from 'lucide-react';
+import { useWorkspace } from '../../../context/WorkspaceContext';
 import { API } from '../../../services/api';
 
 interface DocxViewerProps {
@@ -8,6 +9,7 @@ interface DocxViewerProps {
 }
 
 export const DocxViewer: React.FC<DocxViewerProps> = ({ filePath }) => {
+  const { activeRepo } = useWorkspace();
   const containerRef = useRef<HTMLDivElement>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -109,6 +111,25 @@ export const DocxViewer: React.FC<DocxViewerProps> = ({ filePath }) => {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              padding: '2px 8px',
+              borderRadius: '4px',
+              background: '#eff6ff',
+              border: '1px solid #dbeafe',
+              color: '#1d4ed8',
+              fontSize: '11.5px',
+              fontWeight: 600,
+              flexShrink: 0,
+            }}
+          >
+            <FolderGit2 size={12} />
+            <span>{activeRepo?.name || 'local'}</span>
+          </div>
+          <span style={{ color: '#94a3b8', fontSize: '12px' }}>/</span>
           <FileText size={16} style={{ color: '#1a73e8' }} />
           <span style={{ fontWeight: 600, color: '#1e293b' }}>{filePath}</span>
           <span

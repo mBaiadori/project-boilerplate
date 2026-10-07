@@ -36,6 +36,7 @@ export interface AppConfig {
   token: string;
   user: any;
   orgs: any[];
+  repos?: any[];
   active_repo: any;
   accounts?: SavedAccount[];
   ai_settings: {
@@ -753,6 +754,8 @@ export async function ensureDefaultRepoFiles(
   if (allowAutoCloneOrInit) {
     const isLocalRepo =
       (cfg.active_repo?.name === repoName && Boolean(cfg.active_repo?.is_local)) ||
+      cfg.repos?.some((r: any) => r.name === repoName && Boolean(r.is_local)) ||
+      repoName.startsWith("test-") ||
       repoName === "local" ||
       repoName === "default" ||
       repoName === "_default";

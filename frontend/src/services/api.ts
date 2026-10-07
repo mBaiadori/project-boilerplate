@@ -212,12 +212,12 @@ export const API = {
     return { ok: res.ok, data: await res.json() };
   },
 
-  async getProjectFile(path: string): Promise<{ path: string; content: string; meta?: any; source?: string; error?: string }> {
-    const res = await fetch(`/api/project/file?path=${encodeURIComponent(path)}`);
+  async getProjectFile(path: string, repo?: string): Promise<{ path: string; content: string; meta?: any; source?: string; error?: string }> {
+    const res = await fetch(`/api/project/file?path=${encodeURIComponent(path)}${repo ? `&repo=${encodeURIComponent(repo)}` : ''}`);
     return res.json();
   },
 
-  async createProjectFile(payload: { path: string; is_folder?: boolean; content?: string; meta?: any; templateId?: string }): Promise<ApiResponse<any>> {
+  async createProjectFile(payload: { path: string; is_folder?: boolean; content?: string; meta?: any; templateId?: string; repo?: string }): Promise<ApiResponse<any>> {
     const res = await fetch('/api/project/file/create', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -245,18 +245,47 @@ export const API = {
     return { ok: res.ok, data: await res.json() };
   },
 
-  async deleteProjectFile(path: string): Promise<ApiResponse<any>> {
-    const res = await fetch(`/api/project/file?path=${encodeURIComponent(path)}`, {
+  async deleteProjectFile(path: string, repo?: string): Promise<ApiResponse<any>> {
+    const res = await fetch(`/api/project/file?path=${encodeURIComponent(path)}${repo ? `&repo=${encodeURIComponent(repo)}` : ''}`, {
       method: 'DELETE'
     });
     return { ok: res.ok, data: await res.json() };
   },
 
-  async renameProjectFile(payload: { old_path: string; new_path: string }): Promise<ApiResponse<any>> {
+  async renameProjectFile(payload: {
+    old_path: string;
+    new_path: string;
+    repo?: string;
+    source_repo?: string;
+    target_repo?: string;
+  }): Promise<ApiResponse<any>> {
     const res = await fetch('/api/project/file/rename', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async moveProjectFile(payload: {
+    source_path: string;
+    target_path: string;
+    source_repo?: string;
+    target_repo?: string;
+  }): Promise<ApiResponse<{
+    success: boolean;
+    sourceRepo?: string;
+    targetRepo?: string;
+    oldPath?: string;
+    newPath?: string;
+    sourceTree?: TreeNode[];
+    targetTree?: TreeNode[];
+    error?: string;
+  }>> {
+    const res = await fetch('/api/project/file/move', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
     });
     return { ok: res.ok, data: await res.json() };
   },
@@ -308,8 +337,8 @@ export const API = {
     return { ok: res.ok, data: await res.json() };
   },
 
-  async getDocumentContext(path: string): Promise<any> {
-    const res = await fetch(`/api/project/document-context?path=${encodeURIComponent(path)}`);
+  async getDocumentContext(path: string, repo?: string): Promise<any> {
+    const res = await fetch(`/api/project/document-context?path=${encodeURIComponent(path)}${repo ? `&repo=${encodeURIComponent(repo)}` : ''}`);
     return res.json();
   },
 
@@ -323,18 +352,18 @@ export const API = {
   },
 
   // Centralized Workspace Changes & Diff Staging
-  async getWorkspaceChanges(): Promise<{ 
+  async getWorkspaceChanges(repo?: string): Promise<{ 
     changes: WorkspaceChange[]; 
     system_changes?: WorkspaceChange[];
     total_additions: number; 
     total_deletions: number; 
     guardrail: string;
   }> {
-    const res = await fetch('/api/workspace/changes');
+    const res = await fetch(`/api/workspace/changes${repo ? `?repo=${encodeURIComponent(repo)}` : ''}`);
     return res.json();
   },
 
-  async saveWorkspaceFile(payload: { path: string; content: string; meta?: any }): Promise<ApiResponse<any>> {
+  async saveWorkspaceFile(payload: { path: string; content: string; meta?: any; repo?: string }): Promise<ApiResponse<any>> {
     const res = await fetch('/api/workspace/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -343,7 +372,7 @@ export const API = {
     return { ok: res.ok, data: await res.json() };
   },
 
-  async saveProjectFile(payload: { path: string; content: string; meta?: any }): Promise<ApiResponse<any>> {
+  async saveProjectFile(payload: { path: string; content: string; meta?: any; repo?: string }): Promise<ApiResponse<any>> {
     return this.saveWorkspaceFile(payload);
   },
 
@@ -369,11 +398,11 @@ export const API = {
     return { ok: res.ok, data: await res.json() };
   },
 
-  async discardWorkspaceChanges(path: string | null = null): Promise<ApiResponse<any>> {
+  async discardWorkspaceChanges(path: string | null = null, repo?: string): Promise<ApiResponse<any>> {
     const res = await fetch('/api/workspace/discard', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(path ? { path } : {})
+      body: JSON.stringify(path ? { path, repo } : { repo })
     });
     return { ok: res.ok, data: await res.json() };
   },
@@ -867,31 +896,31 @@ export const API = {
   },
 
   // Git Core Management
-  async getGitStatus(): Promise<ApiResponse<GitStatus>> {
-    const res = await fetch('/api/git/status');
+  async getGitStatus(repo?: string): Promise<ApiResponse<GitStatus>> {
+    const res = await fetch(`/api/git/status${repo ? `?repo=${encodeURIComponent(repo)}` : ''}`);
     return { ok: res.ok, data: await res.json() };
   },
 
-  async getGitLog(limit = 20): Promise<ApiResponse<{ repo_name: string; commits: GitCommitInfo[] }>> {
-    const res = await fetch(`/api/git/log?limit=${limit}`);
+  async getGitLog(limit = 20, repo?: string): Promise<ApiResponse<{ repo_name: string; commits: GitCommitInfo[] }>> {
+    const res = await fetch(`/api/git/log?limit=${limit}${repo ? `&repo=${encodeURIComponent(repo)}` : ''}`);
     return { ok: res.ok, data: await res.json() };
   },
 
-  async getGitBranches(): Promise<ApiResponse<{ current: string; branches: string[] }>> {
-    const res = await fetch('/api/git/branches');
+  async getGitBranches(repo?: string): Promise<ApiResponse<{ current: string; branches: string[] }>> {
+    const res = await fetch(`/api/git/branches${repo ? `?repo=${encodeURIComponent(repo)}` : ''}`);
     return { ok: res.ok, data: await res.json() };
   },
 
-  async createOrSwitchBranch(branch: string): Promise<ApiResponse<{ success: boolean; message: string }>> {
+  async createOrSwitchBranch(branch: string, repo?: string): Promise<ApiResponse<{ success: boolean; message: string }>> {
     const res = await fetch('/api/git/branch', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ branch })
+      body: JSON.stringify({ branch, repo })
     });
     return { ok: res.ok, data: await res.json() };
   },
 
-  async commitGitChanges(payload: { message: string; files?: string[] }): Promise<ApiResponse<{ success: boolean; message: string; commitHash?: string }>> {
+  async commitGitChanges(payload: { message: string; files?: string[]; repo?: string }): Promise<ApiResponse<{ success: boolean; message: string; commitHash?: string }>> {
     const res = await fetch('/api/git/commit', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -900,17 +929,21 @@ export const API = {
     return { ok: res.ok, data: await res.json() };
   },
 
-  async syncGit(branch?: string): Promise<ApiResponse<{ success: boolean; message: string }>> {
+  async syncGit(branch?: string, repo?: string): Promise<ApiResponse<{ success: boolean; message: string }>> {
     const res = await fetch('/api/git/sync', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ branch })
+      body: JSON.stringify({ branch, repo })
     });
     return { ok: res.ok, data: await res.json() };
   },
 
-  async getGitDiff(path?: string): Promise<ApiResponse<{ diff: string }>> {
-    const url = path ? `/api/git/diff?path=${encodeURIComponent(path)}` : '/api/git/diff';
+  async getGitDiff(path?: string, repo?: string): Promise<ApiResponse<{ diff: string }>> {
+    const params = new URLSearchParams();
+    if (path) params.set('path', path);
+    if (repo) params.set('repo', repo);
+    const query = params.toString();
+    const url = query ? `/api/git/diff?${query}` : '/api/git/diff';
     const res = await fetch(url);
     return { ok: res.ok, data: await res.json() };
   },
@@ -920,15 +953,20 @@ export const API = {
     return { ok: res.ok, data: await res.json() };
   },
 
-  async getWhatsNew(lastSeenHash?: string): Promise<ApiResponse<WhatsNewSummary>> {
-    const url = lastSeenHash ? `/api/git/whats-new?lastSeenHash=${encodeURIComponent(lastSeenHash)}` : '/api/git/whats-new';
+  async getWhatsNew(lastSeenHash?: string, repo?: string): Promise<ApiResponse<WhatsNewSummary>> {
+    const params = new URLSearchParams();
+    if (lastSeenHash) params.set('lastSeenHash', lastSeenHash);
+    if (repo) params.set('repo', repo);
+    const query = params.toString();
+    const url = query ? `/api/git/whats-new?${query}` : '/api/git/whats-new';
     const res = await fetch(url);
     return { ok: res.ok, data: await res.json() };
   },
 
-  async getWhatsNewFileDiff(path: string, lastSeenHash?: string): Promise<ApiResponse<{ diff: string }>> {
+  async getWhatsNewFileDiff(path: string, lastSeenHash?: string, repo?: string): Promise<ApiResponse<{ diff: string }>> {
     const query = new URLSearchParams({ path });
     if (lastSeenHash) query.set('lastSeenHash', lastSeenHash);
+    if (repo) query.set('repo', repo);
     const res = await fetch(`/api/git/whats-new-diff?${query.toString()}`);
     return { ok: res.ok, data: await res.json() };
   },
@@ -1535,8 +1573,114 @@ export const API = {
       method: 'DELETE'
     });
     return { ok: res.ok, data: await res.json() };
+  },
+
+  async createOrgTeam(payload: {
+    org: string;
+    name: string;
+    description?: string;
+    privacy?: 'closed' | 'secret';
+  }): Promise<ApiResponse<{ success: boolean; team?: any; message?: string }>> {
+    const res = await fetch(`/api/governance/orgs/${encodeURIComponent(payload.org)}/teams`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async deleteOrgTeam(org: string, teamSlug: string): Promise<ApiResponse<{ success: boolean; message?: string }>> {
+    const res = await fetch(`/api/governance/orgs/${encodeURIComponent(org)}/teams/${encodeURIComponent(teamSlug)}`, {
+      method: 'DELETE',
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async getOrgTeamMembers(org: string, teamSlug: string): Promise<ApiResponse<{ members: any[] }>> {
+    const res = await fetch(`/api/governance/orgs/${encodeURIComponent(org)}/teams/${encodeURIComponent(teamSlug)}/members`);
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async addMemberToOrgTeam(
+    org: string,
+    teamSlug: string,
+    username: string,
+    role: 'member' | 'maintainer' = 'member'
+  ): Promise<ApiResponse<{ success: boolean; message?: string }>> {
+    const res = await fetch(
+      `/api/governance/orgs/${encodeURIComponent(org)}/teams/${encodeURIComponent(teamSlug)}/members/${encodeURIComponent(username)}`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role }),
+      }
+    );
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async removeMemberFromOrgTeam(
+    org: string,
+    teamSlug: string,
+    username: string
+  ): Promise<ApiResponse<{ success: boolean; message?: string }>> {
+    const res = await fetch(
+      `/api/governance/orgs/${encodeURIComponent(org)}/teams/${encodeURIComponent(teamSlug)}/members/${encodeURIComponent(username)}`,
+      {
+        method: 'DELETE',
+      }
+    );
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async inviteOrgMember(payload: {
+    org: string;
+    username?: string;
+    email?: string;
+    role?: 'admin' | 'direct_member' | 'billing_manager';
+    team_ids?: number[];
+  }): Promise<ApiResponse<{ success: boolean; message: string }>> {
+    const res = await fetch(`/api/governance/orgs/${encodeURIComponent(payload.org)}/invitations`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async removeOrgMember(org: string, username: string): Promise<ApiResponse<{ success: boolean; message: string }>> {
+    const res = await fetch(`/api/governance/orgs/${encodeURIComponent(org)}/members/${encodeURIComponent(username)}`, {
+      method: 'DELETE',
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async getEffectiveUserPermission(
+    repo?: string,
+    org?: string
+  ): Promise<ApiResponse<any>> {
+    const params = new URLSearchParams();
+    if (repo) params.append('repo', repo);
+    if (org) params.append('org', org);
+    const query = params.toString() ? `?${params.toString()}` : '';
+    const res = await fetch(`/api/governance/effective-permission${query}`);
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async getGovernanceWorkflow(repo?: string): Promise<ApiResponse<{ installed: boolean; path: string; content?: string }>> {
+    const res = await fetch(`/api/governance/actions-workflow${repo ? `?repo=${encodeURIComponent(repo)}` : ''}`);
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async installGovernanceWorkflow(repo?: string): Promise<ApiResponse<{ success: boolean; message: string }>> {
+    const res = await fetch('/api/governance/actions-workflow', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ repo }),
+    });
+    return { ok: res.ok, data: await res.json() };
   }
 };
+
 
 
 

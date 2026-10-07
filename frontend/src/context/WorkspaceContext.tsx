@@ -51,6 +51,7 @@ interface WorkspaceContextType {
   activeRepo: Repo | null;
   repos: Repo[];
   tree: TreeNode[];
+  treesByRepo: Record<string, TreeNode[]>;
   activeFile: string;
   fileContent: string;
   originalContent: string;
@@ -81,7 +82,7 @@ interface WorkspaceContextType {
     initialFile?: string,
   ) => Promise<boolean>;
   loadTree: (targetRepo?: string) => Promise<void>;
-  loadFile: (filePath: string) => Promise<void>;
+  loadFile: (filePath: string, targetRepo?: string) => Promise<void>;
   reloadActiveFile: (forceDisk?: boolean) => Promise<void>;
   setFileContent: (content: string) => void;
   setFileMetadata: (meta: Record<string, any>) => void;
@@ -124,6 +125,12 @@ interface WorkspaceContextType {
   createOrSwitchBranch: (
     branch: string,
   ) => Promise<{ success: boolean; message: string }>;
+  moveFileOrFolder: (
+    sourcePath: string,
+    targetPath: string,
+    sourceRepo?: string,
+    targetRepo?: string,
+  ) => Promise<{ success: boolean; error?: string }>;
 }
 
 const WorkspaceContext = createContext<WorkspaceContextType | undefined>(
@@ -147,6 +154,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
   const [activeRepo, setActiveRepo] = useState<Repo | null>(null);
   const [repos, setRepos] = useState<Repo[]>([]);
   const [tree, setTree] = useState<TreeNode[]>([]);
+  const [treesByRepo, setTreesByRepo] = useState<Record<string, TreeNode[]>>({});
   const [activeFile, setActiveFile] = useState<string>("");
   const [fileContent, setFileContentState] = useState<string>("");
   const [fileMetadata, setFileMetadataState] = useState<Record<string, any>>(
@@ -181,7 +189,12 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
   const originalContentRef = useRef<string>("");
   const fileMetadataRef = useRef<Record<string, any>>({});
   const activeRepoRef = useRef<Repo | null>(null);
+  const reposRef = useRef<Repo[]>([]);
+  useEffect(() => {
+    reposRef.current = repos;
+  }, [repos]);
   const inFlightRepoRef = useRef<string | null>(null);
+  const treesByRepoRef = useRef<Record<string, TreeNode[]>>({});
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const statusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -270,9 +283,10 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
   }, [loadOrgs]);
 
   const refreshGitStatus = useCallback(async () => {
-    if (!activeRepoRef.current) return;
+    const repo = activeRepoRef.current?.name;
+    if (!repo) return;
     try {
-      const res = await API.getGitStatus();
+      const res = await API.getGitStatus(repo);
       if (res.ok && res.data) {
         const filteredFiles = (res.data.files || []).filter(
           (f) => f?.path && !isPathHidden(f.path),
@@ -299,9 +313,10 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
   }, []);
 
   const refreshGitLog = useCallback(async (limit = 20) => {
-    if (!activeRepoRef.current) return;
+    const repo = activeRepoRef.current?.name;
+    if (!repo) return;
     try {
-      const res = await API.getGitLog(limit);
+      const res = await API.getGitLog(limit, repo);
       if (res.ok && res.data?.commits) {
         setGitLog(res.data.commits);
       }
@@ -311,9 +326,10 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
   }, []);
 
   const refreshPendingChanges = useCallback(async () => {
-    if (!activeRepoRef.current) return;
+    const repo = activeRepoRef.current?.name;
+    if (!repo) return;
     try {
-      const data = await API.getWorkspaceChanges();
+      const data = await API.getWorkspaceChanges(repo);
       const filtered = (data.changes || []).filter(
         (c: any) => c?.path && !isPathHidden(c.path),
       );
@@ -337,24 +353,25 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
       targetPath?: string,
       contentToSave?: string,
       metaToSave?: Record<string, any>,
+      targetRepo?: string,
     ): Promise<{ success: boolean; error?: string }> => {
       const file = targetPath || activeFileRef.current;
       const content =
         contentToSave !== undefined ? contentToSave : fileContentRef.current;
       const meta =
         metaToSave !== undefined ? metaToSave : fileMetadataRef.current;
-      const repo = activeRepoRef.current;
+      const repoName = targetRepo || activeRepoRef.current?.name;
 
-      if (!repo || !file) {
+      if (!repoName || !file) {
         return { success: false, error: "Nenhum documento ativo para salvar" };
       }
 
       setIsSaving(true);
       setSaveStatus("Salvando...");
       try {
-        const res = await API.saveWorkspaceFile({ path: file, content, meta });
+        const res = await API.saveWorkspaceFile({ path: file, content, meta, repo: repoName });
         if (res.ok) {
-          if (file === activeFileRef.current) {
+          if (file === activeFileRef.current && (!targetRepo || targetRepo === activeRepoRef.current?.name)) {
             setOriginalContent(content);
             originalContentRef.current = content;
             if (res.data?.meta) {
@@ -362,7 +379,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
               fileMetadataRef.current = res.data.meta;
             }
           }
-          DraftStore.clearDocDraft(repo.name, file);
+          DraftStore.clearDocDraft(repoName, file);
           setSaveStatus("Salvo no disco");
           window.dispatchEvent(
             new CustomEvent("workspace:document-saved", {
@@ -420,7 +437,11 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
     setIsLoadingTree(true);
     try {
       const data = await API.getProjectTree(repo);
-      setTree(data.tree || []);
+      treesByRepoRef.current[repo] = data.tree || [];
+      setTreesByRepo((prev) => ({ ...prev, [repo]: data.tree || [] }));
+      if (activeRepoRef.current?.name === repo) {
+        setTree(data.tree || []);
+      }
     } catch (err) {
       console.error("[WorkspaceContext] Erro ao buscar árvore:", err);
     } finally {
@@ -429,8 +450,9 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
   }, []);
 
   const loadFile = useCallback(
-    async (rawFilePath: string) => {
-      if (!activeRepoRef.current || !rawFilePath) return;
+    async (rawFilePath: string, targetRepo?: string) => {
+      const currentRepoName = targetRepo || activeRepoRef.current?.name;
+      if (!currentRepoName || !rawFilePath) return;
 
       const hashIndex = rawFilePath.indexOf("#");
       const cleanPath =
@@ -485,12 +507,12 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
       setFileMetadataState({});
       fileMetadataRef.current = {};
       try {
-        const data = await API.getProjectFile(cleanPath);
+        const data = await API.getProjectFile(cleanPath, currentRepoName);
         if (!data || (data as any).error) {
           throw new Error((data as any).error || "Arquivo não encontrado");
         }
         const draft = DraftStore.getDocDraft(
-          activeRepoRef.current.name,
+          currentRepoName,
           cleanPath,
         );
 
@@ -539,7 +561,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
         if (forceDisk) {
           DraftStore.clearDocDraft(currentRepo.name, currentFile);
         }
-        const data = await API.getProjectFile(currentFile);
+        const data = await API.getProjectFile(currentFile, currentRepo.name);
         if (data && !(data as any).error) {
           const content = data.content || "";
           setFileContentState(content);
@@ -888,11 +910,39 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
       setIsLoadingWorkspace(true);
       setIsLoadingTree(true);
       try {
-        await flushPendingSave();
-        setActiveRepo(repo);
-        activeRepoRef.current = repo;
+        const prevRepo = activeRepoRef.current;
+        const prevFile = activeFileRef.current;
+        const prevContent = fileContentRef.current;
+        const prevOriginal = originalContentRef.current;
+        const prevMeta = fileMetadataRef.current;
 
-        // Clear previous document states if changing to a different repo
+        // Persist current repo tree in cache before switching
+        if (prevRepo?.name) {
+          treesByRepoRef.current[prevRepo.name] = tree;
+        }
+
+        // Cancel any pending debounced autosave
+        if (autoSaveTimerRef.current) {
+          clearTimeout(autoSaveTimerRef.current);
+          autoSaveTimerRef.current = null;
+        }
+
+        // If the previous repo had unsaved changes, flush them explicitly to the OLD repo
+        if (prevRepo && prevFile && prevContent !== prevOriginal) {
+          try {
+            await API.saveWorkspaceFile({
+              path: prevFile,
+              content: prevContent,
+              meta: prevMeta,
+              repo: prevRepo.name,
+            });
+            DraftStore.clearDocDraft(prevRepo.name, prevFile);
+          } catch (err) {
+            console.warn("[WorkspaceContext] Erro ao salvar alterações do repo anterior:", err);
+          }
+        }
+
+        // Clear previous document and tree states immediately so old repo files do not leak or flash
         setActiveFile("");
         activeFileRef.current = "";
         setFileContentState("");
@@ -901,6 +951,18 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
         originalContentRef.current = "";
         setFileMetadataState({});
         fileMetadataRef.current = {};
+        setPendingChanges([]);
+        setSystemPendingChanges([]);
+        setGitStatus(null);
+        setGitLog([]);
+        setWhatsNewSummary(null);
+
+        // Immediately use cached tree for target repo if available, or [] (never previous repo's files!)
+        const cachedTree = treesByRepoRef.current[repo.name];
+        setTree(cachedTree || []);
+
+        setActiveRepo(repo);
+        activeRepoRef.current = repo;
 
         const selectRes = await API.selectRepo(repo);
         const isReady = selectRes.data?.is_ready !== false;
@@ -913,7 +975,11 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
         }
 
         const data = await API.getProjectTree(repo.name);
-        setTree(data.tree || []);
+        treesByRepoRef.current[repo.name] = data.tree || [];
+        setTreesByRepo((prev) => ({ ...prev, [repo.name]: data.tree || [] }));
+        if (activeRepoRef.current?.name === repo.name) {
+          setTree(data.tree || []);
+        }
 
         setIsLoadingTree(false);
         setIsLoadingWorkspace(false);
@@ -944,7 +1010,6 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
       }
     },
     [
-      flushPendingSave,
       loadProjectMetadataOptions,
       loadProjectConfig,
       loadDictionaryTerms,
@@ -997,17 +1062,18 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   const discardChanges = async (path?: string) => {
-    if (!activeRepo) return;
-    await API.discardWorkspaceChanges(path || null);
-    if (path && activeRepo) {
-      DraftStore.clearDocDraft(activeRepo.name, path);
-    } else if (!path && activeRepo) {
-      DraftStore.clearDocDraft(activeRepo.name, activeFileRef.current);
+    const repo = activeRepoRef.current;
+    if (!repo) return;
+    await API.discardWorkspaceChanges(path || null, repo.name);
+    if (path) {
+      DraftStore.clearDocDraft(repo.name, path);
+    } else {
+      DraftStore.clearDocDraft(repo.name, activeFileRef.current);
     }
     await Promise.all([
       refreshPendingChanges(),
       refreshGitStatus(),
-      loadTree(),
+      loadTree(repo.name),
     ]);
     if (path === activeFileRef.current || (!path && activeFileRef.current)) {
       await loadFile(activeFileRef.current);
@@ -1015,7 +1081,8 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   const commitGit = async (message: string, files?: string[]) => {
-    const res = await API.commitGitChanges({ message, files });
+    const repo = activeRepoRef.current;
+    const res = await API.commitGitChanges({ message, files, repo: repo?.name });
     if (res.ok && res.data.success) {
       await refreshPendingChanges();
       await refreshGitStatus();
@@ -1026,27 +1093,98 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   const syncGit = async (branch?: string) => {
-    const res = await API.syncGit(branch);
+    const repo = activeRepoRef.current;
+    const res = await API.syncGit(branch, repo?.name);
     if (res.ok) {
       await refreshPendingChanges();
       await refreshGitStatus();
       await refreshGitLog(15);
       await refreshWhatsNew();
-      await loadTree();
+      if (repo) await loadTree(repo.name);
     }
     return res.data;
   };
 
   const createOrSwitchBranch = async (branch: string) => {
-    const res = await API.createOrSwitchBranch(branch);
+    const repo = activeRepoRef.current;
+    const res = await API.createOrSwitchBranch(branch, repo?.name);
     if (res.ok) {
       await refreshGitStatus();
       await refreshGitLog(15);
       await refreshWhatsNew();
-      await loadTree();
+      if (repo) await loadTree(repo.name);
     }
     return res.data;
   };
+
+  const moveFileOrFolder = useCallback(
+    async (
+      sourcePath: string,
+      targetPath: string,
+      sourceRepo?: string,
+      targetRepo?: string
+    ): Promise<{ success: boolean; error?: string }> => {
+      const srcRepo = sourceRepo || activeRepoRef.current?.name;
+      const dstRepo = targetRepo || srcRepo;
+      if (!srcRepo || !dstRepo || !sourcePath || !targetPath) {
+        return { success: false, error: 'Parâmetros inválidos para mover arquivo.' };
+      }
+
+      await flushPendingSave();
+
+      try {
+        const res = await API.moveProjectFile({
+          source_path: sourcePath,
+          target_path: targetPath,
+          source_repo: srcRepo,
+          target_repo: dstRepo,
+        });
+
+        if (res.ok && res.data?.success) {
+          // Invalida e recarrega árvores de ambos os repositórios
+          await Promise.all([
+            loadTree(srcRepo),
+            srcRepo !== dstRepo ? loadTree(dstRepo) : Promise.resolve(),
+            refreshPendingChanges(),
+            refreshGitStatus(),
+          ]);
+
+          // Se o arquivo movido era o activeFile
+          const cleanOld = sourcePath.trim().replace(/^\/+/, '').replace(/\/+$/, '');
+          const cleanNew = targetPath.trim().replace(/^\/+/, '').replace(/\/+$/, '');
+          const currentActive = activeFileRef.current;
+
+          if (currentActive === cleanOld || (currentActive && currentActive.startsWith(`${cleanOld}/`))) {
+            const finalPath = currentActive === cleanOld
+              ? cleanNew
+              : `${cleanNew}${currentActive.slice(cleanOld.length)}`;
+
+            if (srcRepo !== dstRepo) {
+              const targetRepoObj = reposRef.current.find(
+                (r) => r.name.toLowerCase() === dstRepo.toLowerCase()
+              ) || {
+                id: 0,
+                name: dstRepo,
+                full_name: dstRepo,
+                is_local: true,
+              };
+              await selectRepo(targetRepoObj, finalPath);
+            } else {
+              await loadFile(finalPath, dstRepo);
+            }
+          }
+
+          return { success: true };
+        } else {
+          return { success: false, error: res.data?.error || 'Falha ao mover arquivo/pasta.' };
+        }
+      } catch (err: any) {
+        console.error('[WorkspaceContext] Erro ao mover arquivo:', err);
+        return { success: false, error: err.message || 'Erro de conexão ao mover arquivo.' };
+      }
+    },
+    [flushPendingSave, loadTree, refreshPendingChanges, refreshGitStatus, selectRepo, loadFile],
+  );
 
   // Lifecycle: Flush de alterações pendentes ao fechar aba, recarregar ou ocultar janela
   useEffect(() => {
@@ -1155,6 +1293,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
         activeRepo,
         repos,
         tree,
+        treesByRepo,
         activeFile,
         fileContent,
         originalContent,
@@ -1207,6 +1346,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
         commitGit,
         syncGit,
         createOrSwitchBranch,
+        moveFileOrFolder,
       }}
     >
       {children}

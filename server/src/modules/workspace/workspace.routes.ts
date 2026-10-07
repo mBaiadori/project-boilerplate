@@ -14,26 +14,26 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
   });
 
   fastify.get('/api/project/file', async (request, reply) => {
-    const query = request.query as { path?: string };
+    const query = request.query as { path?: string; repo?: string };
     const filePath = query.path?.trim();
     if (!filePath) {
       return reply.status(400).send({ error: 'Parâmetro path é obrigatório' });
     }
     try {
-      return reply.send(workspaceService.getFile(filePath));
+      return reply.send(workspaceService.getFile(filePath, query.repo));
     } catch (err: any) {
       return reply.status(404).send({ error: err.message });
     }
   });
 
   fastify.get('/api/project/file/raw', async (request, reply) => {
-    const query = request.query as { path?: string };
+    const query = request.query as { path?: string; repo?: string };
     const filePath = query.path?.trim();
     if (!filePath) {
       return reply.status(400).send({ error: 'Parâmetro path é obrigatório' });
     }
     try {
-      const { buffer, mimeType, filename } = workspaceService.getRawFile(filePath);
+      const { buffer, mimeType, filename } = workspaceService.getRawFile(filePath, query.repo);
       return reply
         .header('Content-Type', mimeType)
         .header('Content-Disposition', `inline; filename="${encodeURIComponent(filename)}"`)
@@ -124,12 +124,12 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
   });
 
   fastify.post('/api/workspace/save', async (request, reply) => {
-    const body = request.body as { path?: string; content?: string; meta?: any };
+    const body = request.body as { path?: string; content?: string; meta?: any; repo?: string };
     if (!body.path) {
       return reply.status(400).send({ error: 'Parâmetro path é obrigatório' });
     }
     try {
-      return reply.send(await workspaceService.saveFile(body.path, body.content || '', body.meta));
+      return reply.send(await workspaceService.saveFile(body.path, body.content || '', body.meta, body.repo));
     } catch (err: any) {
       return reply.status(400).send({ error: err.message });
     }
@@ -143,6 +143,7 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
       isFolder?: boolean;
       meta?: any;
       templateId?: string;
+      repo?: string;
     };
     try {
       const isFolder = !!(body.is_folder || body.isFolder);
@@ -154,7 +155,7 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
       if (!isFolder && templateId) {
         const { templatesService } = await import('../templates/templates.service.js');
         const cfg = loadConfig();
-        const repoName = cfg.active_repo?.name || 'local';
+        const repoName = body.repo || cfg.active_repo?.name || 'local';
         const tpl = templatesService.resolveTemplate(templateId, repoName);
         if (tpl) {
           content = tpl.content;
@@ -168,7 +169,7 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
         prompt: body.meta?.prompt || '',
       };
 
-      const result = await workspaceService.createFile(body.path || '', content, isFolder, meta);
+      const result = await workspaceService.createFile(body.path || '', content, isFolder, meta, body.repo);
       return reply.send({ ...result, templatePrompt, systemPrompt: templatePrompt, templateId });
     } catch (err: any) {
       return reply.status(400).send({ error: err.message });
@@ -203,43 +204,79 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
   });
 
   fastify.post('/api/project/file/rename', async (request, reply) => {
-    const body = request.body as { old_path?: string; new_path?: string; oldPath?: string; newPath?: string };
+    const body = request.body as {
+      old_path?: string;
+      new_path?: string;
+      oldPath?: string;
+      newPath?: string;
+      repo?: string;
+      source_repo?: string;
+      target_repo?: string;
+    };
     const oldPath = body.old_path || body.oldPath || '';
     const newPath = body.new_path || body.newPath || '';
+    const sourceRepo = body.source_repo || body.repo;
+    const targetRepo = body.target_repo || sourceRepo;
     try {
-      return reply.send(await workspaceService.renameFile(oldPath, newPath));
+      if (targetRepo && sourceRepo && targetRepo !== sourceRepo) {
+        return reply.send(await workspaceService.moveFile(oldPath, newPath, sourceRepo, targetRepo));
+      }
+      return reply.send(await workspaceService.renameFile(oldPath, newPath, sourceRepo));
+    } catch (err: any) {
+      return reply.status(400).send({ error: err.message });
+    }
+  });
+
+  fastify.post('/api/project/file/move', async (request, reply) => {
+    const body = request.body as {
+      source_path?: string;
+      old_path?: string;
+      target_path?: string;
+      new_path?: string;
+      source_repo?: string;
+      target_repo?: string;
+      repo?: string;
+    };
+    const sourcePath = body.source_path || body.old_path || '';
+    const targetPath = body.target_path || body.new_path || '';
+    const sourceRepo = body.source_repo || body.repo;
+    const targetRepo = body.target_repo || sourceRepo;
+    try {
+      return reply.send(await workspaceService.moveFile(sourcePath, targetPath, sourceRepo, targetRepo));
     } catch (err: any) {
       return reply.status(400).send({ error: err.message });
     }
   });
 
   fastify.delete('/api/project/file', async (request, reply) => {
-    const query = request.query as { path?: string };
+    const query = request.query as { path?: string; repo?: string };
     try {
-      return reply.send(await workspaceService.deleteFile(query.path || ''));
+      return reply.send(await workspaceService.deleteFile(query.path || '', query.repo));
     } catch (err: any) {
       return reply.status(400).send({ error: err.message });
     }
   });
 
-  fastify.get('/api/workspace/changes', async (_request, reply) => {
-    return reply.send(workspaceService.getWorkspaceChanges());
+  fastify.get('/api/workspace/changes', async (request, reply) => {
+    const query = request.query as { repo?: string };
+    return reply.send(workspaceService.getWorkspaceChanges(query.repo));
   });
 
   fastify.post('/api/workspace/discard', async (request, reply) => {
-    const body = request.body as { path?: string; paths?: string[] };
+    const body = request.body as { path?: string; paths?: string[]; repo?: string };
     const paths = body?.paths || (body?.path ? [body.path] : undefined);
-    return reply.send(await workspaceService.discardChanges(paths));
+    return reply.send(await workspaceService.discardChanges(paths, body?.repo));
   });
 
   fastify.get('/api/project/document-context', async (request, reply) => {
-    const query = request.query as { path?: string };
-    return reply.send(workspaceService.getDocumentContext(query.path || ''));
+    const query = request.query as { path?: string; repo?: string };
+    return reply.send(workspaceService.getDocumentContext(query.path || '', query.repo));
   });
 
-  fastify.get('/api/project/status', async (_request, reply) => {
-    const treeData = await workspaceService.getTree();
-    const changesData = workspaceService.getWorkspaceChanges();
+  fastify.get('/api/project/status', async (request, reply) => {
+    const query = request.query as { repo?: string };
+    const treeData = await workspaceService.getTree(query.repo);
+    const changesData = workspaceService.getWorkspaceChanges(query.repo);
     return reply.send({
       repo: treeData.repo,
       total_files: treeData.tree.length,

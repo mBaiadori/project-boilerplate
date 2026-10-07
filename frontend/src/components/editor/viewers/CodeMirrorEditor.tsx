@@ -15,7 +15,7 @@ import { php } from '@codemirror/lang-php';
 import { xml } from '@codemirror/lang-xml';
 import { getFileExtension, getLanguageLabel } from '../../../utils/file-types';
 import { useWorkspace } from '../../../context/WorkspaceContext';
-import { FileCode, Save, Laptop } from 'lucide-react';
+import { FileCode, Save, Laptop, FolderGit2 } from 'lucide-react';
 import { API } from '../../../services/api';
 
 interface CodeMirrorEditorProps {
@@ -80,7 +80,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = ({
   content,
   onChange,
 }) => {
-  const { saveStatus, isSaving, saveCurrentFile, hasUnsavedChanges } = useWorkspace();
+  const { saveStatus, isSaving, saveCurrentFile, hasUnsavedChanges, activeRepo } = useWorkspace();
   const ext = getFileExtension(filePath);
   const langLabel = getLanguageLabel(filePath);
 
@@ -168,6 +168,25 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = ({
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+          <div
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              padding: '2px 8px',
+              borderRadius: '4px',
+              background: '#eff6ff',
+              border: '1px solid #dbeafe',
+              color: '#1d4ed8',
+              fontSize: '11.5px',
+              fontWeight: 600,
+              flexShrink: 0,
+            }}
+          >
+            <FolderGit2 size={12} />
+            <span>{activeRepo?.name || 'local'}</span>
+          </div>
+          <span style={{ color: '#94a3b8', fontSize: '12px' }}>/</span>
           <FileCode size={16} style={{ color: '#1a73e8', flexShrink: 0 }} />
           <span style={{ fontWeight: 600, color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {filePath}

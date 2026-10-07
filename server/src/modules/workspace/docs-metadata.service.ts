@@ -526,6 +526,53 @@ export class DocsMetadataService {
     }
   }
 
+  migrateDocMetadata(sourceRepo: string, targetRepo: string, oldPath: string, newPath: string): void {
+    const cleanOld = (oldPath || '').trim().replace(/^\/+/, '');
+    const cleanNew = (newPath || '').trim().replace(/^\/+/, '');
+    const sourceList = this.loadDocsMetadata(sourceRepo);
+    const targetList = this.loadDocsMetadata(targetRepo);
+
+    const itemsToMigrate = sourceList.filter(
+      (d) => d.path === cleanOld || d.path.startsWith(`${cleanOld}/`)
+    );
+
+    if (itemsToMigrate.length === 0) return;
+
+    // Remove from source
+    const updatedSource = sourceList.filter(
+      (d) => !(d.path === cleanOld || d.path.startsWith(`${cleanOld}/`))
+    );
+    this.saveDocsMetadata(sourceRepo, updatedSource);
+
+    // Add/update in target
+    for (const item of itemsToMigrate) {
+      let migratedPath = cleanNew;
+      if (item.path.startsWith(`${cleanOld}/`)) {
+        migratedPath = `${cleanNew}${item.path.slice(cleanOld.length)}`;
+      }
+      const ext = path.extname(migratedPath).replace(/^\./, '') || 'md';
+      const name = path.basename(migratedPath, path.extname(migratedPath));
+
+      const existingTargetIdx = targetList.findIndex((d) => d.path === migratedPath);
+      const migratedItem = this.sanitizeMetaItem({
+        ...item,
+        id: generateDocId(migratedPath),
+        name,
+        path: migratedPath,
+        ext,
+        updated_at: new Date().toISOString(),
+      });
+
+      if (existingTargetIdx >= 0) {
+        targetList[existingTargetIdx] = migratedItem;
+      } else {
+        targetList.push(migratedItem);
+      }
+    }
+
+    this.saveDocsMetadata(targetRepo, targetList);
+  }
+
   detachTemplateFromDocs(repoName: string, templateId: string): number {
     const cleanRepo = repoName || 'local';
     const targetSlug = (templateId || '').toLowerCase().trim().replace(/\.md$/, '');

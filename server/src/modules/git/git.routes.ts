@@ -5,7 +5,8 @@ export async function gitRoutes(app: FastifyInstance) {
   // 1. Get current Git Status
   app.get("/api/git/status", async (req, reply) => {
     try {
-      const data = await gitService.getStatus();
+      const { repo } = req.query as { repo?: string };
+      const data = await gitService.getStatus(repo);
       return data;
     } catch (err: any) {
       return reply
@@ -17,8 +18,8 @@ export async function gitRoutes(app: FastifyInstance) {
   // 2. Get Git Log / Commits history
   app.get("/api/git/log", async (req, reply) => {
     try {
-      const { limit } = req.query as { limit?: string };
-      const data = await gitService.getLog(limit ? parseInt(limit, 10) : 20);
+      const { limit, repo } = req.query as { limit?: string; repo?: string };
+      const data = await gitService.getLog(limit ? parseInt(limit, 10) : 20, repo);
       return data;
     } catch (err: any) {
       return reply
@@ -30,7 +31,8 @@ export async function gitRoutes(app: FastifyInstance) {
   // 3. Get Branches
   app.get("/api/git/branches", async (req, reply) => {
     try {
-      const data = await gitService.getBranches();
+      const { repo } = req.query as { repo?: string };
+      const data = await gitService.getBranches(repo);
       return data;
     } catch (err: any) {
       return reply
@@ -42,13 +44,13 @@ export async function gitRoutes(app: FastifyInstance) {
   // 4. Create or Switch Branch
   app.post("/api/git/branch", async (req, reply) => {
     try {
-      const { branch } = req.body as { branch: string };
+      const { branch, repo } = req.body as { branch: string; repo?: string };
       if (!branch) {
         return reply
           .status(400)
           .send({ error: "Nome da branch é obrigatório" });
       }
-      const res = await gitService.switchOrCreateBranch(branch);
+      const res = await gitService.switchOrCreateBranch(branch, repo);
       return res;
     } catch (err: any) {
       return reply
@@ -83,8 +85,8 @@ export async function gitRoutes(app: FastifyInstance) {
   // 6. Sync with remote (Push/Pull)
   app.post("/api/git/sync", async (req, reply) => {
     try {
-      const { branch } = (req.body as { branch?: string }) || {};
-      const res = await gitService.sync(branch);
+      const { branch, repo } = (req.body as { branch?: string; repo?: string }) || {};
+      const res = await gitService.sync(branch, repo);
       return res;
     } catch (err: any) {
       return reply
@@ -96,13 +98,13 @@ export async function gitRoutes(app: FastifyInstance) {
   // 7. Get File Blame
   app.get("/api/git/blame", async (req, reply) => {
     try {
-      const { path } = req.query as { path: string };
+      const { path, repo } = req.query as { path: string; repo?: string };
       if (!path) {
         return reply
           .status(400)
           .send({ error: "Caminho do arquivo é obrigatório" });
       }
-      const res = await gitService.getBlame(path);
+      const res = await gitService.getBlame(path, repo);
       return res;
     } catch (err: any) {
       return reply
@@ -114,7 +116,7 @@ export async function gitRoutes(app: FastifyInstance) {
   // 8. Get Specific File History (Commits)
   app.get("/api/git/file-history", async (req, reply) => {
     try {
-      const { path, limit } = req.query as { path: string; limit?: string };
+      const { path, limit, repo } = req.query as { path: string; limit?: string; repo?: string };
       if (!path) {
         return reply
           .status(400)
@@ -123,6 +125,7 @@ export async function gitRoutes(app: FastifyInstance) {
       const res = await gitService.getFileHistory(
         path,
         limit ? parseInt(limit, 10) : 30,
+        repo
       );
       return res;
     } catch (err: any) {
@@ -135,13 +138,13 @@ export async function gitRoutes(app: FastifyInstance) {
   // 9. Get Specific File Content at Historical Commit
   app.get("/api/git/file-version", async (req, reply) => {
     try {
-      const { path, hash } = req.query as { path: string; hash: string };
+      const { path, hash, repo } = req.query as { path: string; hash: string; repo?: string };
       if (!path || !hash) {
         return reply
           .status(400)
           .send({ error: "Parâmetros path e hash são obrigatórios" });
       }
-      const res = await gitService.getFileVersion(path, hash);
+      const res = await gitService.getFileVersion(path, hash, repo);
       return res;
     } catch (err: any) {
       return reply
@@ -153,8 +156,8 @@ export async function gitRoutes(app: FastifyInstance) {
   // 10. Get File / Working Tree Diff
   app.get("/api/git/diff", async (req, reply) => {
     try {
-      const { path } = req.query as { path?: string };
-      const data = await gitService.getDiff(path);
+      const { path, repo } = req.query as { path?: string; repo?: string };
+      const data = await gitService.getDiff(path, repo);
       return data;
     } catch (err: any) {
       return reply
@@ -166,8 +169,8 @@ export async function gitRoutes(app: FastifyInstance) {
   // 11. Get Whats New Summary
   app.get("/api/git/whats-new", async (req, reply) => {
     try {
-      const { lastSeenHash } = req.query as { lastSeenHash?: string };
-      const data = await gitService.getWhatsNew(lastSeenHash);
+      const { lastSeenHash, repo } = req.query as { lastSeenHash?: string; repo?: string };
+      const data = await gitService.getWhatsNew(lastSeenHash, repo);
       return data;
     } catch (err: any) {
       return reply
@@ -179,16 +182,17 @@ export async function gitRoutes(app: FastifyInstance) {
   // 12. Get Whats New Single File Diff
   app.get("/api/git/whats-new-diff", async (req, reply) => {
     try {
-      const { path: filePath, lastSeenHash } = req.query as {
+      const { path: filePath, lastSeenHash, repo } = req.query as {
         path: string;
         lastSeenHash?: string;
+        repo?: string;
       };
       if (!filePath) {
         return reply
           .status(400)
           .send({ error: "Parâmetro path é obrigatório" });
       }
-      const data = await gitService.getWhatsNewDiff(filePath, lastSeenHash);
+      const data = await gitService.getWhatsNewDiff(filePath, lastSeenHash, repo);
       return data;
     } catch (err: any) {
       return reply

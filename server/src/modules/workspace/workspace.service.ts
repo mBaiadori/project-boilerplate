@@ -7,6 +7,8 @@ import {
   saveConfig,
   recordChange,
   ensureDefaultRepoFiles,
+  loadRepoWorkspaceChanges,
+  saveRepoWorkspaceChanges,
 } from "../../config/storage.js";
 import { computeDiff } from "../../utils/diff.js";
 import { isGitRepo, executeGitCommand } from "../../utils/git.js";
@@ -130,21 +132,10 @@ export class WorkspaceService {
     const cfg = loadConfig();
     const repoName = targetRepoName || cfg.active_repo?.name || "local";
     const repoDir = this.getRepoDir(repoName);
-    const repoDirExists =
-      fs.existsSync(repoDir) && fs.existsSync(path.join(repoDir, ".git"));
 
-    if (!repoDirExists) {
+    if (forceRefresh) {
       this.invalidateTreeCache(repoName);
-      // If folder does not exist on disk, do NOT recreate or auto-clone it!
-      if (!fs.existsSync(repoDir)) {
-        return {
-          repo: repoName,
-          tree: [],
-        };
-      }
-    }
-
-    if (!forceRefresh && repoDirExists) {
+    } else {
       const cached = this.treeCache.get(repoName);
       if (cached && Date.now() - cached.timestamp < 30000) {
         return {
@@ -154,7 +145,7 @@ export class WorkspaceService {
       }
     }
 
-    await ensureDefaultRepoFiles(repoName, false);
+    await ensureDefaultRepoFiles(repoName, true);
 
     const docsMetadata = docsMetadataService.loadDocsMetadata(repoName);
     const metaMap = new Map(docsMetadata.map((d) => [d.path, d]));
@@ -171,14 +162,14 @@ export class WorkspaceService {
     };
   }
 
-  getFile(filePath: string) {
+  getFile(filePath: string, targetRepoName?: string) {
     const cfg = loadConfig();
-    const repoName = cfg.active_repo?.name || "local";
+    const repoName = targetRepoName || cfg.active_repo?.name || "local";
     const cleanPath = (filePath || "").trim().replace(/^\/+/, "");
     const fullPath = path.join(this.getRepoDir(repoName), cleanPath);
 
     if (!fs.existsSync(fullPath)) {
-      throw new Error(`Arquivo '${cleanPath}' não encontrado.`);
+      throw new Error(`Arquivo '${cleanPath}' não encontrado no repositório '${repoName}'.`);
     }
 
     const stat = fs.statSync(fullPath);
@@ -225,14 +216,14 @@ export class WorkspaceService {
     };
   }
 
-  getRawFile(filePath: string) {
+  getRawFile(filePath: string, targetRepoName?: string) {
     const cfg = loadConfig();
-    const repoName = cfg.active_repo?.name || "local";
+    const repoName = targetRepoName || cfg.active_repo?.name || "local";
     const cleanPath = (filePath || "").trim().replace(/^\/+/, "");
     const fullPath = path.join(this.getRepoDir(repoName), cleanPath);
 
     if (!fs.existsSync(fullPath)) {
-      throw new Error(`Arquivo '${cleanPath}' não encontrado.`);
+      throw new Error(`Arquivo '${cleanPath}' não encontrado no repositório '${repoName}'.`);
     }
 
     const ext = path.extname(cleanPath).replace(".", "").toLowerCase();
@@ -280,7 +271,8 @@ export class WorkspaceService {
       ([k]) => k.toLowerCase() === activeUserLogin.toLowerCase()
     )?.[1] as any) || {};
 
-    const resolvedFullName = cfg.active_repo?.full_name || '';
+    const repoObj = cfg.repos?.find((r: any) => r.name === repoName) || (cfg.active_repo?.name === repoName ? cfg.active_repo : undefined);
+    const resolvedFullName = repoObj?.full_name || '';
     const isOwner = activeUserLogin.toLowerCase() === (resolvedFullName.split('/')[0] || cfg.user?.login || '').toLowerCase();
 
     const userProfile = {
@@ -299,9 +291,9 @@ export class WorkspaceService {
     }
   }
 
-  async saveFile(filePath: string, content: string, meta?: any) {
+  async saveFile(filePath: string, content: string, meta?: any, targetRepoName?: string) {
     const cfg = loadConfig();
-    const repoName = cfg.active_repo?.name || "local";
+    const repoName = targetRepoName || cfg.active_repo?.name || "local";
     const cleanPath = (filePath || "").trim().replace(/^\/+/, "");
     
     // Validação estrita de Clearance de Governança
@@ -354,9 +346,10 @@ export class WorkspaceService {
     initialContent: string = "",
     isFolder: boolean = false,
     meta?: any,
+    targetRepoName?: string,
   ) {
     const cfg = loadConfig();
-    const repoName = cfg.active_repo?.name || "local";
+    const repoName = targetRepoName || cfg.active_repo?.name || "local";
     let cleanPath = (filePath || "")
       .trim()
       .replace(/^\/+/, "")
@@ -550,9 +543,9 @@ export class WorkspaceService {
     };
   }
 
-  async renameFile(oldPath: string, newPath: string) {
+  async renameFile(oldPath: string, newPath: string, targetRepoName?: string) {
     const cfg = loadConfig();
-    const repoName = cfg.active_repo?.name || "local";
+    const repoName = targetRepoName || cfg.active_repo?.name || "local";
     const cleanOld = (oldPath || "")
       .trim()
       .replace(/^\/+/, "")
@@ -606,9 +599,103 @@ export class WorkspaceService {
     };
   }
 
-  async deleteFile(filePath: string) {
+  async moveFile(
+    sourcePath: string,
+    targetPath: string,
+    sourceRepoName?: string,
+    targetRepoName?: string
+  ) {
     const cfg = loadConfig();
-    const repoName = cfg.active_repo?.name || "local";
+    const sourceRepo = sourceRepoName || cfg.active_repo?.name || "local";
+    const targetRepo = targetRepoName || sourceRepo;
+
+    if (sourceRepo === targetRepo) {
+      const renameRes = await this.renameFile(sourcePath, targetPath, sourceRepo);
+      return {
+        ...renameRes,
+        sourceRepo,
+        targetRepo,
+        sourceTree: renameRes.tree,
+        targetTree: renameRes.tree,
+      };
+    }
+
+    const cleanOld = (sourcePath || "").trim().replace(/^\/+/, "").replace(/\/+$/, "");
+    let cleanNew = (targetPath || "").trim().replace(/^\/+/, "").replace(/\/+$/, "");
+
+    if (!cleanOld) throw new Error("Caminho de origem não pode ser vazio.");
+    if (!cleanNew) throw new Error("Caminho de destino não pode ser vazio.");
+
+    const sourceRepoDir = this.getRepoDir(sourceRepo);
+    const targetRepoDir = this.getRepoDir(targetRepo);
+
+    const fullOld = path.join(sourceRepoDir, cleanOld);
+    if (!fs.existsSync(fullOld)) {
+      throw new Error(`Origem '${cleanOld}' não existe no repositório '${sourceRepo}'.`);
+    }
+
+    const isDir = fs.statSync(fullOld).isDirectory();
+    if (!isDir && !path.extname(cleanNew)) {
+      cleanNew += path.extname(cleanOld) || ".md";
+    }
+
+    const fullNew = path.join(targetRepoDir, cleanNew);
+    if (fs.existsSync(fullNew)) {
+      throw new Error(`Destino '${cleanNew}' já existe no repositório '${targetRepo}'.`);
+    }
+
+    // Clearance check on target repo
+    if (!isDir) {
+      this.verifyUserClearance(targetRepo, cleanNew);
+    }
+
+    // Ensure target folder exists
+    fs.mkdirSync(path.dirname(fullNew), { recursive: true });
+
+    // Move file/folder across directories
+    fs.cpSync(fullOld, fullNew, { recursive: true, force: true });
+    fs.rmSync(fullOld, { recursive: true, force: true });
+
+    // Record changes in both repositories
+    if (!isDir) {
+      let content = "";
+      if (fs.existsSync(fullNew)) {
+        try {
+          content = fs.readFileSync(fullNew, "utf-8");
+        } catch {}
+      }
+      recordChange(sourceRepo, cleanOld, "DELETED", content, "");
+      recordChange(targetRepo, cleanNew, "ADDED", "", content);
+    } else {
+      recordChange(sourceRepo, cleanOld, "DELETED", "", "");
+      recordChange(targetRepo, cleanNew, "ADDED", "", "");
+    }
+
+    // Migrate metadata & translations
+    docsMetadataService.migrateDocMetadata(sourceRepo, targetRepo, cleanOld, cleanNew);
+    translationsService.migrateTranslations(sourceRepo, targetRepo, cleanOld, cleanNew);
+
+    // Invalidate caches for both repositories
+    this.invalidateTreeCache(sourceRepo);
+    this.invalidateTreeCache(targetRepo);
+
+    const sourceTree = (await this.getTree(sourceRepo, true)).tree;
+    const targetTree = (await this.getTree(targetRepo, true)).tree;
+
+    return {
+      success: true,
+      sourceRepo,
+      targetRepo,
+      oldPath: cleanOld,
+      newPath: cleanNew,
+      sourceTree,
+      targetTree,
+    };
+  }
+
+  async deleteFile(filePath: string, targetRepoName?: string) {
+    const cfg = loadConfig();
+    const repoName = targetRepoName || cfg.active_repo?.name || "local";
     const cleanPath = (filePath || "").trim().replace(/^\/+/, "");
 
     if (!cleanPath) {
@@ -642,22 +729,14 @@ export class WorkspaceService {
     };
   }
 
-  getWorkspaceChanges() {
+  getWorkspaceChanges(targetRepoName?: string) {
     const cfg = loadConfig();
-    const activeRepo = cfg.active_repo;
-    if (!activeRepo) {
-      return {
-        changes: [],
-        total_additions: 0,
-        total_deletions: 0,
-        guardrail: "CLEAN",
-      };
-    }
+    const repoName = targetRepoName || cfg.active_repo?.name || "local";
+    const activeRepo = cfg.repos?.find((r: any) => r.name === repoName) || (cfg.active_repo?.name === repoName ? cfg.active_repo : { name: repoName, full_name: repoName, is_local: true });
 
-    const repoName = activeRepo.name || "local";
     const repoDir = this.getRepoDir(repoName);
     const hiddenList = loadHiddenFiles(repoDir);
-    const allRaw = cfg.workspace_changes?.[repoName] || [];
+    const allRaw = cfg.workspace_changes?.[repoName] || loadRepoWorkspaceChanges(repoName);
     const rawDocChanges = allRaw.filter(
       (c) => !isPathHidden(c.path, hiddenList),
     );
@@ -728,11 +807,11 @@ export class WorkspaceService {
     };
   }
 
-  async discardChanges(paths?: string[]) {
+  async discardChanges(paths?: string[], targetRepoName?: string) {
     const cfg = loadConfig();
-    const repoName = cfg.active_repo?.name || "local";
+    const repoName = targetRepoName || cfg.active_repo?.name || "local";
     const repoDir = this.getRepoDir(repoName);
-    const rawChanges = cfg.workspace_changes?.[repoName] || [];
+    const rawChanges = cfg.workspace_changes?.[repoName] || loadRepoWorkspaceChanges(repoName);
 
     const targetPaths = paths && paths.length > 0 ? new Set(paths) : null;
     const remainingChanges = [];
@@ -783,7 +862,9 @@ export class WorkspaceService {
       }
     }
 
+    if (!cfg.workspace_changes) cfg.workspace_changes = {};
     cfg.workspace_changes[repoName] = remainingChanges;
+    saveRepoWorkspaceChanges(repoName, remainingChanges);
     saveConfig(cfg);
 
     this.invalidateTreeCache(repoName);
@@ -795,9 +876,9 @@ export class WorkspaceService {
     };
   }
 
-  getDocumentContext(filePath: string) {
+  getDocumentContext(filePath: string, targetRepoName?: string) {
     const cfg = loadConfig();
-    const repoName = cfg.active_repo?.name || "local";
+    const repoName = targetRepoName || cfg.active_repo?.name || "local";
     const cleanPath = (filePath || "").trim().replace(/^\/+/, "");
     const repoDir = this.getRepoDir(repoName);
     const docsMetadata = docsMetadataService.loadDocsMetadata(repoName);

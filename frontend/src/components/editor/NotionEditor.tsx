@@ -1,4 +1,4 @@
-import { FileText, FolderTree, Plus, Lock } from "lucide-react";
+import { FileText, FolderTree, Plus, Lock, FolderGit2, Laptop } from "lucide-react";
 import React, { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { useWorkspace } from "../../context/WorkspaceContext";
@@ -28,6 +28,7 @@ import { LanguageSelectorDropdown } from "./LanguageSelectorDropdown";
 import { TranslationBanner } from "./TranslationBanner";
 import { SyncTranslationModal } from "../modals/SyncTranslationModal";
 import { MergeConflictResolutionModal } from "../modals/MergeConflictResolutionModal";
+import { MoveItemModal } from "../modals/MoveItemModal";
 import type { SupportedLanguage, SyncToMainPreview } from "../../types";
 
 interface NotionEditorProps {
@@ -88,6 +89,8 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
 
   // Git Mode, Visual Diff & Document History Drawer State
   const [isGitMode, setIsGitMode] = useState(false);
+  const [isMoveModalOpen, setIsMoveModalOpen] = useState(false);
+  const [openedInOS, setOpenedInOS] = useState(false);
   const [isHistoryDrawerOpen, setIsHistoryDrawerOpen] = useState(false);
   const [selectedCommit, setSelectedCommit] = useState<GitCommitInfo | null>(
     null,
@@ -993,6 +996,17 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
     }
   };
 
+  const handleOpenInOS = async () => {
+    if (!filePath) return;
+    try {
+      const res = await API.openInOS(filePath, activeRepo?.name);
+      if (res.ok) {
+        setOpenedInOS(true);
+        setTimeout(() => setOpenedInOS(false), 2000);
+      }
+    } catch {}
+  };
+
   const handleRevealInTree = useCallback(() => {
     if (!filePath) return;
     window.dispatchEvent(
@@ -1136,47 +1150,113 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
         {/* 1. Document Header & Toolbar */}
         <div className="editor-top-toolbar">
           <div className="doc-meta-left">
-            <div className="doc-breadcrumbs">
-              <input
-                type="text"
-                id="doc-path-input"
-                className="doc-path-input"
-                value={filePath || ""}
-                readOnly
-                placeholder="Selecione ou crie um documento..."
-                spellCheck="false"
-                title="Caminho do documento no workspace"
-              />
-              <button
-                id="btn-copy-doc-path"
-                className="btn-icon-subtle"
-                type="button"
-                title="Copiar caminho do arquivo"
-                onClick={handleCopyPath}
+            <div className="doc-breadcrumbs-container" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              {/* Repo Badge */}
+              <div
+                className="doc-repo-badge"
+                title={`Repositório: ${activeRepo?.name || 'local'}`}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  padding: '3px 8px',
+                  borderRadius: '6px',
+                  background: 'var(--color-primary-container, #eff6ff)',
+                  border: '1px solid var(--color-primary-fixed, #dbeafe)',
+                  color: 'var(--color-primary, #1d4ed8)',
+                  fontSize: '11.5px',
+                  fontWeight: 600,
+                  flexShrink: 0,
+                }}
               >
-                <svg
-                  width="12.5"
-                  height="12.5"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
+                <FolderGit2 size={13} style={{ color: 'var(--color-primary, #2563eb)' }} />
+                <span>{activeRepo?.name || 'local'}</span>
+              </div>
+
+              <span style={{ color: '#94a3b8', fontSize: '12px' }}>/</span>
+
+              {/* Breadcrumb Path Input / Display */}
+              <div className="doc-breadcrumbs" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <input
+                  type="text"
+                  id="doc-path-input"
+                  className="doc-path-input"
+                  value={filePath || ""}
+                  readOnly
+                  placeholder="Selecione ou crie um documento..."
+                  spellCheck="false"
+                  title={`Caminho: ${activeRepo?.name || 'local'}/${filePath || ''}`}
+                />
+                
+                {/* Action: Mover Arquivo entre Repositórios / Pastas */}
+                <button
+                  id="btn-move-doc"
+                  className="btn-icon-subtle"
+                  type="button"
+                  title="Mover documento para outro repositório ou pasta"
+                  onClick={() => setIsMoveModalOpen(true)}
+                  disabled={!filePath}
                 >
-                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                </svg>
-              </button>
-              <button
-                id="btn-reveal-in-tree"
-                className="btn-icon-subtle"
-                type="button"
-                title="Expandir pastas e revelar na árvore de documentos"
-                onClick={handleRevealInTree}
-              >
-                <FolderTree size={13} />
-              </button>
+                  <FolderGit2 size={13} />
+                </button>
+
+                {/* Action: Copiar Caminho */}
+                <button
+                  id="btn-copy-doc-path"
+                  className="btn-icon-subtle"
+                  type="button"
+                  title="Copiar caminho do arquivo (Clique para caminho simples, segure Alt para incluir repositório)"
+                  onClick={(e) => {
+                    if (e.altKey && activeRepo?.name && filePath) {
+                      navigator.clipboard.writeText(`${activeRepo.name}:${filePath}`);
+                      setEditorToast({ text: `Caminho completo copiado: ${activeRepo.name}:${filePath}`, type: "info" });
+                    } else {
+                      handleCopyPath();
+                      setEditorToast({ text: "Caminho copiado para a área de transferência!", type: "info" });
+                    }
+                    setTimeout(() => setEditorToast(null), 2500);
+                  }}
+                  disabled={!filePath}
+                >
+                  <svg
+                    width="12.5"
+                    height="12.5"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                  </svg>
+                </button>
+
+                {/* Action: Revelar na Árvore */}
+                <button
+                  id="btn-reveal-in-tree"
+                  className="btn-icon-subtle"
+                  type="button"
+                  title="Expandir pastas e revelar na árvore de documentos"
+                  onClick={handleRevealInTree}
+                  disabled={!filePath}
+                >
+                  <FolderTree size={13} />
+                </button>
+
+                {/* Action: Abrir no PC */}
+                <button
+                  id="btn-open-in-pc"
+                  className="btn-icon-subtle"
+                  type="button"
+                  title="Abrir no gerenciador de arquivos do PC"
+                  onClick={handleOpenInOS}
+                  disabled={!filePath}
+                >
+                  <Laptop size={13} style={{ color: openedInOS ? '#16a34a' : undefined }} />
+                </button>
+              </div>
             </div>
           </div>
 
@@ -2228,6 +2308,22 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
           }
         }}
       />
+
+      {/* Modal de Mover Documento entre Repositórios / Pastas */}
+      {isMoveModalOpen && filePath && (
+        <MoveItemModal
+          isOpen={isMoveModalOpen}
+          onClose={() => setIsMoveModalOpen(false)}
+          sourcePath={filePath}
+          sourceRepo={activeRepo?.name}
+          isFolder={false}
+          onSuccess={(newPath) => {
+            if (onNavigateFile) {
+              onNavigateFile(newPath);
+            }
+          }}
+        />
+      )}
     </div>
   );
 };
