@@ -10,6 +10,7 @@ import {
   ExternalLink,
   User,
 } from "lucide-react";
+import { OrgSelectorDropdown } from "./OrgSelectorDropdown";
 
 interface TopHeaderProps {
   onBackToRepos: () => void;
@@ -142,6 +143,8 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
       </div>
 
       <div className="dash-nav-right" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <OrgSelectorDropdown />
+
         {filteredPendingChanges.length > 0 && (
           <Button
             id="btn-open-workspace-diff"
