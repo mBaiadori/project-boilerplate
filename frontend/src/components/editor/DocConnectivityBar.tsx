@@ -1,9 +1,8 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
-import { API } from "../../services/api";
-import { useWorkspace } from "../../context/WorkspaceContext";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useSecurity } from "../../context/SecurityContext";
-
-import type { TaxonomyItem, StatusItem } from "../../types";
+import { useWorkspace } from "../../context/WorkspaceContext";
+import { API } from "../../services/api";
+import type { StatusItem, TaxonomyItem } from "../../types";
 
 interface DocConnectivityBarProps {
   filePath: string;
