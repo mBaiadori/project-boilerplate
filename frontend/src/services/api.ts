@@ -115,7 +115,9 @@ export const API = {
     description?: string; 
     enable_protection?: boolean; 
     required_approvals?: number; 
-    is_private?: boolean 
+    is_private?: boolean;
+    initialTeams?: Array<{ slug: string; permission?: string }>;
+    initialCollaborators?: Array<{ username: string; permission?: string }>;
   }): Promise<ApiResponse<any>> {
     const res = await fetch('/api/repos/create', {
       method: 'POST',
@@ -1351,6 +1353,10 @@ export const API = {
     return { ok: res.ok, data: await res.json() };
   },
 
+  async getCollaborators(repo?: string) {
+    return this.getGovernanceCollaborators(repo);
+  },
+
   async inviteCollaborator(payload: {
     username: string;
     permission: string;
@@ -1485,6 +1491,49 @@ export const API = {
 
   async scanSecrets(repo?: string): Promise<ApiResponse<{ hasSecrets: boolean; violations: any[] }>> {
     const res = await fetch(`/api/governance/scan-secrets${repo ? `?repo=${encodeURIComponent(repo)}` : ''}`);
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async getOrgTeams(org: string): Promise<ApiResponse<{ teams: any[] }>> {
+    const res = await fetch(`/api/governance/orgs/${encodeURIComponent(org)}/teams`);
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async getOrgMembers(org: string): Promise<ApiResponse<{ members: any[] }>> {
+    const res = await fetch(`/api/governance/orgs/${encodeURIComponent(org)}/members`);
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async getRepoTeams(owner: string, repo: string): Promise<ApiResponse<{ teams: any[] }>> {
+    const res = await fetch(`/api/governance/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/teams`);
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async addTeamToRepo(payload: {
+    org?: string;
+    teamSlug: string;
+    owner: string;
+    repo: string;
+    permission: string;
+  }): Promise<ApiResponse<{ success: boolean; message?: string }>> {
+    const res = await fetch(`/api/governance/repos/${encodeURIComponent(payload.owner)}/${encodeURIComponent(payload.repo)}/teams/${encodeURIComponent(payload.teamSlug)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async removeTeamFromRepo(payload: {
+    org?: string;
+    teamSlug: string;
+    owner: string;
+    repo: string;
+  }): Promise<ApiResponse<{ success: boolean; message?: string }>> {
+    const query = payload.org ? `?org=${encodeURIComponent(payload.org)}` : '';
+    const res = await fetch(`/api/governance/repos/${encodeURIComponent(payload.owner)}/${encodeURIComponent(payload.repo)}/teams/${encodeURIComponent(payload.teamSlug)}${query}`, {
+      method: 'DELETE'
+    });
     return { ok: res.ok, data: await res.json() };
   }
 };

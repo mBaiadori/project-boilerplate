@@ -982,7 +982,7 @@ export class PRsService {
     // 4. Secret scan guard
     const scan = scanContentForSecrets(finalPlainContent, payload.filePath);
     if (scan.hasSecrets) {
-      const violationSummary = scan.violations.map((v) => `${v.file}: ${v.message}`).join('; ');
+      const violationSummary = scan.violations.map((v: any) => `${v.file}: ${v.message}`).join('; ');
       throw new Error(`[Secret Guard] Edição bloqueada: foram detectados segredos não criptografados: ${violationSummary}`);
     }
 

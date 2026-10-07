@@ -133,3 +133,37 @@ export interface SecretScanResult {
   hasSecrets: boolean;
   violations: SecretScanViolation[];
 }
+
+export interface OrganizationTeamInfo {
+  id: number;
+  slug: string;
+  name: string;
+  description?: string;
+  permission?: GitHubPermission | string;
+  members_count?: number;
+  privacy?: string;
+}
+
+export interface OrganizationMemberInfo {
+  id: number;
+  login: string;
+  avatar_url: string;
+  html_url: string;
+  role?: 'admin' | 'member' | string;
+}
+
+export interface RepoTeamInfo {
+  id: number;
+  slug: string;
+  name: string;
+  description?: string;
+  permission: GitHubPermission | string;
+  permissions?: {
+    pull?: boolean;
+    triage?: boolean;
+    push?: boolean;
+    maintain?: boolean;
+    admin?: boolean;
+  };
+}
+

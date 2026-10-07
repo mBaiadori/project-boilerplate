@@ -15,6 +15,7 @@ import {
   isGitRepo,
 } from "../../utils/git.js";
 import { workspaceService } from "../workspace/workspace.service.js";
+import { governanceService } from "../governance/governance.service.js";
 
 export interface RepoDiagnosisCheckItem {
   exists: boolean;
@@ -486,6 +487,8 @@ export class ReposService {
     enable_protection?: boolean;
     required_approvals?: number;
     auto_initialize?: boolean;
+    initialTeams?: Array<{ slug: string; permission?: string }>;
+    initialCollaborators?: Array<{ username: string; permission?: string }>;
   }) {
     const repoName = payload.name.trim().toLowerCase().replace(/\s+/g, "-");
     if (!repoName) {
@@ -605,6 +608,42 @@ export class ReposService {
       permissions: { admin: true, push: true, pull: true },
     };
     saveConfig(cfg);
+
+    // Se foram fornecidos times iniciais, associa na Organização do GitHub
+    if (Array.isArray(payload.initialTeams) && payload.initialTeams.length > 0 && !isPersonal) {
+      for (const t of payload.initialTeams) {
+        if (t.slug) {
+          try {
+            await governanceService.addTeamToRepo({
+              org: targetOwner,
+              teamSlug: t.slug,
+              owner: targetOwner,
+              repo: repoName,
+              permission: t.permission || "push",
+            });
+          } catch (tErr) {
+            console.warn(`[ReposService] Falha ao associar time inicial ${t.slug} ao repo ${repoName}:`, tErr);
+          }
+        }
+      }
+    }
+
+    // Se foram fornecidos colaboradores iniciais, convida no GitHub
+    if (Array.isArray(payload.initialCollaborators) && payload.initialCollaborators.length > 0) {
+      for (const c of payload.initialCollaborators) {
+        if (c.username) {
+          try {
+            await governanceService.inviteCollaborator({
+              username: c.username,
+              permission: (c.permission as any) || "push",
+              repo: repoName,
+            });
+          } catch (cErr) {
+            console.warn(`[ReposService] Falha ao convidar colaborador inicial ${c.username} para o repo ${repoName}:`, cErr);
+          }
+        }
+      }
+    }
 
     if (payload.auto_initialize) {
       return await this.initializeRepo({

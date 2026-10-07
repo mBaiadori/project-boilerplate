@@ -214,6 +214,39 @@ export interface CollaboratorInfo {
   status?: 'active' | 'pending';
 }
 
+export interface OrganizationTeamInfo {
+  id: number;
+  slug: string;
+  name: string;
+  description?: string;
+  permission?: 'pull' | 'triage' | 'push' | 'maintain' | 'admin' | string;
+  members_count?: number;
+  privacy?: string;
+}
+
+export interface OrganizationMemberInfo {
+  id: number;
+  login: string;
+  avatar_url: string;
+  html_url: string;
+  role?: 'admin' | 'member' | string;
+}
+
+export interface RepoTeamInfo {
+  id: number;
+  slug: string;
+  name: string;
+  description?: string;
+  permission: 'pull' | 'triage' | 'push' | 'maintain' | 'admin' | string;
+  permissions?: {
+    pull?: boolean;
+    triage?: boolean;
+    push?: boolean;
+    maintain?: boolean;
+    admin?: boolean;
+  };
+}
+
 export interface ProjectMetadataOptions {
   categories: CategoryOption[];
   statuses: StatusItem[];

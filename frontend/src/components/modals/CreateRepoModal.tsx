@@ -15,6 +15,11 @@ import { API } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
 import { useWorkspace } from "../../context/WorkspaceContext";
 import type { Repo } from "../../types";
+import { AccessGovernanceManager } from "../governance/AccessGovernanceManager";
+import type {
+  SelectedGovernanceTeam,
+  SelectedGovernanceMember,
+} from "../governance/AccessGovernanceManager";
 
 interface CreateRepoModalProps {
   isOpen: boolean;
@@ -38,6 +43,8 @@ export const CreateRepoModal: React.FC<CreateRepoModalProps> = ({
   const [isPrivate, setIsPrivate] = useState(true);
   const [enableProtection, setEnableProtection] = useState(true);
   const [requiredApprovals, setRequiredApprovals] = useState(1);
+  const [selectedTeams, setSelectedTeams] = useState<SelectedGovernanceTeam[]>([]);
+  const [selectedMembers, setSelectedMembers] = useState<SelectedGovernanceMember[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -92,6 +99,8 @@ export const CreateRepoModal: React.FC<CreateRepoModalProps> = ({
       setIsPrivate(true);
       setEnableProtection(true);
       setRequiredApprovals(1);
+      setSelectedTeams([]);
+      setSelectedMembers([]);
       setErrorMessage(null);
 
       if (defaultOwner && defaultOwner !== "all" && defaultOwner !== "local") {
@@ -133,6 +142,14 @@ export const CreateRepoModal: React.FC<CreateRepoModalProps> = ({
         is_private: isPrivate,
         enable_protection: enableProtection,
         required_approvals: requiredApprovals,
+        initialTeams: selectedTeams.map((t) => ({
+          slug: t.slug,
+          permission: t.permission,
+        })),
+        initialCollaborators: selectedMembers.map((m) => ({
+          username: m.username,
+          permission: m.permission,
+        })),
       });
 
       if (res.ok && res.data?.repo) {
@@ -528,6 +545,42 @@ export const CreateRepoModal: React.FC<CreateRepoModalProps> = ({
                 }
               />
             </div>
+
+            {/* Governança de Times e Colaboradores */}
+            {selectedOwner && selectedOwner !== "local" && (
+              <div
+                style={{
+                  paddingTop: "12px",
+                  borderTop: "1px solid var(--color-outline-variant, #e2e8f0)",
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: "12px",
+                    fontWeight: 700,
+                    color: "var(--color-on-surface, #0f172a)",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.5px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    marginBottom: "10px",
+                  }}
+                >
+                  <Shield size={14} color="#1a73e8" />
+                  Governança & Acessos Iniciais
+                </span>
+                <AccessGovernanceManager
+                  orgLogin={selectedOwner}
+                  mode="form"
+                  selectedTeams={selectedTeams}
+                  onChangeTeams={setSelectedTeams}
+                  selectedMembers={selectedMembers}
+                  onChangeMembers={setSelectedMembers}
+                  compact={true}
+                />
+              </div>
+            )}
           </div>
 
           {/* Footer */}

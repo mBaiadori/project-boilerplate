@@ -22,13 +22,18 @@ import {
   Laptop,
   Shield,
   Lock,
+  Building2,
 } from "lucide-react";
 import type { TreeNode, TemplateItem, Repo } from "../../types";
 import { useWorkspace } from "../../context/WorkspaceContext";
 import { useSecurity } from "../../context/SecurityContext";
+import { useAuth } from "../../context/AuthContext";
 import { API } from "../../services/api";
 import { TemplatePickerModal } from "../modals/TemplatePickerModal";
 import { LockedRepoModal } from "../modals/LockedRepoModal";
+import { CreateRepoModal } from "../modals/CreateRepoModal";
+import { DeleteRepoModal } from "../modals/DeleteRepoModal";
+import { RepoGovernanceModal } from "../modals/RepoGovernanceModal";
 
 interface FileTreeProps {
   onOpenFile: (path: string) => void;
@@ -242,6 +247,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
     activeRepo,
     repos,
     selectRepo,
+    loadRepos,
     activeOrg,
     loadTree,
     gitStatus,
@@ -251,11 +257,35 @@ export const FileTree: React.FC<FileTreeProps> = ({
     isLoadingWorkspace,
     isLoadingTree,
   } = useWorkspace();
+  const { user } = useAuth();
   const { canAccessDoc, departments } = useSecurity();
   const repoName = activeRepo?.name || "default";
   const isTreeLoading = Boolean(isLoadingWorkspace || isLoadingTree);
   const [searchTerm, setSearchTerm] = useState("");
   const [lockedRepoTarget, setLockedRepoTarget] = useState<Repo | null>(null);
+  const [createRepoModalOpen, setCreateRepoModalOpen] = useState(false);
+  const [deleteRepoTarget, setDeleteRepoTarget] = useState<Repo | null>(null);
+  const [governanceRepoTarget, setGovernanceRepoTarget] = useState<Repo | null>(null);
+  const [collapsedRepos, setCollapsedRepos] = useState<Record<string, boolean>>({});
+
+  const canCreateRootRepo = useMemo(() => {
+    if (!activeOrg) return true;
+    if (activeOrg.role === 'admin' || (activeOrg as any).is_owner) return true;
+    if (user?.login && activeOrg.login.toLowerCase() === user.login.toLowerCase()) return true;
+    return false;
+  }, [activeOrg, user]);
+
+  const toggleRepoCollapse = (r: Repo, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const isCurrentlyActive = r.name.toLowerCase() === activeRepo?.name.toLowerCase();
+    if (!isCurrentlyActive) {
+      selectRepo(r);
+      setCollapsedRepos((prev) => ({ ...prev, [r.name]: false }));
+    } else {
+      setCollapsedRepos((prev) => ({ ...prev, [r.name]: !prev[r.name] }));
+    }
+  };
+
   const [collapsedFolders, setCollapsedFolders] = useState<
     Record<string, boolean>
   >(() => {
@@ -1802,11 +1832,42 @@ export const FileTree: React.FC<FileTreeProps> = ({
         onDragEnter={handlePaneDragEnter}
         onDragLeave={handlePaneDragLeave}
       >
-        {/* TOP SECTION: Search Bar + Actions Toolbar */}
+        {/* TOP SECTION: Org Header + Search Bar + Actions Toolbar */}
         <div
           className="tree-top-container"
           onClick={(e) => e.stopPropagation()}
         >
+          {/* Org Root Identity Bar */}
+          <div className="tree-org-bar">
+            <div className="tree-org-info">
+              <div className="tree-org-icon">
+                <Building2 size={13} />
+              </div>
+              <span className="tree-org-name">
+                {(activeOrg as any)?.name || activeOrg?.login || "Minha Organização"}
+              </span>
+            </div>
+
+            <button
+              id="btn-tree-create-root-repo"
+              className="btn-tree-new-repo"
+              title={
+                canCreateRootRepo
+                  ? "Nova Pasta Raiz (Criar Repositório na Organização)"
+                  : "Apenas administradores ou proprietários da organização podem criar repositórios raiz."
+              }
+              onClick={() => {
+                if (canCreateRootRepo) {
+                  setCreateRepoModalOpen(true);
+                }
+              }}
+              disabled={!canCreateRootRepo}
+            >
+              <FolderPlus size={13} />
+              <span>Novo Repo</span>
+            </button>
+          </div>
+
           {/* Search Input Bar */}
           <div className="tree-search-wrapper">
             <span className="tree-search-icon">
@@ -1841,7 +1902,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
                 title={
                   selectedFolder
                     ? `Novo Arquivo em /${selectedFolderName}`
-                    : "Novo Arquivo na raiz"
+                    : "Novo Arquivo no repositório ativo"
                 }
                 onClick={() => startInlineCreate(selectedFolder, false)}
               >
@@ -1853,7 +1914,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
                 title={
                   selectedFolder
                     ? `Nova Pasta em /${selectedFolderName}`
-                    : "Nova Pasta na raiz"
+                    : "Nova Pasta no repositório ativo"
                 }
                 onClick={() => startInlineCreate(selectedFolder, true)}
               >
@@ -1865,7 +1926,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
                 title={
                   selectedFolder
                     ? `Importar Documentos em /${selectedFolderName}`
-                    : "Importar Documentos na raiz"
+                    : "Importar Documentos no repositório ativo"
                 }
                 onClick={() => {
                   setTargetUploadFolder(selectedFolder || "");
@@ -2117,153 +2178,185 @@ export const FileTree: React.FC<FileTreeProps> = ({
               </div>
             ) : (
               <>
-                {/* Seção de Repositórios da Organização no 1º Nível */}
-                {orgRepos.length > 1 && (
-                  <div style={{ marginBottom: "12px", borderBottom: "1px solid var(--color-outline-variant, #e2e8f0)", paddingBottom: "8px" }}>
-                    <div
-                      style={{
-                        fontSize: "10px",
-                        fontWeight: 700,
-                        textTransform: "uppercase",
-                        color: "var(--color-on-surface-variant, #64748b)",
-                        padding: "2px 8px 6px",
-                        letterSpacing: "0.05em",
-                      }}
-                    >
-                      Repositórios da Org
-                    </div>
+                {/* Árvore de Documentos Multi-Repo Unificada (Nível 0 = Repositórios) */}
+                <div className="tree-repos-container">
+                  {orgRepos.map((r) => {
+                    const isActive = r.name.toLowerCase() === activeRepo?.name.toLowerCase();
+                    const isCollapsed = collapsedRepos[r.name] ?? !isActive;
+                    const isLocked =
+                      Boolean(r.is_locked) ||
+                      (r.permissions && !r.permissions.pull && !r.permissions.admin);
+                    const canAdminRepo = Boolean(r.permissions?.admin || r.is_owner || canCreateRootRepo);
 
-                    {orgRepos.map((r) => {
-                      const isActive = r.name.toLowerCase() === activeRepo?.name.toLowerCase();
-                      const isLocked =
-                        Boolean(r.is_locked) ||
-                        (r.permissions && !r.permissions.pull && !r.permissions.admin);
-
-                      if (isActive) {
-                        return (
-                          <div
-                            key={`org-repo-active-${r.name}`}
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "space-between",
-                              padding: "6px 8px",
-                              borderRadius: "6px",
-                              backgroundColor: "var(--color-primary-container, #e8f0fe)",
-                              color: "var(--color-primary, #1a73e8)",
-                              marginBottom: "4px",
-                              fontWeight: 600,
-                              fontSize: "12px",
-                            }}
-                          >
-                            <div style={{ display: "flex", alignItems: "center", gap: "6px", minWidth: 0 }}>
-                              <FolderOpen size={14} style={{ flexShrink: 0 }} />
-                              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                {r.name}
-                              </span>
-                            </div>
-                            <span
-                              style={{
-                                fontSize: "9px",
-                                fontWeight: 700,
-                                padding: "1px 5px",
-                                borderRadius: "6px",
-                                backgroundColor: "var(--color-primary, #1a73e8)",
-                                color: "#ffffff",
-                              }}
-                            >
-                              Ativo
-                            </span>
-                          </div>
-                        );
-                      }
-
-                      if (isLocked) {
-                        return (
-                          <div
-                            key={`org-repo-locked-${r.name}`}
-                            onClick={() => setLockedRepoTarget(r)}
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "space-between",
-                              padding: "5px 8px",
-                              borderRadius: "6px",
-                              cursor: "pointer",
-                              opacity: 0.75,
-                              marginBottom: "3px",
-                              backgroundColor: "rgba(239, 68, 68, 0.05)",
-                              border: "1px dashed rgba(239, 68, 68, 0.25)",
-                              fontSize: "12px",
-                            }}
-                            title={`Repositório restrito: ${r.name}. Clique para detalhes.`}
-                          >
-                            <div style={{ display: "flex", alignItems: "center", gap: "6px", minWidth: 0 }}>
-                              <Lock size={13} color="#ef4444" style={{ flexShrink: 0 }} />
-                              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--color-on-surface, #0f172a)" }}>
-                                {r.name}
-                              </span>
-                            </div>
-                            <span
-                              style={{
-                                fontSize: "9px",
-                                fontWeight: 700,
-                                padding: "1px 5px",
-                                borderRadius: "6px",
-                                backgroundColor: "rgba(239, 68, 68, 0.12)",
-                                color: "#ef4444",
-                              }}
-                            >
-                              Sem Acesso
-                            </span>
-                          </div>
-                        );
-                      }
-
+                    if (isLocked) {
                       return (
                         <div
-                          key={`org-repo-sibling-${r.name}`}
-                          onClick={() => selectRepo(r)}
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "space-between",
-                            padding: "5px 8px",
-                            borderRadius: "6px",
-                            cursor: "pointer",
-                            marginBottom: "3px",
-                            fontSize: "12px",
-                            color: "var(--color-on-surface, #0f172a)",
-                          }}
-                          className="tree-repo-row"
-                          title={`Abrir repositório ${r.name}`}
+                          key={`org-repo-locked-${r.name}`}
+                          onClick={() => setLockedRepoTarget(r)}
+                          className="tree-repo-header"
+                          style={{ opacity: 0.75 }}
+                          title={`Repositório restrito: ${r.name}. Clique para detalhes.`}
                         >
-                          <div style={{ display: "flex", alignItems: "center", gap: "6px", minWidth: 0 }}>
-                            <Folder size={13} color="#64748b" style={{ flexShrink: 0 }} />
-                            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          <div className="tree-repo-left">
+                            <Lock size={13} color="#ef4444" style={{ flexShrink: 0 }} />
+                            <span className="tree-repo-name" style={{ color: "var(--text-heading)" }}>
                               {r.name}
                             </span>
                           </div>
-                          <span
-                            style={{
-                              fontSize: "9px",
-                              fontWeight: 500,
-                              padding: "1px 4px",
-                              borderRadius: "4px",
-                              backgroundColor: "var(--color-surface-container-high, #e2e8f0)",
-                              color: "var(--color-on-surface-variant, #64748b)",
-                            }}
-                          >
-                            {r.is_private ? "Privado" : "Público"}
+                          <span className="tree-repo-badge locked">
+                            Sem Acesso
                           </span>
                         </div>
                       );
-                    })}
-                  </div>
-                )}
+                    }
 
-                {/* Nós de Arquivos e Pastas do Repositório Ativo */}
-                {displayNodes.map((node) => renderTreeNode(node))}
+                    return (
+                      <div
+                        key={`org-repo-node-${r.name}`}
+                        className="tree-repo-root-item"
+                      >
+                        {/* Linha da Pasta Raiz (Repositório) */}
+                        <div
+                          className={`tree-repo-header ${isActive ? "is-active" : ""}`}
+                          onClick={(e) => toggleRepoCollapse(r, e)}
+                        >
+                          <div className="tree-repo-left">
+                            <span
+                              className="tree-caret"
+                              style={{
+                                transform: !isCollapsed ? "rotate(90deg)" : "none",
+                              }}
+                            >
+                              <ChevronRight size={12} />
+                            </span>
+
+                            {!isCollapsed ? (
+                              <FolderOpen
+                                size={14}
+                                color={isActive ? "var(--primary, #2563eb)" : "#64748b"}
+                                style={{ flexShrink: 0 }}
+                              />
+                            ) : (
+                              <Folder
+                                size={14}
+                                color={isActive ? "var(--primary, #2563eb)" : "#64748b"}
+                                style={{ flexShrink: 0 }}
+                              />
+                            )}
+
+                            <span className="tree-repo-name">
+                              {r.name}
+                            </span>
+
+                            {isActive && (
+                              <span className="tree-repo-badge">
+                                Ativo
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Ações de Contexto no Nível Raiz do Repositório */}
+                          <div
+                            className="tree-repo-actions"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {/* 1. Governança & Acessos */}
+                            <button
+                              type="button"
+                              className="btn-tree-action"
+                              title="Governança & Acessos do Repositório"
+                              onClick={() => setGovernanceRepoTarget(r)}
+                            >
+                              <Shield size={12} />
+                            </button>
+
+                            {/* 2. Sincronizar Git */}
+                            <button
+                              type="button"
+                              className="btn-tree-action"
+                              title="Sincronizar Repositório"
+                              onClick={() => {
+                                if (isActive) {
+                                  refreshGitStatus();
+                                  loadTree();
+                                } else {
+                                  selectRepo(r);
+                                }
+                              }}
+                            >
+                              <RefreshCw size={12} />
+                            </button>
+
+                            {/* 3. Novo Arquivo na Raiz deste Repo */}
+                            <button
+                              type="button"
+                              className="btn-tree-action"
+                              title="Novo Arquivo neste repositório"
+                              onClick={async () => {
+                                if (!isActive) await selectRepo(r);
+                                startInlineCreate("", false);
+                              }}
+                            >
+                              <FilePlus size={12} />
+                            </button>
+
+                            {/* 4. Nova Pasta na Raiz deste Repo */}
+                            <button
+                              type="button"
+                              className="btn-tree-action"
+                              title="Nova Pasta neste repositório"
+                              onClick={async () => {
+                                if (!isActive) await selectRepo(r);
+                                startInlineCreate("", true);
+                              }}
+                            >
+                              <FolderPlus size={12} />
+                            </button>
+
+                            {/* 5. Excluir Repositório (Apenas Admin/Owner) */}
+                            {canAdminRepo && (
+                              <button
+                                type="button"
+                                className="btn-tree-action delete"
+                                title="Excluir Repositório"
+                                onClick={() => setDeleteRepoTarget(r)}
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Conteúdo Expandido do Repositório */}
+                        {!isCollapsed && (
+                          <div className="tree-repo-children-container">
+                            {isActive ? (
+                              displayNodes.length > 0 ? (
+                                displayNodes.map((node) => renderTreeNode(node))
+                              ) : isTreeLoading ? (
+                                <div className="tree-repo-empty-hint">
+                                  Carregando arquivos...
+                                </div>
+                              ) : (
+                                <div className="tree-repo-empty-hint">
+                                  Nenhum arquivo encontrado neste repositório.
+                                </div>
+                              )
+                            ) : (
+                              <div
+                                className="tree-repo-empty-hint"
+                                style={{ cursor: "pointer" }}
+                                onClick={() => selectRepo(r)}
+                              >
+                                Clique para carregar arquivos de {r.name}...
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </>
             )}
           </div>
@@ -2360,6 +2453,41 @@ export const FileTree: React.FC<FileTreeProps> = ({
         repo={lockedRepoTarget}
         orgName={activeOrg?.login}
       />
+
+      {/* Modal de Criação de Pasta Raiz (Repositório) */}
+      <CreateRepoModal
+        isOpen={createRepoModalOpen}
+        onClose={() => setCreateRepoModalOpen(false)}
+        defaultOwner={activeOrg?.login}
+        onCreated={async (newRepo) => {
+          await loadRepos();
+          await selectRepo(newRepo);
+          setCreateRepoModalOpen(false);
+          showToast(`Repositório ${newRepo.name} criado com sucesso!`, "info");
+        }}
+      />
+
+      {/* Modal de Exclusão de Repositório Raiz */}
+      <DeleteRepoModal
+        isOpen={Boolean(deleteRepoTarget)}
+        onClose={() => setDeleteRepoTarget(null)}
+        repo={deleteRepoTarget}
+        onDeleted={async () => {
+          await loadRepos();
+          setDeleteRepoTarget(null);
+          showToast("Repositório removido.", "info");
+        }}
+      />
+
+      {/* Modal de Governança & Acessos do Repositório */}
+      {governanceRepoTarget && (
+        <RepoGovernanceModal
+          isOpen={Boolean(governanceRepoTarget)}
+          onClose={() => setGovernanceRepoTarget(null)}
+          orgLogin={governanceRepoTarget.owner || activeOrg?.login || "local"}
+          repoName={governanceRepoTarget.name}
+        />
+      )}
     </>
   );
 };

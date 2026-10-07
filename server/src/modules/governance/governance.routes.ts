@@ -159,4 +159,73 @@ export async function governanceRoutes(fastify: FastifyInstance) {
       return reply.status(400).send({ error: err.message });
     }
   });
+
+  // 11. Organization Teams
+  fastify.get('/api/governance/orgs/:org/teams', async (request, reply) => {
+    const params = request.params as { org: string };
+    try {
+      const teams = await governanceService.getOrgTeams(params.org);
+      return reply.send({ teams });
+    } catch (err: any) {
+      return reply.status(400).send({ error: err.message });
+    }
+  });
+
+  // 12. Organization Members
+  fastify.get('/api/governance/orgs/:org/members', async (request, reply) => {
+    const params = request.params as { org: string };
+    try {
+      const members = await governanceService.getOrgMembers(params.org);
+      return reply.send({ members });
+    } catch (err: any) {
+      return reply.status(400).send({ error: err.message });
+    }
+  });
+
+  // 13. Repo Teams List
+  fastify.get('/api/governance/repos/:owner/:repo/teams', async (request, reply) => {
+    const params = request.params as { owner: string; repo: string };
+    try {
+      const teams = await governanceService.getRepoTeams(params.owner, params.repo);
+      return reply.send({ teams });
+    } catch (err: any) {
+      return reply.status(400).send({ error: err.message });
+    }
+  });
+
+  // 14. Add/Update Team on Repo
+  fastify.put('/api/governance/repos/:owner/:repo/teams/:team_slug', async (request, reply) => {
+    const params = request.params as { owner: string; repo: string; team_slug: string };
+    const body = (request.body as any) || {};
+    try {
+      const result = await governanceService.addTeamToRepo({
+        org: body.org || params.owner,
+        teamSlug: params.team_slug,
+        owner: params.owner,
+        repo: params.repo,
+        permission: body.permission || 'push',
+      });
+      return reply.send(result);
+    } catch (err: any) {
+      return reply.status(400).send({ error: err.message });
+    }
+  });
+
+  // 15. Remove Team from Repo
+  fastify.delete('/api/governance/repos/:owner/:repo/teams/:team_slug', async (request, reply) => {
+    const params = request.params as { owner: string; repo: string; team_slug: string };
+    const query = request.query as { org?: string };
+    try {
+      const result = await governanceService.removeTeamFromRepo({
+        org: query.org || params.owner,
+        teamSlug: params.team_slug,
+        owner: params.owner,
+        repo: params.repo,
+      });
+      return reply.send(result);
+    } catch (err: any) {
+      return reply.status(400).send({ error: err.message });
+    }
+  });
 }
+

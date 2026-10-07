@@ -14,6 +14,9 @@ import {
   DEFAULT_DEPARTMENTS,
   SecretScanResult,
   SecretScanViolation,
+  OrganizationTeamInfo,
+  OrganizationMemberInfo,
+  RepoTeamInfo,
 } from "./governance.types.js";
 import { scanContentForSecrets } from "../../utils/crypto.js";
 
@@ -1086,6 +1089,139 @@ export class GovernanceService {
       filePath: payload.filePath,
       content: rawContent,
     };
+  }
+
+  /**
+   * Lista todos os times da Organização no GitHub
+   */
+  async getOrgTeams(orgLogin: string): Promise<OrganizationTeamInfo[]> {
+    const cfg = loadConfig();
+    if (!cfg.token || !orgLogin) {
+      return [];
+    }
+    try {
+      const res = await callGitHubAPI(`/orgs/${orgLogin}/teams?per_page=100`, cfg.token, "GET");
+      if (res.statusCode === 200 && Array.isArray(res.data)) {
+        return res.data.map((t: any) => ({
+          id: t.id,
+          slug: t.slug,
+          name: t.name,
+          description: t.description || "",
+          permission: t.permission || "pull",
+          members_count: t.members_count || 0,
+          privacy: t.privacy || "closed",
+        }));
+      }
+      return [];
+    } catch (err) {
+      console.warn(`[GovernanceService] Falha ao listar times da org ${orgLogin}:`, err);
+      return [];
+    }
+  }
+
+  /**
+   * Lista todos os membros da Organização no GitHub
+   */
+  async getOrgMembers(orgLogin: string): Promise<OrganizationMemberInfo[]> {
+    const cfg = loadConfig();
+    if (!cfg.token || !orgLogin) {
+      return [];
+    }
+    try {
+      const res = await callGitHubAPI(`/orgs/${orgLogin}/members?per_page=100`, cfg.token, "GET");
+      if (res.statusCode === 200 && Array.isArray(res.data)) {
+        return res.data.map((m: any) => ({
+          id: m.id,
+          login: m.login,
+          avatar_url: m.avatar_url || `https://github.com/${m.login}.png`,
+          html_url: m.html_url || `https://github.com/${m.login}`,
+          role: m.site_admin ? "admin" : "member",
+        }));
+      }
+      return [];
+    } catch (err) {
+      console.warn(`[GovernanceService] Falha ao listar membros da org ${orgLogin}:`, err);
+      return [];
+    }
+  }
+
+  /**
+   * Lista times com acesso a um repositório específico
+   */
+  async getRepoTeams(owner: string, repo: string): Promise<RepoTeamInfo[]> {
+    const cfg = loadConfig();
+    if (!cfg.token || !owner || !repo) {
+      return [];
+    }
+    try {
+      const res = await callGitHubAPI(`/repos/${owner}/${repo}/teams?per_page=100`, cfg.token, "GET");
+      if (res.statusCode === 200 && Array.isArray(res.data)) {
+        return res.data.map((t: any) => ({
+          id: t.id,
+          slug: t.slug,
+          name: t.name,
+          description: t.description || "",
+          permission: t.permission || "pull",
+          permissions: t.permissions,
+        }));
+      }
+      return [];
+    } catch (err) {
+      console.warn(`[GovernanceService] Falha ao listar times do repo ${owner}/${repo}:`, err);
+      return [];
+    }
+  }
+
+  /**
+   * Adiciona ou atualiza permissão de um time em um repositório
+   */
+  async addTeamToRepo(payload: {
+    org: string;
+    teamSlug: string;
+    owner: string;
+    repo: string;
+    permission: string;
+  }): Promise<{ success: boolean; message?: string }> {
+    const cfg = loadConfig();
+    if (!cfg.token) {
+      throw new Error("Token do GitHub não autenticado");
+    }
+    const { org, teamSlug, owner, repo, permission } = payload;
+    const res = await callGitHubAPI(
+      `/orgs/${org}/teams/${teamSlug}/repos/${owner}/${repo}`,
+      cfg.token,
+      "PUT",
+      { permission: permission || "push" }
+    );
+    if (res.statusCode === 204 || res.statusCode === 200 || res.statusCode === 201) {
+      return { success: true, message: `Time @${org}/${teamSlug} adicionado ao repositório ${owner}/${repo} com permissão '${permission}'` };
+    }
+    throw new Error(res.data?.message || `Erro ao associar time ao repositório (${res.statusCode})`);
+  }
+
+  /**
+   * Remove acesso de um time de um repositório
+   */
+  async removeTeamFromRepo(payload: {
+    org: string;
+    teamSlug: string;
+    owner: string;
+    repo: string;
+  }): Promise<{ success: boolean; message?: string }> {
+    const cfg = loadConfig();
+    if (!cfg.token) {
+      throw new Error("Token do GitHub não autenticado");
+    }
+    const { org, teamSlug, owner, repo } = payload;
+    const res = await callGitHubAPI(
+      `/orgs/${org}/teams/${teamSlug}/repos/${owner}/${repo}`,
+      cfg.token,
+      "DELETE"
+    );
+    if (res.statusCode === 204 || res.statusCode === 200) {
+      return { success: true, message: `Time @${org}/${teamSlug} removido do repositório ${owner}/${repo}` };
+    }
+    throw new Error(res.data?.message || `Erro ao remover time do repositório (${res.statusCode})`);
   }
 }
 
