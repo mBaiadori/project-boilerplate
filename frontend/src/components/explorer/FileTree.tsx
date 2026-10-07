@@ -25,12 +25,15 @@ import {
   Lock,
   Building2,
   Copy,
+  AlertTriangle,
+  FolderGit2,
 } from "lucide-react";
 import type { TreeNode, TemplateItem, Repo } from "../../types";
 import { useWorkspace } from "../../context/WorkspaceContext";
 import { useSecurity } from "../../context/SecurityContext";
 import { useAuth } from "../../context/AuthContext";
 import { API } from "../../services/api";
+import { Modal, Button } from "../ui";
 import { TemplatePickerModal } from "../modals/TemplatePickerModal";
 import { LockedRepoModal } from "../modals/LockedRepoModal";
 import { CreateRepoModal } from "../modals/CreateRepoModal";
@@ -266,48 +269,80 @@ export const FileTree: React.FC<FileTreeProps> = ({
   const { user } = useAuth();
   const { canAccessDoc, departments } = useSecurity();
   const navigate = useNavigate();
-  const { subview } = useParams<{ subview?: string }>();
+  const { org, subview } = useParams<{ org?: string; subview?: string }>();
   const repoName = activeRepo?.name || "default";
   const isTreeLoading = Boolean(isLoadingWorkspace || isLoadingTree);
   const [searchTerm, setSearchTerm] = useState("");
   const [lockedRepoTarget, setLockedRepoTarget] = useState<Repo | null>(null);
   const [createRepoModalOpen, setCreateRepoModalOpen] = useState(false);
   const [deleteRepoTarget, setDeleteRepoTarget] = useState<Repo | null>(null);
-  const [governanceRepoTarget, setGovernanceRepoTarget] = useState<Repo | null>(null);
-  const [collapsedRepos, setCollapsedRepos] = useState<Record<string, boolean>>({});
+  const [deleteItemTarget, setDeleteItemTarget] = useState<{
+    path: string;
+    name: string;
+    isFolder: boolean;
+    repoName?: string;
+  } | null>(null);
+  const [isDeletingItem, setIsDeletingItem] = useState(false);
+  const [governanceRepoTarget, setGovernanceRepoTarget] = useState<Repo | null>(
+    null,
+  );
+  const [collapsedRepos, setCollapsedRepos] = useState<Record<string, boolean>>(
+    {},
+  );
   const [loadingRepos, setLoadingRepos] = useState<Record<string, boolean>>({});
 
   const canCreateRootRepo = useMemo(() => {
     if (!activeOrg) return true;
-    if (activeOrg.role === 'admin' || (activeOrg as any).is_owner) return true;
-    if (user?.login && activeOrg.login.toLowerCase() === user.login.toLowerCase()) return true;
+    if (activeOrg.role === "admin" || (activeOrg as any).is_owner) return true;
+    if (
+      user?.login &&
+      activeOrg.login.toLowerCase() === user.login.toLowerCase()
+    )
+      return true;
     return false;
   }, [activeOrg, user]);
 
   const handleSelectRepo = async (r: Repo, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    const isCurrentlyActive = r.name.toLowerCase() === activeRepo?.name.toLowerCase();
-    setCollapsedRepos((prev) => ({ ...prev, [r.name]: false }));
+    const isCurrentlyActive =
+      r.name.toLowerCase() === activeRepo?.name.toLowerCase();
 
-    if (!isCurrentlyActive) {
-      setLoadingRepos((prev) => ({ ...prev, [r.name]: true }));
-      navigate(`/repo/${encodeURIComponent(r.name)}/${subview || "editor"}`);
-      try {
-        await selectRepo(r);
-      } finally {
-        setLoadingRepos((prev) => ({ ...prev, [r.name]: false }));
-      }
+    // Se já é o repositório ativo e o usuário clica novamente, alterna entre expandido e colapsado
+    if (isCurrentlyActive) {
+      await toggleRepoCollapse(r, e);
+      return;
+    }
+
+    setCollapsedRepos((prev) => ({ ...prev, [r.name]: false }));
+    setLoadingRepos((prev) => ({ ...prev, [r.name]: true }));
+    const fileQuery = activeFile
+      ? `?file=${encodeURIComponent(activeFile)}`
+      : "";
+    const owner = r.owner || (r.full_name ? r.full_name.split("/")[0] : "");
+    const isOrg = owner && owner !== "local" && !r.is_local && owner.toLowerCase() !== (user?.login || "").toLowerCase();
+    const repoPath = isOrg
+      ? `/org/${encodeURIComponent(owner)}/repo/${encodeURIComponent(r.name)}/${subview || "editor"}${fileQuery}`
+      : `/repo/${encodeURIComponent(r.name)}/${subview || "editor"}${fileQuery}`;
+    navigate(repoPath);
+    try {
+      await selectRepo(r, activeFile || undefined);
+    } finally {
+      setLoadingRepos((prev) => ({ ...prev, [r.name]: false }));
     }
   };
 
   const toggleRepoCollapse = async (r: Repo, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    const isCurrentlyActive = r.name.toLowerCase() === activeRepo?.name.toLowerCase();
+    const isCurrentlyActive =
+      r.name.toLowerCase() === activeRepo?.name.toLowerCase();
     const isCurrentlyCollapsed = collapsedRepos[r.name] ?? !isCurrentlyActive;
     const willBeExpanded = isCurrentlyCollapsed;
     setCollapsedRepos((prev) => ({ ...prev, [r.name]: !willBeExpanded }));
 
-    if (willBeExpanded && (!treesByRepo[r.name] || treesByRepo[r.name].length === 0)) {
+    if (
+      willBeExpanded &&
+      (!treesByRepo[r.name] || treesByRepo[r.name].length === 0)
+    ) {
       setLoadingRepos((prev) => ({ ...prev, [r.name]: true }));
       try {
         await loadTree(r.name);
@@ -749,7 +784,12 @@ export const FileTree: React.FC<FileTreeProps> = ({
 
     // 2. Internal tree item dropped on folder
     if (!draggedItem) return;
-    const { path: sourcePath, name: itemName, isFolder, repo: sourceRepo } = draggedItem;
+    const {
+      path: sourcePath,
+      name: itemName,
+      isFolder,
+      repo: sourceRepo,
+    } = draggedItem;
     setDraggedItem(null);
 
     const srcRepo = sourceRepo || activeRepo?.name || "default";
@@ -757,7 +797,11 @@ export const FileTree: React.FC<FileTreeProps> = ({
     const isCrossRepo = srcRepo.toLowerCase() !== dstRepo.toLowerCase();
 
     if (!isCrossRepo && sourcePath === targetFolderPath) return;
-    if (!isCrossRepo && isFolder && folderPathEqualOrChild(targetFolderPath, sourcePath)) {
+    if (
+      !isCrossRepo &&
+      isFolder &&
+      folderPathEqualOrChild(targetFolderPath, sourcePath)
+    ) {
       showToast(
         "Não é possível mover uma pasta para dentro de si mesma.",
         "warning",
@@ -768,7 +812,14 @@ export const FileTree: React.FC<FileTreeProps> = ({
     const targetPath = `${targetFolderPath}/${itemName}`;
     if (!isCrossRepo && sourcePath === targetPath) return;
 
-    await executeMove(sourcePath, targetPath, itemName, targetFolderPath, srcRepo, dstRepo);
+    await executeMove(
+      sourcePath,
+      targetPath,
+      itemName,
+      targetFolderPath,
+      srcRepo,
+      dstRepo,
+    );
   };
 
   const folderPathEqualOrChild = (target: string, source: string) => {
@@ -834,7 +885,12 @@ export const FileTree: React.FC<FileTreeProps> = ({
     // 2. Internal item move
     if (!draggedItem) return;
 
-    const { path: sourcePath, name: itemName, isFolder, repo: sourceRepo } = draggedItem;
+    const {
+      path: sourcePath,
+      name: itemName,
+      isFolder,
+      repo: sourceRepo,
+    } = draggedItem;
     setDraggedItem(null);
 
     const srcRepo = sourceRepo || activeRepo?.name || "default";
@@ -859,7 +915,14 @@ export const FileTree: React.FC<FileTreeProps> = ({
     const targetPath = parentDir ? `${parentDir}/${itemName}` : itemName;
     if (!isCrossRepo && sourcePath === targetPath) return;
 
-    await executeMove(sourcePath, targetPath, itemName, parentDir || "raiz", srcRepo, dstRepo);
+    await executeMove(
+      sourcePath,
+      targetPath,
+      itemName,
+      parentDir || "raiz",
+      srcRepo,
+      dstRepo,
+    );
   };
 
   const handleDragOverRoot = (e: React.DragEvent) => {
@@ -919,7 +982,13 @@ export const FileTree: React.FC<FileTreeProps> = ({
     const targetPath = itemName;
     if (sourcePath === targetPath) return;
 
-    await executeMove(sourcePath, targetPath, itemName, "raiz", draggedItem.repo);
+    await executeMove(
+      sourcePath,
+      targetPath,
+      itemName,
+      "raiz",
+      draggedItem.repo,
+    );
   };
 
   const handleDragOverRepo = (e: React.DragEvent, targetRepoName: string) => {
@@ -971,7 +1040,10 @@ export const FileTree: React.FC<FileTreeProps> = ({
     }
   };
 
-  const handleDropOnRepo = async (e: React.DragEvent, targetRepoName: string) => {
+  const handleDropOnRepo = async (
+    e: React.DragEvent,
+    targetRepoName: string,
+  ) => {
     e.preventDefault();
     e.stopPropagation();
     setDragOverTarget(null);
@@ -1008,11 +1080,21 @@ export const FileTree: React.FC<FileTreeProps> = ({
     const srcRepo = sourceRepo || activeRepo?.name || "default";
     const targetPath = itemName;
 
-    if (srcRepo.toLowerCase() === targetRepoName.toLowerCase() && !sourcePath.includes("/")) {
+    if (
+      srcRepo.toLowerCase() === targetRepoName.toLowerCase() &&
+      !sourcePath.includes("/")
+    ) {
       return;
     }
 
-    await executeMove(sourcePath, targetPath, itemName, "raiz", srcRepo, targetRepoName);
+    await executeMove(
+      sourcePath,
+      targetPath,
+      itemName,
+      "raiz",
+      srcRepo,
+      targetRepoName,
+    );
   };
 
   const handleDuplicateFile = async (
@@ -1032,7 +1114,10 @@ export const FileTree: React.FC<FileTreeProps> = ({
       }
     } catch (err: any) {
       console.error("[FileTree] Erro ao duplicar arquivo:", err);
-      showToast(err.message || "Erro inesperado ao duplicar arquivo.", "warning");
+      showToast(
+        err.message || "Erro inesperado ao duplicar arquivo.",
+        "warning",
+      );
     }
   };
 
@@ -1198,7 +1283,9 @@ export const FileTree: React.FC<FileTreeProps> = ({
 
         // Silent background refresh
         loadTree(activeRepo?.name).catch(() => {});
-        Promise.all([refreshPendingChanges(), refreshGitStatus()]).catch(() => {});
+        Promise.all([refreshPendingChanges(), refreshGitStatus()]).catch(
+          () => {},
+        );
       } else {
         alert(res.data?.error || "Erro ao criar item na árvore.");
       }
@@ -1267,7 +1354,9 @@ export const FileTree: React.FC<FileTreeProps> = ({
     setCollapsedRepos({});
     const uninitializedRepos = orgRepos.filter((r) => !treesByRepo[r.name]);
     if (uninitializedRepos.length > 0) {
-      Promise.allSettled(uninitializedRepos.map((r) => loadTree(r.name))).catch(() => {});
+      Promise.allSettled(uninitializedRepos.map((r) => loadTree(r.name))).catch(
+        () => {},
+      );
     }
     showToast("Todas as pastas e repositórios foram expandidos.", "info");
   };
@@ -1288,15 +1377,29 @@ export const FileTree: React.FC<FileTreeProps> = ({
   };
 
   // File Click Handler: Open any file in the workspace
-  const handleFileClick = async (path: string, _name: string, repoForNode?: string) => {
-    if (repoForNode && repoForNode.toLowerCase() !== activeRepo?.name.toLowerCase()) {
-      const targetRepoObj = repos.find((r) => r.name.toLowerCase() === repoForNode.toLowerCase()) || {
+  const handleFileClick = async (
+    path: string,
+    _name: string,
+    repoForNode?: string,
+  ) => {
+    if (
+      repoForNode &&
+      repoForNode.toLowerCase() !== activeRepo?.name.toLowerCase()
+    ) {
+      const targetRepoObj = repos.find(
+        (r) => r.name.toLowerCase() === repoForNode.toLowerCase(),
+      ) || {
         id: 0,
         name: repoForNode,
         full_name: repoForNode,
         is_local: true,
       };
-      navigate(`/repo/${encodeURIComponent(repoForNode)}/editor?file=${encodeURIComponent(path)}`);
+      const targetOwner = targetRepoObj.owner || (targetRepoObj.full_name ? targetRepoObj.full_name.split("/")[0] : "");
+      const isOrg = targetOwner && targetOwner !== "local" && !targetRepoObj.is_local && targetOwner.toLowerCase() !== (user?.login || "").toLowerCase();
+      const targetUrl = isOrg
+        ? `/org/${encodeURIComponent(targetOwner)}/repo/${encodeURIComponent(repoForNode)}/editor?file=${encodeURIComponent(path)}`
+        : `/repo/${encodeURIComponent(repoForNode)}/editor?file=${encodeURIComponent(path)}`;
+      navigate(targetUrl);
       await selectRepo(targetRepoObj, path);
     } else {
       onOpenFile(path);
@@ -1374,33 +1477,50 @@ export const FileTree: React.FC<FileTreeProps> = ({
     }
   };
 
-  const handleDeletePath = async (
+  const promptDeleteItem = (
     path: string,
+    name: string,
     isFolder: boolean,
+    repoName?: string,
     e?: React.MouseEvent,
   ) => {
     if (e) e.stopPropagation();
-    const itemTypeLabel = isFolder ? "a pasta" : "o arquivo";
-    if (
-      confirm(
-        `Tem certeza que deseja excluir ${itemTypeLabel} "${path}"? Esta alteração será registrada no workspace.`,
-      )
-    ) {
-      try {
-        const res = await API.deleteProjectFile(path, activeRepo?.name);
-        if (res.ok && res.data?.success) {
-          await loadTree();
-          await Promise.all([refreshPendingChanges(), refreshGitStatus()]);
+    setDeleteItemTarget({ path, name, isFolder, repoName });
+  };
+
+  const handleConfirmDeleteItem = async () => {
+    if (!deleteItemTarget) return;
+    setIsDeletingItem(true);
+    const { path, isFolder, repoName: targetRepo } = deleteItemTarget;
+    const repoToUse = targetRepo || activeRepo?.name;
+    try {
+      const res = await API.deleteProjectFile(path, repoToUse);
+      if (res.ok && res.data?.success) {
+        setDeleteItemTarget(null);
+        await loadTree(repoToUse);
+        if (repoToUse === activeRepo?.name) {
+          await Promise.allSettled([
+            refreshPendingChanges(),
+            refreshGitStatus(),
+          ]);
           if (activeFile === path || activeFile.startsWith(`${path}/`)) {
             onOpenFile("");
           }
-          showToast(`Item excluído com sucesso.`, "info");
-        } else {
-          alert("Erro ao excluir item.");
         }
-      } catch (e) {
-        alert("Erro ao conectar com o servidor para excluir.");
+        showToast(
+          `${isFolder ? "Pasta" : "Arquivo"} excluído com sucesso.`,
+          "info",
+        );
+      } else {
+        showToast(
+          res.data?.error || "Erro ao excluir item do repositório.",
+          "warning",
+        );
       }
+    } catch {
+      showToast("Erro ao conectar com o servidor para excluir.", "warning");
+    } finally {
+      setIsDeletingItem(false);
     }
   };
 
@@ -1444,18 +1564,75 @@ export const FileTree: React.FC<FileTreeProps> = ({
     return map;
   }, [pendingChanges]);
 
-  // Repositórios do Workspace
+  // Determina a organização em foco (URL :org, activeOrg ou owner do activeRepo)
+  const currentOrgLogin = useMemo(() => {
+    if (org && org.trim()) return org.toLowerCase().trim();
+    if (activeOrg?.login && activeOrg.login !== "local") return activeOrg.login.toLowerCase().trim();
+    if (activeRepo && !activeRepo.is_local) {
+      const owner = (activeRepo.owner || (activeRepo.full_name ? activeRepo.full_name.split("/")[0] : "")).toLowerCase().trim();
+      if (owner && owner !== "local" && owner !== (user?.login || "").toLowerCase()) {
+        return owner;
+      }
+    }
+    return "";
+  }, [org, activeOrg?.login, activeRepo, user?.login]);
+
+  // Repositórios do Workspace estritamente separados por Organização
   const orgRepos = useMemo(() => {
     if (!repos || repos.length === 0) {
       if (activeRepo) return [activeRepo];
       return [];
     }
+
+    // Caso 1: Navegando em uma organização específica (ex: enursy)
+    if (currentOrgLogin) {
+      const filtered = repos.filter((r) => {
+        const owner = (
+          r.owner || (r.full_name ? r.full_name.split("/")[0] : "")
+        ).toLowerCase().trim();
+        return owner === currentOrgLogin;
+      });
+
+      // Garante que o activeRepo esteja incluso se pertencer a esta mesma organização
+      if (activeRepo) {
+        const activeOwner = (
+          activeRepo.owner || (activeRepo.full_name ? activeRepo.full_name.split("/")[0] : "")
+        ).toLowerCase().trim();
+        if (
+          activeOwner === currentOrgLogin &&
+          !filtered.some((r) => r.name.toLowerCase() === activeRepo.name.toLowerCase())
+        ) {
+          filtered.push(activeRepo);
+        }
+      }
+
+      return filtered;
+    }
+
+    // Caso 2: Navegando em escopo local ou sem organização
+    const localOrPersonalRepos = repos.filter((r) => {
+      const owner = (
+        r.owner || (r.full_name ? r.full_name.split("/")[0] : "")
+      ).toLowerCase().trim();
+      return r.is_local || owner === "local" || owner === (user?.login || "").toLowerCase() || !owner;
+    });
+
+    if (localOrPersonalRepos.length > 0) {
+      return localOrPersonalRepos;
+    }
+
+    if (activeRepo) {
+      return [activeRepo];
+    }
+
     return repos;
-  }, [repos, activeRepo]);
+  }, [repos, activeRepo, currentOrgLogin, user?.login]);
 
   // Build display nodes for a given repository (or active repo)
   const getDisplayNodesForRepo = (rName: string) => {
-    const nodes = treesByRepo[rName] || (rName.toLowerCase() === activeRepo?.name.toLowerCase() ? tree : []);
+    const nodes =
+      treesByRepo[rName] ||
+      (rName.toLowerCase() === activeRepo?.name.toLowerCase() ? tree : []);
     if (!nodes || nodes.length === 0) return [];
     if (!searchTerm.trim()) return nodes;
 
@@ -1466,7 +1643,9 @@ export const FileTree: React.FC<FileTreeProps> = ({
         (node.title && node.title.toLowerCase().includes(q)),
       );
       const isDir =
-        node.type === "dir" || node.type === "directory" || (node as any).is_directory;
+        node.type === "dir" ||
+        node.type === "directory" ||
+        (node as any).is_directory;
 
       if (!isDir) {
         return nameMatch ? node : null;
@@ -1739,7 +1918,9 @@ export const FileTree: React.FC<FileTreeProps> = ({
                 onClick={(e) => {
                   e.stopPropagation();
                   setTargetUploadFolder(node.path);
-                  setTargetUploadRepo(repoNameForNode || activeRepo?.name || "");
+                  setTargetUploadRepo(
+                    repoNameForNode || activeRepo?.name || "",
+                  );
                   fileInputRef.current?.click();
                 }}
               >
@@ -1764,7 +1945,15 @@ export const FileTree: React.FC<FileTreeProps> = ({
               <button
                 className="btn-tree-action delete"
                 title="Excluir pasta"
-                onClick={(e) => handleDeletePath(node.path, true, e)}
+                onClick={(e) =>
+                  promptDeleteItem(
+                    node.path,
+                    node.name,
+                    true,
+                    repoNameForNode,
+                    e,
+                  )
+                }
               >
                 <Trash2 size={12} />
               </button>
@@ -1777,7 +1966,9 @@ export const FileTree: React.FC<FileTreeProps> = ({
               {renderInlineCreateInput(node.path)}
 
               {node.children && node.children.length > 0 ? (
-                node.children.map((child) => renderTreeNode(child, repoNameForNode))
+                node.children.map((child) =>
+                  renderTreeNode(child, repoNameForNode),
+                )
               ) : inlineCreating?.parentPath !== node.path ? (
                 <div
                   style={{
@@ -1819,8 +2010,10 @@ export const FileTree: React.FC<FileTreeProps> = ({
     const badgeClass = node.badge ? node.badge.toLowerCase() : "t1";
 
     const cleanNodePath = node.path ? node.path.replace(/^\/+/, "") : "";
-    const gitFile = gitStatusMap.get(cleanNodePath) || gitStatusMap.get(node.path);
-    const pendingChange = pendingChangesMap.get(cleanNodePath) || pendingChangesMap.get(node.path);
+    const gitFile =
+      gitStatusMap.get(cleanNodePath) || gitStatusMap.get(node.path);
+    const pendingChange =
+      pendingChangesMap.get(cleanNodePath) || pendingChangesMap.get(node.path);
     const gitStatusCode = gitFile
       ? gitFile.status === "??"
         ? "U"
@@ -1832,7 +2025,9 @@ export const FileTree: React.FC<FileTreeProps> = ({
         : null;
 
     const deptObj = departments.find(
-      (d) => d.id === (node as any).department || d.folder.toLowerCase() === (node as any).department?.toLowerCase()
+      (d) =>
+        d.id === (node as any).department ||
+        d.folder.toLowerCase() === (node as any).department?.toLowerCase(),
     );
     const isAllowed = canAccessDoc(node as any);
     const isLocked = !isAllowed;
@@ -1990,7 +2185,9 @@ export const FileTree: React.FC<FileTreeProps> = ({
               <button
                 className="btn-tree-action"
                 title={`Duplicar "${node.name}"`}
-                onClick={(e) => handleDuplicateFile(node.path, repoNameForNode, e)}
+                onClick={(e) =>
+                  handleDuplicateFile(node.path, repoNameForNode, e)
+                }
               >
                 <Copy size={11} />
               </button>
@@ -2006,7 +2203,15 @@ export const FileTree: React.FC<FileTreeProps> = ({
               <button
                 className="btn-tree-action delete"
                 title="Excluir"
-                onClick={(e) => handleDeletePath(node.path, false, e)}
+                onClick={(e) =>
+                  promptDeleteItem(
+                    node.path,
+                    node.name,
+                    false,
+                    repoNameForNode,
+                    e,
+                  )
+                }
               >
                 <Trash2 size={11} />
               </button>
@@ -2093,7 +2298,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
                   }
                 }}
               >
-                <FilePlus size={14} color="#2563eb" />
+                <FolderGit2 size={14} color="#2563eb" />
               </button>
 
               {/* Novo Arquivo */}
@@ -2159,7 +2364,9 @@ export const FileTree: React.FC<FileTreeProps> = ({
                       ? `Abrir repositório "${activeRepo.name}" no gerenciador de arquivos do PC`
                       : "Abrir pasta do projeto no gerenciador de arquivos do PC"
                 }
-                onClick={(e) => handleOpenInOS(selectedFolder || "", e, activeRepo?.name)}
+                onClick={(e) =>
+                  handleOpenInOS(selectedFolder || "", e, activeRepo?.name)
+                }
               >
                 <Laptop size={13} />
               </button>
@@ -2234,7 +2441,9 @@ export const FileTree: React.FC<FileTreeProps> = ({
             id="tree-nodes-container"
             className={`agent-tree-root ${isDragOverRoot ? "drag-over-root" : ""}`}
           >
-            {isTreeLoading && displayNodes.length === 0 && orgRepos.length === 0 ? (
+            {isTreeLoading &&
+            displayNodes.length === 0 &&
+            orgRepos.length === 0 ? (
               <div
                 className="tree-skeleton-container"
                 aria-label="Carregando estrutura de arquivos"
@@ -2330,17 +2539,24 @@ export const FileTree: React.FC<FileTreeProps> = ({
                 {/* Árvore de Documentos Multi-Repo Unificada (Nível 0 = Repositórios) */}
                 <div className="tree-repos-container">
                   {orgRepos.map((r) => {
-                    const isActive = r.name.toLowerCase() === activeRepo?.name.toLowerCase();
+                    const isActive =
+                      r.name.toLowerCase() === activeRepo?.name.toLowerCase();
                     const isCollapsed = collapsedRepos[r.name] ?? !isActive;
                     const repoDisplayNodes = getDisplayNodesForRepo(r.name);
                     const isRepoLoading = Boolean(
                       loadingRepos[r.name] ||
-                      (isActive && isTreeLoading && repoDisplayNodes.length === 0)
+                      (isActive &&
+                        isTreeLoading &&
+                        repoDisplayNodes.length === 0),
                     );
                     const isLocked =
                       Boolean(r.is_locked) ||
-                      (r.permissions && !r.permissions.pull && !r.permissions.admin);
-                    const canAdminRepo = Boolean(r.permissions?.admin || r.is_owner || canCreateRootRepo);
+                      (r.permissions &&
+                        !r.permissions.pull &&
+                        !r.permissions.admin);
+                    const canAdminRepo = Boolean(
+                      r.permissions?.admin || r.is_owner || canCreateRootRepo,
+                    );
 
                     if (isLocked) {
                       return (
@@ -2352,8 +2568,15 @@ export const FileTree: React.FC<FileTreeProps> = ({
                           title={`Repositório restrito: ${r.name}. Clique para detalhes.`}
                         >
                           <div className="tree-repo-left">
-                            <Lock size={13} color="#ef4444" style={{ flexShrink: 0 }} />
-                            <span className="tree-repo-name" style={{ color: "var(--text-heading)" }}>
+                            <Lock
+                              size={13}
+                              color="#ef4444"
+                              style={{ flexShrink: 0 }}
+                            />
+                            <span
+                              className="tree-repo-name"
+                              style={{ color: "var(--text-heading)" }}
+                            >
                               {r.name}
                             </span>
                           </div>
@@ -2381,30 +2604,26 @@ export const FileTree: React.FC<FileTreeProps> = ({
                             <span
                               className="tree-caret"
                               style={{
-                                transform: !isCollapsed ? "rotate(90deg)" : "none",
+                                transform: !isCollapsed
+                                  ? "rotate(90deg)"
+                                  : "none",
                               }}
                               onClick={(e) => toggleRepoCollapse(r, e)}
                             >
                               <ChevronRight size={12} />
                             </span>
 
-                            {!isCollapsed ? (
-                              <FolderOpen
-                                size={14}
-                                color={isActive ? "var(--primary, #2563eb)" : "#64748b"}
-                                style={{ flexShrink: 0 }}
-                              />
-                            ) : (
-                              <Folder
-                                size={14}
-                                color={isActive ? "var(--primary, #2563eb)" : "#64748b"}
-                                style={{ flexShrink: 0 }}
-                              />
-                            )}
+                            <FolderGit2
+                              size={14}
+                              color={
+                                isActive
+                                  ? "var(--primary, #2563eb)"
+                                  : "#64748b"
+                              }
+                              style={{ flexShrink: 0 }}
+                            />
 
-                            <span className="tree-repo-name">
-                              {r.name}
-                            </span>
+                            <span className="tree-repo-name">{r.name}</span>
 
                             {dragOverTarget === `__repo__:${r.name}` && (
                               <span
@@ -2459,11 +2678,17 @@ export const FileTree: React.FC<FileTreeProps> = ({
                                 if (isActive) {
                                   refreshGitStatus();
                                 }
-                                setLoadingRepos((prev) => ({ ...prev, [r.name]: true }));
+                                setLoadingRepos((prev) => ({
+                                  ...prev,
+                                  [r.name]: true,
+                                }));
                                 try {
                                   await loadTree(r.name);
                                 } finally {
-                                  setLoadingRepos((prev) => ({ ...prev, [r.name]: false }));
+                                  setLoadingRepos((prev) => ({
+                                    ...prev,
+                                    [r.name]: false,
+                                  }));
                                 }
                               }}
                             >
@@ -2553,7 +2778,9 @@ export const FileTree: React.FC<FileTreeProps> = ({
                           >
                             {isActive && renderInlineCreateInput("")}
                             {repoDisplayNodes.length > 0 ? (
-                              repoDisplayNodes.map((node) => renderTreeNode(node, r.name))
+                              repoDisplayNodes.map((node) =>
+                                renderTreeNode(node, r.name),
+                              )
                             ) : isRepoLoading ? (
                               <div
                                 className="tree-repo-empty-hint"
@@ -2583,16 +2810,34 @@ export const FileTree: React.FC<FileTreeProps> = ({
                                   gap: "8px",
                                   padding: "16px 12px",
                                   textAlign: "center",
-                                  border: dragOverTarget === `__repo__:${r.name}` ? "1.5px dashed var(--primary, #2563eb)" : undefined,
-                                  backgroundColor: dragOverTarget === `__repo__:${r.name}` ? "rgba(37, 99, 235, 0.05)" : undefined,
+                                  border:
+                                    dragOverTarget === `__repo__:${r.name}`
+                                      ? "1.5px dashed var(--primary, #2563eb)"
+                                      : undefined,
+                                  backgroundColor:
+                                    dragOverTarget === `__repo__:${r.name}`
+                                      ? "rgba(37, 99, 235, 0.05)"
+                                      : undefined,
                                   borderRadius: "6px",
                                   transition: "all 0.15s ease",
                                 }}
                               >
-                                <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>
+                                <span
+                                  style={{
+                                    fontSize: "12px",
+                                    color: "var(--text-muted)",
+                                  }}
+                                >
                                   Nenhum arquivo encontrado neste repositório.
                                 </span>
-                                <div style={{ display: "flex", gap: "6px", width: "100%", maxWidth: "220px" }}>
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    gap: "6px",
+                                    width: "100%",
+                                    maxWidth: "220px",
+                                  }}
+                                >
                                   <button
                                     className="btn btn-primary btn-sm"
                                     style={{
@@ -2693,7 +2938,11 @@ export const FileTree: React.FC<FileTreeProps> = ({
           onChange={async (e) => {
             if (e.target.files && e.target.files.length > 0) {
               const scanned = filesToScannedList(e.target.files);
-              await handleImportFiles(scanned, targetUploadFolder, targetUploadRepo);
+              await handleImportFiles(
+                scanned,
+                targetUploadFolder,
+                targetUploadRepo,
+              );
               e.target.value = "";
             }
           }}
@@ -2709,7 +2958,11 @@ export const FileTree: React.FC<FileTreeProps> = ({
           onChange={async (e) => {
             if (e.target.files && e.target.files.length > 0) {
               const scanned = filesToScannedList(e.target.files);
-              await handleImportFiles(scanned, targetUploadFolder, targetUploadRepo);
+              await handleImportFiles(
+                scanned,
+                targetUploadFolder,
+                targetUploadRepo,
+              );
               e.target.value = "";
             }
           }}
@@ -2760,12 +3013,18 @@ export const FileTree: React.FC<FileTreeProps> = ({
         onClose={() => setDeleteRepoTarget(null)}
         repo={deleteRepoTarget}
         onDeleted={async () => {
-          await loadRepos();
           const target = deleteRepoTarget;
           setDeleteRepoTarget(null);
+          await loadRepos();
           showToast("Repositório removido.", "info");
-          if (target && activeRepo && target.name.toLowerCase() === activeRepo.name.toLowerCase()) {
-            const remaining = repos.filter((x) => x.name.toLowerCase() !== target.name.toLowerCase());
+          if (
+            target &&
+            activeRepo &&
+            target.name.toLowerCase() === activeRepo.name.toLowerCase()
+          ) {
+            const remaining = repos.filter(
+              (x) => x.name.toLowerCase() !== target.name.toLowerCase(),
+            );
             if (remaining.length > 0) {
               navigate(`/repo/${encodeURIComponent(remaining[0].name)}/editor`);
               await selectRepo(remaining[0]);
@@ -2775,6 +3034,83 @@ export const FileTree: React.FC<FileTreeProps> = ({
           }
         }}
       />
+
+      {/* Modal de Confirmação de Exclusão de Arquivo / Pasta */}
+      <Modal
+        isOpen={Boolean(deleteItemTarget)}
+        onClose={() => !isDeletingItem && setDeleteItemTarget(null)}
+        title={deleteItemTarget?.isFolder ? "Excluir Pasta" : "Excluir Arquivo"}
+        size="sm"
+      >
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "flex-start",
+              gap: 12,
+              padding: "12px 14px",
+              borderRadius: "var(--radius-md, 8px)",
+              backgroundColor: "rgba(239, 68, 68, 0.08)",
+              border: "1px solid rgba(239, 68, 68, 0.2)",
+            }}
+          >
+            <AlertTriangle
+              size={20}
+              style={{ color: "#ef4444", flexShrink: 0, marginTop: 2 }}
+            />
+            <div
+              style={{
+                fontSize: "13px",
+                lineHeight: "1.5",
+                color: "var(--text-primary)",
+              }}
+            >
+              Tem certeza que deseja excluir{" "}
+              {deleteItemTarget?.isFolder ? "a pasta" : "o arquivo"}{" "}
+              <strong>"{deleteItemTarget?.name}"</strong>?
+              {deleteItemTarget?.isFolder && (
+                <div
+                  style={{
+                    fontSize: "11.5px",
+                    color: "var(--text-muted)",
+                    marginTop: 4,
+                  }}
+                >
+                  Todos os arquivos e subpastas internos também serão excluídos.
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "flex-end",
+              gap: 10,
+              marginTop: 6,
+            }}
+          >
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setDeleteItemTarget(null)}
+              disabled={isDeletingItem}
+            >
+              Cancelar
+            </Button>
+            <Button
+              id="btn-confirm-delete-tree-item"
+              variant="danger"
+              size="sm"
+              isLoading={isDeletingItem}
+              icon={<Trash2 size={14} />}
+              onClick={handleConfirmDeleteItem}
+            >
+              Excluir
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Modal de Governança & Acessos do Repositório */}
       {governanceRepoTarget && (

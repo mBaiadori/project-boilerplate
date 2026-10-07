@@ -1,34 +1,44 @@
-import { FileText, FolderTree, Plus, Lock, FolderGit2, Laptop } from "lucide-react";
-import React, { useCallback, useEffect, useRef, useState, useMemo } from "react";
-import { useSearchParams, useNavigate } from "react-router-dom";
-import { useWorkspace } from "../../context/WorkspaceContext";
-import { useSecurity } from "../../context/SecurityContext";
+import { FileText, FolderGit2, FolderTree, Lock, Plus } from "lucide-react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import { useSecurity } from "../../context/SecurityContext";
+import { useWorkspace } from "../../context/WorkspaceContext";
 import { API } from "../../services/api";
 import {
   parseFrontmatter,
   serializeFrontmatter,
 } from "../../services/frontmatter";
-import type { DocumentMetadataItem, GitCommitInfo } from "../../types";
-import { InsertLinkModal } from "../modals/InsertLinkModal";
-import { AddDictionaryTermModal } from "../modals/AddDictionaryTermModal";
-import { LinkSynonymModal } from "../modals/LinkSynonymModal";
+import type {
+  DocumentMetadataItem,
+  GitCommitInfo,
+  SupportedLanguage,
+  SyncToMainPreview,
+} from "../../types";
 import {
   DictionaryPopover,
   type DictionaryPopoverData,
 } from "../dictionary/DictionaryPopover";
+import { AddDictionaryTermModal } from "../modals/AddDictionaryTermModal";
+import { InsertLinkModal } from "../modals/InsertLinkModal";
+import { LinkSynonymModal } from "../modals/LinkSynonymModal";
+import { MergeConflictResolutionModal } from "../modals/MergeConflictResolutionModal";
+import { SyncTranslationModal } from "../modals/SyncTranslationModal";
 import { DocConnectivityBar } from "./DocConnectivityBar";
 import { DocumentHistoryDrawer } from "./DocumentHistoryDrawer";
+import { LanguageSelectorDropdown } from "./LanguageSelectorDropdown";
 import {
   NotionEditorEngine,
   type FragmentStatusInfo,
 } from "./notion-editor-engine";
-import { VisualMarkdownDiff } from "./VisualMarkdownDiff";
-import { LanguageSelectorDropdown } from "./LanguageSelectorDropdown";
 import { TranslationBanner } from "./TranslationBanner";
-import { SyncTranslationModal } from "../modals/SyncTranslationModal";
-import { MergeConflictResolutionModal } from "../modals/MergeConflictResolutionModal";
-import type { SupportedLanguage, SyncToMainPreview } from "../../types";
+import { VisualMarkdownDiff } from "./VisualMarkdownDiff";
 
 interface NotionEditorProps {
   content: string;
@@ -88,7 +98,6 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
 
   // Git Mode, Visual Diff & Document History Drawer State
   const [isGitMode, setIsGitMode] = useState(false);
-  const [openedInOS, setOpenedInOS] = useState(false);
   const [isHistoryDrawerOpen, setIsHistoryDrawerOpen] = useState(false);
   const [selectedCommit, setSelectedCommit] = useState<GitCommitInfo | null>(
     null,
@@ -112,9 +121,13 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
   // Translation & SSOT State
   const [activeLanguage, setActiveLanguage] = useState<string>("pt-BR");
   const [defaultLanguage, setDefaultLanguage] = useState<string>("pt-BR");
-  const [supportedLanguages, setSupportedLanguages] = useState<SupportedLanguage[]>([]);
+  const [supportedLanguages, setSupportedLanguages] = useState<
+    SupportedLanguage[]
+  >([]);
   const [isTranslationOutdated, setIsTranslationOutdated] = useState(false);
-  const [syncPreview, setSyncPreview] = useState<SyncToMainPreview | null>(null);
+  const [syncPreview, setSyncPreview] = useState<SyncToMainPreview | null>(
+    null,
+  );
   const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
 
   // Collaborative PR Editing Mode State
@@ -159,7 +172,10 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
         }
       })
       .catch((err) => {
-        console.warn("[NotionEditor] Erro ao carregar arquivo da branch do PR:", err);
+        console.warn(
+          "[NotionEditor] Erro ao carregar arquivo da branch do PR:",
+          err,
+        );
       });
     return () => {
       isCancelled = true;
@@ -170,7 +186,9 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
   const { departments, canAccessDoc } = useSecurity();
 
   const activeDeptObj = departments.find(
-    (d) => d.id === fileMetadata?.department || d.folder.toLowerCase() === fileMetadata?.department?.toLowerCase()
+    (d) =>
+      d.id === fileMetadata?.department ||
+      d.folder.toLowerCase() === fileMetadata?.department?.toLowerCase(),
   );
 
   const isAllowedByDept = canAccessDoc(fileMetadata || {});
@@ -632,7 +650,8 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
       if (onReload) onReload();
     } else {
       setEditorToast({
-        text: (res.data as any)?.error || "Erro ao atualizar documento oficial.",
+        text:
+          (res.data as any)?.error || "Erro ao atualizar documento oficial.",
         type: "warning",
       });
       setTimeout(() => setEditorToast(null), 3000);
@@ -764,7 +783,15 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
       });
       setTimeout(() => setEditorToast(null), 2500);
     }
-  }, [filePath, saveCurrentFile, onCustomSave, prId, prHeadSha, user?.login, activeRepo?.name]);
+  }, [
+    filePath,
+    saveCurrentFile,
+    onCustomSave,
+    prId,
+    prHeadSha,
+    user?.login,
+    activeRepo?.name,
+  ]);
 
   const handleSaveRef = useRef(handleSave);
   handleSaveRef.current = handleSave;
@@ -941,7 +968,9 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
 
       const normEngine = (currentEngineMd || "").replace(/\r\n/g, "\n").trim();
       const normTarget = (targetText || "").replace(/\r\n/g, "\n").trim();
-      const normLastEmitted = (lastEmittedMarkdownRef.current || "").replace(/\r\n/g, "\n").trim();
+      const normLastEmitted = (lastEmittedMarkdownRef.current || "")
+        .replace(/\r\n/g, "\n")
+        .trim();
 
       // Só recarrega o DOM se a mudança for externa real e diferente do que foi digitado
       if (normEngine !== normTarget && normLastEmitted !== normTarget) {
@@ -992,17 +1021,6 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
     if (filePath) {
       navigator.clipboard.writeText(filePath);
     }
-  };
-
-  const handleOpenInOS = async () => {
-    if (!filePath) return;
-    try {
-      const res = await API.openInOS(filePath, activeRepo?.name);
-      if (res.ok) {
-        setOpenedInOS(true);
-        setTimeout(() => setOpenedInOS(false), 2000);
-      }
-    } catch {}
   };
 
   const handleRevealInTree = useCallback(() => {
@@ -1148,33 +1166,42 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
         {/* 1. Document Header & Toolbar */}
         <div className="editor-top-toolbar">
           <div className="doc-meta-left">
-            <div className="doc-breadcrumbs-container" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div
+              className="doc-breadcrumbs-container"
+              style={{ display: "flex", alignItems: "center", gap: "6px" }}
+            >
               {/* Repo Badge */}
               <div
                 className="doc-repo-badge"
-                title={`Repositório: ${activeRepo?.name || 'local'}`}
+                title={`Repositório: ${activeRepo?.name || "local"}`}
                 style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '5px',
-                  padding: '3px 8px',
-                  borderRadius: '6px',
-                  background: 'var(--color-primary-container, #eff6ff)',
-                  border: '1px solid var(--color-primary-fixed, #dbeafe)',
-                  color: 'var(--color-primary, #1d4ed8)',
-                  fontSize: '11.5px',
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  padding: "3px 8px",
+                  borderRadius: "6px",
+                  background: "var(--color-primary-container, #eff6ff)",
+                  border: "1px solid var(--color-primary-fixed, #dbeafe)",
+                  color: "var(--color-primary, #1d4ed8)",
+                  fontSize: "11.5px",
                   fontWeight: 600,
                   flexShrink: 0,
                 }}
               >
-                <FolderGit2 size={13} style={{ color: 'var(--color-primary, #2563eb)' }} />
-                <span>{activeRepo?.name || 'local'}</span>
+                <FolderGit2
+                  size={13}
+                  style={{ color: "var(--color-primary, #2563eb)" }}
+                />
+                <span>{activeRepo?.name || "local"}</span>
               </div>
 
-              <span style={{ color: '#94a3b8', fontSize: '12px' }}>/</span>
+              <span style={{ color: "#94a3b8", fontSize: "12px" }}>/</span>
 
               {/* Breadcrumb Path Input / Display */}
-              <div className="doc-breadcrumbs" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <div
+                className="doc-breadcrumbs"
+                style={{ display: "flex", alignItems: "center", gap: "4px" }}
+              >
                 <input
                   type="text"
                   id="doc-path-input"
@@ -1183,9 +1210,9 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
                   readOnly
                   placeholder="Selecione ou crie um documento..."
                   spellCheck="false"
-                  title={`Caminho: ${activeRepo?.name || 'local'}/${filePath || ''}`}
+                  title={`Caminho: ${activeRepo?.name || "local"}/${filePath || ""}`}
                 />
-                
+
                 {/* Action: Copiar Caminho */}
                 <button
                   id="btn-copy-doc-path"
@@ -1194,11 +1221,19 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
                   title="Copiar caminho do arquivo (Clique para caminho simples, segure Alt para incluir repositório)"
                   onClick={(e) => {
                     if (e.altKey && activeRepo?.name && filePath) {
-                      navigator.clipboard.writeText(`${activeRepo.name}:${filePath}`);
-                      setEditorToast({ text: `Caminho completo copiado: ${activeRepo.name}:${filePath}`, type: "info" });
+                      navigator.clipboard.writeText(
+                        `${activeRepo.name}:${filePath}`,
+                      );
+                      setEditorToast({
+                        text: `Caminho completo copiado: ${activeRepo.name}:${filePath}`,
+                        type: "info",
+                      });
                     } else {
                       handleCopyPath();
-                      setEditorToast({ text: "Caminho copiado para a área de transferência!", type: "info" });
+                      setEditorToast({
+                        text: "Caminho copiado para a área de transferência!",
+                        type: "info",
+                      });
                     }
                     setTimeout(() => setEditorToast(null), 2500);
                   }}
@@ -1214,7 +1249,14 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
                     strokeLinecap="round"
                     strokeLinejoin="round"
                   >
-                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                    <rect
+                      x="9"
+                      y="9"
+                      width="13"
+                      height="13"
+                      rx="2"
+                      ry="2"
+                    ></rect>
                     <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
                   </svg>
                 </button>
@@ -1229,18 +1271,6 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
                   disabled={!filePath}
                 >
                   <FolderTree size={13} />
-                </button>
-
-                {/* Action: Abrir no PC */}
-                <button
-                  id="btn-open-in-pc"
-                  className="btn-icon-subtle"
-                  type="button"
-                  title="Abrir no gerenciador de arquivos do PC"
-                  onClick={handleOpenInOS}
-                  disabled={!filePath}
-                >
-                  <Laptop size={13} style={{ color: openedInOS ? '#16a34a' : undefined }} />
                 </button>
               </div>
             </div>
@@ -1642,19 +1672,20 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
         )}
 
         {/* Translation Mode Banner */}
-        {!isTemplateMode && activeLanguage.toLowerCase() !== defaultLanguage.toLowerCase() && (
-          <TranslationBanner
-            currentLanguage={activeLanguage}
-            defaultLanguage={defaultLanguage}
-            supportedLanguages={supportedLanguages}
-            isOutdated={isTranslationOutdated}
-            onSyncToMain={handleSyncToMain}
-            onBackToMain={() => handleSelectLanguage(defaultLanguage)}
-            onUpdateFromMain={handleUpdateFromMain}
-            isSyncing={isSyncingToMain}
-            isUpdating={isUpdatingFromMain}
-          />
-        )}
+        {!isTemplateMode &&
+          activeLanguage.toLowerCase() !== defaultLanguage.toLowerCase() && (
+            <TranslationBanner
+              currentLanguage={activeLanguage}
+              defaultLanguage={defaultLanguage}
+              supportedLanguages={supportedLanguages}
+              isOutdated={isTranslationOutdated}
+              onSyncToMain={handleSyncToMain}
+              onBackToMain={() => handleSelectLanguage(defaultLanguage)}
+              onUpdateFromMain={handleUpdateFromMain}
+              isSyncing={isSyncingToMain}
+              isUpdating={isUpdatingFromMain}
+            />
+          )}
 
         {/* Merge Conflict Banner */}
         {hasMergeConflict && (
@@ -1672,13 +1703,21 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
             }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-              <span className="material-symbols-outlined" style={{ color: "#eab308", fontSize: "22px" }}>
+              <span
+                className="material-symbols-outlined"
+                style={{ color: "#eab308", fontSize: "22px" }}
+              >
                 merge_type
               </span>
               <div>
-                <div style={{ fontWeight: 600, fontSize: "13px" }}>Conflito de Merge Detectado</div>
-                <div style={{ fontSize: "12px", color: "var(--color-outline)" }}>
-                  Este documento possui alterações conflitantes entre sua versão local e o repositório Git.
+                <div style={{ fontWeight: 600, fontSize: "13px" }}>
+                  Conflito de Merge Detectado
+                </div>
+                <div
+                  style={{ fontSize: "12px", color: "var(--color-outline)" }}
+                >
+                  Este documento possui alterações conflitantes entre sua versão
+                  local e o repositório Git.
                 </div>
               </div>
             </div>
@@ -1698,7 +1737,12 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
                 gap: "6px",
               }}
             >
-              <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>splitscreen</span>
+              <span
+                className="material-symbols-outlined"
+                style={{ fontSize: "16px" }}
+              >
+                splitscreen
+              </span>
               Resolver Conflito Visualmente
             </button>
           </div>
@@ -1820,7 +1864,16 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
               </div>
 
               <div>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", marginBottom: "12px", flexWrap: "wrap" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "8px",
+                    marginBottom: "12px",
+                    flexWrap: "wrap",
+                  }}
+                >
                   {activeDeptObj && (
                     <div
                       style={{
@@ -1836,7 +1889,10 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
                         fontWeight: 700,
                       }}
                     >
-                      <span className="material-symbols-outlined" style={{ fontSize: "15px" }}>
+                      <span
+                        className="material-symbols-outlined"
+                        style={{ fontSize: "15px" }}
+                      >
                         {activeDeptObj.icon || "folder"}
                       </span>
                       Departamento: {activeDeptObj.name}
@@ -1864,9 +1920,12 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
                 >
                   Este documento pertence à pasta restrita{" "}
                   <strong style={{ color: activeDeptObj?.color || "#6366f1" }}>
-                    {activeDeptObj?.name || fileMetadata?.department || "Restrita"}
+                    {activeDeptObj?.name ||
+                      fileMetadata?.department ||
+                      "Restrita"}
                   </strong>{" "}
-                  e seu usuário não possui autorização de leitura para este departamento ou rota no projeto.
+                  e seu usuário não possui autorização de leitura para este
+                  departamento ou rota no projeto.
                 </p>
 
                 <div
@@ -1882,14 +1941,38 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
                     lineHeight: "1.5",
                   }}
                 >
-                  <div style={{ display: "flex", alignItems: "center", gap: "6px", fontWeight: 700, color: "#6366f1", marginBottom: "4px" }}>
-                    <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>lock</span>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      fontWeight: 700,
+                      color: "#6366f1",
+                      marginBottom: "4px",
+                    }}
+                  >
+                    <span
+                      className="material-symbols-outlined"
+                      style={{ fontSize: "16px" }}
+                    >
+                      lock
+                    </span>
                     Como obter acesso a este documento:
                   </div>
                   <div>
-                    1. Solicite permissão para o departamento <strong>{activeDeptObj?.name || fileMetadata?.department}</strong> ao Administrador do repositório.<br />
-                    2. O Administrador pode liberar seu acesso no menu <strong>Governança & Equipe &rarr; Departamentos & Pastas</strong>.<br />
-                    3. As permissões são aplicadas automaticamente com base no seu perfil.
+                    1. Solicite permissão para o departamento{" "}
+                    <strong>
+                      {activeDeptObj?.name || fileMetadata?.department}
+                    </strong>{" "}
+                    ao Administrador do repositório.
+                    <br />
+                    2. O Administrador pode liberar seu acesso no menu{" "}
+                    <strong>
+                      Governança & Equipe &rarr; Departamentos & Pastas
+                    </strong>
+                    .<br />
+                    3. As permissões são aplicadas automaticamente com base no
+                    seu perfil.
                   </div>
                 </div>
               </div>
@@ -1937,7 +2020,10 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
                         rows={1}
                         placeholder="Sem título..."
                         value={titleValue}
-                        disabled={activeLanguage.toLowerCase() !== defaultLanguage.toLowerCase()}
+                        disabled={
+                          activeLanguage.toLowerCase() !==
+                          defaultLanguage.toLowerCase()
+                        }
                         onChange={(e) => {
                           handleTitleChange(e.target.value);
                           e.target.style.height = "auto";
@@ -1956,13 +2042,22 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
                           }
                         }}
                         title={
-                          activeLanguage.toLowerCase() !== defaultLanguage.toLowerCase()
+                          activeLanguage.toLowerCase() !==
+                          defaultLanguage.toLowerCase()
                             ? `Título Oficial (${defaultLanguage.toUpperCase()}) - Metadados são editados no Documento Oficial`
                             : "Título principal do documento (.docs.metadata.json)"
                         }
                       />
-                      {activeLanguage.toLowerCase() !== defaultLanguage.toLowerCase() && (
-                        <div style={{ display: "flex", alignItems: "center", gap: "6px", marginLeft: "12px" }}>
+                      {activeLanguage.toLowerCase() !==
+                        defaultLanguage.toLowerCase() && (
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "6px",
+                            marginLeft: "12px",
+                          }}
+                        >
                           <span
                             style={{
                               fontSize: "11px",

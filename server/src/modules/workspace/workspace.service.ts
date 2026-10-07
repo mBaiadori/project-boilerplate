@@ -776,7 +776,7 @@ export class WorkspaceService {
     recordChange(repoName, copyRelPath, "ADDED", "", content);
 
     try {
-      const existingMeta = docsMetadataService.getDocMetadataItem(repoName, cleanPath);
+      const existingMeta = docsMetadataService.getDocMetadata(repoName, cleanPath);
       const newTitle = (existingMeta?.title || baseName) + " (Cópia)";
       docsMetadataService.updateDocMetadataItem(repoName, copyRelPath, {
         ...(existingMeta || {}),

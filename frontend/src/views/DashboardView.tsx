@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { TopHeader } from '../components/layout/TopHeader';
 import { SidebarNav, type SubViewType } from '../components/layout/SidebarNav';
 import { AICopilotPanel } from '../components/copilot/AICopilotPanel';
@@ -35,7 +35,7 @@ const DEFAULT_AI_WIDTH = 360;
 const VALID_SUBVIEWS: SubViewType[] = ['editor', 'edits', 'versions', 'dictionary', 'wiki', 'templates', 'skills', 'aicenter', 'prs', 'governance', 'settings'];
 
 export const DashboardView: React.FC<DashboardViewProps> = ({ onBackToRepos }) => {
-  const { repoName, subview } = useParams<{ repoName: string; subview?: string }>();
+  const { org, repoName, subview } = useParams<{ org?: string; repoName: string; subview?: string }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
@@ -49,17 +49,38 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onBackToRepos }) =
   const [isScaffoldModalOpen, setIsScaffoldModalOpen] = useState(false);
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
 
-  const { activeFile, activeRepo, fileContent, selectRepoByName, loadFile, hasUnreadWhatsNew } = useWorkspace();
+  const { activeFile, activeRepo, fileContent, selectRepoByName, loadFile, hasUnreadWhatsNew, activeOrg, selectOrg } = useWorkspace();
   const { messages, aiSettings, openSettingsModal } = useAI();
   const [systemPrompt, setSystemPrompt] = useState('');
   const fileParam = searchParams.get('file');
 
-  // Sync Repo from URL parameter
+  // Sync Org from URL parameter if present
   useEffect(() => {
-    if (repoName && (!activeRepo || activeRepo.name.toLowerCase() !== repoName.toLowerCase())) {
-      selectRepoByName(repoName, fileParam || undefined);
+    if (org && (!activeOrg || activeOrg.login.toLowerCase() !== org.toLowerCase())) {
+      selectOrg(org).catch(() => {});
     }
-  }, [repoName, activeRepo, selectRepoByName, fileParam]);
+  }, [org, activeOrg?.login, selectOrg]);
+
+  // Sync Repo from URL parameter with double-invocation protection
+  const lastSyncedRepoRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!repoName) return;
+    const currentActive = activeRepo?.name?.toLowerCase();
+    const target = repoName.toLowerCase();
+
+    if (currentActive === target) {
+      lastSyncedRepoRef.current = target;
+      return;
+    }
+
+    if (lastSyncedRepoRef.current === target) {
+      return;
+    }
+
+    lastSyncedRepoRef.current = target;
+    selectRepoByName(repoName, fileParam || undefined);
+  }, [repoName, activeRepo?.name, selectRepoByName, fileParam]);
 
   // Sync File from search parameter ?file=...
   useEffect(() => {
@@ -67,7 +88,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onBackToRepos }) =
       const currentHash = window.location.hash || '';
       loadFile(`${fileParam}${currentHash}`);
     }
-  }, [fileParam, activeFile, activeRepo, loadFile]);
+  }, [fileParam, activeFile, activeRepo?.name, loadFile]);
 
   const [aiWidth, setAiWidth] = useState<number>(() => {
     try {
@@ -121,48 +142,70 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onBackToRepos }) =
     window.addEventListener('mouseup', handleMouseUp);
   };
 
-  const toggleCopilot = () => {
-    if (isCopilotOpen) {
-      setIsCopilotOpen(false);
-      setActiveCopilotSidebar(null);
-    } else {
-      setIsCopilotOpen(true);
+  const toggleCopilot = useCallback(() => {
+    setIsCopilotOpen((prev) => {
+      if (prev) {
+        setActiveCopilotSidebar(null);
+        return false;
+      }
+      return true;
+    });
+  }, []);
+
+  const buildRepoBaseUrl = useCallback((view: SubViewType) => {
+    const currentRepoName = repoName || activeRepo?.name || 'default';
+    const effectiveOrg = org || (activeRepo?.owner && activeRepo.owner !== 'local' && !activeRepo.is_local ? activeRepo.owner : (activeOrg?.login && activeOrg.login !== 'local' && !activeRepo?.is_local ? activeOrg.login : null));
+    if (effectiveOrg) {
+      return `/org/${encodeURIComponent(effectiveOrg)}/repo/${encodeURIComponent(currentRepoName)}/${view}`;
     }
-  };
+    return `/repo/${encodeURIComponent(currentRepoName)}/${view}`;
+  }, [org, repoName, activeRepo, activeOrg?.login]);
 
   const handleSelectView = (view: SubViewType) => {
-    const currentRepoName = repoName || activeRepo?.name || 'default';
+    const base = buildRepoBaseUrl(view);
     if (view === 'editor' && activeFile) {
-      navigate(`/repo/${encodeURIComponent(currentRepoName)}/${view}?file=${encodeURIComponent(activeFile)}`);
+      navigate(`${base}?file=${encodeURIComponent(activeFile)}`);
     } else if (view === 'edits' || view === 'versions') {
       const defaultTab = hasUnreadWhatsNew ? 'whats-new' : 'drafts';
-      navigate(`/repo/${encodeURIComponent(currentRepoName)}/edits?tab=${defaultTab}`);
+      navigate(`${buildRepoBaseUrl('edits')}?tab=${defaultTab}`);
     } else {
-      navigate(`/repo/${encodeURIComponent(currentRepoName)}/${view}`);
+      navigate(base);
     }
   };
 
-  const handleNavigateToEdits = (tab?: 'drafts' | 'whats-new') => {
-    const currentRepoName = repoName || activeRepo?.name || 'default';
+  const handleNavigateToEdits = useCallback((tab?: 'drafts' | 'whats-new') => {
+    const base = buildRepoBaseUrl('edits');
     const targetTab = tab || (hasUnreadWhatsNew ? 'whats-new' : 'drafts');
-    navigate(`/repo/${encodeURIComponent(currentRepoName)}/edits?tab=${targetTab}`);
-  };
+    navigate(`${base}?tab=${targetTab}`);
+  }, [buildRepoBaseUrl, hasUnreadWhatsNew, navigate]);
 
-  const handleBackToRepos = () => {
+  const handleBackToRepos = useCallback(() => {
     if (onBackToRepos) {
       onBackToRepos();
     } else {
       navigate('/repos');
     }
-  };
+  }, [onBackToRepos, navigate]);
+
+  const handleOpenDiffModal = useCallback(() => {
+    handleNavigateToEdits('drafts');
+  }, [handleNavigateToEdits]);
+
+  const handleOpenGitModal = useCallback(() => {
+    handleNavigateToEdits();
+  }, [handleNavigateToEdits]);
+
+  const handleOpenTour = useCallback(() => {
+    setIsOnboardingOpen(true);
+  }, []);
 
   const handleOpenFile = (rawPath: string) => {
     const hashIndex = rawPath.indexOf('#');
     const cleanPath = hashIndex !== -1 ? rawPath.slice(0, hashIndex) : rawPath;
     const hash = hashIndex !== -1 ? rawPath.slice(hashIndex) : '';
 
-    const currentRepoName = repoName || activeRepo?.name || 'default';
-    navigate(`/repo/${encodeURIComponent(currentRepoName)}/editor?file=${encodeURIComponent(cleanPath)}${hash}`);
+    const base = buildRepoBaseUrl('editor');
+    navigate(`${base}?file=${encodeURIComponent(cleanPath)}${hash}`);
   };
 
   return (
@@ -170,11 +213,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onBackToRepos }) =
       {/* Top Global Header */}
       <TopHeader
         onBackToRepos={handleBackToRepos}
-        onOpenDiffModal={() => handleNavigateToEdits('drafts')}
+        onOpenDiffModal={handleOpenDiffModal}
         onToggleCopilot={toggleCopilot}
-        onOpenGitModal={() => handleNavigateToEdits()}
+        onOpenGitModal={handleOpenGitModal}
         onNavigateToEdits={handleNavigateToEdits}
-        onOpenTour={() => setIsOnboardingOpen(true)}
+        onOpenTour={handleOpenTour}
       />
 
       {/* Main Workspace Layout */}

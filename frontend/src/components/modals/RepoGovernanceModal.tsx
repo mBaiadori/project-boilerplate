@@ -146,233 +146,270 @@ export const RepoGovernanceModal: React.FC<RepoGovernanceModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} size="md">
-      {/* Modal Header */}
-      <div className="flex items-center justify-between p-4 border-b border-surface-subtle">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-primary-main/15 flex items-center justify-center text-primary-light">
-            <Shield className="w-4 h-4" />
-          </div>
-          <div>
-            <h3 className="text-sm font-semibold text-text-primary">
-              Governança & Acessos
-            </h3>
-            <p className="text-xs text-text-muted">
-              Nível de permissão em <span className="font-mono text-primary-light">{orgLogin}/{repoName}</span>
-            </p>
-          </div>
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      size="md"
+      title="Governança & Acessos"
+      subtitle={
+        <>
+          Nível de permissão em{' '}
+          <code
+            style={{
+              color: 'var(--md-sys-color-primary, #1a73e8)',
+              fontWeight: 600,
+              fontFamily: 'monospace',
+            }}
+          >
+            {orgLogin}/{repoName}
+          </code>
+        </>
+      }
+      icon={<Shield size={20} />}
+      footer={
+        <div className="repo-gov-footer">
+          <span className="repo-gov-footer-total">
+            Total:{' '}
+            <strong>
+              {activeTab === 'people' ? filteredPeople.length : filteredTeams.length}
+            </strong>{' '}
+            {activeTab === 'people' ? 'pessoa(s)' : 'time(s)'}
+          </span>
+          <Button variant="primary" size="sm" onClick={onClose}>
+            Fechar
+          </Button>
         </div>
-
-        <IconButton
-          icon={<X className="w-4 h-4" />}
-          variant="ghost"
-          size="sm"
-          onClick={onClose}
-          aria-label="Fechar"
-        />
-      </div>
-
-      {/* Tabs & Search Filter */}
-      <div className="px-4 pt-3 pb-2 border-b border-surface-subtle bg-surface-subtle/10 flex flex-col gap-2.5">
-        <div className="flex items-center justify-between gap-2">
-          {/* Segmented Control */}
-          <div className="flex items-center p-0.5 bg-surface-subtle/60 rounded-lg text-xs">
+      }
+    >
+      <div className="repo-gov-container">
+        {/* Toolbar: Segmented Controls + Reload */}
+        <div className="repo-gov-toolbar">
+          <div className="repo-gov-segmented">
             <button
               type="button"
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md font-medium transition-all ${
-                activeTab === 'people'
-                  ? 'bg-surface-elevated text-primary shadow-sm'
-                  : 'text-text-muted hover:text-text-primary'
-              }`}
+              className={`repo-gov-seg-btn ${activeTab === 'people' ? 'active' : ''}`}
               onClick={() => setActiveTab('people')}
             >
-              <User className="w-3.5 h-3.5" />
+              <User size={14} />
               <span>Pessoas</span>
-              <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-primary/10 text-primary font-bold">
-                {collaborators.length}
-              </span>
+              <span className="repo-gov-counter">{collaborators.length}</span>
             </button>
             <button
               type="button"
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md font-medium transition-all ${
-                activeTab === 'teams'
-                  ? 'bg-surface-elevated text-primary shadow-sm'
-                  : 'text-text-muted hover:text-text-primary'
-              }`}
+              className={`repo-gov-seg-btn ${activeTab === 'teams' ? 'active' : ''}`}
               onClick={() => setActiveTab('teams')}
             >
-              <Users className="w-3.5 h-3.5" />
+              <Users size={14} />
               <span>Times</span>
-              <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-primary/10 text-primary font-bold">
-                {teams.length}
-              </span>
+              <span className="repo-gov-counter">{teams.length}</span>
             </button>
           </div>
 
-          <button
-            type="button"
-            className="p-1.5 text-text-muted hover:text-text-primary rounded-md transition-colors"
-            title="Recarregar acessos"
+          <IconButton
+            size="sm"
+            variant="ghost"
+            tooltip="Recarregar acessos"
             onClick={loadData}
             disabled={isLoading}
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-          </button>
+            <RefreshCw
+              size={14}
+              style={{
+                animation: isLoading ? 'spin 1s linear infinite' : 'none',
+              }}
+            />
+          </IconButton>
         </div>
 
-        {/* Search input */}
-        <div className="relative">
-          <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+        {/* Search Filter */}
+        <div className="repo-gov-search-wrap">
+          <Search size={14} className="repo-gov-search-icon" />
           <input
             type="text"
-            placeholder={activeTab === 'people' ? 'Filtrar pessoas por nome ou @username...' : 'Filtrar times por nome...'}
+            className="repo-gov-search-input"
+            placeholder={
+              activeTab === 'people'
+                ? 'Filtrar pessoas por nome ou @username...'
+                : 'Filtrar times por nome...'
+            }
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full text-xs pl-8 pr-3 py-1.5 bg-surface-elevated border border-surface-subtle rounded-md text-text-primary placeholder:text-text-muted focus:outline-none focus:border-primary"
           />
+          {searchQuery && (
+            <button
+              type="button"
+              className="repo-gov-search-clear"
+              onClick={() => setSearchQuery('')}
+              title="Limpar busca"
+            >
+              <X size={14} />
+            </button>
+          )}
         </div>
-      </div>
 
-      {/* Content List */}
-      <div className="p-4 max-h-[50vh] min-h-[220px] overflow-y-auto custom-scrollbar flex flex-col gap-2">
-        {isLoading ? (
-          <div className="flex flex-col items-center justify-center py-12 gap-2 text-text-muted">
-            <Spinner size="md" />
-            <span className="text-xs">Consultando permissões de acesso...</span>
-          </div>
-        ) : errorMsg ? (
-          <div className="text-center py-8 text-xs text-rose-500">
-            {errorMsg}
-          </div>
-        ) : activeTab === 'people' ? (
-          filteredPeople.length === 0 ? (
-            <div className="text-center py-10 text-xs text-text-muted flex flex-col items-center gap-1.5">
-              <User className="w-6 h-6 opacity-40 mb-1" />
-              <p>Nenhuma pessoa encontrada.</p>
-              {searchQuery && (
-                <button
-                  type="button"
-                  className="text-primary hover:underline text-[11px]"
-                  onClick={() => setSearchQuery('')}
-                >
-                  Limpar busca
-                </button>
-              )}
+        {/* Content List */}
+        <div className="repo-gov-list custom-scrollbar">
+          {isLoading ? (
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '48px 0',
+                gap: '10px',
+                color: 'var(--md-sys-color-on-surface-variant, #5f6368)',
+              }}
+            >
+              <Spinner size="md" />
+              <span style={{ fontSize: '12px' }}>Consultando permissões de acesso...</span>
             </div>
-          ) : (
-            filteredPeople.map((person) => {
-              const badge = getPermissionBadge(person.permission);
-              return (
-                <div
-                  key={`person-${person.login}`}
-                  className="flex items-center justify-between p-2.5 rounded-lg border border-surface-subtle bg-surface-elevated hover:border-surface-highlight transition-all"
-                >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    {person.avatar_url ? (
-                      <img
-                        src={person.avatar_url}
-                        alt={person.login}
-                        className="w-7 h-7 rounded-full object-cover shrink-0"
-                      />
-                    ) : (
-                      <div className="w-7 h-7 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-xs shrink-0">
-                        {person.login?.charAt(0).toUpperCase()}
-                      </div>
-                    )}
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xs font-semibold text-text-primary truncate">
-                          {(person as any).name || person.login}
-                        </span>
-                        {person.is_owner && (
-                          <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-500/15 text-amber-600 border border-amber-500/30 shrink-0">
-                            Proprietário
+          ) : errorMsg ? (
+            <div
+              style={{
+                padding: '14px',
+                borderRadius: '8px',
+                background: 'var(--md-sys-color-error-container, #fce8e6)',
+                color: 'var(--md-sys-color-on-error-container, #c5221f)',
+                fontSize: '12px',
+                textAlign: 'center',
+              }}
+            >
+              {errorMsg}
+            </div>
+          ) : activeTab === 'people' ? (
+            filteredPeople.length === 0 ? (
+              <div className="repo-gov-empty">
+                <User size={32} className="repo-gov-empty-icon" />
+                <p style={{ margin: 0 }}>Nenhuma pessoa encontrada.</p>
+                {searchQuery && (
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    onClick={() => setSearchQuery('')}
+                    style={{ marginTop: '4px' }}
+                  >
+                    Limpar busca
+                  </Button>
+                )}
+              </div>
+            ) : (
+              filteredPeople.map((person) => {
+                const badge = getPermissionBadge(person.permission);
+                return (
+                  <div key={`person-${person.login}`} className="repo-gov-card">
+                    <div className="repo-gov-card-left">
+                      {person.avatar_url ? (
+                        <img
+                          src={person.avatar_url}
+                          alt={person.login}
+                          className="repo-gov-avatar"
+                          style={{
+                            width: '34px',
+                            height: '34px',
+                            borderRadius: '50%',
+                            objectFit: 'cover',
+                            flexShrink: 0,
+                          }}
+                        />
+                      ) : (
+                        <div className="repo-gov-avatar-fallback">
+                          {person.login?.charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                      <div className="repo-gov-info">
+                        <div className="repo-gov-name-row">
+                          <span className="repo-gov-name">
+                            {(person as any).name || person.login}
                           </span>
-                        )}
+                          {person.is_owner && (
+                            <span className="repo-gov-owner-badge">Proprietário</span>
+                          )}
+                        </div>
+                        <span className="repo-gov-sub">@{person.login}</span>
                       </div>
-                      <span className="text-[11px] text-text-muted font-mono truncate block">
-                        @{person.login}
+                    </div>
+
+                    <div className="repo-gov-card-right">
+                      <span
+                        className="repo-gov-perm-badge"
+                        style={{
+                          backgroundColor: badge.bg,
+                          color: badge.color,
+                          border: `1px solid ${badge.border}`,
+                        }}
+                      >
+                        {badge.label}
                       </span>
+
+                      {person.html_url && (
+                        <a
+                          href={person.html_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="repo-gov-external-link"
+                          title="Ver perfil no GitHub"
+                        >
+                          <ExternalLink size={14} />
+                        </a>
+                      )}
                     </div>
                   </div>
-
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span
-                      className="text-[10.5px] font-semibold px-2 py-0.5 rounded-full inline-flex items-center gap-1"
-                      style={{
-                        backgroundColor: badge.bg,
-                        color: badge.color,
-                        border: `1px solid ${badge.border}`,
-                      }}
-                    >
-                      {badge.label}
-                    </span>
-
-                    {person.html_url && (
-                      <a
-                        href={person.html_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="p-1 text-text-muted hover:text-text-primary transition-colors"
-                        title="Ver perfil no GitHub"
-                      >
-                        <ExternalLink className="w-3 h-3" />
-                      </a>
-                    )}
-                  </div>
-                </div>
-              );
-            })
-          )
-        ) : (
-          filteredTeams.length === 0 ? (
-            <div className="text-center py-10 text-xs text-text-muted flex flex-col items-center gap-1.5">
-              <Users className="w-6 h-6 opacity-40 mb-1" />
-              <p>Nenhum time vinculado a este repositório.</p>
+                );
+              })
+            )
+          ) : filteredTeams.length === 0 ? (
+            <div className="repo-gov-empty">
+              <Users size={32} className="repo-gov-empty-icon" />
+              <p style={{ margin: 0 }}>Nenhum time vinculado a este repositório.</p>
               {searchQuery && (
-                <button
-                  type="button"
-                  className="text-primary hover:underline text-[11px]"
+                <Button
+                  variant="ghost"
+                  size="xs"
                   onClick={() => setSearchQuery('')}
+                  style={{ marginTop: '4px' }}
                 >
                   Limpar busca
-                </button>
+                </Button>
               )}
             </div>
           ) : (
             filteredTeams.map((team) => {
               const badge = getPermissionBadge(team.permission);
               return (
-                <div
-                  key={`team-${team.id || team.slug}`}
-                  className="flex items-center justify-between p-2.5 rounded-lg border border-surface-subtle bg-surface-elevated hover:border-surface-highlight transition-all"
-                >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="w-7 h-7 rounded-lg bg-indigo-500/10 text-indigo-500 flex items-center justify-center shrink-0">
-                      <Users className="w-3.5 h-3.5" />
+                <div key={`team-${team.id || team.slug}`} className="repo-gov-card">
+                  <div className="repo-gov-card-left">
+                    <div className="repo-gov-team-icon">
+                      <Users size={16} />
                     </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xs font-semibold text-text-primary truncate">
-                          {team.name}
-                        </span>
+                    <div className="repo-gov-info">
+                      <div className="repo-gov-name-row">
+                        <span className="repo-gov-name">{team.name}</span>
                         {(team as any).members_count !== undefined && (
-                          <span className="text-[10px] text-text-muted px-1.5 py-0.2 rounded bg-surface-subtle shrink-0">
-                            {(team as any).members_count} {(team as any).members_count === 1 ? 'membro' : 'membros'}
+                          <span
+                            className="repo-gov-owner-badge"
+                            style={{
+                              background: 'var(--md-sys-color-surface-container-high, #e8eaed)',
+                              color: 'var(--md-sys-color-on-surface-variant, #5f6368)',
+                              borderColor: 'var(--md-sys-color-outline-variant, #dadce0)',
+                            }}
+                          >
+                            {(team as any).members_count}{' '}
+                            {(team as any).members_count === 1 ? 'membro' : 'membros'}
                           </span>
                         )}
                       </div>
                       {team.description && (
-                        <p className="text-[11px] text-text-muted truncate max-w-[280px]">
+                        <span className="repo-gov-sub" style={{ maxWidth: '280px' }}>
                           {team.description}
-                        </p>
+                        </span>
                       )}
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="repo-gov-card-right">
                     <span
-                      className="text-[10.5px] font-semibold px-2 py-0.5 rounded-full inline-flex items-center gap-1"
+                      className="repo-gov-perm-badge"
                       style={{
                         backgroundColor: badge.bg,
                         color: badge.color,
@@ -385,18 +422,8 @@ export const RepoGovernanceModal: React.FC<RepoGovernanceModalProps> = ({
                 </div>
               );
             })
-          )
-        )}
-      </div>
-
-      {/* Modal Footer */}
-      <div className="flex items-center justify-between p-3.5 border-t border-surface-subtle bg-surface-subtle/20">
-        <span className="text-[11px] text-text-muted">
-          Total: {activeTab === 'people' ? `${collaborators.length} pessoa(s)` : `${teams.length} time(s)`}
-        </span>
-        <Button variant="primary" size="sm" onClick={onClose}>
-          Fechar
-        </Button>
+          )}
+        </div>
       </div>
     </Modal>
   );

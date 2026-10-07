@@ -214,4 +214,17 @@ export async function gitRoutes(app: FastifyInstance) {
         .send({ error: err.message || "Erro ao diagnosticar Git" });
     }
   });
+
+  // 14. Check Remote Updates (Commit comparison without blocking)
+  app.get("/api/git/check-remote", async (req, reply) => {
+    try {
+      const { repo, branch } = req.query as { repo?: string; branch?: string };
+      const res = await gitService.checkRemote(repo, branch);
+      return res;
+    } catch (err: any) {
+      return reply
+        .status(500)
+        .send({ error: err.message || "Erro ao verificar atualizações remotas" });
+    }
+  });
 }

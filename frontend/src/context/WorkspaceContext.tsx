@@ -94,6 +94,7 @@ interface WorkspaceContextType {
   tree: TreeNode[];
   treesByRepo: Record<string, TreeNode[]>;
   activeFile: string;
+  activeDocRepo: string;
   fileContent: string;
   originalContent: string;
   fileMetadata: Record<string, any>;
@@ -111,6 +112,9 @@ interface WorkspaceContextType {
   gitLog: GitCommitInfo[];
   whatsNewSummary: WhatsNewSummary | null;
   hasUnreadWhatsNew: boolean;
+  hasRemoteUpdates: boolean;
+  remoteUpdateInfo: { localHash: string; remoteHash?: string; branch?: string } | null;
+  checkRemoteUpdates: (targetRepoName?: string) => Promise<boolean>;
   refreshWhatsNew: () => Promise<void>;
   markWhatsNewAsSeen: () => void;
   loadRepos: () => Promise<void>;
@@ -203,6 +207,8 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
   const [tree, setTree] = useState<TreeNode[]>([]);
   const [treesByRepo, setTreesByRepo] = useState<Record<string, TreeNode[]>>({});
   const [activeFile, setActiveFile] = useState<string>("");
+  const [activeDocRepo, setActiveDocRepo] = useState<string>("");
+  const activeDocRepoRef = useRef<string>("");
   const [fileContent, setFileContentState] = useState<string>("");
   const [fileMetadata, setFileMetadataState] = useState<Record<string, any>>(
     {},
@@ -215,13 +221,15 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
   const [saveStatus, setSaveStatus] = useState<AutoSaveStatus>("Pronto");
   const [isLoadingFile, setIsLoadingFile] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [isLoadingWorkspace, setIsLoadingWorkspace] = useState(false);
+  const [isLoadingWorkspace] = useState(false);
   const [isLoadingTree, setIsLoadingTree] = useState(false);
   const [gitStatus, setGitStatus] = useState<GitStatus | null>(null);
   const [gitLog, setGitLog] = useState<GitCommitInfo[]>([]);
   const [whatsNewSummary, setWhatsNewSummary] =
     useState<WhatsNewSummary | null>(null);
   const [hasUnreadWhatsNew, setHasUnreadWhatsNew] = useState<boolean>(false);
+  const [hasRemoteUpdates, setHasRemoteUpdates] = useState<boolean>(false);
+  const [remoteUpdateInfo, setRemoteUpdateInfo] = useState<{ localHash: string; remoteHash?: string; branch?: string } | null>(null);
   const [projectMetaOptions, setProjectMetaOptions] =
     useState<ProjectMetadataOptions | null>(null);
   const [projectConfig, setProjectConfig] = useState<any>(null);
@@ -244,20 +252,40 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
   }, [repos]);
   const inFlightRepoRef = useRef<string | null>(null);
   const treesByRepoRef = useRef<Record<string, TreeNode[]>>({});
+  const pendingChangesByRepoRef = useRef<Record<string, any[]>>({});
+  const remoteUpdatesByRepoRef = useRef<Record<string, boolean>>({});
+  const effectivePermissionsByRepoRef = useRef<Record<string, EffectiveUserPermission>>({});
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const statusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const refreshEffectivePermission = useCallback(async (targetRepo?: Repo) => {
     const r = targetRepo || activeRepoRef.current;
     if (!r?.name) return;
-    const initialPerm = computeInitialPermission(r, user?.login);
+    const initialPerm =
+      effectivePermissionsByRepoRef.current[r.name] ||
+      computeInitialPermission(r, user?.login);
     setEffectivePermission(initialPerm);
 
     try {
       const ownerLogin = typeof r.owner === "string" ? r.owner : (r.owner as any)?.login;
       const res = await API.getEffectiveUserPermission(r.name, ownerLogin);
       if (res.ok && res.data) {
-        setEffectivePermission(res.data);
+        effectivePermissionsByRepoRef.current[r.name] = res.data;
+        if (activeRepoRef.current?.name === r.name) {
+          setEffectivePermission((prev) => {
+            if (
+              prev &&
+              prev.roleName === res.data.roleName &&
+              prev.repoPermission === res.data.repoPermission &&
+              prev.isOrgOwner === res.data.isOrgOwner &&
+              prev.allowedActions?.canAdmin === res.data.allowedActions?.canAdmin &&
+              prev.allowedActions?.canWrite === res.data.allowedActions?.canWrite
+            ) {
+              return prev;
+            }
+            return res.data;
+          });
+        }
       }
     } catch {}
   }, [user?.login]);
@@ -346,8 +374,8 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
     loadOrgs().catch(() => {});
   }, [loadOrgs]);
 
-  const refreshGitStatus = useCallback(async () => {
-    const repo = activeRepoRef.current?.name;
+  const refreshGitStatus = useCallback(async (targetRepoName?: string) => {
+    const repo = targetRepoName || activeRepoRef.current?.name;
     if (!repo) return;
     try {
       const res = await API.getGitStatus(repo);
@@ -364,33 +392,37 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
           if (sf?.path) sysMap.set(sf.path, sf);
         }
         const uniqueSysFiles = Array.from(sysMap.values());
-        setGitStatus({
-          ...res.data,
-          files: filteredFiles,
-          systemFiles: uniqueSysFiles,
-          isClean: filteredFiles.length === 0 && uniqueSysFiles.length === 0,
-        });
+        if (activeRepoRef.current?.name === repo) {
+          setGitStatus({
+            ...res.data,
+            files: filteredFiles,
+            systemFiles: uniqueSysFiles,
+            isClean: filteredFiles.length === 0 && uniqueSysFiles.length === 0,
+          });
+        }
       }
     } catch (err) {
       console.warn("[WorkspaceContext] Erro ao buscar status do Git:", err);
     }
   }, []);
 
-  const refreshGitLog = useCallback(async (limit = 20) => {
-    const repo = activeRepoRef.current?.name;
+  const refreshGitLog = useCallback(async (limit = 20, targetRepoName?: string) => {
+    const repo = targetRepoName || activeRepoRef.current?.name;
     if (!repo) return;
     try {
       const res = await API.getGitLog(limit, repo);
       if (res.ok && res.data?.commits) {
-        setGitLog(res.data.commits);
+        if (activeRepoRef.current?.name === repo) {
+          setGitLog(res.data.commits);
+        }
       }
     } catch (err) {
       console.warn("[WorkspaceContext] Erro ao buscar histórico Git:", err);
     }
   }, []);
 
-  const refreshPendingChanges = useCallback(async () => {
-    const repo = activeRepoRef.current?.name;
+  const refreshPendingChanges = useCallback(async (targetRepoName?: string) => {
+    const repo = targetRepoName || activeRepoRef.current?.name;
     if (!repo) return;
     try {
       const data = await API.getWorkspaceChanges(repo);
@@ -400,10 +432,13 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
       const sysFiltered = (data.system_changes || []).filter(
         (c: any) => c?.path && isSystemPath(c.path),
       );
-      setPendingChanges(filtered);
-      setSystemPendingChanges(sysFiltered);
-      setGuardrailStatus(filtered.length === 0 ? "CLEAN" : data.guardrail || "CLEAN");
-      await refreshGitStatus();
+      pendingChangesByRepoRef.current[repo] = filtered;
+      if (activeRepoRef.current?.name === repo) {
+        setPendingChanges(filtered);
+        setSystemPendingChanges(sysFiltered);
+        setGuardrailStatus(filtered.length === 0 ? "CLEAN" : data.guardrail || "CLEAN");
+      }
+      await refreshGitStatus(repo);
     } catch (err) {
       console.error(
         "[WorkspaceContext] Erro ao buscar alterações pendentes:",
@@ -424,7 +459,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
         contentToSave !== undefined ? contentToSave : fileContentRef.current;
       const meta =
         metaToSave !== undefined ? metaToSave : fileMetadataRef.current;
-      const repoName = targetRepo || activeRepoRef.current?.name;
+      const repoName = targetRepo || activeDocRepoRef.current || activeRepoRef.current?.name;
 
       if (!repoName || !file) {
         return { success: false, error: "Nenhum documento ativo para salvar" };
@@ -565,14 +600,19 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
       const cached = fileCacheRef.current.get(cacheKey);
       const draft = DraftStore.getDocDraft(currentRepoName, cleanPath);
 
-      setActiveFile(cleanPath);
-      activeFileRef.current = cleanPath;
-
       // Se já temos rascunho ou cache deste arquivo, aplica imediatamente sem piscar a tela
       if (draft) {
+        setActiveDocRepo(currentRepoName);
+        activeDocRepoRef.current = currentRepoName;
+        setActiveFile(cleanPath);
+        activeFileRef.current = cleanPath;
         setFileContentState(draft.rawContent);
         fileContentRef.current = draft.rawContent;
       } else if (cached) {
+        setActiveDocRepo(currentRepoName);
+        activeDocRepoRef.current = currentRepoName;
+        setActiveFile(cleanPath);
+        activeFileRef.current = cleanPath;
         setFileContentState(cached.content);
         fileContentRef.current = cached.content;
         setOriginalContent(cached.originalContent);
@@ -593,6 +633,11 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
         );
 
         const content = activeDraft ? activeDraft.rawContent : data.content || "";
+        // Atualiza repositório, documento e conteúdo atomicamente no mesmo ciclo para evitar flash
+        setActiveDocRepo(currentRepoName);
+        activeDocRepoRef.current = currentRepoName;
+        setActiveFile(cleanPath);
+        activeFileRef.current = cleanPath;
         setFileContentState(content);
         fileContentRef.current = content;
         setOriginalContent(data.content || "");
@@ -980,6 +1025,36 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
     refreshWhatsNew();
   }, [whatsNewSummary, refreshWhatsNew]);
 
+  const checkRemoteUpdates = useCallback(
+    async (targetRepoName?: string): Promise<boolean> => {
+      const repoName = targetRepoName || activeRepoRef.current?.name;
+      if (!repoName || repoName === "local" || repoName === "default" || repoName === "_default") {
+        if (repoName) remoteUpdatesByRepoRef.current[repoName] = false;
+        if (!targetRepoName || activeRepoRef.current?.name === repoName) {
+          setHasRemoteUpdates(false);
+          setRemoteUpdateInfo(null);
+        }
+        return false;
+      }
+      try {
+        const res = await API.checkRemoteGitUpdates(repoName);
+        if (res.ok && res.data) {
+          const hasUp = Boolean(res.data.hasUpdates);
+          remoteUpdatesByRepoRef.current[repoName] = hasUp;
+          if (!targetRepoName || activeRepoRef.current?.name === repoName) {
+            setHasRemoteUpdates(hasUp);
+            setRemoteUpdateInfo(hasUp ? res.data : null);
+          }
+          return hasUp;
+        }
+      } catch (err) {
+        console.warn("[WorkspaceContext] Erro ao verificar atualizações remotas:", err);
+      }
+      return false;
+    },
+    [],
+  );
+
   const selectRepo = useCallback(
     async (
       repo: Repo,
@@ -989,19 +1064,28 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
       if (inFlightRepoRef.current === repo.name) {
         return { success: true, is_ready: true };
       }
+      if (activeRepoRef.current?.name.toLowerCase() === repo.name.toLowerCase() && !initialFile) {
+        return { success: true, is_ready: true };
+      }
       inFlightRepoRef.current = repo.name;
 
       const cachedTree = treesByRepoRef.current[repo.name];
       const hasCachedTree = Array.isArray(cachedTree) && cachedTree.length > 0;
 
-      // Se já temos a árvore em cache, não ativa o skeleton de carregamento completo
-      if (!hasCachedTree) {
+      // Não ativa skeleton de carregamento do workspace inteiro (header) para evitar blink na troca de repositório
+      if (!hasCachedTree && !repo.is_local) {
         setIsLoadingTree(true);
       }
-      setIsLoadingWorkspace(true);
 
-      // Sincroniza permissões no contexto IMEDIATAMENTE a partir do repositório selecionado
-      const initialPerm = computeInitialPermission(repo, user?.login);
+      // Aplica imediatamente estados cacheados deste repositório para evitar flashes e saltos visuais
+      const cachedPending = pendingChangesByRepoRef.current[repo.name] || [];
+      setPendingChanges(cachedPending);
+
+      const cachedRemote = remoteUpdatesByRepoRef.current[repo.name] || false;
+      setHasRemoteUpdates(cachedRemote);
+
+      const cachedPerm = effectivePermissionsByRepoRef.current[repo.name];
+      const initialPerm = cachedPerm || computeInitialPermission(repo, user?.login);
       setEffectivePermission(initialPerm);
 
       try {
@@ -1052,7 +1136,22 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
         API.getEffectiveUserPermission(repo.name, ownerLogin)
           .then((res) => {
             if (res.ok && res.data) {
-              setEffectivePermission(res.data);
+              effectivePermissionsByRepoRef.current[repo.name] = res.data;
+              if (activeRepoRef.current?.name === repo.name) {
+                setEffectivePermission((prev) => {
+                  if (
+                    prev &&
+                    prev.roleName === res.data.roleName &&
+                    prev.repoPermission === res.data.repoPermission &&
+                    prev.isOrgOwner === res.data.isOrgOwner &&
+                    prev.allowedActions?.canAdmin === res.data.allowedActions?.canAdmin &&
+                    prev.allowedActions?.canWrite === res.data.allowedActions?.canWrite
+                  ) {
+                    return prev;
+                  }
+                  return res.data;
+                });
+              }
             }
           })
           .catch(() => {});
@@ -1063,7 +1162,6 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
 
         if (!isReady) {
           setIsLoadingTree(false);
-          setIsLoadingWorkspace(false);
           return { success: true, is_ready: false, diagnosis };
         }
 
@@ -1075,31 +1173,37 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
         }
 
         setIsLoadingTree(false);
-        setIsLoadingWorkspace(false);
 
-        const fileToOpen = initialFile || findFirstMdFile(data.tree || []);
+        // Mantém o editor no último documento selecionado.
+        // Só altera se um arquivo inicial foi explicitamente solicitado,
+        // ou se o editor estiver completamente vazio na primeira inicialização.
+        const fileToOpen =
+          initialFile !== undefined
+            ? initialFile
+            : (!activeFileRef.current ? findFirstMdFile(data.tree || []) : null);
+
         if (fileToOpen) {
           loadFile(fileToOpen, repo.name).catch((e) =>
             console.warn("[WorkspaceContext] Erro ao carregar arquivo inicial:", e)
           );
         }
 
-        // Executa carregamentos secundários em segundo plano sem bloquear a árvore/editor
+        // Executa carregamentos secundários e verificação de commits remotos em segundo plano sem bloquear a árvore/editor
         Promise.allSettled([
           loadProjectMetadataOptions(),
           loadProjectConfig(),
           loadDictionaryTerms(),
-          refreshPendingChanges(),
-          refreshGitStatus(),
-          refreshGitLog(15),
+          refreshPendingChanges(repo.name),
+          refreshGitStatus(repo.name),
+          refreshGitLog(15, repo.name),
           refreshWhatsNew(),
+          checkRemoteUpdates(repo.name),
         ]).catch(() => {});
 
         return { success: true, is_ready: true, diagnosis };
       } finally {
         inFlightRepoRef.current = null;
         setIsLoadingTree(false);
-        setIsLoadingWorkspace(false);
       }
     },
     [
@@ -1112,12 +1216,24 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
       refreshGitStatus,
       refreshGitLog,
       refreshWhatsNew,
+      checkRemoteUpdates,
       loadFile,
     ],
   );
 
   const selectRepoByName = useCallback(
     async (repoName: string, initialFile?: string): Promise<boolean> => {
+      if (!repoName) return false;
+      if (activeRepoRef.current?.name.toLowerCase() === repoName.toLowerCase()) {
+        if (initialFile && initialFile !== activeFileRef.current) {
+          await loadFile(initialFile, repoName);
+        }
+        return true;
+      }
+      if (inFlightRepoRef.current?.toLowerCase() === repoName.toLowerCase()) {
+        return true;
+      }
+
       let currentRepos = repos;
       if (currentRepos.length === 0) {
         try {
@@ -1141,13 +1257,12 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
       const fallbackRepo: Repo = {
         id: 0,
         name: repoName,
-        full_name: repoName,
-        is_local: true,
+        is_local: false,
       };
       await selectRepo(fallbackRepo, initialFile);
       return true;
     },
-    [repos, selectRepo],
+    [repos, selectRepo, loadFile],
   );
 
   const saveCurrentFile = async (metaOverride?: Record<string, any>) => {
@@ -1191,6 +1306,8 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
     const repo = activeRepoRef.current;
     const res = await API.syncGit(branch, repo?.name);
     if (res.ok) {
+      setHasRemoteUpdates(false);
+      setRemoteUpdateInfo(null);
       await refreshPendingChanges();
       await refreshGitStatus();
       await refreshGitLog(15);
@@ -1450,6 +1567,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
         tree,
         treesByRepo,
         activeFile,
+        activeDocRepo,
         fileContent,
         originalContent,
         fileMetadata,
@@ -1467,6 +1585,9 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
         gitLog,
         whatsNewSummary,
         hasUnreadWhatsNew,
+        hasRemoteUpdates,
+        remoteUpdateInfo,
+        checkRemoteUpdates,
         refreshWhatsNew,
         markWhatsNewAsSeen,
         loadRepos,

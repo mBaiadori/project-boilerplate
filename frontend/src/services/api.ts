@@ -954,6 +954,15 @@ export const API = {
     return { ok: res.ok, data: await res.json() };
   },
 
+  async checkRemoteGitUpdates(repo?: string, branch?: string): Promise<ApiResponse<{ hasUpdates: boolean; localHash: string; remoteHash?: string; branch?: string; error?: string }>> {
+    const params = new URLSearchParams();
+    if (repo) params.set('repo', repo);
+    if (branch) params.set('branch', branch);
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    const res = await fetch(`/api/git/check-remote${qs}`);
+    return { ok: res.ok, data: await res.json() };
+  },
+
   async getGitDiff(path?: string, repo?: string): Promise<ApiResponse<{ diff: string }>> {
     const params = new URLSearchParams();
     if (path) params.set('path', path);

@@ -2,7 +2,7 @@ import React, { useMemo } from "react";
 import { useWorkspace } from "../../context/WorkspaceContext";
 import { useAuth } from "../../context/AuthContext";
 import { isPathHidden } from "../../utils/hidden-files";
-import { IconButton, Button, Badge, Spinner } from "../ui";
+import { IconButton, Button, Badge } from "../ui";
 import {
   ArrowLeft,
   Sparkles,
@@ -10,6 +10,7 @@ import {
   ExternalLink,
   User,
   Shield,
+  CloudDownload,
 } from "lucide-react";
 import { OrgSelectorDropdown } from "./OrgSelectorDropdown";
 
@@ -22,7 +23,7 @@ interface TopHeaderProps {
   onOpenTour?: () => void;
 }
 
-export const TopHeader: React.FC<TopHeaderProps> = ({
+export const TopHeader: React.FC<TopHeaderProps> = React.memo(({
   onBackToRepos,
   onOpenDiffModal,
   onToggleCopilot,
@@ -30,7 +31,13 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
   onNavigateToEdits,
   onOpenTour = () => {},
 }) => {
-  const { activeRepo, pendingChanges, isLoadingWorkspace, effectivePermission } = useWorkspace();
+  const {
+    activeRepo,
+    pendingChanges,
+    effectivePermission,
+    hasRemoteUpdates,
+    syncGit,
+  } = useWorkspace();
   const { user, provider } = useAuth();
   const providerLabel = provider === "github" ? "GitHub" : "Modo Local";
 
@@ -57,21 +64,6 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
 
   return (
     <header className="dashboard-navbar" style={{ position: "relative" }}>
-      {isLoadingWorkspace && (
-        <div
-          className="repos-linear-progress-track"
-          style={{
-            position: "absolute",
-            bottom: 0,
-            left: 0,
-            right: 0,
-            height: "2.5px",
-            zIndex: 10,
-          }}
-        >
-          <div className="repos-linear-progress-bar"></div>
-        </div>
-      )}
       <div className="dash-brand">
         <IconButton
           id="btn-back-to-repos"
@@ -89,6 +81,8 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
             src={user.avatar_url}
             alt={user.name || user.login || "Usuário"}
             title={user.name || user.login || "Usuário"}
+            loading="eager"
+            decoding="async"
             style={{
               width: "28px",
               height: "28px",
@@ -119,9 +113,31 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
         )}
 
         <div className="dash-brand-divider"></div>
-        <div className="dash-title-wrap">
-          <div className="dash-title-row">
-            <h1 id="dash-repo-title">{activeRepo?.name || "Projeto"}</h1>
+        <div className="dash-title-wrap" style={{ minWidth: 0, flexShrink: 1 }}>
+          <div
+            className="dash-title-row"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
+              minHeight: "28px",
+              flexWrap: "nowrap",
+            }}
+          >
+            <h1
+              id="dash-repo-title"
+              style={{
+                margin: 0,
+                fontSize: "17px",
+                fontWeight: 700,
+                color: "var(--text-heading)",
+                letterSpacing: "-0.01em",
+                lineHeight: 1.2,
+                whiteSpace: "nowrap",
+              }}
+            >
+              {activeRepo?.name || "Projeto"}
+            </h1>
 
             {effectivePermission && (
               <span
@@ -135,6 +151,8 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
                   fontWeight: 600,
                   padding: "2px 8px",
                   borderRadius: "9999px",
+                  whiteSpace: "nowrap",
+                  transition: "all 0.15s ease",
                   backgroundColor:
                     effectivePermission.isOrgOwner || effectivePermission.allowedActions.canAdmin
                       ? "rgba(236, 72, 153, 0.12)"
@@ -176,19 +194,56 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
                 className="dash-repo-github-icon-btn"
                 title={`Abrir no ${providerLabel} (${activeRepo.full_name})`}
                 aria-label={`Abrir repositório ${activeRepo.full_name} no ${providerLabel}`}
-                style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "4px",
+                  transition: "opacity 0.15s ease",
+                }}
               >
                 <ExternalLink size={14} />
               </a>
             )}
-            {isLoadingWorkspace && (
-              <Spinner size="sm" style={{ marginLeft: 4 }} />
+
+            {hasRemoteUpdates && (
+              <button
+                id="dash-repo-remote-update-badge"
+                type="button"
+                onClick={() => syncGit()}
+                title="Existem novos commits no GitHub. Clique para puxar atualizações sem perder rascunhos."
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  fontSize: "11px",
+                  fontWeight: 600,
+                  padding: "3px 10px",
+                  borderRadius: "9999px",
+                  backgroundColor: "rgba(37, 99, 235, 0.12)",
+                  color: "var(--color-primary, #2563eb)",
+                  border: "1px solid rgba(37, 99, 235, 0.3)",
+                  cursor: "pointer",
+                  transition: "all 0.15s ease",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                <CloudDownload size={13} />
+                Atualização remota disponível
+              </button>
             )}
           </div>
         </div>
       </div>
 
-      <div className="dash-nav-right" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <div
+        className="dash-nav-right"
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          minHeight: "36px",
+        }}
+      >
         <OrgSelectorDropdown />
 
         {filteredPendingChanges.length > 0 && (
@@ -199,6 +254,10 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
             onClick={() => handleGoToEdits("drafts")}
             title="Ver minhas alterações e rascunhos na Central de Edições"
             leftIcon={<Badge variant="warning" size="sm" hasDot>{filteredPendingChanges.length}</Badge>}
+            style={{
+              whiteSpace: "nowrap",
+              transition: "all 0.15s ease",
+            }}
           >
             <span id="pending-changes-badge-text">
               {filteredPendingChanges.length === 1
@@ -230,4 +289,6 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
       </div>
     </header>
   );
-};
+});
+
+TopHeader.displayName = "TopHeader";

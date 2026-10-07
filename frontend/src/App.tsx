@@ -99,6 +99,11 @@ const AdminAuthRoute: React.FC = () => {
   return <AdminAuthView onLoginSuccess={() => navigate('/repos')} />;
 };
 
+const OrgRepoRedirect: React.FC = () => {
+  const { org, repoName } = useParams<{ org: string; repoName: string }>();
+  return <Navigate to={`/org/${encodeURIComponent(org || '')}/repo/${encodeURIComponent(repoName || '')}/editor`} replace />;
+};
+
 const RepoRedirect: React.FC = () => {
   const { repoName } = useParams<{ repoName: string }>();
   return <Navigate to={`/repo/${encodeURIComponent(repoName || '')}/editor`} replace />;
@@ -129,7 +134,25 @@ export const App: React.FC = () => {
                     }
                   />
 
-                  {/* Redirecionamento de /repo/:repoName para o Editor padrão */}
+                  {/* Rotas COM Organização: /org/:org/repo/:repoName */}
+                  <Route
+                    path="/org/:org/repo/:repoName"
+                    element={
+                      <ProtectedRoute>
+                        <OrgRepoRedirect />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/org/:org/repo/:repoName/:subview"
+                    element={
+                      <ProtectedRoute>
+                        <DashboardView />
+                      </ProtectedRoute>
+                    }
+                  />
+
+                  {/* Rotas SEM Organização (ou repositórios locais/pessoais): /repo/:repoName */}
                   <Route
                     path="/repo/:repoName"
                     element={
@@ -138,8 +161,6 @@ export const App: React.FC = () => {
                       </ProtectedRoute>
                     }
                   />
-
-                  {/* Dashboard com subviews: editor, dictionary, wiki, templates, prs, settings, governance */}
                   <Route
                     path="/repo/:repoName/:subview"
                     element={

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import type { Repo, RepoDiagnosis } from "../types";
@@ -101,7 +101,13 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
         setWizardDiagnosis(res.diagnosis || null);
         setIsWizardOpen(true);
       } else {
-        navigate(`/repo/${encodeURIComponent(repo.name)}/editor`);
+        const owner = repo.owner || (repo.full_name ? repo.full_name.split("/")[0] : "");
+        const isOrg = owner && owner !== "local" && !repo.is_local && owner.toLowerCase() !== (user?.login || "").toLowerCase();
+        if (isOrg) {
+          navigate(`/org/${encodeURIComponent(owner)}/repo/${encodeURIComponent(repo.name)}/editor`);
+        } else {
+          navigate(`/repo/${encodeURIComponent(repo.name)}/editor`);
+        }
       }
     } catch (err) {
       console.error("[ReposView] Erro ao abrir repositório:", err);
@@ -115,7 +121,13 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
     setWizardRepo(null);
     setWizardDiagnosis(null);
     await loadRepos();
-    navigate(`/repo/${encodeURIComponent(activeRepo.name)}/editor`);
+    const owner = activeRepo.owner || (activeRepo.full_name ? activeRepo.full_name.split("/")[0] : "");
+    const isOrg = owner && owner !== "local" && !activeRepo.is_local && owner.toLowerCase() !== (user?.login || "").toLowerCase();
+    if (isOrg) {
+      navigate(`/org/${encodeURIComponent(owner)}/repo/${encodeURIComponent(activeRepo.name)}/editor`);
+    } else {
+      navigate(`/repo/${encodeURIComponent(activeRepo.name)}/editor`);
+    }
   };
 
   // Get list of unique organizations/owners with metadata
@@ -177,14 +189,7 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
     }
   };
 
-  // Se tiver apenas uma organização na conta da pessoa, entra direto nela
-  const hasAutoEnteredRef = useRef(false);
-  useEffect(() => {
-    if (!isLoading && !hasAutoEnteredRef.current && orgsList.length === 1 && repos.length > 0) {
-      hasAutoEnteredRef.current = true;
-      handleEnterOrg(orgsList[0]);
-    }
-  }, [isLoading, orgsList, repos]);
+
 
   // Sempre lista todos os repositórios abaixo (filtrados apenas pelo termo de busca digitado)
   const filteredRepos = useMemo(() => {
@@ -278,9 +283,6 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
 
               <div className="orgs-cards-grid">
                 {orgsList.map((org) => {
-                  const count = repos.filter(
-                    (r) => (r.owner || "").toLowerCase() === org.login.toLowerCase(),
-                  ).length;
                   const isEntering = enteringOrgLogin === org.login;
 
                   return (
@@ -289,7 +291,7 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
                       className="org-card"
                       role="button"
                       tabIndex={0}
-                      title={`Entrar na organização @${org.login}`}
+                      title={`Abrir repositório da organização @${org.login}`}
                       onClick={() => handleEnterOrg(org)}
                       onKeyDown={(e) => {
                         if (e.key === "Enter" || e.key === " ") {
@@ -310,40 +312,11 @@ export const ReposView: React.FC<ReposViewProps> = ({ onSelectRepo }) => {
                         <span className="org-card-subtitle">@{org.login}</span>
                       </div>
 
-                      {isEntering ? (
-                        <div style={{ display: "flex", alignItems: "center", gap: 4, color: "var(--primary)", fontSize: "11px", fontWeight: 500 }}>
-                          <span className="material-symbols-outlined spinning" style={{ fontSize: "14px" }}>
+                      {isEntering && (
+                        <div style={{ display: "flex", alignItems: "center", color: "var(--primary)", paddingRight: "4px" }}>
+                          <span className="material-symbols-outlined spinning" style={{ fontSize: "16px" }}>
                             progress_activity
                           </span>
-                        </div>
-                      ) : (
-                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                          <button
-                            type="button"
-                            title={`Gerenciar Governança da Organização @${org.login}`}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setOrgGovernanceTarget(org.login);
-                            }}
-                            style={{
-                              background: "rgba(99, 102, 241, 0.1)",
-                              border: "1px solid rgba(99, 102, 241, 0.3)",
-                              color: "#4f46e5",
-                              padding: "4px 8px",
-                              borderRadius: "6px",
-                              fontSize: "11px",
-                              fontWeight: 600,
-                              cursor: "pointer",
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: "4px",
-                            }}
-                          >
-                            <Shield size={12} />
-                            Governança
-                          </button>
-                          <span className="org-card-count" title={`${count} repositórios`}>{count}</span>
-                          <ArrowRight size={14} style={{ color: "var(--text-muted)" }} />
                         </div>
                       )}
                     </div>

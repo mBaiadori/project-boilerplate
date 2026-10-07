@@ -19,6 +19,8 @@ import {
   executeGitCommand,
   getWhatsNewSummary,
   getWhatsNewFileDiff,
+  checkRemoteGitUpdates,
+  isGitRepo,
 } from '../../utils/git.js';
 
 export class GitService {
@@ -40,8 +42,17 @@ export class GitService {
       remoteUrl = `https://github.com/${owner}/${repoName}.git`;
     }
     const token = isLocal ? undefined : cfg.token;
-    const res = await ensureGitRepo(repoDir, cfg.user, remoteUrl, token, repoName, !isLocal);
+    const repoExistsLocally = fs.existsSync(repoDir) && (await isGitRepo(repoDir));
+    // Se o repositório já existe localmente, NÃO bloqueia com pull de rede a cada query de status/log.
+    const res = await ensureGitRepo(repoDir, cfg.user, remoteUrl, token, repoName, !repoExistsLocally);
     return res;
+  }
+
+  async checkRemote(repoNameParam?: string, branch?: string) {
+    const cfg = loadConfig();
+    const repoName = repoNameParam || cfg.active_repo?.name || 'local';
+    const repoDir = this.getRepoDir(repoName);
+    return await checkRemoteGitUpdates(repoDir, branch);
   }
 
   async getStatus(repoNameParam?: string) {

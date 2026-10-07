@@ -10,22 +10,69 @@ interface DocConnectivityBarProps {
   onNavigateFile: (path: string) => void;
 }
 
-const TAG_PALETTES: Record<string, { bg: string; color: string; border: string }> = {
-  rfc: { bg: 'rgba(99, 102, 241, 0.12)', color: '#4f46e5', border: 'rgba(99, 102, 241, 0.25)' },
-  prd: { bg: 'rgba(168, 85, 247, 0.12)', color: '#7e22ce', border: 'rgba(168, 85, 247, 0.25)' },
-  api: { bg: 'rgba(14, 165, 233, 0.12)', color: '#0284c7', border: 'rgba(14, 165, 233, 0.25)' },
-  backend: { bg: 'rgba(59, 130, 246, 0.12)', color: '#2563eb', border: 'rgba(59, 130, 246, 0.25)' },
-  frontend: { bg: 'rgba(236, 72, 153, 0.12)', color: '#db2777', border: 'rgba(236, 72, 153, 0.25)' },
-  infra: { bg: 'rgba(234, 88, 12, 0.12)', color: '#c2410c', border: 'rgba(234, 88, 12, 0.25)' },
-  sipoc: { bg: 'rgba(20, 184, 166, 0.12)', color: '#0f766e', border: 'rgba(20, 184, 166, 0.25)' },
-  processos: { bg: 'rgba(245, 158, 11, 0.12)', color: '#d97706', border: 'rgba(245, 158, 11, 0.25)' },
-  qualidade: { bg: 'rgba(16, 185, 129, 0.12)', color: '#059669', border: 'rgba(16, 185, 129, 0.25)' },
-  security: { bg: 'rgba(239, 68, 68, 0.12)', color: '#dc2626', border: 'rgba(239, 68, 68, 0.25)' },
-  database: { bg: 'rgba(139, 92, 246, 0.12)', color: '#6d28d9', border: 'rgba(139, 92, 246, 0.25)' },
+const TAG_PALETTES: Record<
+  string,
+  { bg: string; color: string; border: string }
+> = {
+  rfc: {
+    bg: "rgba(99, 102, 241, 0.12)",
+    color: "#4f46e5",
+    border: "rgba(99, 102, 241, 0.25)",
+  },
+  prd: {
+    bg: "rgba(168, 85, 247, 0.12)",
+    color: "#7e22ce",
+    border: "rgba(168, 85, 247, 0.25)",
+  },
+  api: {
+    bg: "rgba(14, 165, 233, 0.12)",
+    color: "#0284c7",
+    border: "rgba(14, 165, 233, 0.25)",
+  },
+  backend: {
+    bg: "rgba(59, 130, 246, 0.12)",
+    color: "#2563eb",
+    border: "rgba(59, 130, 246, 0.25)",
+  },
+  frontend: {
+    bg: "rgba(236, 72, 153, 0.12)",
+    color: "#db2777",
+    border: "rgba(236, 72, 153, 0.25)",
+  },
+  infra: {
+    bg: "rgba(234, 88, 12, 0.12)",
+    color: "#c2410c",
+    border: "rgba(234, 88, 12, 0.25)",
+  },
+  sipoc: {
+    bg: "rgba(20, 184, 166, 0.12)",
+    color: "#0f766e",
+    border: "rgba(20, 184, 166, 0.25)",
+  },
+  processos: {
+    bg: "rgba(245, 158, 11, 0.12)",
+    color: "#d97706",
+    border: "rgba(245, 158, 11, 0.25)",
+  },
+  qualidade: {
+    bg: "rgba(16, 185, 129, 0.12)",
+    color: "#059669",
+    border: "rgba(16, 185, 129, 0.25)",
+  },
+  security: {
+    bg: "rgba(239, 68, 68, 0.12)",
+    color: "#dc2626",
+    border: "rgba(239, 68, 68, 0.25)",
+  },
+  database: {
+    bg: "rgba(139, 92, 246, 0.12)",
+    color: "#6d28d9",
+    border: "rgba(139, 92, 246, 0.25)",
+  },
 };
 
 function getTagStyle(tagName: string, customColor?: string) {
-  if (customColor && customColor !== '#3b82f6' && customColor !== '#6366f1') {
+  if (customColor && customColor !== "#3b82f6" && customColor !== "#6366f1") {
     return {
       background: `${customColor}15`,
       color: customColor,
@@ -41,7 +88,8 @@ function getTagStyle(tagName: string, customColor?: string) {
     };
   }
   let hash = 0;
-  for (let i = 0; i < normalized.length; i++) hash = (hash << 5) - hash + normalized.charCodeAt(i);
+  for (let i = 0; i < normalized.length; i++)
+    hash = (hash << 5) - hash + normalized.charCodeAt(i);
   const hue = Math.abs(hash) % 360;
   return {
     background: `hsla(${hue}, 70%, 50%, 0.1)`,
@@ -54,7 +102,8 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
   filePath,
   onNavigateFile,
 }) => {
-  const { fileMetadata, updateFileMetadata, projectMetaOptions } = useWorkspace();
+  const { fileMetadata, updateFileMetadata, projectMetaOptions } =
+    useWorkspace();
   const [contextData, setContextData] = useState<any>(null);
   const [showConsumers, setShowConsumers] = useState(false);
   const [showDeps, setShowDeps] = useState(false);
@@ -84,12 +133,22 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
   useEffect(() => {
     const handleDocumentSaved = (e: any) => {
       const savedPath = e.detail?.filePath;
-      if (!savedPath || !filePath || savedPath === filePath || savedPath === filePath.split('#')[0] || filePath.startsWith(savedPath)) {
+      if (
+        !savedPath ||
+        !filePath ||
+        savedPath === filePath ||
+        savedPath === filePath.split("#")[0] ||
+        filePath.startsWith(savedPath)
+      ) {
         loadContext();
       }
     };
     window.addEventListener("workspace:document-saved", handleDocumentSaved);
-    return () => window.removeEventListener("workspace:document-saved", handleDocumentSaved);
+    return () =>
+      window.removeEventListener(
+        "workspace:document-saved",
+        handleDocumentSaved,
+      );
   }, [filePath, loadContext]);
 
   useEffect(() => {
@@ -104,26 +163,42 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
     return () => document.removeEventListener("mousedown", handleOutsideClick);
   }, []);
 
-  const cleanPath = filePath.split('#')[0];
+  const cleanPath = filePath.split("#")[0];
   const segments = cleanPath.split("/").filter(Boolean);
   const consumers = contextData?.consumers || [];
   const dependencies = contextData?.dependencies || [];
-  
+
   // Metadados ativos combinando o contextData com o fileMetadata reativo
   const currentTitle = fileMetadata?.title || contextData?.title || "";
   const currentStatus = fileMetadata?.status || contextData?.status || "draft";
-  const currentCategories = fileMetadata?.categories || fileMetadata?.category || contextData?.categories || contextData?.category || "";
-  const currentTags: string[] = Array.isArray(fileMetadata?.tags) ? fileMetadata.tags : [];
-  const currentApprovers: string[] = Array.isArray(fileMetadata?.approvers) ? fileMetadata.approvers : [];
+  const currentCategories =
+    fileMetadata?.categories ||
+    fileMetadata?.category ||
+    contextData?.categories ||
+    contextData?.category ||
+    "";
+  const currentTags: string[] = Array.isArray(fileMetadata?.tags)
+    ? fileMetadata.tags
+    : [];
+  const currentApprovers: string[] = Array.isArray(fileMetadata?.approvers)
+    ? fileMetadata.approvers
+    : [];
   const currentId = fileMetadata?.id || "";
-  const currentTemplateId = fileMetadata?.templateId || fileMetadata?.template || contextData?.templateId || contextData?.template || "";
+  const currentTemplateId =
+    fileMetadata?.templateId ||
+    fileMetadata?.template ||
+    contextData?.templateId ||
+    contextData?.template ||
+    "";
   const currentUpdatedAt = fileMetadata?.updated_at || "";
 
   // Opções do projeto
   const statusOptions = useMemo<StatusItem[]>(() => {
     const raw = projectMetaOptions?.statuses || [];
     return raw.map((s: any) => {
-      const name = String(s.name || s.key || s.label || "").toLowerCase().replace(/\s+/g, "-");
+      const name = String(s.name || s.key || s.label || "")
+        .toLowerCase()
+        .replace(/\s+/g, "-");
       const label = s.label || name.toUpperCase().replace(/-/g, " ");
       const key = s.key || name;
       const color = s.color || "#3b82f6";
@@ -134,14 +209,18 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
   const categoryOptions = useMemo<TaxonomyItem[]>(() => {
     const raw = projectMetaOptions?.categories || [];
     return raw.map((c: any) =>
-      typeof c === "string" ? { name: c, color: "#3b82f6" } : { name: c.name || "", color: c.color || "#3b82f6" }
+      typeof c === "string"
+        ? { name: c, color: "#3b82f6" }
+        : { name: c.name || "", color: c.color || "#3b82f6" },
     );
   }, [projectMetaOptions?.categories]);
 
   const availableTags = useMemo<TaxonomyItem[]>(() => {
     const raw = projectMetaOptions?.tags || [];
     return raw.map((t: any) =>
-      typeof t === "string" ? { name: t, color: "#6366f1" } : { name: t.name || "", color: t.color || "#6366f1" }
+      typeof t === "string"
+        ? { name: t, color: "#6366f1" }
+        : { name: t.name || "", color: t.color || "#6366f1" },
     );
   }, [projectMetaOptions?.tags]);
 
@@ -183,13 +262,19 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
 
   const currentDeptId = fileMetadata?.department || "";
   const activeDept = departments.find(
-    (d) => d.id === currentDeptId || d.folder.toLowerCase() === currentDeptId.toLowerCase()
+    (d) =>
+      d.id === currentDeptId ||
+      d.folder.toLowerCase() === currentDeptId.toLowerCase(),
   );
 
-  const activeStatusObj = statusOptions.find((s) => s.name === currentStatus || s.key === currentStatus) || {
+  const activeStatusObj = statusOptions.find(
+    (s) => s.name === currentStatus || s.key === currentStatus,
+  ) || {
     name: currentStatus,
     key: currentStatus,
-    label: currentStatus ? currentStatus.toUpperCase().replace(/-/g, " ") : "DRAFT",
+    label: currentStatus
+      ? currentStatus.toUpperCase().replace(/-/g, " ")
+      : "DRAFT",
     color: "#64748b",
   };
 
@@ -216,12 +301,17 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
             currentStatus === "approved"
               ? "badge-success-subtle"
               : currentStatus === "review"
-              ? "badge-info-subtle"
-              : currentStatus === "proposed"
-              ? "badge-warning-subtle"
-              : "badge-neutral-subtle"
+                ? "badge-info-subtle"
+                : currentStatus === "proposed"
+                  ? "badge-warning-subtle"
+                  : "badge-neutral-subtle"
           }`}
-          style={{ fontSize: "10.5px", padding: "2px 7px", borderRadius: "4px", fontWeight: 600 }}
+          style={{
+            fontSize: "10.5px",
+            padding: "2px 7px",
+            borderRadius: "4px",
+            fontWeight: 600,
+          }}
           title={`Status de governança: ${activeStatusObj.label}`}
         >
           {activeStatusObj.key ? activeStatusObj.key.toUpperCase() : "DRAFT"}
@@ -231,14 +321,16 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
         {currentCategories && (
           <span
             className="badge badge-primary-subtle"
-            style={{ fontSize: "10.5px", padding: "2px 7px", borderRadius: "4px" }}
+            style={{
+              fontSize: "10.5px",
+              padding: "2px 7px",
+              borderRadius: "4px",
+            }}
             title="Categoria funcional do documento"
           >
             {currentCategories}
           </span>
         )}
-
-
 
         {/* Departamento Badge */}
         {activeDept && (
@@ -261,7 +353,10 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
             onClick={() => setShowProperties(true)}
             title={`Departamento: ${activeDept.name} (Pasta padrão: ${activeDept.folder}) - Clique para gerenciar`}
           >
-            <span className="material-symbols-outlined" style={{ fontSize: "12px" }}>
+            <span
+              className="material-symbols-outlined"
+              style={{ fontSize: "12px" }}
+            >
               domain
             </span>
             {activeDept.name}
@@ -298,7 +393,6 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
 
       {/* Right: Propriedades (Dropdown), Consumidores & Dependências */}
       <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-        
         {/* 1. Botão Dropdown / Popover de Propriedades (Metadados) */}
         <div style={{ position: "relative" }} ref={propDropdownRef}>
           <button
@@ -316,14 +410,19 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
               gap: "5px",
               fontSize: "11px",
               fontWeight: 500,
-              background: showProperties ? "var(--color-surface-container, #f1f5f9)" : "transparent",
+              background: showProperties
+                ? "var(--color-surface-container, #f1f5f9)"
+                : "transparent",
               color: showProperties ? "var(--primary, #2563eb)" : "inherit",
               borderRadius: "5px",
               padding: "4px 8px",
             }}
             title="Gerenciar propriedades do documento"
           >
-            <span className="material-symbols-outlined icon-xs" style={{ color: "#2563eb", fontSize: "15px" }}>
+            <span
+              className="material-symbols-outlined icon-xs"
+              style={{ color: "#2563eb", fontSize: "15px" }}
+            >
               tune
             </span>
             <span>Propriedades</span>
@@ -341,7 +440,10 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
                 {currentTags.length}
               </span>
             )}
-            <span className="material-symbols-outlined icon-xs" style={{ fontSize: "14px", opacity: 0.7 }}>
+            <span
+              className="material-symbols-outlined icon-xs"
+              style={{ fontSize: "14px", opacity: 0.7 }}
+            >
               {showProperties ? "expand_less" : "expand_more"}
             </span>
           </button>
@@ -369,12 +471,31 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
               }}
             >
               {/* Header do Popover */}
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--color-outline-variant, #f1f5f9)", paddingBottom: "8px" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                  <span className="material-symbols-outlined icon-xs" style={{ color: "var(--primary, #2563eb)" }}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  borderBottom:
+                    "1px solid var(--color-outline-variant, #f1f5f9)",
+                  paddingBottom: "8px",
+                }}
+              >
+                <div
+                  style={{ display: "flex", alignItems: "center", gap: "6px" }}
+                >
+                  <span
+                    className="material-symbols-outlined icon-xs"
+                    style={{ color: "var(--primary, #2563eb)" }}
+                  >
                     tune
                   </span>
-                  <strong style={{ fontSize: "12.5px", color: "var(--color-on-surface, #0f172a)" }}>
+                  <strong
+                    style={{
+                      fontSize: "12.5px",
+                      color: "var(--color-on-surface, #0f172a)",
+                    }}
+                  >
                     Propriedades
                   </strong>
                 </div>
@@ -396,21 +517,46 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
               </div>
 
               {/* Título do Documento */}
-              <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                <span style={{ fontSize: "11px", fontWeight: 600, color: "var(--color-outline, #64748b)" }}>Título</span>
+              <div
+                style={{ display: "flex", flexDirection: "column", gap: "4px" }}
+              >
+                <span
+                  style={{
+                    fontSize: "11px",
+                    fontWeight: 600,
+                    color: "var(--color-outline, #64748b)",
+                  }}
+                >
+                  Título
+                </span>
                 <input
                   type="text"
                   className="form-input"
                   placeholder="Título do documento..."
                   value={currentTitle}
-                  onChange={(e) => updateFileMetadata({ title: e.target.value })}
-                  style={{ fontSize: "12px", padding: "6px 8px", borderRadius: "5px", border: "1px solid var(--color-outline-variant, #cbd5e1)" }}
+                  onChange={(e) =>
+                    updateFileMetadata({ title: e.target.value })
+                  }
+                  style={{
+                    fontSize: "12px",
+                    padding: "6px 8px",
+                    borderRadius: "5px",
+                    border: "1px solid var(--color-outline-variant, #cbd5e1)",
+                  }}
                 />
               </div>
 
               {/* Departamento / Cofre */}
-              <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                <span style={{ fontSize: "11px", fontWeight: 600, color: "var(--color-outline, #64748b)" }}>
+              <div
+                style={{ display: "flex", flexDirection: "column", gap: "4px" }}
+              >
+                <span
+                  style={{
+                    fontSize: "11px",
+                    fontWeight: 600,
+                    color: "var(--color-outline, #64748b)",
+                  }}
+                >
                   Cofre / Departamento
                 </span>
                 <select
@@ -434,7 +580,11 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
                 >
                   <option value="">(Público / Pasta Padrão)</option>
                   {departments.map((dept) => (
-                    <option key={dept.id} value={dept.id} style={{ color: "#0f172a" }}>
+                    <option
+                      key={dept.id}
+                      value={dept.id}
+                      style={{ color: "#0f172a" }}
+                    >
                       {dept.name} ({dept.folder})
                     </option>
                   ))}
@@ -442,10 +592,30 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
               </div>
 
               {/* Status & Categoria em linha */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: "10px",
+                }}
+              >
                 {/* Status */}
-                <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                  <span style={{ fontSize: "11px", fontWeight: 600, color: "var(--color-outline, #64748b)" }}>Status</span>
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "4px",
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: "11px",
+                      fontWeight: 600,
+                      color: "var(--color-outline, #64748b)",
+                    }}
+                  >
+                    Status
+                  </span>
                   <select
                     className="form-select"
                     value={currentStatus}
@@ -461,16 +631,38 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
                     }}
                   >
                     {statusOptions.map((opt) => (
-                      <option key={opt.name || opt.key || ""} value={opt.name || opt.key || ""}>
-                        {opt.label || (opt.name ? opt.name.toUpperCase() : (opt.key ? opt.key.toUpperCase() : ""))}
+                      <option
+                        key={opt.name || opt.key || ""}
+                        value={opt.name || opt.key || ""}
+                      >
+                        {opt.label ||
+                          (opt.name
+                            ? opt.name.toUpperCase()
+                            : opt.key
+                              ? opt.key.toUpperCase()
+                              : "")}
                       </option>
                     ))}
                   </select>
                 </div>
 
                 {/* Categoria */}
-                <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                  <span style={{ fontSize: "11px", fontWeight: 600, color: "var(--color-outline, #64748b)" }}>Categoria</span>
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "4px",
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: "11px",
+                      fontWeight: 600,
+                      color: "var(--color-outline, #64748b)",
+                    }}
+                  >
+                    Categoria
+                  </span>
                   <select
                     className="form-select"
                     value={currentCategories}
@@ -496,13 +688,37 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
               </div>
 
               {/* Tags */}
-              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                <span style={{ fontSize: "11px", fontWeight: 600, color: "var(--color-outline, #64748b)" }}>Tags</span>
-                
+              <div
+                style={{ display: "flex", flexDirection: "column", gap: "6px" }}
+              >
+                <span
+                  style={{
+                    fontSize: "11px",
+                    fontWeight: 600,
+                    color: "var(--color-outline, #64748b)",
+                  }}
+                >
+                  Tags
+                </span>
+
                 {/* Chips de tags ativas com cores */}
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", minHeight: "26px", alignItems: "center" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: "4px",
+                    minHeight: "26px",
+                    alignItems: "center",
+                  }}
+                >
                   {currentTags.length === 0 ? (
-                    <span style={{ fontSize: "11px", color: "#94a3b8", fontStyle: "italic" }}>
+                    <span
+                      style={{
+                        fontSize: "11px",
+                        color: "#94a3b8",
+                        fontStyle: "italic",
+                      }}
+                    >
                       Nenhuma tag atribuída.
                     </span>
                   ) : (
@@ -541,7 +757,10 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
                             }}
                             title={`Remover #${tag}`}
                           >
-                            <span className="material-symbols-outlined" style={{ fontSize: "12px" }}>
+                            <span
+                              className="material-symbols-outlined"
+                              style={{ fontSize: "12px" }}
+                            >
                               close
                             </span>
                           </button>
@@ -552,9 +771,26 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
                 </div>
 
                 {/* Sugestões rápidas de tags do projeto (.project.json) */}
-                {availableTags.filter((t) => !currentTags.includes(t.name)).length > 0 && (
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", alignItems: "center", marginTop: "2px" }}>
-                    <span style={{ fontSize: "10px", color: "#94a3b8", marginRight: "2px" }}>Sugeridas:</span>
+                {availableTags.filter((t) => !currentTags.includes(t.name))
+                  .length > 0 && (
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: "4px",
+                      alignItems: "center",
+                      marginTop: "2px",
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: "10px",
+                        color: "#94a3b8",
+                        marginRight: "2px",
+                      }}
+                    >
+                      Sugeridas:
+                    </span>
                     {availableTags
                       .filter((t) => !currentTags.includes(t.name))
                       .slice(0, 7)
@@ -602,7 +838,12 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
                         handleAddTag(newTagInput);
                       }
                     }}
-                    style={{ fontSize: "11px", padding: "4px 7px", borderRadius: "4px", flex: 1 }}
+                    style={{
+                      fontSize: "11px",
+                      padding: "4px 7px",
+                      borderRadius: "4px",
+                      flex: 1,
+                    }}
                   />
                   <button
                     type="button"
@@ -616,11 +857,35 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
               </div>
 
               {/* Aprovadores (Approvers) */}
-              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                <span style={{ fontSize: "11px", fontWeight: 600, color: "var(--color-outline, #64748b)" }}>Aprovadores</span>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", minHeight: "22px", alignItems: "center" }}>
+              <div
+                style={{ display: "flex", flexDirection: "column", gap: "6px" }}
+              >
+                <span
+                  style={{
+                    fontSize: "11px",
+                    fontWeight: 600,
+                    color: "var(--color-outline, #64748b)",
+                  }}
+                >
+                  Aprovadores
+                </span>
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: "4px",
+                    minHeight: "22px",
+                    alignItems: "center",
+                  }}
+                >
                   {currentApprovers.length === 0 ? (
-                    <span style={{ fontSize: "11px", color: "#94a3b8", fontStyle: "italic" }}>
+                    <span
+                      style={{
+                        fontSize: "11px",
+                        color: "#94a3b8",
+                        fontStyle: "italic",
+                      }}
+                    >
                       Nenhum aprovador atribuído.
                     </span>
                   ) : (
@@ -653,7 +918,10 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
                             color: "#94a3b8",
                           }}
                         >
-                          <span className="material-symbols-outlined" style={{ fontSize: "12px" }}>
+                          <span
+                            className="material-symbols-outlined"
+                            style={{ fontSize: "12px" }}
+                          >
                             close
                           </span>
                         </button>
@@ -674,7 +942,12 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
                         handleAddApprover();
                       }
                     }}
-                    style={{ fontSize: "11px", padding: "4px 7px", borderRadius: "4px", flex: 1 }}
+                    style={{
+                      fontSize: "11px",
+                      padding: "4px 7px",
+                      borderRadius: "4px",
+                      flex: 1,
+                    }}
                   />
                   <button
                     type="button"
@@ -688,16 +961,36 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
               </div>
 
               {/* Template ID */}
-              <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                <span style={{ fontSize: "11px", fontWeight: 600, color: "var(--color-outline, #64748b)" }}>Template ID</span>
-                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <div
+                style={{ display: "flex", flexDirection: "column", gap: "4px" }}
+              >
+                <span
+                  style={{
+                    fontSize: "11px",
+                    fontWeight: 600,
+                    color: "var(--color-outline, #64748b)",
+                  }}
+                >
+                  Template ID
+                </span>
+                <div
+                  style={{ display: "flex", alignItems: "center", gap: "6px" }}
+                >
                   <input
                     type="text"
                     className="form-input"
                     placeholder="Identificador de template (ex: sipoc, rfc)..."
                     value={currentTemplateId}
-                    onChange={(e) => updateFileMetadata({ templateId: e.target.value })}
-                    style={{ fontSize: "11px", padding: "4px 7px", borderRadius: "4px", flex: 1, fontFamily: "monospace" }}
+                    onChange={(e) =>
+                      updateFileMetadata({ templateId: e.target.value })
+                    }
+                    style={{
+                      fontSize: "11px",
+                      padding: "4px 7px",
+                      borderRadius: "4px",
+                      flex: 1,
+                      fontFamily: "monospace",
+                    }}
                   />
                 </div>
               </div>
@@ -716,13 +1009,23 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
                   border: "1px solid var(--color-outline-variant, #f1f5f9)",
                 }}
               >
-                <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span><strong>ID: </strong><code>{currentId || "auto"}</code></span>
-                  <span>{dependencies.length} deps &bull; {consumers.length} cons</span>
+                <div
+                  style={{ display: "flex", justifyContent: "space-between" }}
+                >
+                  <span>
+                    <strong>ID: </strong>
+                    <code>{currentId || "auto"}</code>
+                  </span>
+                  <span>
+                    {dependencies.length} deps &bull; {consumers.length} cons
+                  </span>
                 </div>
                 {currentUpdatedAt && (
                   <div>
-                    <span><strong>Atualizado: </strong>{new Date(currentUpdatedAt).toLocaleDateString()}</span>
+                    <span>
+                      <strong>Atualizado: </strong>
+                      {new Date(currentUpdatedAt).toLocaleDateString()}
+                    </span>
                   </div>
                 )}
               </div>
@@ -745,17 +1048,25 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
               alignItems: "center",
               gap: "4px",
               fontSize: "11px",
-              background: showConsumers ? "var(--color-surface-container, #f1f5f9)" : "transparent",
+              background: showConsumers
+                ? "var(--color-surface-container, #f1f5f9)"
+                : "transparent",
             }}
           >
-            <span className="material-symbols-outlined icon-xs" style={{ color: "#2563eb" }}>
+            <span
+              className="material-symbols-outlined icon-xs"
+              style={{ color: "#2563eb" }}
+            >
               call_received
             </span>
-            <span>Consumidores</span>
+
             <span
               style={{
                 fontWeight: 700,
-                background: consumers.length > 0 ? "rgba(37,99,235,0.12)" : "rgba(0,0,0,0.06)",
+                background:
+                  consumers.length > 0
+                    ? "rgba(37,99,235,0.12)"
+                    : "rgba(0,0,0,0.06)",
                 color: consumers.length > 0 ? "#2563eb" : "inherit",
                 padding: "1px 5px",
                 borderRadius: "10px",
@@ -792,17 +1103,39 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
                   paddingBottom: "4px",
                 }}
               >
-                <strong style={{ fontSize: "11px", color: "var(--color-on-surface, #0f172a)" }}>
+                <strong
+                  style={{
+                    fontSize: "11px",
+                    color: "var(--color-on-surface, #0f172a)",
+                  }}
+                >
                   Documentos Dependentes (Backlinks):
                 </strong>
-                <span style={{ fontSize: "10px", color: "#94a3b8" }}>{consumers.length}</span>
+                <span style={{ fontSize: "10px", color: "#94a3b8" }}>
+                  {consumers.length}
+                </span>
               </div>
               {consumers.length === 0 ? (
-                <div style={{ fontSize: "11px", color: "var(--color-outline, #64748b)", padding: "8px 4px", textAlign: "center" }}>
+                <div
+                  style={{
+                    fontSize: "11px",
+                    color: "var(--color-outline, #64748b)",
+                    padding: "8px 4px",
+                    textAlign: "center",
+                  }}
+                >
                   Nenhum outro documento aponta para este.
                 </div>
               ) : (
-                <div style={{ maxHeight: "200px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "2px" }}>
+                <div
+                  style={{
+                    maxHeight: "200px",
+                    overflowY: "auto",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "2px",
+                  }}
+                >
                   {consumers.map((c: any, i: number) => (
                     <div
                       key={i}
@@ -822,16 +1155,42 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
                       }}
                       className="dropdown-item-hover"
                     >
-                      <div style={{ display: "flex", alignItems: "center", gap: "6px", overflow: "hidden" }}>
-                        <span className="material-symbols-outlined icon-xs" style={{ color: "#64748b" }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "6px",
+                          overflow: "hidden",
+                        }}
+                      >
+                        <span
+                          className="material-symbols-outlined icon-xs"
+                          style={{ color: "#64748b" }}
+                        >
                           description
                         </span>
-                        <span style={{ fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        <span
+                          style={{
+                            fontWeight: 500,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
                           {c.title || c.path || c}
                         </span>
                       </div>
                       {c.categories && (
-                        <span style={{ fontSize: "9.5px", padding: "1px 4px", borderRadius: "3px", background: "rgba(0,0,0,0.06)", color: "#64748b", flexShrink: 0 }}>
+                        <span
+                          style={{
+                            fontSize: "9.5px",
+                            padding: "1px 4px",
+                            borderRadius: "3px",
+                            background: "rgba(0,0,0,0.06)",
+                            color: "#64748b",
+                            flexShrink: 0,
+                          }}
+                        >
                           {c.categories}
                         </span>
                       )}
@@ -858,17 +1217,23 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
               alignItems: "center",
               gap: "4px",
               fontSize: "11px",
-              background: showDeps ? "var(--color-surface-container, #f1f5f9)" : "transparent",
+              background: showDeps
+                ? "var(--color-surface-container, #f1f5f9)"
+                : "transparent",
             }}
           >
-            <span className="material-symbols-outlined icon-xs" style={{ color: "#16a34a" }}>
+            <span
+              className="material-symbols-outlined icon-xs"
+              style={{ color: "#16a34a" }}
+            >
               call_made
             </span>
-            <span>Dependências</span>
             <span
               style={{
-                fontWeight: 700,
-                background: dependencies.length > 0 ? "rgba(22,163,74,0.12)" : "rgba(0,0,0,0.06)",
+                background:
+                  dependencies.length > 0
+                    ? "rgba(22,163,74,0.12)"
+                    : "rgba(0,0,0,0.06)",
                 color: dependencies.length > 0 ? "#16a34a" : "inherit",
                 padding: "1px 5px",
                 borderRadius: "10px",
@@ -905,17 +1270,39 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
                   paddingBottom: "4px",
                 }}
               >
-                <strong style={{ fontSize: "11px", color: "var(--color-on-surface, #0f172a)" }}>
+                <strong
+                  style={{
+                    fontSize: "11px",
+                    color: "var(--color-on-surface, #0f172a)",
+                  }}
+                >
                   Contratos Requeridos (Links de Saída):
                 </strong>
-                <span style={{ fontSize: "10px", color: "#94a3b8" }}>{dependencies.length}</span>
+                <span style={{ fontSize: "10px", color: "#94a3b8" }}>
+                  {dependencies.length}
+                </span>
               </div>
               {dependencies.length === 0 ? (
-                <div style={{ fontSize: "11px", color: "var(--color-outline, #64748b)", padding: "8px 4px", textAlign: "center" }}>
+                <div
+                  style={{
+                    fontSize: "11px",
+                    color: "var(--color-outline, #64748b)",
+                    padding: "8px 4px",
+                    textAlign: "center",
+                  }}
+                >
                   Nenhum link ou dependência referenciada.
                 </div>
               ) : (
-                <div style={{ maxHeight: "200px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "2px" }}>
+                <div
+                  style={{
+                    maxHeight: "200px",
+                    overflowY: "auto",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "2px",
+                  }}
+                >
                   {dependencies.map((d: any, i: number) => (
                     <div
                       key={i}
@@ -935,16 +1322,42 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
                       }}
                       className="dropdown-item-hover"
                     >
-                      <div style={{ display: "flex", alignItems: "center", gap: "6px", overflow: "hidden" }}>
-                        <span className="material-symbols-outlined icon-xs" style={{ color: d.hash ? "#2563eb" : "#64748b" }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "6px",
+                          overflow: "hidden",
+                        }}
+                      >
+                        <span
+                          className="material-symbols-outlined icon-xs"
+                          style={{ color: d.hash ? "#2563eb" : "#64748b" }}
+                        >
                           {d.hash ? "share_location" : "description"}
                         </span>
-                        <span style={{ fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        <span
+                          style={{
+                            fontWeight: 500,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
                           {d.title || d.path || d}
                         </span>
                       </div>
                       {d.categories && (
-                        <span style={{ fontSize: "9.5px", padding: "1px 4px", borderRadius: "3px", background: "rgba(0,0,0,0.06)", color: "#64748b", flexShrink: 0 }}>
+                        <span
+                          style={{
+                            fontSize: "9.5px",
+                            padding: "1px 4px",
+                            borderRadius: "3px",
+                            background: "rgba(0,0,0,0.06)",
+                            color: "#64748b",
+                            flexShrink: 0,
+                          }}
+                        >
                           {d.categories}
                         </span>
                       )}

@@ -1,11 +1,13 @@
 import React, { useRef, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Building2, ChevronDown, Check } from "lucide-react";
 import { useWorkspace } from "../../context/WorkspaceContext";
 import { useOrgUiStore } from "../../stores/orgUiStore";
 
 export const OrgSelectorDropdown: React.FC = () => {
-  const { activeOrg, orgs, selectOrg } = useWorkspace();
+  const { activeOrg, orgs, selectOrg, repos } = useWorkspace();
   const { isOrgDropdownOpen, toggleOrgDropdown, closeOrgDropdown } = useOrgUiStore();
+  const navigate = useNavigate();
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Fecha o dropdown ao clicar fora ou pressionar Escape
@@ -156,6 +158,15 @@ export const OrgSelectorDropdown: React.FC = () => {
                 onClick={() => {
                   selectOrg(o.login);
                   closeOrgDropdown();
+                  const targetRepos = repos.filter((r) => {
+                    const owner = (r.owner || (r.full_name ? r.full_name.split("/")[0] : "")).toLowerCase();
+                    return owner === o.login.toLowerCase();
+                  });
+                  if (targetRepos.length > 0) {
+                    navigate(`/org/${encodeURIComponent(o.login)}/repo/${encodeURIComponent(targetRepos[0].name)}/editor`);
+                  } else if (o.login === "local") {
+                    navigate("/repo/local/editor");
+                  }
                 }}
                 style={{
                   padding: "8px 10px",

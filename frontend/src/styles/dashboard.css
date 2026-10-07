@@ -9233,4 +9233,295 @@ input[type="text"].icon-picker-search-input:focus {
   border-color: var(--primary, #2563eb);
 }
 
+/* ========================================================================= */
+/* REPOSITORY GOVERNANCE MODAL (MATERIAL DESIGN 3)                          */
+/* ========================================================================= */
+.repo-gov-container {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.repo-gov-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.repo-gov-segmented {
+  display: inline-flex;
+  align-items: center;
+  background: var(--md-sys-color-surface-container, #f1f3f4);
+  padding: 3px;
+  border-radius: var(--md-shape-corner-md, 10px);
+  gap: 2px;
+  border: 1px solid var(--md-sys-color-outline-variant, #dadce0);
+}
+
+.repo-gov-seg-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: var(--md-shape-corner-sm, 7px);
+  font-size: 12px;
+  font-weight: 500;
+  border: none;
+  background: transparent;
+  color: var(--md-sys-color-on-surface-variant, #5f6368);
+  cursor: pointer;
+  transition: all var(--md-sys-motion-duration-short, 150ms) ease;
+}
+
+.repo-gov-seg-btn:hover {
+  color: var(--md-sys-color-on-surface, #202124);
+}
+
+.repo-gov-seg-btn.active {
+  background: var(--md-sys-color-surface, #ffffff);
+  color: var(--md-sys-color-primary, #1a73e8);
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.repo-gov-counter {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 9999px;
+  background: var(--md-sys-color-surface-container-high, #e8eaed);
+  color: var(--md-sys-color-on-surface-variant, #5f6368);
+}
+
+.repo-gov-seg-btn.active .repo-gov-counter {
+  background: var(--md-sys-color-primary-container, #d2e3fc);
+  color: var(--md-sys-color-on-primary-container, #041e49);
+}
+
+.repo-gov-search-wrap {
+  position: relative;
+  width: 100%;
+}
+
+.repo-gov-search-icon {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--md-sys-color-on-surface-variant, #5f6368);
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+}
+
+.repo-gov-search-input {
+  width: 100%;
+  padding: 8px 32px 8px 34px;
+  border-radius: var(--md-shape-corner-md, 8px);
+  border: 1px solid var(--md-sys-color-outline-variant, #dadce0);
+  background: var(--md-sys-color-surface, #ffffff);
+  color: var(--md-sys-color-on-surface, #202124);
+  font-size: 12.5px;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color var(--md-sys-motion-duration-short, 150ms) ease;
+}
+
+.repo-gov-search-input:focus {
+  border-color: var(--md-sys-color-primary, #1a73e8);
+  box-shadow: 0 0 0 1px var(--md-sys-color-primary, #1a73e8);
+}
+
+.repo-gov-search-clear {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--md-sys-color-on-surface-variant, #5f6368);
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  border-radius: 4px;
+}
+
+.repo-gov-search-clear:hover {
+  color: var(--md-sys-color-on-surface, #202124);
+}
+
+.repo-gov-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 380px;
+  min-height: 180px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.repo-gov-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-radius: var(--md-shape-corner-md, 10px);
+  background: var(--md-sys-color-surface-container-low, #f8f9fa);
+  border: 1px solid var(--md-sys-color-outline-variant, #e8eaed);
+  gap: 12px;
+  transition: all var(--md-sys-motion-duration-short, 150ms) ease;
+}
+
+.repo-gov-card:hover {
+  border-color: var(--md-sys-color-outline, #747775);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+}
+
+.repo-gov-card-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.repo-gov-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  border: 1px solid var(--md-sys-color-outline-variant, #dadce0);
+}
+
+.repo-gov-avatar-fallback {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--md-sys-color-primary-container, #d2e3fc);
+  color: var(--md-sys-color-on-primary-container, #041e49);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.repo-gov-team-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  background: rgba(99, 102, 241, 0.12);
+  color: #6366f1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.repo-gov-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 2px;
+}
+
+.repo-gov-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.repo-gov-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--md-sys-color-on-surface, #202124);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.repo-gov-owner-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(245, 158, 11, 0.15);
+  color: #b45309;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  flex-shrink: 0;
+}
+
+.repo-gov-sub {
+  font-size: 11px;
+  color: var(--md-sys-color-on-surface-variant, #5f6368);
+  font-family: var(--font-mono, monospace);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.repo-gov-card-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.repo-gov-perm-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.repo-gov-external-link {
+  padding: 4px;
+  border-radius: 4px;
+  color: var(--md-sys-color-on-surface-variant, #5f6368);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color var(--md-sys-motion-duration-short, 150ms) ease;
+}
+
+.repo-gov-external-link:hover {
+  color: var(--md-sys-color-primary, #1a73e8);
+}
+
+.repo-gov-empty {
+  padding: 32px 16px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--md-sys-color-on-surface-variant, #5f6368);
+  font-size: 13px;
+}
+
+.repo-gov-empty-icon {
+  opacity: 0.4;
+  margin-bottom: 4px;
+}
+
+.repo-gov-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.repo-gov-footer-total {
+  font-size: 12px;
+  color: var(--md-sys-color-on-surface-variant, #5f6368);
+}
+
 

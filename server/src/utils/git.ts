@@ -1317,3 +1317,72 @@ export async function getFileBlameDetails(
 
   return { success: true, blame: result };
 }
+
+export interface RemoteUpdateCheckResult {
+  hasUpdates: boolean;
+  localHash: string;
+  remoteHash?: string;
+  branch?: string;
+  behindCount?: number;
+  aheadCount?: number;
+  error?: string;
+}
+
+export async function checkRemoteGitUpdates(
+  repoDir: string,
+  remoteBranch?: string,
+): Promise<RemoteUpdateCheckResult> {
+  const isRepo = await isGitRepo(repoDir);
+  if (!isRepo) {
+    return { hasUpdates: false, localHash: "" };
+  }
+
+  // 1. Get current local HEAD commit hash
+  const headRes = await executeGitCommand("git rev-parse HEAD", repoDir);
+  const localHash = headRes.stdout.trim();
+  if (!localHash) {
+    return { hasUpdates: false, localHash: "" };
+  }
+
+  // 2. Check if repo has remote configured
+  const remoteRes = await executeGitCommand("git remote get-url origin", repoDir);
+  if (!remoteRes.success || !remoteRes.stdout.trim()) {
+    return { hasUpdates: false, localHash };
+  }
+
+  // Determine branch to compare
+  let branch = remoteBranch;
+  if (!branch) {
+    const branchRes = await executeGitCommand(
+      "git rev-parse --abbrev-ref HEAD",
+      repoDir,
+    );
+    branch = branchRes.stdout?.trim() || "main";
+  }
+
+  // 3. Query remote HEAD commit hash via ls-remote (fast, 0 disk operations, no working tree changes)
+  const lsRes = await executeGitCommand(
+    `git ls-remote origin refs/heads/${branch}`,
+    repoDir,
+  );
+  if (!lsRes.success || !lsRes.stdout.trim()) {
+    return { hasUpdates: false, localHash, branch, error: lsRes.stderr };
+  }
+
+  const parts = lsRes.stdout.trim().split(/\s+/);
+  const remoteHash = parts[0]?.trim();
+
+  if (!remoteHash) {
+    return { hasUpdates: false, localHash, branch };
+  }
+
+  const hasUpdates = remoteHash.toLowerCase() !== localHash.toLowerCase();
+
+  return {
+    hasUpdates,
+    localHash,
+    remoteHash,
+    branch,
+  };
+}
+

@@ -33,11 +33,9 @@ export const DeleteRepoModal: React.FC<DeleteRepoModalProps> = ({
     if (isOpen) {
       setConfirmName("");
       setErrorMsg(null);
-      if (initialMode === "unlink" || !hasRemote || !isAdmin) {
-        setDeleteMode("local_only");
-      } else {
-        setDeleteMode("both");
-      }
+      // Sempre padronizar para desvincular/remover localmente por segurança,
+      // evitando falhas de permissão de exclusão remota na nuvem (403 Forbidden).
+      setDeleteMode("local_only");
     }
   }, [isOpen, repo, hasRemote, isAdmin, initialMode]);
 
@@ -60,15 +58,27 @@ export const DeleteRepoModal: React.FC<DeleteRepoModalProps> = ({
       });
 
       if (res.ok) {
-        onDeleted();
+        await onDeleted();
         onClose();
       } else {
-        setErrorMsg(res.data?.error || res.data?.message || "Erro ao processar exclusão.");
+        const errorText = res.data?.error || res.data?.message || "Erro ao processar exclusão.";
+        if (deleteRemote && (errorText.includes("403") || errorText.includes("401") || errorText.includes("remoto"))) {
+          setErrorMsg(`${errorText}. Dica: marque a opção "Apenas desvincular do Context OS" para remover o repositório da sua máquina.`);
+        } else {
+          setErrorMsg(errorText);
+        }
       }
     } catch (err: any) {
       setErrorMsg(err.message || "Falha na comunicação com o servidor.");
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && isConfirmed && !isDeleting) {
+      e.preventDefault();
+      handleDelete();
     }
   };
 
@@ -175,6 +185,7 @@ export const DeleteRepoModal: React.FC<DeleteRepoModalProps> = ({
             placeholder={repo.name}
             value={confirmName}
             onChange={(e) => setConfirmName(e.target.value)}
+            onKeyDown={handleKeyDown}
             autoFocus
           />
         </FormField>
