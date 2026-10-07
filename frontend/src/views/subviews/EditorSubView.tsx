@@ -123,8 +123,31 @@ export const EditorSubView: React.FC<EditorSubViewProps> = ({
         )}
 
         {/* PANEL 2: EDITOR & LIVE PREVIEW CANVAS */}
-        <section className="workbench-editor-pane">
-          {isLoadingFile ? (
+        <section className="workbench-editor-pane" style={{ position: 'relative' }}>
+          {isLoadingFile && (
+            <div
+              className="editor-loading-indicator-track"
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                height: '2.5px',
+                zIndex: 60,
+                overflow: 'hidden',
+                backgroundColor: 'rgba(37, 99, 235, 0.15)',
+              }}
+            >
+              <div
+                className="repos-linear-progress-bar"
+                style={{
+                  height: '100%',
+                  backgroundColor: 'var(--primary, #2563eb)',
+                }}
+              />
+            </div>
+          )}
+          {isLoadingFile && !activeFile ? (
             <div className="loading-state" style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               Carregando documento...
             </div>

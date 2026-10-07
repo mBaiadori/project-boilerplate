@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useMemo } from "react";
 import { useWorkspace } from "../../context/WorkspaceContext";
 import { useAuth } from "../../context/AuthContext";
 import { isPathHidden } from "../../utils/hidden-files";
@@ -12,8 +12,6 @@ import {
   Shield,
 } from "lucide-react";
 import { OrgSelectorDropdown } from "./OrgSelectorDropdown";
-import { API } from "../../services/api";
-import type { EffectiveUserPermission } from "../../types";
 
 interface TopHeaderProps {
   onBackToRepos: () => void;
@@ -32,23 +30,9 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
   onNavigateToEdits,
   onOpenTour = () => {},
 }) => {
-  const { activeRepo, pendingChanges, isLoadingWorkspace } = useWorkspace();
+  const { activeRepo, pendingChanges, isLoadingWorkspace, effectivePermission } = useWorkspace();
   const { user, provider } = useAuth();
   const providerLabel = provider === "github" ? "GitHub" : "Modo Local";
-
-  const [effectivePerm, setEffectivePerm] = useState<EffectiveUserPermission | null>(null);
-
-  useEffect(() => {
-    if (activeRepo?.name) {
-      API.getEffectiveUserPermission(activeRepo.name, activeRepo.owner)
-        .then((res) => {
-          if (res.ok && res.data) {
-            setEffectivePerm(res.data);
-          }
-        })
-        .catch(() => {});
-    }
-  }, [activeRepo?.name, activeRepo?.owner]);
 
   const getRepoWebUrl = () => {
     if (activeRepo?.html_url) return activeRepo.html_url;
@@ -139,10 +123,10 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
           <div className="dash-title-row">
             <h1 id="dash-repo-title">{activeRepo?.name || "Projeto"}</h1>
 
-            {effectivePerm && (
+            {effectivePermission && (
               <span
                 id="dash-user-perm-badge"
-                title={`Seu papel efetivo: ${effectivePerm.roleName} (Permissão: ${effectivePerm.repoPermission})`}
+                title={`Seu papel efetivo: ${effectivePermission.roleName} (Permissão: ${effectivePermission.repoPermission})`}
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -152,34 +136,34 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
                   padding: "2px 8px",
                   borderRadius: "9999px",
                   backgroundColor:
-                    effectivePerm.isOrgOwner || effectivePerm.allowedActions.canAdmin
+                    effectivePermission.isOrgOwner || effectivePermission.allowedActions.canAdmin
                       ? "rgba(236, 72, 153, 0.12)"
-                      : effectivePerm.allowedActions.canMaintain
+                      : effectivePermission.allowedActions.canMaintain
                       ? "rgba(139, 92, 246, 0.12)"
-                      : effectivePerm.allowedActions.canWrite
+                      : effectivePermission.allowedActions.canWrite
                       ? "rgba(16, 185, 129, 0.12)"
                       : "rgba(2, 132, 199, 0.12)",
                   color:
-                    effectivePerm.isOrgOwner || effectivePerm.allowedActions.canAdmin
+                    effectivePermission.isOrgOwner || effectivePermission.allowedActions.canAdmin
                       ? "#ec4899"
-                      : effectivePerm.allowedActions.canMaintain
+                      : effectivePermission.allowedActions.canMaintain
                       ? "#8b5cf6"
-                      : effectivePerm.allowedActions.canWrite
+                      : effectivePermission.allowedActions.canWrite
                       ? "#10b981"
                       : "#0284c7",
                   border: `1px solid ${
-                    effectivePerm.isOrgOwner || effectivePerm.allowedActions.canAdmin
+                    effectivePermission.isOrgOwner || effectivePermission.allowedActions.canAdmin
                       ? "rgba(236, 72, 153, 0.3)"
-                      : effectivePerm.allowedActions.canMaintain
+                      : effectivePermission.allowedActions.canMaintain
                       ? "rgba(139, 92, 246, 0.3)"
-                      : effectivePerm.allowedActions.canWrite
+                      : effectivePermission.allowedActions.canWrite
                       ? "rgba(16, 185, 129, 0.3)"
                       : "rgba(2, 132, 199, 0.3)"
                   }`,
                 }}
               >
                 <Shield size={11} />
-                {effectivePerm.roleName}
+                {effectivePermission.roleName}
               </span>
             )}
 

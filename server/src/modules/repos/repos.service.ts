@@ -454,8 +454,10 @@ export class ReposService {
     const repoDir = path.join(PROJECTS_DIR, repo.name);
     workspaceService.invalidateTreeCache(repo.name);
 
-    // Se o repositório remoto não estiver clonado localmente, clona agora
-    await ensureGitRepo(repoDir, cfg.user, htmlUrl, cfg.token, repo.name, true);
+    const repoExistsLocally = fs.existsSync(repoDir) && (await isGitRepo(repoDir));
+    // Se o repositório remoto não estiver clonado localmente, clona agora (pullLatest = true).
+    // Se já estiver na máquina, usa os arquivos locais imediatamente sem bloquear a troca com pull de rede.
+    await ensureGitRepo(repoDir, cfg.user, htmlUrl, cfg.token, repo.name, !repoExistsLocally);
 
     // Realiza o diagnóstico de compatibilidade
     const diagnosis = await this.diagnoseRepo(repo.name);

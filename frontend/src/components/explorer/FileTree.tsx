@@ -24,7 +24,7 @@ import {
   Shield,
   Lock,
   Building2,
-  FolderGit2,
+  Copy,
 } from "lucide-react";
 import type { TreeNode, TemplateItem, Repo } from "../../types";
 import { useWorkspace } from "../../context/WorkspaceContext";
@@ -36,7 +36,6 @@ import { LockedRepoModal } from "../modals/LockedRepoModal";
 import { CreateRepoModal } from "../modals/CreateRepoModal";
 import { DeleteRepoModal } from "../modals/DeleteRepoModal";
 import { RepoGovernanceModal } from "../modals/RepoGovernanceModal";
-import { MoveItemModal } from "../modals/MoveItemModal";
 
 interface FileTreeProps {
   onOpenFile: (path: string) => void;
@@ -262,6 +261,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
     isLoadingWorkspace,
     isLoadingTree,
     moveFileOrFolder,
+    duplicateFile,
   } = useWorkspace();
   const { user } = useAuth();
   const { canAccessDoc, departments } = useSecurity();
@@ -276,7 +276,6 @@ export const FileTree: React.FC<FileTreeProps> = ({
   const [governanceRepoTarget, setGovernanceRepoTarget] = useState<Repo | null>(null);
   const [collapsedRepos, setCollapsedRepos] = useState<Record<string, boolean>>({});
   const [loadingRepos, setLoadingRepos] = useState<Record<string, boolean>>({});
-  const [movingItem, setMovingItem] = useState<{ path: string; repo?: string; isFolder: boolean } | null>(null);
 
   const canCreateRootRepo = useMemo(() => {
     if (!activeOrg) return true;
@@ -391,6 +390,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
   const [isImporting, setIsImporting] = useState(false);
   const [importProgressMessage, setImportProgressMessage] = useState("");
   const [targetUploadFolder, setTargetUploadFolder] = useState<string>("");
+  const [targetUploadRepo, setTargetUploadRepo] = useState<string>("");
   const dragHoverTimerRef = useRef<any>(null);
   const hoveredFolderForExpansionRef = useRef<string | null>(null);
   const externalDragCounterRef = useRef<number>(0);
@@ -563,9 +563,11 @@ export const FileTree: React.FC<FileTreeProps> = ({
   const handleImportFiles = async (
     scannedFiles: ScannedFile[],
     targetFolder: string = "",
+    targetRepoName?: string,
   ) => {
     if (!scannedFiles || scannedFiles.length === 0) return;
 
+    const targetRepo = targetRepoName || activeRepo?.name;
     setIsImporting(true);
     const count = scannedFiles.length;
     setImportProgressMessage(
@@ -574,24 +576,29 @@ export const FileTree: React.FC<FileTreeProps> = ({
 
     try {
       const filesPayload = await processFilesForUpload(scannedFiles);
-      setImportProgressMessage(
-        `Importando para ${targetFolder ? `/${targetFolder}` : "a raiz"}...`,
-      );
+      const destLabel = targetFolder
+        ? `/${targetFolder}`
+        : targetRepo
+          ? `a raiz de ${targetRepo}`
+          : "a raiz do projeto";
+
+      setImportProgressMessage(`Importando para ${destLabel}...`);
 
       const res = await API.importFiles({
         target_folder: targetFolder,
         files: filesPayload,
-        repo: activeRepo?.name,
+        repo: targetRepo,
       });
 
       if (res.ok && res.data?.success) {
-        await loadTree();
+        if (targetRepo) {
+          await loadTree(targetRepo);
+        } else {
+          await loadTree();
+        }
         await Promise.all([refreshPendingChanges(), refreshGitStatus()]);
 
         const imported = res.data.importedFiles || [];
-        const destLabel = targetFolder
-          ? `/${targetFolder}`
-          : "a raiz do projeto";
         showToast(
           `${imported.length} arquivo${imported.length > 1 ? "s" : ""} importado${imported.length > 1 ? "s" : ""} com sucesso em ${destLabel}!`,
           "info",
@@ -716,6 +723,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
   const handleDropOnFolder = async (
     e: React.DragEvent,
     targetFolderPath: string,
+    targetRepoName?: string,
   ) => {
     e.preventDefault();
     e.stopPropagation();
@@ -745,7 +753,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
     setDraggedItem(null);
 
     const srcRepo = sourceRepo || activeRepo?.name || "default";
-    const dstRepo = activeRepo?.name || "default";
+    const dstRepo = targetRepoName || activeRepo?.name || "default";
     const isCrossRepo = srcRepo.toLowerCase() !== dstRepo.toLowerCase();
 
     if (!isCrossRepo && sourcePath === targetFolderPath) return;
@@ -796,6 +804,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
   const handleDropOnFile = async (
     e: React.DragEvent,
     targetFilePath: string,
+    targetRepoName?: string,
   ) => {
     e.preventDefault();
     e.stopPropagation();
@@ -825,12 +834,17 @@ export const FileTree: React.FC<FileTreeProps> = ({
     // 2. Internal item move
     if (!draggedItem) return;
 
-    const { path: sourcePath, name: itemName, isFolder } = draggedItem;
+    const { path: sourcePath, name: itemName, isFolder, repo: sourceRepo } = draggedItem;
     setDraggedItem(null);
 
-    if (sourcePath === targetFilePath) return;
+    const srcRepo = sourceRepo || activeRepo?.name || "default";
+    const dstRepo = targetRepoName || activeRepo?.name || "default";
+    const isCrossRepo = srcRepo.toLowerCase() !== dstRepo.toLowerCase();
+
+    if (!isCrossRepo && sourcePath === targetFilePath) return;
 
     if (
+      !isCrossRepo &&
       isFolder &&
       parentDir &&
       (parentDir === sourcePath || parentDir.startsWith(`${sourcePath}/`))
@@ -843,9 +857,9 @@ export const FileTree: React.FC<FileTreeProps> = ({
     }
 
     const targetPath = parentDir ? `${parentDir}/${itemName}` : itemName;
-    if (sourcePath === targetPath) return;
+    if (!isCrossRepo && sourcePath === targetPath) return;
 
-    await executeMove(sourcePath, targetPath, itemName, parentDir || "raiz");
+    await executeMove(sourcePath, targetPath, itemName, parentDir || "raiz", srcRepo, dstRepo);
   };
 
   const handleDragOverRoot = (e: React.DragEvent) => {
@@ -911,15 +925,49 @@ export const FileTree: React.FC<FileTreeProps> = ({
   const handleDragOverRepo = (e: React.DragEvent, targetRepoName: string) => {
     e.preventDefault();
     e.stopPropagation();
+
+    const isExt = isExternalFileDrag(e);
+    if (isExt) {
+      e.dataTransfer.dropEffect = "copy";
+    } else {
+      e.dataTransfer.dropEffect = "move";
+    }
+
     setDragOverTarget(`__repo__:${targetRepoName}`);
     setIsDragOverRoot(false);
+
+    // Auto-expande o repositório se passar 400ms sobre ele
+    if (hoveredFolderForExpansionRef.current !== `__repo__:${targetRepoName}`) {
+      hoveredFolderForExpansionRef.current = `__repo__:${targetRepoName}`;
+      if (dragHoverTimerRef.current) {
+        clearTimeout(dragHoverTimerRef.current);
+      }
+      if (collapsedRepos[targetRepoName]) {
+        dragHoverTimerRef.current = setTimeout(() => {
+          setCollapsedRepos((prev) => ({ ...prev, [targetRepoName]: false }));
+        }, 400);
+      }
+    }
   };
 
   const handleDragLeaveRepo = (e: React.DragEvent, targetRepoName: string) => {
     e.preventDefault();
     e.stopPropagation();
+
+    // Se o cursor ainda estiver dentro do elemento ou de seus filhos, não limpa a drop zone
+    if (e.currentTarget.contains(e.relatedTarget as Node)) {
+      return;
+    }
+
     if (dragOverTarget === `__repo__:${targetRepoName}`) {
       setDragOverTarget(null);
+    }
+    if (hoveredFolderForExpansionRef.current === `__repo__:${targetRepoName}`) {
+      hoveredFolderForExpansionRef.current = null;
+      if (dragHoverTimerRef.current) {
+        clearTimeout(dragHoverTimerRef.current);
+        dragHoverTimerRef.current = null;
+      }
     }
   };
 
@@ -929,7 +977,30 @@ export const FileTree: React.FC<FileTreeProps> = ({
     setDragOverTarget(null);
     setIsDragOverRoot(false);
     setIsExternalDragActive(false);
+    externalDragCounterRef.current = 0;
+    if (dragHoverTimerRef.current) {
+      clearTimeout(dragHoverTimerRef.current);
+      dragHoverTimerRef.current = null;
+    }
 
+    // Auto-expande o repositório destino para exibir o item solto
+    setCollapsedRepos((prev) => ({ ...prev, [targetRepoName]: false }));
+
+    // 1. Arquivos externos do SO soltos na raiz do repositório
+    if (
+      isExternalFileDrag(e) ||
+      (e.dataTransfer.files && e.dataTransfer.files.length > 0 && !draggedItem)
+    ) {
+      const scanned = e.dataTransfer.items
+        ? await scanDataTransferItems(e.dataTransfer.items)
+        : filesToScannedList(e.dataTransfer.files);
+      if (scanned.length > 0) {
+        await handleImportFiles(scanned, "", targetRepoName);
+      }
+      return;
+    }
+
+    // 2. Item interno da árvore movido para a raiz do repositório
     if (!draggedItem) return;
     const { path: sourcePath, name: itemName, repo: sourceRepo } = draggedItem;
     setDraggedItem(null);
@@ -942,6 +1013,27 @@ export const FileTree: React.FC<FileTreeProps> = ({
     }
 
     await executeMove(sourcePath, targetPath, itemName, "raiz", srcRepo, targetRepoName);
+  };
+
+  const handleDuplicateFile = async (
+    filePath: string,
+    repoNameForNode?: string,
+    e?: React.MouseEvent,
+  ) => {
+    if (e) e.stopPropagation();
+    const targetRepo = repoNameForNode || activeRepo?.name || "default";
+    try {
+      const res = await duplicateFile(filePath, targetRepo);
+      if (res.success && res.newPath) {
+        const fileName = res.newPath.split("/").pop() || res.newPath;
+        showToast(`"${fileName}" duplicado com sucesso!`, "info");
+      } else {
+        showToast(res.error || "Falha ao duplicar arquivo.", "warning");
+      }
+    } catch (err: any) {
+      console.error("[FileTree] Erro ao duplicar arquivo:", err);
+      showToast(err.message || "Erro inesperado ao duplicar arquivo.", "warning");
+    }
   };
 
   const executeMove = async (
@@ -1118,10 +1210,15 @@ export const FileTree: React.FC<FileTreeProps> = ({
   };
 
   // Open file or folder in OS File Manager (Finder / Explorer / File Manager)
-  const handleOpenInOS = async (path: string, e?: React.MouseEvent) => {
+  const handleOpenInOS = async (
+    path: string,
+    e?: React.MouseEvent,
+    repoName?: string,
+  ) => {
     e?.stopPropagation();
     try {
-      const res = await API.openInOS(path, activeRepo?.name);
+      const targetRepo = repoName || activeRepo?.name;
+      const res = await API.openInOS(path, targetRepo);
       if (res.ok) {
         showToast("Aberto no gerenciador de arquivos do PC.", "info");
       } else {
@@ -1157,14 +1254,37 @@ export const FileTree: React.FC<FileTreeProps> = ({
       }
     };
     if (tree) collectDirs(tree);
+    Object.values(treesByRepo).forEach((t) => {
+      if (t) collectDirs(t);
+    });
     setCollapsedFolders(allFolderPaths);
     showToast("Todas as pastas foram recolhidas.", "info");
   };
 
-  // Expand All Folders (VS Code action)
+  // Expand All Folders & Repos (VS Code action)
   const handleExpandAllFolders = () => {
     setCollapsedFolders({});
-    showToast("Todas as pastas foram expandidas.", "info");
+    setCollapsedRepos({});
+    const uninitializedRepos = orgRepos.filter((r) => !treesByRepo[r.name]);
+    if (uninitializedRepos.length > 0) {
+      Promise.allSettled(uninitializedRepos.map((r) => loadTree(r.name))).catch(() => {});
+    }
+    showToast("Todas as pastas e repositórios foram expandidos.", "info");
+  };
+
+  // Refresh All Open Repos & Workspace
+  const handleRefreshAll = async () => {
+    try {
+      await loadTree(activeRepo?.name);
+      const openRepos = orgRepos.filter(
+        (r) => !collapsedRepos[r.name] && r.name !== activeRepo?.name,
+      );
+      await Promise.allSettled(openRepos.map((r) => loadTree(r.name)));
+      await Promise.allSettled([refreshPendingChanges(), refreshGitStatus()]);
+      showToast("Árvore de arquivos atualizada.", "info");
+    } catch {
+      showToast("Falha ao atualizar árvore.", "warning");
+    }
   };
 
   // File Click Handler: Open any file in the workspace
@@ -1324,29 +1444,14 @@ export const FileTree: React.FC<FileTreeProps> = ({
     return map;
   }, [pendingChanges]);
 
-  // Repositórios pertencentes à Organização Ativa
+  // Repositórios do Workspace
   const orgRepos = useMemo(() => {
     if (!repos || repos.length === 0) {
       if (activeRepo) return [activeRepo];
       return [];
     }
-    const currentOrgLogin = activeOrg?.login?.toLowerCase();
-    if (!currentOrgLogin) return repos;
-    const filtered = repos.filter((r) => {
-      if (!r.owner) return true;
-      return (
-        r.owner.toLowerCase() === currentOrgLogin ||
-        r.full_name?.toLowerCase().startsWith(`${currentOrgLogin}/`)
-      );
-    });
-    if (
-      activeRepo &&
-      !filtered.some((r) => r.name.toLowerCase() === activeRepo.name.toLowerCase())
-    ) {
-      filtered.unshift(activeRepo);
-    }
-    return filtered.length > 0 ? filtered : repos;
-  }, [repos, activeOrg, activeRepo]);
+    return repos;
+  }, [repos, activeRepo]);
 
   // Build display nodes for a given repository (or active repo)
   const getDisplayNodesForRepo = (rName: string) => {
@@ -1560,7 +1665,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
             onDragEnd={handleDragEnd}
             onDragOver={(e) => handleDragOverFolder(e, node.path)}
             onDragLeave={(e) => handleDragLeaveFolder(e, node.path)}
-            onDrop={(e) => handleDropOnFolder(e, node.path)}
+            onDrop={(e) => handleDropOnFolder(e, node.path, repoNameForNode)}
             onClick={(e) => toggleFolder(node.path, e)}
           >
             <div className="tree-folder-left">
@@ -1634,6 +1739,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
                 onClick={(e) => {
                   e.stopPropagation();
                   setTargetUploadFolder(node.path);
+                  setTargetUploadRepo(repoNameForNode || activeRepo?.name || "");
                   fileInputRef.current?.click();
                 }}
               >
@@ -1642,23 +1748,9 @@ export const FileTree: React.FC<FileTreeProps> = ({
               <button
                 className="btn-tree-action"
                 title={`Abrir pasta "${node.name}" no gerenciador de arquivos do PC`}
-                onClick={(e) => handleOpenInOS(node.path, e)}
+                onClick={(e) => handleOpenInOS(node.path, e, repoNameForNode)}
               >
                 <Laptop size={12} />
-              </button>
-              <button
-                className="btn-tree-action"
-                title={`Mover pasta "${node.name}" para outro repositório ou pasta...`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setMovingItem({
-                    path: node.path,
-                    repo: repoNameForNode || activeRepo?.name,
-                    isFolder: true,
-                  });
-                }}
-              >
-                <FolderGit2 size={12} />
               </button>
               <button
                 className="btn-tree-action"
@@ -1759,7 +1851,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
           onDragEnd={handleDragEnd}
           onDragOver={(e) => handleDragOverFile(e, node.path)}
           onDragLeave={(e) => handleDragLeaveFile(e, node.path)}
-          onDrop={(e) => handleDropOnFile(e, node.path)}
+          onDrop={(e) => handleDropOnFile(e, node.path, repoNameForNode)}
           onClick={() => handleFileClick(node.path, node.name, repoNameForNode)}
           title={`Abrir ${node.name}`}
         >
@@ -1891,23 +1983,16 @@ export const FileTree: React.FC<FileTreeProps> = ({
               <button
                 className="btn-tree-action"
                 title={`Abrir "${node.name}" no gerenciador de arquivos do PC`}
-                onClick={(e) => handleOpenInOS(node.path, e)}
+                onClick={(e) => handleOpenInOS(node.path, e, repoNameForNode)}
               >
                 <Laptop size={11} />
               </button>
               <button
                 className="btn-tree-action"
-                title={`Mover "${node.name}" para outro repositório ou pasta...`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setMovingItem({
-                    path: node.path,
-                    repo: repoNameForNode || activeRepo?.name,
-                    isFolder: false,
-                  });
-                }}
+                title={`Duplicar "${node.name}"`}
+                onClick={(e) => handleDuplicateFile(node.path, repoNameForNode, e)}
               >
-                <FolderGit2 size={11} />
+                <Copy size={11} />
               </button>
               <button
                 className="btn-tree-action"
@@ -1959,42 +2044,11 @@ export const FileTree: React.FC<FileTreeProps> = ({
         onDragEnter={handlePaneDragEnter}
         onDragLeave={handlePaneDragLeave}
       >
-        {/* TOP SECTION: Org Header + Search Bar + Actions Toolbar */}
+        {/* TOP SECTION: Search Bar + Actions Toolbar */}
         <div
           className="tree-top-container"
           onClick={(e) => e.stopPropagation()}
         >
-          {/* Org Root Identity Bar */}
-          <div className="tree-org-bar">
-            <div className="tree-org-info">
-              <div className="tree-org-icon">
-                <Building2 size={13} />
-              </div>
-              <span className="tree-org-name">
-                {(activeOrg as any)?.name || activeOrg?.login || "Minha Organização"}
-              </span>
-            </div>
-
-            <button
-              id="btn-tree-create-root-repo"
-              className="btn-tree-new-repo"
-              title={
-                canCreateRootRepo
-                  ? "Nova Pasta Raiz (Criar Repositório na Organização)"
-                  : "Apenas administradores ou proprietários da organização podem criar repositórios raiz."
-              }
-              onClick={() => {
-                if (canCreateRootRepo) {
-                  setCreateRepoModalOpen(true);
-                }
-              }}
-              disabled={!canCreateRootRepo}
-            >
-              <FolderPlus size={13} />
-              <span>Novo Repo</span>
-            </button>
-          </div>
-
           {/* Search Input Bar */}
           <div className="tree-search-wrapper">
             <span className="tree-search-icon">
@@ -2023,65 +2077,104 @@ export const FileTree: React.FC<FileTreeProps> = ({
           {/* Action Toolbar Below Search Bar */}
           <div className="tree-toolbar-row">
             <div className="tree-toolbar-icons">
+              {/* Novo Repositório */}
+              <button
+                id="btn-tree-create-root-repo"
+                className="btn-tree-tool btn-tree-tool-repo"
+                title="Novo repositório"
+                onClick={() => {
+                  if (canCreateRootRepo) {
+                    setCreateRepoModalOpen(true);
+                  } else {
+                    showToast(
+                      "Apenas administradores ou proprietários da organização podem criar repositórios raiz.",
+                      "warning",
+                    );
+                  }
+                }}
+              >
+                <FilePlus size={14} color="#2563eb" />
+              </button>
+
+              {/* Novo Arquivo */}
               <button
                 id="btn-tree-new-file"
                 className="btn-tree-tool"
                 title={
                   selectedFolder
                     ? `Novo Arquivo em /${selectedFolderName}`
-                    : "Novo Arquivo no repositório ativo"
+                    : activeRepo?.name
+                      ? `Novo Arquivo na raiz de ${activeRepo.name}`
+                      : "Novo Arquivo no repositório ativo"
                 }
                 onClick={() => startInlineCreate(selectedFolder, false)}
               >
                 <FilePlus size={14} />
               </button>
+
+              {/* Nova Pasta */}
               <button
                 id="btn-tree-new-folder"
                 className="btn-tree-tool"
                 title={
                   selectedFolder
                     ? `Nova Pasta em /${selectedFolderName}`
-                    : "Nova Pasta no repositório ativo"
+                    : activeRepo?.name
+                      ? `Nova Pasta na raiz de ${activeRepo.name}`
+                      : "Nova Pasta no repositório ativo"
                 }
                 onClick={() => startInlineCreate(selectedFolder, true)}
               >
                 <FolderPlus size={14} />
               </button>
+
+              {/* Importar Documentos */}
               <button
                 id="btn-tree-import-file"
                 className="btn-tree-tool"
                 title={
                   selectedFolder
                     ? `Importar Documentos em /${selectedFolderName}`
-                    : "Importar Documentos no repositório ativo"
+                    : activeRepo?.name
+                      ? `Importar Documentos na raiz de ${activeRepo.name}`
+                      : "Importar Documentos"
                 }
                 onClick={() => {
                   setTargetUploadFolder(selectedFolder || "");
+                  setTargetUploadRepo(activeRepo?.name || "");
                   fileInputRef.current?.click();
                 }}
               >
                 <Upload size={13} />
               </button>
+
+              {/* Abrir no PC */}
               <button
                 id="btn-tree-open-os"
                 className="btn-tree-tool"
                 title={
                   selectedFolder
                     ? `Abrir pasta /${selectedFolderName} no gerenciador de arquivos do PC`
-                    : "Abrir pasta do projeto no gerenciador de arquivos do PC"
+                    : activeRepo?.name
+                      ? `Abrir repositório "${activeRepo.name}" no gerenciador de arquivos do PC`
+                      : "Abrir pasta do projeto no gerenciador de arquivos do PC"
                 }
-                onClick={(e) => handleOpenInOS(selectedFolder || "", e)}
+                onClick={(e) => handleOpenInOS(selectedFolder || "", e, activeRepo?.name)}
               >
                 <Laptop size={13} />
               </button>
+
+              {/* Expandir Todas as Pastas e Repositórios */}
               <button
                 id="btn-tree-expand-all"
                 className="btn-tree-tool"
-                title="Expandir Todas as Pastas"
+                title="Expandir Todas as Pastas e Repositórios"
                 onClick={handleExpandAllFolders}
               >
                 <ChevronsUpDown size={14} />
               </button>
+
+              {/* Recolher Todas as Pastas */}
               <button
                 id="btn-tree-collapse-all"
                 className="btn-tree-tool"
@@ -2090,13 +2183,15 @@ export const FileTree: React.FC<FileTreeProps> = ({
               >
                 <ChevronsDownUp size={14} />
               </button>
+
+              {/* Atualizar Árvore */}
               <button
                 id="btn-tree-refresh"
                 className={`btn-tree-tool ${isTreeLoading ? "spinning" : ""}`}
                 title={
                   isTreeLoading ? "Carregando arquivos..." : "Atualizar Árvore"
                 }
-                onClick={() => loadTree()}
+                onClick={handleRefreshAll}
                 disabled={isTreeLoading}
               >
                 <RefreshCw
@@ -2104,6 +2199,8 @@ export const FileTree: React.FC<FileTreeProps> = ({
                   className={isTreeLoading ? "spinning" : ""}
                 />
               </button>
+
+              {/* Recolher Painel Lateral */}
               <button
                 id="btn-toggle-tree-pane"
                 className="btn-tree-tool"
@@ -2309,6 +2406,26 @@ export const FileTree: React.FC<FileTreeProps> = ({
                               {r.name}
                             </span>
 
+                            {dragOverTarget === `__repo__:${r.name}` && (
+                              <span
+                                className="tree-repo-drop-hint"
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "3px",
+                                  fontSize: "10px",
+                                  fontWeight: 700,
+                                  color: "var(--primary, #2563eb)",
+                                  backgroundColor: "rgba(37, 99, 235, 0.14)",
+                                  padding: "1px 6px",
+                                  borderRadius: "4px",
+                                  marginLeft: "6px",
+                                }}
+                              >
+                                Soltar na raiz
+                              </span>
+                            )}
+
                             {isActive && (
                               <span
                                 className="tree-repo-active-dot"
@@ -2353,7 +2470,35 @@ export const FileTree: React.FC<FileTreeProps> = ({
                               <RefreshCw size={12} />
                             </button>
 
-                            {/* 3. Novo Arquivo na Raiz deste Repo */}
+                            {/* 3. Abrir Repositório no Gerenciador de Arquivos do PC */}
+                            <button
+                              type="button"
+                              className="btn-tree-action"
+                              title={`Abrir repositório "${r.name}" no gerenciador de arquivos do PC`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleOpenInOS("", e, r.name);
+                              }}
+                            >
+                              <Laptop size={12} />
+                            </button>
+
+                            {/* 4. Importar Arquivos na Raiz deste Repositório */}
+                            <button
+                              type="button"
+                              className="btn-tree-action"
+                              title={`Importar arquivos na raiz de "${r.name}"`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setTargetUploadFolder("");
+                                setTargetUploadRepo(r.name);
+                                fileInputRef.current?.click();
+                              }}
+                            >
+                              <Upload size={12} />
+                            </button>
+
+                            {/* 5. Novo Arquivo na Raiz deste Repo */}
                             <button
                               type="button"
                               className="btn-tree-action"
@@ -2367,7 +2512,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
                               <FilePlus size={12} />
                             </button>
 
-                            {/* 4. Nova Pasta na Raiz deste Repo */}
+                            {/* 6. Nova Pasta na Raiz deste Repo */}
                             <button
                               type="button"
                               className="btn-tree-action"
@@ -2400,7 +2545,12 @@ export const FileTree: React.FC<FileTreeProps> = ({
 
                         {/* Conteúdo Expandido do Repositório */}
                         {!isCollapsed && (
-                          <div className="tree-repo-children-container">
+                          <div
+                            className={`tree-repo-children-container ${dragOverTarget === `__repo__:${r.name}` ? "drag-over-repo-container" : ""}`}
+                            onDragOver={(e) => handleDragOverRepo(e, r.name)}
+                            onDragLeave={(e) => handleDragLeaveRepo(e, r.name)}
+                            onDrop={(e) => handleDropOnRepo(e, r.name)}
+                          >
                             {isActive && renderInlineCreateInput("")}
                             {repoDisplayNodes.length > 0 ? (
                               repoDisplayNodes.map((node) => renderTreeNode(node, r.name))
@@ -2433,6 +2583,10 @@ export const FileTree: React.FC<FileTreeProps> = ({
                                   gap: "8px",
                                   padding: "16px 12px",
                                   textAlign: "center",
+                                  border: dragOverTarget === `__repo__:${r.name}` ? "1.5px dashed var(--primary, #2563eb)" : undefined,
+                                  backgroundColor: dragOverTarget === `__repo__:${r.name}` ? "rgba(37, 99, 235, 0.05)" : undefined,
+                                  borderRadius: "6px",
+                                  transition: "all 0.15s ease",
                                 }}
                               >
                                 <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>
@@ -2539,7 +2693,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
           onChange={async (e) => {
             if (e.target.files && e.target.files.length > 0) {
               const scanned = filesToScannedList(e.target.files);
-              await handleImportFiles(scanned, targetUploadFolder);
+              await handleImportFiles(scanned, targetUploadFolder, targetUploadRepo);
               e.target.value = "";
             }
           }}
@@ -2555,7 +2709,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
           onChange={async (e) => {
             if (e.target.files && e.target.files.length > 0) {
               const scanned = filesToScannedList(e.target.files);
-              await handleImportFiles(scanned, targetUploadFolder);
+              await handleImportFiles(scanned, targetUploadFolder, targetUploadRepo);
               e.target.value = "";
             }
           }}
@@ -2629,17 +2783,6 @@ export const FileTree: React.FC<FileTreeProps> = ({
           onClose={() => setGovernanceRepoTarget(null)}
           orgLogin={governanceRepoTarget.owner || activeOrg?.login || "local"}
           repoName={governanceRepoTarget.name}
-        />
-      )}
-
-      {/* Modal de Mover Item entre Repositórios/Pastas */}
-      {movingItem && (
-        <MoveItemModal
-          isOpen={Boolean(movingItem)}
-          onClose={() => setMovingItem(null)}
-          sourcePath={movingItem.path}
-          sourceRepo={movingItem.repo}
-          isFolder={movingItem.isFolder}
         />
       )}
     </>

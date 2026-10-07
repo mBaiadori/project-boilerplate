@@ -252,6 +252,22 @@ export const API = {
     return { ok: res.ok, data: await res.json() };
   },
 
+  async duplicateProjectFile(path: string, repo?: string): Promise<ApiResponse<{
+    success: boolean;
+    originalPath?: string;
+    newPath?: string;
+    repo?: string;
+    tree?: TreeNode[];
+    error?: string;
+  }>> {
+    const res = await fetch('/api/project/file/duplicate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path, repo }),
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
   async renameProjectFile(payload: {
     old_path: string;
     new_path: string;

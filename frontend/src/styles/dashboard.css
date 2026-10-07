@@ -544,6 +544,7 @@ body.is-resizing .dash-sidebar-nav {
   display: flex;
   align-items: center;
   gap: 4px;
+  flex-wrap: wrap;
 }
 
 .btn-tree-tool {
@@ -559,6 +560,16 @@ body.is-resizing .dash-sidebar-nav {
   cursor: pointer;
   transition: all 0.12s ease;
   padding: 0;
+}
+
+.btn-tree-tool.btn-tree-tool-repo {
+  color: #2563eb;
+}
+
+.btn-tree-tool.btn-tree-tool-repo:hover {
+  background: rgba(37, 99, 235, 0.12);
+  color: #1d4ed8;
+  border-color: rgba(37, 99, 235, 0.28);
 }
 
 .btn-tree-tool:hover {
@@ -8834,6 +8845,19 @@ input[type="text"].icon-picker-search-input:focus {
 .tree-repo-header.is-active {
   background: rgba(37, 99, 235, 0.08);
   color: var(--primary, #2563eb);
+}
+
+.tree-repo-header.drag-over {
+  background: rgba(37, 99, 235, 0.14) !important;
+  outline: 2px dashed var(--primary, #2563eb) !important;
+  outline-offset: -2px;
+  color: var(--primary, #2563eb) !important;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+}
+
+.tree-repo-children-container.drag-over-repo-container {
+  background: rgba(37, 99, 235, 0.03);
+  border-left-color: var(--primary, #2563eb);
 }
 
 .tree-repo-left {

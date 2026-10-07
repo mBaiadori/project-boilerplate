@@ -28,7 +28,6 @@ import { LanguageSelectorDropdown } from "./LanguageSelectorDropdown";
 import { TranslationBanner } from "./TranslationBanner";
 import { SyncTranslationModal } from "../modals/SyncTranslationModal";
 import { MergeConflictResolutionModal } from "../modals/MergeConflictResolutionModal";
-import { MoveItemModal } from "../modals/MoveItemModal";
 import type { SupportedLanguage, SyncToMainPreview } from "../../types";
 
 interface NotionEditorProps {
@@ -89,7 +88,6 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
 
   // Git Mode, Visual Diff & Document History Drawer State
   const [isGitMode, setIsGitMode] = useState(false);
-  const [isMoveModalOpen, setIsMoveModalOpen] = useState(false);
   const [openedInOS, setOpenedInOS] = useState(false);
   const [isHistoryDrawerOpen, setIsHistoryDrawerOpen] = useState(false);
   const [selectedCommit, setSelectedCommit] = useState<GitCommitInfo | null>(
@@ -1188,18 +1186,6 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
                   title={`Caminho: ${activeRepo?.name || 'local'}/${filePath || ''}`}
                 />
                 
-                {/* Action: Mover Arquivo entre Repositórios / Pastas */}
-                <button
-                  id="btn-move-doc"
-                  className="btn-icon-subtle"
-                  type="button"
-                  title="Mover documento para outro repositório ou pasta"
-                  onClick={() => setIsMoveModalOpen(true)}
-                  disabled={!filePath}
-                >
-                  <FolderGit2 size={13} />
-                </button>
-
                 {/* Action: Copiar Caminho */}
                 <button
                   id="btn-copy-doc-path"
@@ -2308,22 +2294,6 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
           }
         }}
       />
-
-      {/* Modal de Mover Documento entre Repositórios / Pastas */}
-      {isMoveModalOpen && filePath && (
-        <MoveItemModal
-          isOpen={isMoveModalOpen}
-          onClose={() => setIsMoveModalOpen(false)}
-          sourcePath={filePath}
-          sourceRepo={activeRepo?.name}
-          isFolder={false}
-          onSuccess={(newPath) => {
-            if (onNavigateFile) {
-              onNavigateFile(newPath);
-            }
-          }}
-        />
-      )}
     </div>
   );
 };

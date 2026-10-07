@@ -257,6 +257,15 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
     }
   });
 
+  fastify.post('/api/project/file/duplicate', async (request, reply) => {
+    const body = request.body as { path?: string; repo?: string };
+    try {
+      return reply.send(await workspaceService.duplicateFile(body.path || '', body.repo));
+    } catch (err: any) {
+      return reply.status(400).send({ error: err.message });
+    }
+  });
+
   fastify.get('/api/workspace/changes', async (request, reply) => {
     const query = request.query as { repo?: string };
     return reply.send(workspaceService.getWorkspaceChanges(query.repo));

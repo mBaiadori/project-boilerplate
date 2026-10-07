@@ -729,6 +729,73 @@ export class WorkspaceService {
     };
   }
 
+  async duplicateFile(filePath: string, targetRepoName?: string) {
+    const cfg = loadConfig();
+    const repoName = targetRepoName || cfg.active_repo?.name || "local";
+    const cleanPath = (filePath || "").trim().replace(/^\/+/, "");
+
+    if (!cleanPath) {
+      throw new Error("Caminho de arquivo inválido.");
+    }
+
+    const repoDir = this.getRepoDir(repoName);
+    const fullPath = path.join(repoDir, cleanPath);
+    if (!fs.existsSync(fullPath)) {
+      throw new Error(`Arquivo '${cleanPath}' não existe.`);
+    }
+
+    const stat = fs.statSync(fullPath);
+    if (stat.isDirectory()) {
+      throw new Error("Não é possível duplicar pastas diretamente.");
+    }
+
+    this.verifyUserClearance(repoName, cleanPath);
+
+    const dir = path.dirname(cleanPath);
+    const ext = path.extname(cleanPath);
+    const baseName = path.basename(cleanPath, ext);
+
+    let copyName = `${baseName}-copia${ext}`;
+    let copyRelPath = dir === "." || !dir ? copyName : `${dir}/${copyName}`;
+    let counter = 2;
+    while (fs.existsSync(path.join(repoDir, copyRelPath))) {
+      copyName = `${baseName}-copia-${counter}${ext}`;
+      copyRelPath = dir === "." || !dir ? copyName : `${dir}/${copyName}`;
+      counter++;
+    }
+
+    const fullCopyPath = path.join(repoDir, copyRelPath);
+    fs.mkdirSync(path.dirname(fullCopyPath), { recursive: true });
+    fs.copyFileSync(fullPath, fullCopyPath);
+
+    let content = "";
+    try {
+      content = fs.readFileSync(fullCopyPath, "utf-8");
+    } catch {}
+
+    recordChange(repoName, copyRelPath, "ADDED", "", content);
+
+    try {
+      const existingMeta = docsMetadataService.getDocMetadataItem(repoName, cleanPath);
+      const newTitle = (existingMeta?.title || baseName) + " (Cópia)";
+      docsMetadataService.updateDocMetadataItem(repoName, copyRelPath, {
+        ...(existingMeta || {}),
+        title: newTitle,
+      });
+    } catch {}
+
+    this.invalidateTreeCache(repoName);
+    const newTree = (await this.getTree(repoName, true)).tree;
+
+    return {
+      success: true,
+      originalPath: cleanPath,
+      newPath: copyRelPath,
+      repo: repoName,
+      tree: newTree,
+    };
+  }
+
   getWorkspaceChanges(targetRepoName?: string) {
     const cfg = loadConfig();
     const repoName = targetRepoName || cfg.active_repo?.name || "local";

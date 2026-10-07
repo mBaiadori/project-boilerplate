@@ -18,11 +18,52 @@ import type {
   ProjectMetadataOptions,
   WhatsNewSummary,
   DictionaryTerm,
+  EffectiveUserPermission,
 } from "../types";
 import { API } from "../services/api";
 import { DraftStore } from "../services/draft-store";
 import { useAuth } from "./AuthContext";
 import { isPathHidden, isSystemPath } from "../utils/hidden-files";
+
+function computeInitialPermission(repo: Repo, userLogin?: string): EffectiveUserPermission {
+  const isOwner = Boolean(
+    repo.is_owner ||
+    (userLogin && (repo.owner === userLogin || (repo.owner as any)?.login === userLogin))
+  );
+  const p = repo.permissions;
+  const canAdmin = Boolean(isOwner || p?.admin);
+  const canWrite = Boolean(canAdmin || p?.push);
+  const canRead = Boolean(p?.pull ?? true);
+
+  const repoPermission: EffectiveUserPermission["repoPermission"] = canAdmin
+    ? "admin"
+    : canWrite
+    ? "push"
+    : "pull";
+
+  const roleName = canAdmin ? "Administrador" : canWrite ? "Escrita" : "Leitura";
+
+  return {
+    login: userLogin || "",
+    isOrgOwner: isOwner,
+    isOrgMember: true,
+    isOutsideCollaborator: false,
+    repoPermission,
+    roleName,
+    allowedActions: {
+      canRead,
+      canWrite,
+      canTriage: canWrite,
+      canMaintain: canAdmin,
+      canAdmin,
+      canManageGovernance: canAdmin,
+      canManageTeams: canAdmin,
+      canDeleteRepo: canAdmin,
+      canManageBranchProtection: canAdmin,
+    },
+    teamMemberships: [],
+  };
+}
 
 function findFirstMdFile(nodes: TreeNode[]): string | null {
   for (const node of nodes) {
@@ -131,6 +172,12 @@ interface WorkspaceContextType {
     sourceRepo?: string,
     targetRepo?: string,
   ) => Promise<{ success: boolean; error?: string }>;
+  duplicateFile: (
+    filePath: string,
+    targetRepo?: string,
+  ) => Promise<{ success: boolean; newPath?: string; error?: string }>;
+  effectivePermission: EffectiveUserPermission | null;
+  refreshEffectivePermission: (repo?: Repo) => Promise<void>;
 }
 
 const WorkspaceContext = createContext<WorkspaceContextType | undefined>(
@@ -184,6 +231,8 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
     dictionaryTermsRef.current = dictionaryTerms;
   }, [dictionaryTerms]);
 
+  const [effectivePermission, setEffectivePermission] = useState<EffectiveUserPermission | null>(null);
+  const fileCacheRef = useRef<Map<string, { content: string; originalContent: string; meta: any }>>(new Map());
   const activeFileRef = useRef<string>("");
   const fileContentRef = useRef<string>("");
   const originalContentRef = useRef<string>("");
@@ -197,6 +246,21 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
   const treesByRepoRef = useRef<Record<string, TreeNode[]>>({});
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const statusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const refreshEffectivePermission = useCallback(async (targetRepo?: Repo) => {
+    const r = targetRepo || activeRepoRef.current;
+    if (!r?.name) return;
+    const initialPerm = computeInitialPermission(r, user?.login);
+    setEffectivePermission(initialPerm);
+
+    try {
+      const ownerLogin = typeof r.owner === "string" ? r.owner : (r.owner as any)?.login;
+      const res = await API.getEffectiveUserPermission(r.name, ownerLogin);
+      if (res.ok && res.data) {
+        setEffectivePermission(res.data);
+      }
+    } catch {}
+  }, [user?.login]);
 
   useEffect(() => {
     activeFileRef.current = activeFile;
@@ -497,26 +561,38 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
       // 1. Flush de segurança se o arquivo anterior possuía alterações não salvas
       await flushPendingSave();
 
-      setIsLoadingFile(true);
+      const cacheKey = `${currentRepoName}:${cleanPath}`;
+      const cached = fileCacheRef.current.get(cacheKey);
+      const draft = DraftStore.getDocDraft(currentRepoName, cleanPath);
+
       setActiveFile(cleanPath);
       activeFileRef.current = cleanPath;
-      setFileContentState("");
-      fileContentRef.current = "";
-      setOriginalContent("");
-      originalContentRef.current = "";
-      setFileMetadataState({});
-      fileMetadataRef.current = {};
+
+      // Se já temos rascunho ou cache deste arquivo, aplica imediatamente sem piscar a tela
+      if (draft) {
+        setFileContentState(draft.rawContent);
+        fileContentRef.current = draft.rawContent;
+      } else if (cached) {
+        setFileContentState(cached.content);
+        fileContentRef.current = cached.content;
+        setOriginalContent(cached.originalContent);
+        originalContentRef.current = cached.originalContent;
+        setFileMetadataState(cached.meta);
+        fileMetadataRef.current = cached.meta;
+      }
+
+      setIsLoadingFile(true);
       try {
         const data = await API.getProjectFile(cleanPath, currentRepoName);
         if (!data || (data as any).error) {
           throw new Error((data as any).error || "Arquivo não encontrado");
         }
-        const draft = DraftStore.getDocDraft(
+        const activeDraft = DraftStore.getDocDraft(
           currentRepoName,
           cleanPath,
         );
 
-        const content = draft ? draft.rawContent : data.content || "";
+        const content = activeDraft ? activeDraft.rawContent : data.content || "";
         setFileContentState(content);
         fileContentRef.current = content;
         setOriginalContent(data.content || "");
@@ -524,6 +600,13 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
         setFileMetadataState(data.meta || {});
         fileMetadataRef.current = data.meta || {};
         setSaveStatus("Pronto");
+
+        // Atualiza o cache local em memória
+        fileCacheRef.current.set(cacheKey, {
+          content,
+          originalContent: data.content || "",
+          meta: data.meta || {},
+        });
 
         if (hash) {
           setTimeout(() => {
@@ -907,8 +990,20 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
         return { success: true, is_ready: true };
       }
       inFlightRepoRef.current = repo.name;
+
+      const cachedTree = treesByRepoRef.current[repo.name];
+      const hasCachedTree = Array.isArray(cachedTree) && cachedTree.length > 0;
+
+      // Se já temos a árvore em cache, não ativa o skeleton de carregamento completo
+      if (!hasCachedTree) {
+        setIsLoadingTree(true);
+      }
       setIsLoadingWorkspace(true);
-      setIsLoadingTree(true);
+
+      // Sincroniza permissões no contexto IMEDIATAMENTE a partir do repositório selecionado
+      const initialPerm = computeInitialPermission(repo, user?.login);
+      setEffectivePermission(initialPerm);
+
       try {
         const prevRepo = activeRepoRef.current;
         const prevFile = activeFileRef.current;
@@ -942,27 +1037,25 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
           }
         }
 
-        // Clear previous document and tree states immediately so old repo files do not leak or flash
-        setActiveFile("");
-        activeFileRef.current = "";
-        setFileContentState("");
-        fileContentRef.current = "";
-        setOriginalContent("");
-        originalContentRef.current = "";
-        setFileMetadataState({});
-        fileMetadataRef.current = {};
-        setPendingChanges([]);
-        setSystemPendingChanges([]);
-        setGitStatus(null);
-        setGitLog([]);
-        setWhatsNewSummary(null);
-
-        // Immediately use cached tree for target repo if available, or [] (never previous repo's files!)
-        const cachedTree = treesByRepoRef.current[repo.name];
-        setTree(cachedTree || []);
-
+        // Atualiza repositório ativo e árvore de forma fluida
         setActiveRepo(repo);
         activeRepoRef.current = repo;
+
+        if (hasCachedTree) {
+          setTree(cachedTree);
+        } else {
+          setTree([]);
+        }
+
+        // Atualiza permissão refinada em segundo plano
+        const ownerLogin = typeof repo.owner === "string" ? repo.owner : (repo.owner as any)?.login;
+        API.getEffectiveUserPermission(repo.name, ownerLogin)
+          .then((res) => {
+            if (res.ok && res.data) {
+              setEffectivePermission(res.data);
+            }
+          })
+          .catch(() => {});
 
         const selectRes = await API.selectRepo(repo);
         const isReady = selectRes.data?.is_ready !== false;
@@ -986,7 +1079,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
 
         const fileToOpen = initialFile || findFirstMdFile(data.tree || []);
         if (fileToOpen) {
-          loadFile(fileToOpen).catch((e) =>
+          loadFile(fileToOpen, repo.name).catch((e) =>
             console.warn("[WorkspaceContext] Erro ao carregar arquivo inicial:", e)
           );
         }
@@ -1010,6 +1103,8 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
       }
     },
     [
+      user?.login,
+      tree,
       loadProjectMetadataOptions,
       loadProjectConfig,
       loadDictionaryTerms,
@@ -1141,10 +1236,29 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
         });
 
         if (res.ok && res.data?.success) {
-          // Invalida e recarrega árvores de ambos os repositórios
+          // Se o servidor já retornou as árvores atualizadas, aplica de imediato
+          if (res.data.sourceTree) {
+            treesByRepoRef.current[srcRepo] = res.data.sourceTree;
+            setTreesByRepo((prev) => ({ ...prev, [srcRepo]: res.data.sourceTree! }));
+            if (activeRepoRef.current?.name.toLowerCase() === srcRepo.toLowerCase()) {
+              setTree(res.data.sourceTree);
+            }
+          } else {
+            await loadTree(srcRepo);
+          }
+
+          if (res.data.targetTree && srcRepo !== dstRepo) {
+            treesByRepoRef.current[dstRepo] = res.data.targetTree;
+            setTreesByRepo((prev) => ({ ...prev, [dstRepo]: res.data.targetTree! }));
+            if (activeRepoRef.current?.name.toLowerCase() === dstRepo.toLowerCase()) {
+              setTree(res.data.targetTree);
+            }
+          } else if (srcRepo !== dstRepo) {
+            await loadTree(dstRepo);
+          }
+
+          fileCacheRef.current.delete(`${srcRepo}:${sourcePath}`);
           await Promise.all([
-            loadTree(srcRepo),
-            srcRepo !== dstRepo ? loadTree(dstRepo) : Promise.resolve(),
             refreshPendingChanges(),
             refreshGitStatus(),
           ]);
@@ -1184,6 +1298,47 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
       }
     },
     [flushPendingSave, loadTree, refreshPendingChanges, refreshGitStatus, selectRepo, loadFile],
+  );
+
+  const duplicateFile = useCallback(
+    async (
+      filePath: string,
+      targetRepo?: string,
+    ): Promise<{ success: boolean; newPath?: string; error?: string }> => {
+      const currentRepoName = targetRepo || activeRepoRef.current?.name;
+      if (!currentRepoName || !filePath) {
+        return { success: false, error: "Parâmetros inválidos para duplicar arquivo." };
+      }
+
+      await flushPendingSave();
+
+      try {
+        const res = await API.duplicateProjectFile(filePath, currentRepoName);
+        if (res.ok && res.data?.success && res.data.newPath) {
+          const newPath = res.data.newPath;
+          if (res.data.tree) {
+            treesByRepoRef.current[currentRepoName] = res.data.tree;
+            setTreesByRepo((prev) => ({ ...prev, [currentRepoName]: res.data.tree! }));
+            if (activeRepoRef.current?.name.toLowerCase() === currentRepoName.toLowerCase()) {
+              setTree(res.data.tree);
+            }
+          } else {
+            await loadTree(currentRepoName);
+          }
+
+          await Promise.all([refreshPendingChanges(), refreshGitStatus()]);
+          await loadFile(newPath, currentRepoName);
+
+          return { success: true, newPath };
+        } else {
+          return { success: false, error: res.data?.error || "Falha ao duplicar arquivo." };
+        }
+      } catch (err: any) {
+        console.error("[WorkspaceContext] Erro ao duplicar arquivo:", err);
+        return { success: false, error: err.message || "Erro de conexão ao duplicar arquivo." };
+      }
+    },
+    [flushPendingSave, loadTree, refreshPendingChanges, refreshGitStatus, loadFile],
   );
 
   // Lifecycle: Flush de alterações pendentes ao fechar aba, recarregar ou ocultar janela
@@ -1347,6 +1502,9 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
         syncGit,
         createOrSwitchBranch,
         moveFileOrFolder,
+        duplicateFile,
+        effectivePermission,
+        refreshEffectivePermission,
       }}
     >
       {children}
