@@ -180,9 +180,9 @@
     "semantic_hash": ""
   },
   "frontend/src/components/editor/DocConnectivityBar.tsx": {
-    "mtime": 1791455822.1604927,
-    "seen": 1791455847.70023,
-    "ast_hash": "7109297a314ff3429c40173b036816e8",
+    "mtime": 1791460719.0841446,
+    "seen": 1791460912.033449,
+    "ast_hash": "3b8cd029ce4b15836e8bf6c0cfecf1c3",
     "semantic_hash": ""
   },
   "frontend/src/components/editor/DocumentHistoryDrawer.tsx": {
@@ -198,15 +198,15 @@
     "semantic_hash": ""
   },
   "frontend/src/components/editor/LanguageSelectorDropdown.tsx": {
-    "mtime": 1791453877.9349024,
-    "seen": 1791454113.865275,
-    "ast_hash": "2e8a7653cf851d9a57b85bfa44ee42ca",
+    "mtime": 1791461692.131297,
+    "seen": 1791461716.0091462,
+    "ast_hash": "1ffbe4a489cd2fdfc9220dd897816bf2",
     "semantic_hash": ""
   },
   "frontend/src/components/editor/NotionEditor.tsx": {
-    "mtime": 1791451195.2255116,
-    "seen": 1791452911.3695538,
-    "ast_hash": "bee06c2cb53d906bf2d2ca6f87a81fdc",
+    "mtime": 1791461674.4722853,
+    "seen": 1791461716.009147,
+    "ast_hash": "b5d66a8da8dd63a5a24a94ac0d83a18e",
     "semantic_hash": ""
   },
   "frontend/src/components/editor/SlashMenu.tsx": {
@@ -216,9 +216,9 @@
     "semantic_hash": ""
   },
   "frontend/src/components/editor/TranslationBanner.tsx": {
-    "mtime": 1790854186.6522925,
-    "seen": 1791452911.369555,
-    "ast_hash": "bc86859ef266419ebbeba69b0a6d739d",
+    "mtime": 1791455963.9672706,
+    "seen": 1791456726.211019,
+    "ast_hash": "65e94aeac7c85ff5cd945626b0340c9d",
     "semantic_hash": ""
   },
   "frontend/src/components/editor/VisualMarkdownDiff.tsx": {
@@ -606,9 +606,9 @@
     "semantic_hash": ""
   },
   "frontend/src/context/WorkspaceContext.tsx": {
-    "mtime": 1791406298.2850287,
-    "seen": 1791452911.369605,
-    "ast_hash": "05d8c52b769763eb7b0c8540b18cebd6",
+    "mtime": 1791461631.3432512,
+    "seen": 1791461716.0092108,
+    "ast_hash": "050d69e96922bb6fdf2b948cec7f8890",
     "semantic_hash": ""
   },
   "frontend/src/hooks/useEditorGitWatcher.ts": {
@@ -1308,9 +1308,9 @@
     "semantic_hash": ""
   },
   "server/src/modules/workspace/docs-metadata.service.ts": {
-    "mtime": 1791454846.3984063,
-    "seen": 1791455085.5879092,
-    "ast_hash": "1c812cb5049baeffeee70bb9a244917c",
+    "mtime": 1791456639.706891,
+    "seen": 1791456726.211205,
+    "ast_hash": "100c766ea84997f3f383370831804c09",
     "semantic_hash": ""
   },
   "server/src/modules/workspace/workspace.move.test.ts": {

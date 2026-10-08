@@ -156,6 +156,7 @@ interface WorkspaceContextType {
   ) => Promise<{ success: boolean; error?: string }>;
   saveCurrentFile: (
     meta?: Record<string, any>,
+    content?: string,
   ) => Promise<{ success: boolean; error?: string }>;
   flushPendingSave: () => Promise<void>;
   refreshPendingChanges: () => Promise<void>;
@@ -1297,10 +1298,15 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
     [repos, selectRepo, loadFile],
   );
 
-  const saveCurrentFile = async (metaOverride?: Record<string, any>) => {
+  const saveCurrentFile = async (
+    metaOverride?: Record<string, any>,
+    contentOverride?: string,
+  ) => {
     const meta =
       metaOverride !== undefined ? metaOverride : fileMetadataRef.current;
-    return performDiskSave(activeFileRef.current, fileContentRef.current, meta);
+    const content =
+      contentOverride !== undefined ? contentOverride : fileContentRef.current;
+    return performDiskSave(activeFileRef.current, content, meta);
   };
 
   const discardChanges = async (path?: string) => {

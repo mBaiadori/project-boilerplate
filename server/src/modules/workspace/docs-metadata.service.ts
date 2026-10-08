@@ -580,6 +580,31 @@ export class DocsMetadataService {
 
     this.saveDocsMetadata(repoName, metaList);
 
+    // Se o arquivo físico existir e for markdown, sincroniza o Frontmatter no arquivo .md
+    try {
+      const fullPath = path.join(this.getRepoDir(repoName), cleanPath);
+      if (
+        fs.existsSync(fullPath) &&
+        (cleanPath.endsWith(".md") || cleanPath.endsWith(".markdown"))
+      ) {
+        const fileContent = fs.readFileSync(fullPath, "utf-8");
+        const frontmatterSyncPayload: Record<string, any> = {};
+        if (partialMeta.title !== undefined) frontmatterSyncPayload.title = partialMeta.title;
+        if (partialMeta.status !== undefined) frontmatterSyncPayload.status = partialMeta.status;
+        if (partialMeta.categories !== undefined) frontmatterSyncPayload.categories = partialMeta.categories;
+        if (partialMeta.category !== undefined) frontmatterSyncPayload.categories = partialMeta.category;
+        if (partialMeta.tags !== undefined) frontmatterSyncPayload.tags = partialMeta.tags;
+        if (partialMeta.department !== undefined) frontmatterSyncPayload.department = partialMeta.department;
+
+        const updatedMarkdown = updateFrontmatterInMarkdown(fileContent, frontmatterSyncPayload);
+        if (updatedMarkdown !== fileContent) {
+          fs.writeFileSync(fullPath, updatedMarkdown, "utf-8");
+        }
+      }
+    } catch (e) {
+      console.warn("[DocsMetadataService] Erro ao sincronizar frontmatter no disco:", e);
+    }
+
     return { success: true, meta: updatedItem };
   }
 

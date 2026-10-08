@@ -1,17 +1,17 @@
 # Graph Report - project-boilerplate  (2026-10-08)
 
 ## Corpus Check
-- 248 files · ~264,133 words
+- 248 files · ~264,631 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 11 file(s) not represented in the graph (top: .css 9, (none) 2)
 
 ## Summary
-- 2024 nodes · 5737 edges · 89 communities (71 shown, 18 thin omitted)
+- 2024 nodes · 5740 edges · 90 communities (71 shown, 19 thin omitted)
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS · INFERRED: 23 edges (avg confidence: 0.86)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `49f4c9e8`
+- Built from commit: `b08116ef`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -21,7 +21,7 @@
 - ai.routes.ts
 - react
 - ReposView.tsx
-- storage.ts
+- schema.validator.ts
 - Chip.tsx
 - SettingsSubView.tsx
 - translationsService
@@ -47,7 +47,7 @@
 - compile-bytecode.js
 - templates.service.ts
 - workspaceService
-- constants.ts
+- storage.ts
 - notion-editor-engine.ts
 - devDependencies
 - docsMetadataService
@@ -64,6 +64,7 @@
 - events.service.ts
 - compilerOptions
 - BubbleMenuEngine
+- storage-vault.test.ts
 - NotionTable
 - 3. Standard Component Archetypes
 - compilerOptions
@@ -78,8 +79,9 @@
 - properties
 - properties
 - test_ai_memory_engine.py
+- saveConfig
 - Regra Arquitetural: Taxonomias Dinâmicas e Uso Obrigatório de Cores do `.project.config.json`
-- ai.service.ts
+- wikiService
 - anyOf
 - Regra Arquitetural: Zero Hardcoded Data & Configuração Dinâmica
 - prWorktreeService
@@ -91,7 +93,6 @@
 - scripts
 - SlashMenu.tsx
 - main/index.ts
-- prSecurityService
 - project.config.schema.json
 - governance_rules
 - TestPRAutoMerge
@@ -131,7 +132,7 @@
 ## Import Cycles
 - None detected.
 
-## Communities (89 total, 18 thin omitted)
+## Communities (90 total, 19 thin omitted)
 
 ### Community 0 - "aicenter.service.ts"
 Cohesion: 0.11
@@ -153,9 +154,9 @@ Nodes (61): DocActionBar(), DocActionBarProps, AccessGovernanceManager(), AddAcc
 Cohesion: 0.08
 Nodes (47): AdminAuthRoute(), App(), CollaboratorAuthRoute(), OrgRepoRedirect(), ProtectedRoute(), RepoRedirect(), AccountSwitcherMenu(), DraggedItem (+39 more)
 
-### Community 5 - "storage.ts"
-Cohesion: 0.07
-Nodes (27): ajv, ajv-formats, CONFIG_PATH, DEFAULT_PROJECT_ABOUT_PROMPT, AppConfig, BINARY_EXTENSIONS, ensureDefaultRepoFiles(), getSSOTDefaultDir() (+19 more)
+### Community 5 - "schema.validator.ts"
+Cohesion: 0.14
+Nodes (14): ajv, ajv-formats, syncBlueprint(), validateAndReportSchema(), verifyAndRepairStructure(), dictionaryService, ajv, __dirname (+6 more)
 
 ### Community 6 - "Chip.tsx"
 Cohesion: 0.14
@@ -174,8 +175,8 @@ Cohesion: 0.04
 Nodes (77): ColorDotPicker(), TaxonomyChipEditor(), TaxonomyChipEditorProps, DocumentHistoryDrawerProps, CsvEditor(), CsvEditorProps, DocxViewer(), DocxViewerProps (+69 more)
 
 ### Community 10 - "loadConfig"
-Cohesion: 0.08
-Nodes (14): loadConfig(), saveConfig(), authService, gitService, prConflictsService, RepoDiagnosis, RepoDiagnosisCheckItem, RepoInitializePayload (+6 more)
+Cohesion: 0.09
+Nodes (8): loadConfig(), authService, RFC-8628, gitService, prConflictsService, prSecurityService, settingsService, systemService
 
 ### Community 11 - "desktop/package.json"
 Cohesion: 0.14
@@ -198,8 +199,8 @@ Cohesion: 0.13
 Nodes (21): fastify, buildApp(), loadCanonicalTutorials(), resolveUiDistDir(), aiRoutes(), authRoutes(), dictionaryRoutes(), eventsRoutes() (+13 more)
 
 ### Community 16 - "governanceService"
-Cohesion: 0.09
-Nodes (23): EphemeralAIToken, ephemeralTokens, governanceService, BranchProtectionConfig, BranchProtectionStatus, CollaboratorInfo, CreateOrgTeamPayload, DEFAULT_DEPARTMENTS (+15 more)
+Cohesion: 0.08
+Nodes (24): EphemeralAIToken, ephemeralTokens, governanceService, BranchProtectionConfig, BranchProtectionStatus, CollaboratorInfo, CreateOrgTeamPayload, DEFAULT_DEPARTMENTS (+16 more)
 
 ### Community 17 - "properties"
 Cohesion: 0.06
@@ -222,8 +223,8 @@ Cohesion: 0.06
 Nodes (33): dependencies, @codemirror/lang-cpp, @codemirror/lang-css, @codemirror/lang-html, @codemirror/lang-java, @codemirror/lang-javascript, @codemirror/lang-json, @codemirror/lang-php (+25 more)
 
 ### Community 23 - "git.ts"
-Cohesion: 0.14
-Nodes (32): RFC-8628, checkRemoteGitUpdates(), commitChanges(), createAndCheckoutBranch(), ensureGitIgnore(), ensureGitRepo(), execAsync, executeGitCommand() (+24 more)
+Cohesion: 0.16
+Nodes (30): checkRemoteGitUpdates(), commitChanges(), createAndCheckoutBranch(), ensureGitIgnore(), ensureGitRepo(), execAsync, executeGitCommand(), getActiveBearerToken() (+22 more)
 
 ### Community 24 - "i18n/index.ts"
 Cohesion: 0.11
@@ -250,12 +251,12 @@ Cohesion: 0.27
 Nodes (10): getCommunityTemplatesPath(), loadCommunityTemplates(), loadProjectTemplates(), ProjectTemplate, sanitizeTemplateItem(), saveCommunityTemplates(), saveProjectTemplates(), generateTemplateSlug() (+2 more)
 
 ### Community 30 - "workspaceService"
-Cohesion: 0.22
-Nodes (9): getRepoWorkspaceChangesPath(), loadRepoWorkspaceChanges(), recordChange(), saveRepoWorkspaceChanges(), DocumentMetadataItem, extractDocLinksFromMarkdown(), workspaceService, isPathHidden() (+1 more)
+Cohesion: 0.21
+Nodes (9): loadRepoWorkspaceChanges(), recordChange(), DocumentMetadataItem, extractDocLinksFromMarkdown(), workspaceService, getGitStatus(), isPathHidden(), isSystemPath() (+1 more)
 
-### Community 31 - "constants.ts"
-Cohesion: 0.06
-Nodes (40): CanonicalTemplate, CanonicalTutorial, DEFAULT_TEMPLATE_CREATOR_PROMPT, __dirname, DOCS_DIR, __filename, FRONTEND_DIR, getProjectTemplatesPath() (+32 more)
+### Community 31 - "storage.ts"
+Cohesion: 0.05
+Nodes (58): @anthropic-ai/sdk, @google/generative-ai, CanonicalTemplate, CanonicalTutorial, DEFAULT_GLOBAL_SYSTEM_PROMPT, DEFAULT_PROJECT_ABOUT_PROMPT, DEFAULT_TEMPLATE_CREATOR_PROMPT, __dirname (+50 more)
 
 ### Community 32 - "notion-editor-engine.ts"
 Cohesion: 0.16
@@ -266,8 +267,8 @@ Cohesion: 0.33
 Nodes (6): devDependencies, electron, electron-builder, tsx, @types/node, typescript
 
 ### Community 34 - "docsMetadataService"
-Cohesion: 0.25
-Nodes (3): docsMetadataService, extractDocTitleFromMarkdown(), generateDocId()
+Cohesion: 0.24
+Nodes (4): docsMetadataService, extractDocTitleFromMarkdown(), generateDocId(), updateFrontmatterInMarkdown()
 
 ### Community 36 - "dependencies"
 Cohesion: 0.50
@@ -284,10 +285,6 @@ Nodes (18): name, private, scripts, build, build:frontend, build:server, desktop
 ### Community 39 - "NotionEditor.tsx"
 Cohesion: 0.07
 Nodes (39): DocConnectivityBar(), DocConnectivityBarProps, getTagStyle(), TAG_PALETTES, DocumentHistoryDrawer(), FrontmatterHeaderProps, LanguageSelectorDropdown(), LanguageSelectorDropdownProps (+31 more)
-
-### Community 41 - "prsService"
-Cohesion: 0.29
-Nodes (3): clearWorkspaceChanges(), prsService, isSystemPath()
 
 ### Community 42 - "compilerOptions"
 Cohesion: 0.12
@@ -308,6 +305,10 @@ Nodes (15): compilerOptions, esModuleInterop, forceConsistentCasingInFileNames, 
 ### Community 48 - "BubbleMenuEngine"
 Cohesion: 0.26
 Nodes (3): BubbleMenuEngine, createTextFragmentFromSelection(), formatTextFragmentUrl()
+
+### Community 49 - "storage-vault.test.ts"
+Cohesion: 0.18
+Nodes (5): CONFIG_PATH, VAULT_KEYS, VaultKey, vaultService, scanContentForSecrets()
 
 ### Community 51 - "3. Standard Component Archetypes"
 Cohesion: 0.15
@@ -353,13 +354,13 @@ Nodes (11): type, type, type, properties, architecture_pattern, description, lea
 Cohesion: 0.18
 Nodes (11): type, type, properties, type, handle, id, name, role (+3 more)
 
+### Community 65 - "saveConfig"
+Cohesion: 0.23
+Nodes (8): saveConfig(), RepoDiagnosis, RepoDiagnosisCheckItem, RepoInitializePayload, reposService, applyBranchProtection(), callGitProviderAPI, checkBranchProtection()
+
 ### Community 67 - "Regra Arquitetural: Taxonomias Dinâmicas e Uso Obrigatório de Cores do `.project.config.json`"
 Cohesion: 0.25
 Nodes (7): 1. Proibição de Listas Fixas (Zero Hardcoded Taxonomies), 2. Uso Obrigatório das Cores Configuradas nas Chips / Badges, 3. Checklist Obrigatório para Agentes & PRs, O que fazer:, Regra Arquitetural: Taxonomias Dinâmicas e Uso Obrigatório de Cores do `.project.config.json`, Regras Visuais para Chips / Badges:, ADR
-
-### Community 68 - "ai.service.ts"
-Cohesion: 0.18
-Nodes (10): @anthropic-ai/sdk, @google/generative-ai, DEFAULT_GLOBAL_SYSTEM_PROMPT, AIExecutionResult, AIServiceCallOptions, ChatMessage, RawTurnMetrics, RawTurnTelemetryRecord (+2 more)
 
 ### Community 69 - "anyOf"
 Cohesion: 0.25
@@ -419,19 +420,19 @@ Nodes (4): ButtonGroupProps, ButtonProps, ButtonSize, ButtonVariant
 
 ## Knowledge Gaps
 - **570 isolated node(s):** `name`, `version`, `description`, `type`, `main` (+565 more)
-  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 685 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
-- **18 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 684 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+- **19 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `react` connect `react` to `useWorkspace`, `Button.tsx`, `ReposView.tsx`, `Chip.tsx`, `SettingsSubView.tsx`, `NotionEditor.tsx`, `types/index.ts`, `Spinner.tsx`, `StatCard.tsx`, `frontend/package.json`, `SlashMenu.tsx`, `WorkbenchCanvas.tsx`, `i18n/index.ts`, `ContextSidebar.tsx`, `BubbleMenu.tsx`, `Layout.tsx`, `TemplatesSubView.tsx`, `RagSearchModal.tsx`?**
-  _High betweenness centrality (0.153) - this node is a cross-community bridge._
+  _High betweenness centrality (0.152) - this node is a cross-community bridge._
 - **What connects `name`, `version`, `description` to the rest of the system?**
   _570 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `aicenter.service.ts` be split into smaller, more focused modules?**
   _Cohesion score 0.11014492753623188 - nodes in this community are weakly interconnected._
-- **Why does `loadConfig()` connect `loadConfig` to `aicenter.service.ts`, `ai.routes.ts`, `ai.service.ts`, `storage.ts`, `translationsService`, `prWorktreeService`, `prsService`, `app.ts`, `governanceService`, `prSecurityService`, `customToolsService`, `git.ts`, `templates.service.ts`, `workspaceService`, `constants.ts`?**
+- **Why does `loadConfig()` connect `loadConfig` to `aicenter.service.ts`, `saveConfig`, `ai.routes.ts`, `wikiService`, `schema.validator.ts`, `translationsService`, `prWorktreeService`, `prsService`, `app.ts`, `governanceService`, `storage-vault.test.ts`, `customToolsService`, `git.ts`, `templates.service.ts`, `workspaceService`, `storage.ts`?**
   _High betweenness centrality (0.100) - this node is a cross-community bridge._
 - **Should `useWorkspace` be split into smaller, more focused modules?**
   _Cohesion score 0.07567567567567568 - nodes in this community are weakly interconnected._

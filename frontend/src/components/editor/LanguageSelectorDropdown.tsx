@@ -3,7 +3,6 @@ import { API } from "../../services/api";
 import type {
   SupportedLanguage,
   DocumentTranslationItem,
-  TranslationEngineInfo,
 } from "../../types";
 
 interface LanguageSelectorDropdownProps {
@@ -18,6 +17,8 @@ export const LanguageSelectorDropdown: React.FC<
 > = ({ filePath, activeLanguage, onSelectLanguage, onTranslationCreated }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isTranslating, setIsTranslating] = useState(false);
+  const [translatingLang, setTranslatingLang] = useState<string | null>(null);
+  const [deletingLang, setDeletingLang] = useState<string | null>(null);
   const [defaultLanguage, setDefaultLanguage] = useState("pt-BR");
   const [supportedLanguages, setSupportedLanguages] = useState<
     SupportedLanguage[]
@@ -25,21 +26,10 @@ export const LanguageSelectorDropdown: React.FC<
   const [translations, setTranslations] = useState<DocumentTranslationItem[]>(
     [],
   );
-  const [engines, setEngines] = useState<TranslationEngineInfo[]>([]);
-  const [selectedEngineId, setSelectedEngineId] =
-    useState<string>("lightweight-local");
+  const [selectedEngineId] = useState<string>("lightweight-local");
   const [errorToast, setErrorToast] = useState<string | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
-
-  // Carregar motores disponíveis uma vez
-  useEffect(() => {
-    API.getTranslationEngines().then((res) => {
-      if (res.ok && res.data?.engines) {
-        setEngines(res.data.engines);
-      }
-    });
-  }, []);
 
   // Carregar lista de traduções do arquivo ativo
   const loadTranslations = async () => {
@@ -94,6 +84,7 @@ export const LanguageSelectorDropdown: React.FC<
 
   const handleTranslate = async (targetLang: string) => {
     setIsTranslating(true);
+    setTranslatingLang(targetLang);
     setErrorToast(null);
     try {
       const res = await API.translateDocument({
@@ -119,6 +110,33 @@ export const LanguageSelectorDropdown: React.FC<
       setErrorToast(err?.message || "Falha na comunicação com o servidor.");
     } finally {
       setIsTranslating(false);
+      setTranslatingLang(null);
+    }
+  };
+
+  const handleDeleteTranslation = async (targetLang: string) => {
+    if (!filePath || !targetLang) return;
+    setDeletingLang(targetLang);
+    setErrorToast(null);
+    try {
+      const res = await API.deleteTranslation({
+        path: filePath,
+        lang: targetLang,
+      });
+      if (res.ok) {
+        await loadTranslations();
+        if (activeLanguage.toLowerCase() === targetLang.toLowerCase()) {
+          onSelectLanguage(defaultLanguage);
+        }
+      } else {
+        setErrorToast(
+          (res.data as any)?.error || "Erro ao remover arquivo de tradução.",
+        );
+      }
+    } catch (err: any) {
+      setErrorToast(err?.message || "Falha ao remover tradução.");
+    } finally {
+      setDeletingLang(null);
     }
   };
 
@@ -200,37 +218,6 @@ export const LanguageSelectorDropdown: React.FC<
             animation: "fadeIn 0.15s ease-out",
           }}
         >
-          {/* Header do Popover */}
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              borderBottom: "1px solid var(--color-outline-variant, #e2e8f0)",
-              paddingBottom: "6px",
-            }}
-          >
-            <span
-              style={{
-                fontSize: "11px",
-                fontWeight: 700,
-                textTransform: "uppercase",
-                letterSpacing: "0.05em",
-                color: "var(--color-outline, #64748b)",
-              }}
-            >
-              Idiomas & Traduções
-            </span>
-            <span
-              style={{
-                fontSize: "11px",
-                color: "var(--color-outline, #64748b)",
-              }}
-            >
-              OFICIAL: {defaultLanguage.toUpperCase()}
-            </span>
-          </div>
-
           {errorToast && (
             <div
               style={{
@@ -399,41 +386,98 @@ export const LanguageSelectorDropdown: React.FC<
                             gap: "6px",
                           }}
                         >
-                          {t.isOutdated && (
-                            <button
-                              type="button"
-                              title="Traduzir com base no documento oficial atualizado"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleTranslate(t.lang);
-                              }}
+                          <button
+                            type="button"
+                            title={`Traduzir ${t.langLabel} a partir do documento oficial`}
+                            disabled={isTranslating || deletingLang === t.lang}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleTranslate(t.lang);
+                            }}
+                            style={{
+                              display: "inline-flex",
+                              height: "22px",
+                              alignItems: "center",
+                              gap: "2px",
+                              padding: "2px 6px",
+                              borderRadius: "4px",
+                              border: t.isOutdated
+                                ? "1px solid rgba(217, 119, 6, 0.4)"
+                                : "1px solid rgba(37, 99, 235, 0.3)",
+                              background: t.isOutdated
+                                ? "rgba(217, 119, 6, 0.1)"
+                                : "rgba(37, 99, 235, 0.08)",
+                              color: t.isOutdated ? "#b45309" : "#2563eb",
+                              fontSize: "10.5px",
+                              fontWeight: 600,
+                              cursor:
+                                isTranslating || deletingLang === t.lang
+                                  ? "not-allowed"
+                                  : "pointer",
+                              transition: "all 0.15s ease",
+                            }}
+                          >
+                            <span
+                              className="material-symbols-outlined"
                               style={{
-                                display: "inline-flex",
-                                alignItems: "center",
-                                gap: "2px",
-                                padding: "2px 6px",
-                                borderRadius: "4px",
-                                border: "1px solid rgba(217, 119, 6, 0.4)",
-                                background: "rgba(217, 119, 6, 0.1)",
-                                color: "#b45309",
-                                fontSize: "10.5px",
-                                fontWeight: 600,
-                                cursor: "pointer",
+                                fontSize: "13px",
+                                animation:
+                                  translatingLang === t.lang
+                                    ? "spin 1s linear infinite"
+                                    : "none",
                               }}
                             >
-                              <span
-                                className="material-symbols-outlined"
-                                style={{ fontSize: "13px" }}
-                              >
-                                autorenew
-                              </span>
-                              <span>Traduzir</span>
-                            </button>
-                          )}
+                              autorenew
+                            </span>
+                          </button>
+
+                          <button
+                            type="button"
+                            title={`Remover tradução de ${t.langLabel}`}
+                            disabled={isTranslating || deletingLang === t.lang}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteTranslation(t.lang);
+                            }}
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              width: "22px",
+                              height: "22px",
+                              padding: 0,
+                              borderRadius: "4px",
+                              border: "1px solid rgba(239, 68, 68, 0.3)",
+                              background: "rgba(239, 68, 68, 0.08)",
+                              color: "#dc2626",
+                              cursor:
+                                isTranslating || deletingLang === t.lang
+                                  ? "not-allowed"
+                                  : "pointer",
+                              transition: "all 0.15s ease",
+                            }}
+                          >
+                            <span
+                              className="material-symbols-outlined"
+                              style={{
+                                fontSize: "14px",
+                                animation:
+                                  deletingLang === t.lang
+                                    ? "spin 1s linear infinite"
+                                    : "none",
+                              }}
+                            >
+                              {deletingLang === t.lang
+                                ? "progress_activity"
+                                : "delete_outline"}
+                            </span>
+                          </button>
+
                           {isCurrent && (
                             <span
                               className="material-symbols-outlined"
                               style={{ fontSize: "16px", color: "#10b981" }}
+                              title="Idioma ativo"
                             >
                               check
                             </span>
@@ -474,43 +518,6 @@ export const LanguageSelectorDropdown: React.FC<
                   Criar Tradução
                 </span>
               </div>
-
-              {/* Seletor de Motor de Tradução */}
-              {engines.length > 1 && (
-                <div
-                  style={{ display: "flex", alignItems: "center", gap: "6px" }}
-                >
-                  <label
-                    htmlFor="translation-engine-select"
-                    style={{
-                      fontSize: "10.5px",
-                      color: "var(--color-outline, #64748b)",
-                    }}
-                  >
-                    Motor:
-                  </label>
-                  <select
-                    id="translation-engine-select"
-                    value={selectedEngineId}
-                    onChange={(e) => setSelectedEngineId(e.target.value)}
-                    style={{
-                      flex: 1,
-                      fontSize: "11px",
-                      padding: "2px 6px",
-                      borderRadius: "4px",
-                      border: "1px solid var(--color-outline-variant, #cbd5e1)",
-                      background: "var(--color-surface, #ffffff)",
-                      color: "var(--color-on-surface, #1e293b)",
-                    }}
-                  >
-                    {engines.map((eng) => (
-                      <option key={eng.id} value={eng.id}>
-                        {eng.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
 
               {/* Lista de Idiomas Disponíveis para Traduzir */}
               <div

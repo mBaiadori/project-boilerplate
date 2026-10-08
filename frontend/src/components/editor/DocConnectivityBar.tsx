@@ -281,7 +281,8 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
   const activeCatObj = currentCategories
     ? categoryOptions.find(
         (c) =>
-          c.name.toLowerCase() === String(currentCategories || "").toLowerCase() ||
+          c.name.toLowerCase() ===
+            String(currentCategories || "").toLowerCase() ||
           c.name.toLowerCase() ===
             (Array.isArray(currentCategories)
               ? currentCategories[0]
@@ -618,8 +619,7 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
                     borderRadius: "5px",
                     border: "none",
                     background:
-                      currentCategories.toLowerCase() ===
-                      cat.name.toLowerCase()
+                      currentCategories.toLowerCase() === cat.name.toLowerCase()
                         ? `${cat.color}15`
                         : "transparent",
                     cursor: "pointer",
@@ -997,8 +997,9 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
         {/* Consumers (Backlinks) */}
         <div style={{ position: "relative" }}>
           <button
+            id="btn-doc-consumers"
             type="button"
-            className="btn btn-ghost btn-xs"
+            className={`btn-icon-action ${showConsumers ? "active" : ""}`}
             onClick={() => {
               setShowConsumers(!showConsumers);
               setShowDeps(false);
@@ -1007,33 +1008,41 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
               setShowTagPicker(false);
             }}
             style={{
+              height: "28px",
+              width: "auto",
+              padding: "0 6px",
               display: "inline-flex",
               alignItems: "center",
+              justifyContent: "center",
               gap: "4px",
-              fontSize: "11px",
+              borderRadius: "6px",
+              border: "1px solid",
+              borderColor: showConsumers
+                ? "var(--primary, #2563eb)"
+                : "var(--color-outline-variant, #e2e8f0)",
               background: showConsumers
-                ? "var(--color-surface-container, #f1f5f9)"
+                ? "var(--color-primary-container, #eff6ff)"
                 : "transparent",
+              cursor: "pointer",
+              color: showConsumers
+                ? "var(--primary, #2563eb)"
+                : "var(--color-outline, #64748b)",
+              transition: "all 0.15s ease",
             }}
+            title="Documentos que referenciam este (Dependentes / Backlinks)"
           >
             <span
               className="material-symbols-outlined icon-xs"
-              style={{ color: "#2563eb" }}
+              style={{ fontSize: "16px", color: "blue" }}
             >
               call_received
             </span>
-
             <span
               style={{
-                fontWeight: 700,
-                background:
-                  consumers.length > 0
-                    ? "rgba(37,99,235,0.12)"
-                    : "rgba(0,0,0,0.06)",
-                color: consumers.length > 0 ? "#2563eb" : "inherit",
-                padding: "1px 5px",
-                borderRadius: "10px",
-                fontSize: "10px",
+                fontWeight: 600,
+                fontSize: "11px",
+                lineHeight: 1,
+                color: "blue",
               }}
             >
               {consumers.length}
@@ -1051,7 +1060,8 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
                 borderRadius: "8px",
                 boxShadow: "0 8px 24px rgba(0,0,0,0.16)",
                 padding: "8px",
-
+                minWidth: "260px",
+                maxWidth: "320px",
                 zIndex: 100,
               }}
             >
@@ -1164,11 +1174,12 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
           )}
         </div>
 
-        {/* 3. Dependencies */}
+        {/* Dependencies */}
         <div style={{ position: "relative" }}>
           <button
+            id="btn-doc-dependencies"
             type="button"
-            className="btn btn-ghost btn-xs"
+            className={`btn-icon-action ${showDeps ? "active" : ""}`}
             onClick={() => {
               setShowDeps(!showDeps);
               setShowConsumers(false);
@@ -1177,31 +1188,41 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
               setShowTagPicker(false);
             }}
             style={{
+              height: "28px",
+              width: "auto",
+              padding: "0 6px",
               display: "inline-flex",
               alignItems: "center",
+              justifyContent: "center",
               gap: "4px",
-              fontSize: "11px",
+              borderRadius: "6px",
+              border: "1px solid",
+              borderColor: showDeps
+                ? "var(--primary, #2563eb)"
+                : "var(--color-outline-variant, #e2e8f0)",
               background: showDeps
-                ? "var(--color-surface-container, #f1f5f9)"
+                ? "var(--color-primary-container, #eff6ff)"
                 : "transparent",
+              cursor: "pointer",
+              color: showDeps
+                ? "var(--primary, #2563eb)"
+                : "var(--color-outline, #64748b)",
+              transition: "all 0.15s ease",
             }}
+            title="Links e documentos referenciados por este arquivo"
           >
             <span
               className="material-symbols-outlined icon-xs"
-              style={{ color: "#16a34a" }}
+              style={{ fontSize: "16px", color: "green" }}
             >
               call_made
             </span>
             <span
               style={{
-                background:
-                  dependencies.length > 0
-                    ? "rgba(22,163,74,0.12)"
-                    : "rgba(0,0,0,0.06)",
-                color: dependencies.length > 0 ? "#16a34a" : "inherit",
-                padding: "1px 5px",
-                borderRadius: "10px",
-                fontSize: "10px",
+                fontWeight: 600,
+                fontSize: "11px",
+                lineHeight: 1,
+                color: "green",
               }}
             >
               {dependencies.length}

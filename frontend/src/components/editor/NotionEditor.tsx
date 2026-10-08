@@ -836,7 +836,27 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
       return;
     }
 
-    const res = await saveCurrentFile();
+    const currentMd = engineRef.current
+      ? engineRef.current.getMarkdown()
+      : docBodyRef.current;
+    const metaToUse = {
+      ...(parsedRef.current?.metadata || {}),
+      ...(fileMetadata || {}),
+    };
+    const hasMeaningfulMeta =
+      parsedRef.current?.hasFrontmatter ||
+      Boolean(
+        metaToUse.status ||
+        metaToUse.categories ||
+        metaToUse.category ||
+        (metaToUse.tags && metaToUse.tags.length > 0) ||
+        metaToUse.department
+      );
+    const fullContent = hasMeaningfulMeta
+      ? serializeFrontmatter(metaToUse, currentMd)
+      : currentMd;
+
+    const res = await saveCurrentFile(metaToUse, fullContent);
     if (res?.success) {
       if (engineRef.current) {
         engineRef.current.applyDictionaryHighlights();
@@ -855,6 +875,7 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
     prHeadSha,
     user?.login,
     activeRepo?.name,
+    fileMetadata,
   ]);
 
   const handleSaveRef = useRef(handleSave);
@@ -886,8 +907,21 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
           ) {
             return;
           }
-          const newContent = parsedRef.current.hasFrontmatter
-            ? serializeFrontmatter(parsedRef.current.metadata, currentMd)
+          const metaToUse = {
+            ...(parsedRef.current?.metadata || {}),
+            ...(fileMetadata || {}),
+          };
+          const hasMeaningfulMeta =
+            parsedRef.current?.hasFrontmatter ||
+            Boolean(
+              metaToUse.status ||
+              metaToUse.categories ||
+              metaToUse.category ||
+              (metaToUse.tags && metaToUse.tags.length > 0) ||
+              metaToUse.department
+            );
+          const newContent = hasMeaningfulMeta
+            ? serializeFrontmatter(metaToUse, currentMd)
             : currentMd;
           onChangeRef.current(newContent);
         } else {
