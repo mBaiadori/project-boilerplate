@@ -994,11 +994,11 @@
    ============================================================================= */
 
 .bubble-menu-popover {
-  position: absolute;
+  position: fixed;
   z-index: 1000;
   display: none;
-  background: #ffffff;
-  color: #1e293b;
+  background: var(--color-surface, #ffffff);
+  color: var(--color-on-surface, #1e293b);
   border-radius: 8px;
   border: 1px solid var(--color-outline-variant, #e2e8f0);
   padding: 4px 6px;
@@ -1007,19 +1007,17 @@
     0 8px 10px -6px rgba(0, 0, 0, 0.06);
   align-items: center;
   gap: 2px;
-  transform: translate(-50%, -100%);
-  margin-top: -8px;
   animation: bubbleAppear 0.12s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @keyframes bubbleAppear {
   from {
     opacity: 0;
-    transform: translate(-50%, -90%) scale(0.95);
+    transform: scale(0.96) translateY(4px);
   }
   to {
     opacity: 1;
-    transform: translate(-50%, -100%) scale(1);
+    transform: scale(1) translateY(0);
   }
 }
 

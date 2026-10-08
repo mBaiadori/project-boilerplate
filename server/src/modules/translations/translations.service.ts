@@ -3,6 +3,7 @@ import path from 'node:path';
 import { PROJECTS_DIR } from '../../config/constants.js';
 import { loadConfig } from '../../config/storage.js';
 import { dictionaryService } from '../dictionary/dictionary.service.js';
+import { docsMetadataService } from '../workspace/docs-metadata.service.js';
 import { translationProviderManager } from './providers/TranslationProviderManager.js';
 import {
   SupportedLanguage,
@@ -357,11 +358,16 @@ export class TranslationsService {
       }
     }
 
+    // Obter título do documento
+    const docMeta = docsMetadataService.getDocMetadata(repoName, cleanPath);
+    const documentTitle = docMeta?.title || path.basename(cleanPath, path.extname(cleanPath));
+
     const translatedContent = await provider.translate(mainContent, {
       sourceLang: defaultLanguage,
       targetLang,
       glossary,
       preserveFrontmatter: true, // Preserva e traduz metadados textuais (title, description)
+      documentTitle,
     });
 
     // Salvar arquivo traduzido (com frontmatter traduzido e corpo traduzido)

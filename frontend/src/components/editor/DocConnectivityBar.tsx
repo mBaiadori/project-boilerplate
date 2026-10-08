@@ -126,11 +126,12 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
   const [contextData, setContextData] = useState<any>(null);
   const [showConsumers, setShowConsumers] = useState(false);
   const [showDeps, setShowDeps] = useState(false);
-  const [showProperties, setShowProperties] = useState(false);
+  const [showStatusPicker, setShowStatusPicker] = useState(false);
+  const [showCategoryPicker, setShowCategoryPicker] = useState(false);
+  const [showTagPicker, setShowTagPicker] = useState(false);
   const [newTagInput, setNewTagInput] = useState("");
-  const [newApproverInput, setNewApproverInput] = useState("");
+  const [customCategoryInput, setCustomCategoryInput] = useState("");
   const barRef = useRef<HTMLDivElement>(null);
-  const propDropdownRef = useRef<HTMLDivElement>(null);
 
   const loadContext = React.useCallback(async () => {
     if (!filePath) return;
@@ -175,7 +176,9 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
       if (barRef.current && !barRef.current.contains(e.target as Node)) {
         setShowConsumers(false);
         setShowDeps(false);
-        setShowProperties(false);
+        setShowStatusPicker(false);
+        setShowCategoryPicker(false);
+        setShowTagPicker(false);
       }
     };
     document.addEventListener("mousedown", handleOutsideClick);
@@ -186,28 +189,20 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
   const dependencies = contextData?.dependencies || [];
 
   // Metadados ativos combinando o contextData com o fileMetadata reativo
-  const currentTitle = fileMetadata?.title || contextData?.title || "";
-  const currentStatus = fileMetadata?.status || contextData?.status || "draft";
-  const currentCategories =
+  const rawStatus = fileMetadata?.status ?? contextData?.status ?? "";
+  const currentStatus = rawStatus && rawStatus !== "-" ? rawStatus : "";
+
+  const rawCat =
     fileMetadata?.categories ||
     fileMetadata?.category ||
     contextData?.categories ||
     contextData?.category ||
     "";
+  const currentCategories = rawCat && rawCat !== "-" ? rawCat : "";
+
   const currentTags: string[] = Array.isArray(fileMetadata?.tags)
     ? fileMetadata.tags
     : [];
-  const currentApprovers: string[] = Array.isArray(fileMetadata?.approvers)
-    ? fileMetadata.approvers
-    : [];
-  const currentId = fileMetadata?.id || "";
-  const currentTemplateId =
-    fileMetadata?.templateId ||
-    fileMetadata?.template ||
-    contextData?.templateId ||
-    contextData?.template ||
-    "";
-  const currentUpdatedAt = fileMetadata?.updated_at || "";
 
   // Opções do projeto
   const statusOptions = useMemo<StatusItem[]>(() => {
@@ -216,9 +211,9 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
       const name = String(s.name || s.key || s.label || "")
         .toLowerCase()
         .replace(/\s+/g, "-");
-      const label = s.label || name.toUpperCase().replace(/-/g, " ");
-      const key = s.key || name;
-      const color = s.color || "#3b82f6";
+      const label = String(s.label || name.toUpperCase().replace(/-/g, " "));
+      const key = String(s.key || name);
+      const color = String(s.color || "#3b82f6");
       return { name, key, label, color };
     });
   }, [projectMetaOptions?.statuses]);
@@ -254,25 +249,11 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
     if (!trimmed || currentTags.includes(trimmed)) return;
     const updated = [...currentTags, trimmed];
     updateFileMetadata({ tags: updated });
-    setNewTagInput("");
   };
 
   const handleRemoveTag = (tagToRemove: string) => {
     const updated = currentTags.filter((t) => t !== tagToRemove);
     updateFileMetadata({ tags: updated });
-  };
-
-  const handleAddApprover = () => {
-    const trimmed = newApproverInput.trim();
-    if (!trimmed || currentApprovers.includes(trimmed)) return;
-    const updated = [...currentApprovers, trimmed];
-    updateFileMetadata({ approvers: updated });
-    setNewApproverInput("");
-  };
-
-  const handleRemoveApprover = (approverToRemove: string) => {
-    const updated = currentApprovers.filter((a) => a !== approverToRemove);
-    updateFileMetadata({ approvers: updated });
   };
 
   const { departments } = useSecurity();
@@ -284,26 +265,30 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
       d.folder.toLowerCase() === currentDeptId.toLowerCase(),
   );
 
-  const activeStatusObj = statusOptions.find(
-    (s) => s.name === currentStatus || s.key === currentStatus,
-  ) || {
-    name: currentStatus,
-    key: currentStatus,
-    label: currentStatus
-      ? currentStatus.toUpperCase().replace(/-/g, " ")
-      : "DRAFT",
-    color: "#64748b",
-  };
+  const activeStatusObj = currentStatus
+    ? statusOptions.find(
+        (s) =>
+          (s.name && s.name.toLowerCase() === currentStatus.toLowerCase()) ||
+          (s.key && s.key.toLowerCase() === currentStatus.toLowerCase()),
+      ) || {
+        name: currentStatus,
+        key: currentStatus,
+        label: currentStatus.toUpperCase().replace(/-/g, " "),
+        color: "#64748b",
+      }
+    : null;
 
-  const activeCatObj = categoryOptions.find(
-    (c) =>
-      c.name.toLowerCase() === String(currentCategories || "").toLowerCase() ||
-      c.name.toLowerCase() ===
-        (Array.isArray(currentCategories)
-          ? currentCategories[0]
-          : ""
-        ).toLowerCase(),
-  );
+  const activeCatObj = currentCategories
+    ? categoryOptions.find(
+        (c) =>
+          c.name.toLowerCase() === String(currentCategories || "").toLowerCase() ||
+          c.name.toLowerCase() ===
+            (Array.isArray(currentCategories)
+              ? currentCategories[0]
+              : ""
+            ).toLowerCase(),
+      )
+    : null;
   const catColor = activeCatObj?.color || "#3b82f6";
 
   return (
@@ -322,7 +307,7 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
         minHeight: "38px",
       }}
     >
-      {/* Left: Status + Categoria + Departamento + Conectividade (Propriedades, Consumidores, Dependências) */}
+      {/* Left: Status + Categoria + Tags + Departamento + Conectividade */}
       <div
         style={{
           display: "flex",
@@ -331,48 +316,648 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
           flexWrap: "nowrap",
         }}
       >
-        {/* Status Badge */}
-        <span
-          style={{
-            fontSize: "11px",
-            padding: "2.5px 8px",
-            borderRadius: "4px",
-            fontWeight: 600,
-            backgroundColor: `${activeStatusObj.color}15`,
-            color: activeStatusObj.color,
-            border: `1px solid ${activeStatusObj.color}40`,
-            display: "inline-flex",
-            alignItems: "center",
-            letterSpacing: "0.02em",
-          }}
-          title={`Status de governança: ${activeStatusObj.label}`}
-        >
-          {activeStatusObj.key ? activeStatusObj.key.toUpperCase() : "DRAFT"}
-        </span>
+        {/* 1. Status Badge & Popover */}
+        <div style={{ position: "relative" }}>
+          <button
+            type="button"
+            onClick={() => {
+              setShowStatusPicker(!showStatusPicker);
+              setShowCategoryPicker(false);
+              setShowTagPicker(false);
+              setShowConsumers(false);
+              setShowDeps(false);
+            }}
+            style={{
+              fontSize: "11px",
+              padding: "2.5px 8px",
+              borderRadius: "4px",
+              fontWeight: 600,
+              backgroundColor: activeStatusObj
+                ? `${activeStatusObj.color}18`
+                : "var(--color-surface-container-high, #f1f5f9)",
+              color: activeStatusObj
+                ? activeStatusObj.color
+                : "var(--color-outline, #64748b)",
+              border: `1px solid ${
+                activeStatusObj
+                  ? activeStatusObj.color + "40"
+                  : "var(--color-outline-variant, #cbd5e1)"
+              }`,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "4px",
+              cursor: "pointer",
+              letterSpacing: "0.02em",
+              transition: "all 0.15s ease",
+            }}
+            title="Clique para alterar o status do documento"
+          >
+            <span>{activeStatusObj ? activeStatusObj.label : "-"}</span>
+            <span
+              className="material-symbols-outlined"
+              style={{ fontSize: "13px", opacity: 0.7 }}
+            >
+              expand_more
+            </span>
+          </button>
 
-        {/* Categoria Badge */}
-        {currentCategories && (
-          <span
+          {showStatusPicker && (
+            <div
+              style={{
+                position: "absolute",
+                top: "calc(100% + 5px)",
+                left: 0,
+                background: "var(--color-surface, #ffffff)",
+                border: "1px solid var(--color-outline-variant, #cbd5e1)",
+                borderRadius: "8px",
+                boxShadow:
+                  "0 10px 25px -5px rgba(0,0,0,0.14), 0 8px 10px -6px rgba(0,0,0,0.06)",
+                padding: "6px",
+                minWidth: "160px",
+                zIndex: 120,
+                display: "flex",
+                flexDirection: "column",
+                gap: "3px",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: "10px",
+                  fontWeight: 700,
+                  color: "var(--color-outline, #64748b)",
+                  padding: "4px 8px",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.05em",
+                }}
+              >
+                Status do Documento
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  handleStatusChange("");
+                  setShowStatusPicker(false);
+                }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  padding: "5px 8px",
+                  borderRadius: "5px",
+                  border: "none",
+                  background: !currentStatus
+                    ? "var(--color-surface-container, #f1f5f9)"
+                    : "transparent",
+                  color: "var(--color-outline, #64748b)",
+                  cursor: "pointer",
+                  fontSize: "11.5px",
+                  textAlign: "left",
+                  width: "100%",
+                }}
+                className="dropdown-item-hover"
+              >
+                <span
+                  style={{
+                    width: "8px",
+                    height: "8px",
+                    borderRadius: "50%",
+                    background: "#94a3b8",
+                  }}
+                />
+                <span>- (Sem status)</span>
+              </button>
+
+              {statusOptions.map((opt) => {
+                const optKey = opt.key || opt.name || "";
+                const optName = opt.name || opt.key || "";
+                const isSelected =
+                  currentStatus.toLowerCase() === optName.toLowerCase() ||
+                  currentStatus.toLowerCase() === optKey.toLowerCase();
+                return (
+                  <button
+                    key={optKey || optName}
+                    type="button"
+                    onClick={() => {
+                      handleStatusChange(optKey || optName);
+                      setShowStatusPicker(false);
+                    }}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "5px 8px",
+                      borderRadius: "5px",
+                      border: "none",
+                      background: isSelected ? `${opt.color}15` : "transparent",
+                      cursor: "pointer",
+                      fontSize: "11.5px",
+                      textAlign: "left",
+                      width: "100%",
+                    }}
+                    className="dropdown-item-hover"
+                  >
+                    <span
+                      style={{
+                        padding: "1.5px 6px",
+                        borderRadius: "4px",
+                        fontWeight: 600,
+                        fontSize: "11px",
+                        backgroundColor: `${opt.color}18`,
+                        color: opt.color,
+                        border: `1px solid ${opt.color}40`,
+                      }}
+                    >
+                      {opt.label || optName.toUpperCase()}
+                    </span>
+                    {isSelected && (
+                      <span
+                        className="material-symbols-outlined"
+                        style={{ fontSize: "14px", color: opt.color }}
+                      >
+                        check
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* 2. Categoria Badge & Popover */}
+        <div style={{ position: "relative" }}>
+          <button
+            type="button"
+            onClick={() => {
+              setShowCategoryPicker(!showCategoryPicker);
+              setShowStatusPicker(false);
+              setShowTagPicker(false);
+              setShowConsumers(false);
+              setShowDeps(false);
+            }}
             style={{
               fontSize: "11px",
               padding: "2.5px 8px",
               borderRadius: "4px",
               fontWeight: 500,
-              backgroundColor: `${catColor}15`,
-              color: catColor,
-              border: `1px solid ${catColor}40`,
+              backgroundColor: currentCategories
+                ? `${catColor}18`
+                : "var(--color-surface-container-high, #f1f5f9)",
+              color: currentCategories
+                ? catColor
+                : "var(--color-outline, #64748b)",
+              border: `1px solid ${
+                currentCategories
+                  ? catColor + "40"
+                  : "var(--color-outline-variant, #cbd5e1)"
+              }`,
               display: "inline-flex",
               alignItems: "center",
+              gap: "4px",
+              cursor: "pointer",
+              transition: "all 0.15s ease",
             }}
-            title="Categoria funcional do documento"
+            title="Clique para alterar a categoria do documento"
           >
-            {Array.isArray(currentCategories)
-              ? currentCategories.join(", ")
-              : currentCategories}
-          </span>
-        )}
+            <span>
+              {currentCategories
+                ? Array.isArray(currentCategories)
+                  ? currentCategories.join(", ")
+                  : currentCategories
+                : "-"}
+            </span>
+            <span
+              className="material-symbols-outlined"
+              style={{ fontSize: "13px", opacity: 0.7 }}
+            >
+              expand_more
+            </span>
+          </button>
 
-        {/* Departamento Badge */}
+          {showCategoryPicker && (
+            <div
+              style={{
+                position: "absolute",
+                top: "calc(100% + 5px)",
+                left: 0,
+                background: "var(--color-surface, #ffffff)",
+                border: "1px solid var(--color-outline-variant, #cbd5e1)",
+                borderRadius: "8px",
+                boxShadow:
+                  "0 10px 25px -5px rgba(0,0,0,0.14), 0 8px 10px -6px rgba(0,0,0,0.06)",
+                padding: "6px",
+                minWidth: "170px",
+                zIndex: 120,
+                display: "flex",
+                flexDirection: "column",
+                gap: "3px",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: "10px",
+                  fontWeight: 700,
+                  color: "var(--color-outline, #64748b)",
+                  padding: "4px 8px",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.05em",
+                }}
+              >
+                Categoria
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  handleCategoryChange("");
+                  setShowCategoryPicker(false);
+                }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  padding: "5px 8px",
+                  borderRadius: "5px",
+                  border: "none",
+                  background: !currentCategories
+                    ? "var(--color-surface-container, #f1f5f9)"
+                    : "transparent",
+                  color: "var(--color-outline, #64748b)",
+                  cursor: "pointer",
+                  fontSize: "11.5px",
+                  textAlign: "left",
+                  width: "100%",
+                }}
+                className="dropdown-item-hover"
+              >
+                <span
+                  style={{
+                    width: "8px",
+                    height: "8px",
+                    borderRadius: "50%",
+                    background: "#94a3b8",
+                  }}
+                />
+                <span>- (Sem categoria)</span>
+              </button>
+
+              {categoryOptions.map((cat) => (
+                <button
+                  key={cat.name}
+                  type="button"
+                  onClick={() => {
+                    handleCategoryChange(cat.name);
+                    setShowCategoryPicker(false);
+                  }}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "5px 8px",
+                    borderRadius: "5px",
+                    border: "none",
+                    background:
+                      currentCategories.toLowerCase() ===
+                      cat.name.toLowerCase()
+                        ? `${cat.color}15`
+                        : "transparent",
+                    cursor: "pointer",
+                    fontSize: "11.5px",
+                    textAlign: "left",
+                    width: "100%",
+                  }}
+                  className="dropdown-item-hover"
+                >
+                  <span
+                    style={{
+                      padding: "1.5px 6px",
+                      borderRadius: "4px",
+                      fontWeight: 500,
+                      fontSize: "11px",
+                      backgroundColor: `${cat.color}18`,
+                      color: cat.color,
+                      border: `1px solid ${cat.color}40`,
+                    }}
+                  >
+                    {cat.name.toUpperCase()}
+                  </span>
+                  {currentCategories.toLowerCase() ===
+                    cat.name.toLowerCase() && (
+                    <span
+                      className="material-symbols-outlined"
+                      style={{ fontSize: "14px", color: cat.color }}
+                    >
+                      check
+                    </span>
+                  )}
+                </button>
+              ))}
+
+              {/* Input de categoria customizada */}
+              <div
+                style={{
+                  marginTop: "4px",
+                  borderTop: "1px solid var(--color-outline-variant, #f1f5f9)",
+                  paddingTop: "4px",
+                  display: "flex",
+                  gap: "4px",
+                }}
+              >
+                <input
+                  type="text"
+                  placeholder="Outra..."
+                  value={customCategoryInput}
+                  onChange={(e) => setCustomCategoryInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && customCategoryInput.trim()) {
+                      e.preventDefault();
+                      handleCategoryChange(customCategoryInput.trim());
+                      setCustomCategoryInput("");
+                      setShowCategoryPicker(false);
+                    }
+                  }}
+                  style={{
+                    fontSize: "11px",
+                    padding: "3px 6px",
+                    borderRadius: "4px",
+                    border: "1px solid var(--color-outline-variant, #cbd5e1)",
+                    flex: 1,
+                    outline: "none",
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (customCategoryInput.trim()) {
+                      handleCategoryChange(customCategoryInput.trim());
+                      setCustomCategoryInput("");
+                      setShowCategoryPicker(false);
+                    }
+                  }}
+                  style={{
+                    padding: "3px 6px",
+                    borderRadius: "4px",
+                    background: "var(--primary, #2563eb)",
+                    color: "#fff",
+                    border: "none",
+                    fontSize: "11px",
+                    cursor: "pointer",
+                  }}
+                >
+                  OK
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* 3. Tags Chips & Popover */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "4px",
+            position: "relative",
+          }}
+        >
+          {currentTags.map((tag) => {
+            const tagOpt = availableTags.find(
+              (t) => t.name.toLowerCase() === tag.toLowerCase(),
+            );
+            const style = getTagStyle(tag, tagOpt?.color);
+            return (
+              <span
+                key={tag}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "3px",
+                  fontSize: "10.5px",
+                  padding: "2px 6px",
+                  borderRadius: "10px",
+                  background: style.background,
+                  color: style.color,
+                  border: `1px solid ${style.borderColor}`,
+                  fontWeight: 600,
+                }}
+              >
+                #{tag}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleRemoveTag(tag);
+                  }}
+                  style={{
+                    background: "transparent",
+                    border: "none",
+                    cursor: "pointer",
+                    padding: 0,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    color: "inherit",
+                    opacity: 0.7,
+                  }}
+                  title={`Remover #${tag}`}
+                >
+                  <span
+                    className="material-symbols-outlined"
+                    style={{ fontSize: "11px" }}
+                  >
+                    close
+                  </span>
+                </button>
+              </span>
+            );
+          })}
+
+          {/* Botão + Tag */}
+          <button
+            type="button"
+            onClick={() => {
+              setShowTagPicker(!showTagPicker);
+              setShowStatusPicker(false);
+              setShowCategoryPicker(false);
+              setShowConsumers(false);
+              setShowDeps(false);
+            }}
+            style={{
+              border: "1px dashed var(--color-outline-variant, #cbd5e1)",
+              background: showTagPicker
+                ? "var(--color-surface-container, #f1f5f9)"
+                : "transparent",
+              color: "var(--color-outline, #64748b)",
+              borderRadius: "10px",
+              fontSize: "10.5px",
+              padding: "1.5px 6px",
+              cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "2px",
+              fontWeight: 500,
+              transition: "all 0.15s ease",
+            }}
+            title="Adicionar ou selecionar tags"
+          >
+            <span
+              className="material-symbols-outlined"
+              style={{ fontSize: "12px" }}
+            >
+              add
+            </span>
+            <span>Tag</span>
+          </button>
+
+          {showTagPicker && (
+            <div
+              style={{
+                position: "absolute",
+                top: "calc(100% + 5px)",
+                left: 0,
+                background: "var(--color-surface, #ffffff)",
+                border: "1px solid var(--color-outline-variant, #cbd5e1)",
+                borderRadius: "8px",
+                boxShadow:
+                  "0 10px 25px -5px rgba(0,0,0,0.14), 0 8px 10px -6px rgba(0,0,0,0.06)",
+                padding: "10px",
+                minWidth: "220px",
+                maxWidth: "280px",
+                zIndex: 120,
+                display: "flex",
+                flexDirection: "column",
+                gap: "8px",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: "10px",
+                  fontWeight: 700,
+                  color: "var(--color-outline, #64748b)",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.05em",
+                }}
+              >
+                Gerenciar Tags
+              </div>
+
+              {/* Input de nova tag */}
+              <div style={{ display: "flex", gap: "4px" }}>
+                <input
+                  type="text"
+                  placeholder="Nova tag..."
+                  value={newTagInput}
+                  onChange={(e) => setNewTagInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && newTagInput.trim()) {
+                      e.preventDefault();
+                      handleAddTag(newTagInput.trim());
+                      setNewTagInput("");
+                    }
+                  }}
+                  style={{
+                    fontSize: "11px",
+                    padding: "3px 6px",
+                    borderRadius: "4px",
+                    border: "1px solid var(--color-outline-variant, #cbd5e1)",
+                    flex: 1,
+                    outline: "none",
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (newTagInput.trim()) {
+                      handleAddTag(newTagInput.trim());
+                      setNewTagInput("");
+                    }
+                  }}
+                  disabled={!newTagInput.trim()}
+                  style={{
+                    padding: "3px 8px",
+                    borderRadius: "4px",
+                    background: "var(--primary, #2563eb)",
+                    color: "#fff",
+                    border: "none",
+                    fontSize: "11px",
+                    cursor: newTagInput.trim() ? "pointer" : "not-allowed",
+                    opacity: newTagInput.trim() ? 1 : 0.6,
+                  }}
+                >
+                  +
+                </button>
+              </div>
+
+              {/* Sugestões do projeto */}
+              {availableTags.length > 0 && (
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "4px",
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: "10px",
+                      color: "var(--color-outline, #64748b)",
+                    }}
+                  >
+                    Tags configuradas:
+                  </span>
+                  <div
+                    style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}
+                  >
+                    {availableTags.map((t) => {
+                      const isSelected = currentTags.includes(
+                        t.name.toLowerCase(),
+                      );
+                      const style = getTagStyle(t.name, t.color);
+                      return (
+                        <button
+                          key={t.name}
+                          type="button"
+                          onClick={() => {
+                            if (isSelected) {
+                              handleRemoveTag(t.name.toLowerCase());
+                            } else {
+                              handleAddTag(t.name);
+                            }
+                          }}
+                          style={{
+                            border: `1px solid ${
+                              isSelected
+                                ? style.borderColor
+                                : "var(--color-outline-variant, #cbd5e1)"
+                            }`,
+                            background: isSelected
+                              ? style.background
+                              : "transparent",
+                            color: isSelected
+                              ? style.color
+                              : "var(--color-outline, #64748b)",
+                            borderRadius: "10px",
+                            fontSize: "10px",
+                            padding: "2px 6px",
+                            cursor: "pointer",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "2px",
+                            fontWeight: isSelected ? 600 : 400,
+                          }}
+                        >
+                          {isSelected ? "✓" : "+"} #{t.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* 4. Departamento Badge */}
         {activeDept && (
           <span
             style={{
@@ -388,10 +973,8 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
               display: "inline-flex",
               alignItems: "center",
               gap: "4px",
-              cursor: "pointer",
             }}
-            onClick={() => setShowProperties(true)}
-            title={`Departamento: ${activeDept.name} (Pasta padrão: ${activeDept.folder}) - Clique para gerenciar`}
+            title={`Departamento: ${activeDept.name}`}
           >
             <span
               className="material-symbols-outlined"
@@ -411,648 +994,7 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
             margin: "0 2px",
           }}
         />
-
-        {/* 1. Botão Dropdown / Popover de Propriedades (Metadados) */}
-        <div style={{ position: "relative" }} ref={propDropdownRef}>
-          <button
-            id="btn-doc-properties-dropdown"
-            type="button"
-            className="btn btn-ghost btn-xs"
-            onClick={() => {
-              setShowProperties(!showProperties);
-              setShowConsumers(false);
-              setShowDeps(false);
-            }}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "5px",
-              fontSize: "11px",
-              fontWeight: 500,
-              background: showProperties
-                ? "var(--color-surface-container, #f1f5f9)"
-                : "transparent",
-              color: showProperties ? "var(--primary, #2563eb)" : "inherit",
-              borderRadius: "5px",
-              padding: "4px 8px",
-            }}
-            title="Gerenciar propriedades do documento"
-          >
-            <span
-              className="material-symbols-outlined icon-xs"
-              style={{ color: "#2563eb", fontSize: "15px" }}
-            >
-              tune
-            </span>
-            <span>Propriedades</span>
-            {currentTags.length > 0 && (
-              <span
-                style={{
-                  fontWeight: 600,
-                  background: "rgba(37,99,235,0.1)",
-                  color: "#2563eb",
-                  padding: "0 5px",
-                  borderRadius: "8px",
-                  fontSize: "9.5px",
-                }}
-              >
-                {currentTags.length}
-              </span>
-            )}
-            <span
-              className="material-symbols-outlined icon-xs"
-              style={{ fontSize: "14px", opacity: 0.7 }}
-            >
-              {showProperties ? "expand_less" : "expand_more"}
-            </span>
-          </button>
-
-          {/* Painel Flutuante de Propriedades */}
-          {showProperties && (
-            <div
-              id="doc-properties-popover"
-              style={{
-                position: "absolute",
-                top: "calc(100% + 6px)",
-                left: 0,
-                background: "var(--color-surface, #ffffff)",
-                border: "1px solid var(--color-outline-variant, #cbd5e1)",
-                borderRadius: "10px",
-                boxShadow: "0 12px 32px rgba(0,0,0,0.14)",
-                padding: "14px 16px",
-                minWidth: "350px",
-                maxWidth: "390px",
-                zIndex: 110,
-                display: "flex",
-                flexDirection: "column",
-                gap: "12px",
-                animation: "fadeIn 0.15s ease-out",
-              }}
-            >
-              {/* Header do Popover */}
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  borderBottom:
-                    "1px solid var(--color-outline-variant, #f1f5f9)",
-                  paddingBottom: "8px",
-                }}
-              >
-                <div
-                  style={{ display: "flex", alignItems: "center", gap: "6px" }}
-                >
-                  <span
-                    className="material-symbols-outlined icon-xs"
-                    style={{ color: "var(--primary, #2563eb)" }}
-                  >
-                    tune
-                  </span>
-                  <strong
-                    style={{
-                      fontSize: "12.5px",
-                      color: "var(--color-on-surface, #0f172a)",
-                    }}
-                  >
-                    Propriedades
-                  </strong>
-                </div>
-                {currentTemplateId && (
-                  <span
-                    style={{
-                      fontSize: "10px",
-                      padding: "2px 6px",
-                      borderRadius: "4px",
-                      background: "rgba(37,99,235,0.08)",
-                      color: "#2563eb",
-                      fontWeight: 600,
-                    }}
-                    title="Template base do documento"
-                  >
-                    Template: {currentTemplateId}
-                  </span>
-                )}
-              </div>
-
-              {/* Título do Documento */}
-              <div
-                style={{ display: "flex", flexDirection: "column", gap: "4px" }}
-              >
-                <span
-                  style={{
-                    fontSize: "11px",
-                    fontWeight: 600,
-                    color: "var(--color-outline, #64748b)",
-                  }}
-                >
-                  Título
-                </span>
-                <input
-                  type="text"
-                  className="form-input"
-                  placeholder="Título do documento..."
-                  value={currentTitle}
-                  onChange={(e) =>
-                    updateFileMetadata({ title: e.target.value })
-                  }
-                  style={{
-                    fontSize: "12px",
-                    padding: "6px 8px",
-                    borderRadius: "5px",
-                    border: "1px solid var(--color-outline-variant, #cbd5e1)",
-                  }}
-                />
-              </div>
-
-              {/* Departamento / Cofre */}
-              <div
-                style={{ display: "flex", flexDirection: "column", gap: "4px" }}
-              >
-                <span
-                  style={{
-                    fontSize: "11px",
-                    fontWeight: 600,
-                    color: "var(--color-outline, #64748b)",
-                  }}
-                >
-                  Cofre / Departamento
-                </span>
-                <select
-                  className="form-select"
-                  value={currentDeptId}
-                  onChange={(e) => {
-                    updateFileMetadata({
-                      department: e.target.value || undefined,
-                    });
-                  }}
-                  style={{
-                    fontSize: "11.5px",
-                    padding: "5px 8px",
-                    borderRadius: "5px",
-                    border: `1px solid ${activeDept ? activeDept.color + "60" : "var(--color-outline-variant, #cbd5e1)"}`,
-                    background: "#fff",
-                    color: activeDept?.color || "#0f172a",
-                    cursor: "pointer",
-                    fontWeight: 500,
-                  }}
-                >
-                  <option value="">(Público / Pasta Padrão)</option>
-                  {departments.map((dept) => (
-                    <option
-                      key={dept.id}
-                      value={dept.id}
-                      style={{ color: "#0f172a" }}
-                    >
-                      {dept.name} ({dept.folder})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Status & Categoria em linha */}
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: "10px",
-                }}
-              >
-                {/* Status */}
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "4px",
-                  }}
-                >
-                  <span
-                    style={{
-                      fontSize: "11px",
-                      fontWeight: 600,
-                      color: "var(--color-outline, #64748b)",
-                    }}
-                  >
-                    Status
-                  </span>
-                  <select
-                    className="form-select"
-                    value={currentStatus}
-                    onChange={(e) => handleStatusChange(e.target.value)}
-                    style={{
-                      fontSize: "11.5px",
-                      padding: "5px 8px",
-                      borderRadius: "5px",
-                      border: "1px solid var(--color-outline-variant, #cbd5e1)",
-                      background: "#fff",
-                      cursor: "pointer",
-                      fontWeight: 500,
-                    }}
-                  >
-                    {statusOptions.map((opt) => (
-                      <option
-                        key={opt.name || opt.key || ""}
-                        value={opt.name || opt.key || ""}
-                      >
-                        {opt.label ||
-                          (opt.name
-                            ? opt.name.toUpperCase()
-                            : opt.key
-                              ? opt.key.toUpperCase()
-                              : "")}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Categoria */}
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "4px",
-                  }}
-                >
-                  <span
-                    style={{
-                      fontSize: "11px",
-                      fontWeight: 600,
-                      color: "var(--color-outline, #64748b)",
-                    }}
-                  >
-                    Categoria
-                  </span>
-                  <select
-                    className="form-select"
-                    value={currentCategories}
-                    onChange={(e) => handleCategoryChange(e.target.value)}
-                    style={{
-                      fontSize: "11.5px",
-                      padding: "5px 8px",
-                      borderRadius: "5px",
-                      border: "1px solid var(--color-outline-variant, #cbd5e1)",
-                      background: "#fff",
-                      cursor: "pointer",
-                      fontWeight: 500,
-                    }}
-                  >
-                    <option value="">(Nenhuma)</option>
-                    {categoryOptions.map((cat) => (
-                      <option key={cat.name} value={cat.name}>
-                        {cat.name.toUpperCase()}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Tags */}
-              <div
-                style={{ display: "flex", flexDirection: "column", gap: "6px" }}
-              >
-                <span
-                  style={{
-                    fontSize: "11px",
-                    fontWeight: 600,
-                    color: "var(--color-outline, #64748b)",
-                  }}
-                >
-                  Tags
-                </span>
-
-                {/* Chips de tags ativas com cores */}
-                <div
-                  style={{
-                    display: "flex",
-                    flexWrap: "wrap",
-                    gap: "4px",
-                    minHeight: "26px",
-                    alignItems: "center",
-                  }}
-                >
-                  {currentTags.length === 0 ? (
-                    <span
-                      style={{
-                        fontSize: "11px",
-                        color: "#94a3b8",
-                        fontStyle: "italic",
-                      }}
-                    >
-                      Nenhuma tag atribuída.
-                    </span>
-                  ) : (
-                    currentTags.map((tag) => {
-                      const tagOpt = availableTags.find((t) => t.name === tag);
-                      const style = getTagStyle(tag, tagOpt?.color);
-                      return (
-                        <span
-                          key={tag}
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "4px",
-                            fontSize: "11px",
-                            padding: "2px 7px",
-                            borderRadius: "12px",
-                            background: style.background,
-                            color: style.color,
-                            border: `1px solid ${style.borderColor}`,
-                            fontWeight: 600,
-                          }}
-                        >
-                          #{tag}
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveTag(tag)}
-                            style={{
-                              background: "transparent",
-                              border: "none",
-                              cursor: "pointer",
-                              padding: 0,
-                              display: "inline-flex",
-                              alignItems: "center",
-                              color: "inherit",
-                              opacity: 0.7,
-                            }}
-                            title={`Remover #${tag}`}
-                          >
-                            <span
-                              className="material-symbols-outlined"
-                              style={{ fontSize: "12px" }}
-                            >
-                              close
-                            </span>
-                          </button>
-                        </span>
-                      );
-                    })
-                  )}
-                </div>
-
-                {/* Sugestões rápidas de tags do projeto (.project.json) */}
-                {availableTags.filter((t) => !currentTags.includes(t.name))
-                  .length > 0 && (
-                  <div
-                    style={{
-                      display: "flex",
-                      flexWrap: "wrap",
-                      gap: "4px",
-                      alignItems: "center",
-                      marginTop: "2px",
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontSize: "10px",
-                        color: "#94a3b8",
-                        marginRight: "2px",
-                      }}
-                    >
-                      Sugeridas:
-                    </span>
-                    {availableTags
-                      .filter((t) => !currentTags.includes(t.name))
-                      .slice(0, 7)
-                      .map((t) => {
-                        const style = getTagStyle(t.name, t.color);
-                        return (
-                          <button
-                            key={t.name}
-                            type="button"
-                            onClick={() => handleAddTag(t.name)}
-                            style={{
-                              border: `1px dashed ${style.borderColor}`,
-                              background: "transparent",
-                              color: style.color,
-                              borderRadius: "10px",
-                              fontSize: "10px",
-                              padding: "1px 6px",
-                              cursor: "pointer",
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: "2px",
-                              fontWeight: 500,
-                              transition: "all 0.15s",
-                            }}
-                            title={`Adicionar #${t.name}`}
-                          >
-                            +{t.name}
-                          </button>
-                        );
-                      })}
-                  </div>
-                )}
-
-                {/* Input para adicionar nova tag */}
-                <div style={{ display: "flex", gap: "4px", marginTop: "2px" }}>
-                  <input
-                    type="text"
-                    className="form-input"
-                    placeholder="Adicionar tag..."
-                    value={newTagInput}
-                    onChange={(e) => setNewTagInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        handleAddTag(newTagInput);
-                      }
-                    }}
-                    style={{
-                      fontSize: "11px",
-                      padding: "4px 7px",
-                      borderRadius: "4px",
-                      flex: 1,
-                    }}
-                  />
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-xs"
-                    onClick={() => handleAddTag(newTagInput)}
-                    disabled={!newTagInput.trim()}
-                  >
-                    Adicionar
-                  </button>
-                </div>
-              </div>
-
-              {/* Aprovadores (Approvers) */}
-              <div
-                style={{ display: "flex", flexDirection: "column", gap: "6px" }}
-              >
-                <span
-                  style={{
-                    fontSize: "11px",
-                    fontWeight: 600,
-                    color: "var(--color-outline, #64748b)",
-                  }}
-                >
-                  Aprovadores
-                </span>
-                <div
-                  style={{
-                    display: "flex",
-                    flexWrap: "wrap",
-                    gap: "4px",
-                    minHeight: "22px",
-                    alignItems: "center",
-                  }}
-                >
-                  {currentApprovers.length === 0 ? (
-                    <span
-                      style={{
-                        fontSize: "11px",
-                        color: "#94a3b8",
-                        fontStyle: "italic",
-                      }}
-                    >
-                      Nenhum aprovador atribuído.
-                    </span>
-                  ) : (
-                    currentApprovers.map((appr) => (
-                      <span
-                        key={appr}
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: "3px",
-                          fontSize: "10.5px",
-                          padding: "2px 7px",
-                          borderRadius: "12px",
-                          background: "rgba(16,185,129,0.1)",
-                          color: "#047857",
-                          fontWeight: 500,
-                        }}
-                      >
-                        @{appr}
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveApprover(appr)}
-                          style={{
-                            background: "transparent",
-                            border: "none",
-                            cursor: "pointer",
-                            padding: 0,
-                            display: "inline-flex",
-                            alignItems: "center",
-                            color: "#94a3b8",
-                          }}
-                        >
-                          <span
-                            className="material-symbols-outlined"
-                            style={{ fontSize: "12px" }}
-                          >
-                            close
-                          </span>
-                        </button>
-                      </span>
-                    ))
-                  )}
-                </div>
-                <div style={{ display: "flex", gap: "4px" }}>
-                  <input
-                    type="text"
-                    className="form-input"
-                    placeholder="Adicionar @revisor..."
-                    value={newApproverInput}
-                    onChange={(e) => setNewApproverInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        handleAddApprover();
-                      }
-                    }}
-                    style={{
-                      fontSize: "11px",
-                      padding: "4px 7px",
-                      borderRadius: "4px",
-                      flex: 1,
-                    }}
-                  />
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-xs"
-                    onClick={handleAddApprover}
-                    disabled={!newApproverInput.trim()}
-                  >
-                    Adicionar
-                  </button>
-                </div>
-              </div>
-
-              {/* Template ID */}
-              <div
-                style={{ display: "flex", flexDirection: "column", gap: "4px" }}
-              >
-                <span
-                  style={{
-                    fontSize: "11px",
-                    fontWeight: 600,
-                    color: "var(--color-outline, #64748b)",
-                  }}
-                >
-                  Template ID
-                </span>
-                <div
-                  style={{ display: "flex", alignItems: "center", gap: "6px" }}
-                >
-                  <input
-                    type="text"
-                    className="form-input"
-                    placeholder="Identificador de template (ex: sipoc, rfc)..."
-                    value={currentTemplateId}
-                    onChange={(e) =>
-                      updateFileMetadata({ templateId: e.target.value })
-                    }
-                    style={{
-                      fontSize: "11px",
-                      padding: "4px 7px",
-                      borderRadius: "4px",
-                      flex: 1,
-                      fontFamily: "monospace",
-                    }}
-                  />
-                </div>
-              </div>
-
-              {/* Informações do Sistema (Minimalista) */}
-              <div
-                style={{
-                  background: "var(--color-surface-container-low, #f8fafc)",
-                  borderRadius: "6px",
-                  padding: "7px 10px",
-                  fontSize: "10.5px",
-                  color: "#64748b",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "3px",
-                  border: "1px solid var(--color-outline-variant, #f1f5f9)",
-                }}
-              >
-                <div
-                  style={{ display: "flex", justifyContent: "space-between" }}
-                >
-                  <span>
-                    <strong>ID: </strong>
-                    <code>{currentId || "auto"}</code>
-                  </span>
-                  <span>
-                    {dependencies.length} deps &bull; {consumers.length} cons
-                  </span>
-                </div>
-                {currentUpdatedAt && (
-                  <div>
-                    <span>
-                      <strong>Atualizado: </strong>
-                      {new Date(currentUpdatedAt).toLocaleDateString()}
-                    </span>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* 2. Consumers (Backlinks) */}
+        {/* Consumers (Backlinks) */}
         <div style={{ position: "relative" }}>
           <button
             type="button"
@@ -1060,7 +1002,9 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
             onClick={() => {
               setShowConsumers(!showConsumers);
               setShowDeps(false);
-              setShowProperties(false);
+              setShowStatusPicker(false);
+              setShowCategoryPicker(false);
+              setShowTagPicker(false);
             }}
             style={{
               display: "inline-flex",
@@ -1107,8 +1051,7 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
                 borderRadius: "8px",
                 boxShadow: "0 8px 24px rgba(0,0,0,0.16)",
                 padding: "8px",
-                minWidth: "260px",
-                maxWidth: "320px",
+
                 zIndex: 100,
               }}
             >
@@ -1128,7 +1071,7 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
                     color: "var(--color-on-surface, #0f172a)",
                   }}
                 >
-                  Documentos Dependentes (Backlinks):
+                  Dependentes:
                 </strong>
                 <span style={{ fontSize: "10px", color: "#94a3b8" }}>
                   {consumers.length}
@@ -1229,7 +1172,9 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
             onClick={() => {
               setShowDeps(!showDeps);
               setShowConsumers(false);
-              setShowProperties(false);
+              setShowStatusPicker(false);
+              setShowCategoryPicker(false);
+              setShowTagPicker(false);
             }}
             style={{
               display: "inline-flex",
@@ -1295,7 +1240,7 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
                     color: "var(--color-on-surface, #0f172a)",
                   }}
                 >
-                  Contratos Requeridos (Links de Saída):
+                  Referenciados:
                 </strong>
                 <span style={{ fontSize: "10px", color: "#94a3b8" }}>
                   {dependencies.length}

@@ -232,16 +232,37 @@ export class BubbleMenuEngine {
 
     if (this.element) {
       this.element.style.display = "flex";
-      const menuWidth = this.element.offsetWidth || 300;
-      const left = Math.max(
-        10,
-        Math.min(
-          rect.left + rect.width / 2 - menuWidth / 2,
-          window.innerWidth - menuWidth - 10,
-        ),
+      const menuWidth = this.element.offsetWidth || 480;
+      const menuHeight = this.element.offsetHeight || 38;
+
+      // Obtém os limites visuais do container do editor e da janela para nunca cortar
+      const editorWrapper =
+        document.getElementById("notion-editor-wrapper") || this.container;
+      const wrapperRect = editorWrapper.getBoundingClientRect();
+
+      // Limite à esquerda: nunca ultrapassar a margem do editor nem invadir a barra lateral
+      const minLeft = Math.max(16, wrapperRect.left + 8);
+      // Limite à direita: nunca sair da tela nem do editor
+      const maxLeft = Math.min(
+        window.innerWidth - menuWidth - 16,
+        wrapperRect.right - menuWidth - 8,
       );
-      this.element.style.left = `${left}px`;
-      this.element.style.top = `${rect.top - 46}px`;
+
+      let left = rect.left + rect.width / 2 - menuWidth / 2;
+      if (maxLeft >= minLeft) {
+        left = Math.max(minLeft, Math.min(left, maxLeft));
+      } else {
+        left = Math.max(16, Math.min(left, window.innerWidth - menuWidth - 16));
+      }
+
+      // Posição vertical: posiciona 8px acima da seleção; se colidir com o topo, inverte para baixo
+      let top = rect.top - menuHeight - 8;
+      if (top < 10) {
+        top = rect.bottom + 8;
+      }
+
+      this.element.style.left = `${Math.round(left)}px`;
+      this.element.style.top = `${Math.round(top)}px`;
     }
     this.isVisible = true;
   }

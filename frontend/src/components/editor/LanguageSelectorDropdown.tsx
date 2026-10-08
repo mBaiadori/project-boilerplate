@@ -166,31 +166,7 @@ export const LanguageSelectorDropdown: React.FC<
       >
         <span style={{ fontSize: "14px" }}>{activeLangObj.flag}</span>
         <span>{activeLangObj.code.toUpperCase()}</span>
-        {isMain ? (
-          <span
-            style={{
-              fontSize: "10px",
-              padding: "1px 5px",
-              borderRadius: "4px",
-              background: "var(--color-surface-container-highest, #e2e8f0)",
-              color: "var(--color-outline, #64748b)",
-            }}
-          >
-            OFICIAL
-          </span>
-        ) : (
-          <span
-            style={{
-              fontSize: "10px",
-              padding: "1px 5px",
-              borderRadius: "4px",
-              background: "#10b981",
-              color: "#ffffff",
-            }}
-          >
-            Tradução
-          </span>
-        )}
+
         <span
           className="material-symbols-outlined"
           style={{
@@ -426,7 +402,7 @@ export const LanguageSelectorDropdown: React.FC<
                           {t.isOutdated && (
                             <button
                               type="button"
-                              title="Re-traduzir com base no documento oficial atualizado"
+                              title="Traduzir com base no documento oficial atualizado"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleTranslate(t.lang);
@@ -451,7 +427,7 @@ export const LanguageSelectorDropdown: React.FC<
                               >
                                 autorenew
                               </span>
-                              <span>Re-traduzir</span>
+                              <span>Traduzir</span>
                             </button>
                           )}
                           {isCurrent && (

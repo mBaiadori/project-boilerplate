@@ -989,7 +989,7 @@ export class WorkspaceService {
           link,
         categories: matchedMeta?.categories || "",
         category: matchedMeta?.categories || "",
-        status: matchedMeta?.status || "draft",
+        status: matchedMeta?.status || "",
       });
     }
 
@@ -1033,7 +1033,7 @@ export class WorkspaceService {
           title: doc.title || doc.name || doc.path,
           categories: doc.categories || "",
           category: doc.categories || "",
-          status: doc.status || "draft",
+          status: doc.status || "",
         });
       }
     }
@@ -1077,7 +1077,7 @@ export class WorkspaceService {
       title: docMeta.title || docMeta.name || cleanPath,
       categories: docMeta.categories || "",
       category: docMeta.categories || "",
-      status: docMeta.status || "draft",
+      status: docMeta.status || "",
       dependencies,
       consumers,
       documents: contextItems,

@@ -1,6 +1,11 @@
-import React, { useState } from 'react';
-import type { Repo, RepoDiagnosis, RepoInitializePayload, TaxonomyItem } from '../../types';
-import { API } from '../../services/api';
+import React, { useState } from "react";
+import type {
+  Repo,
+  RepoDiagnosis,
+  RepoInitializePayload,
+  TaxonomyItem,
+} from "../../types";
+import { API } from "../../services/api";
 import {
   ShieldCheck,
   Sparkles,
@@ -11,9 +16,9 @@ import {
   Tag,
   FileBadge,
   AlertCircle,
-} from 'lucide-react';
-import { Button, IconButton, FormField, Input, Switch } from '../ui';
-import { TaxonomyChipEditor } from '../common/TaxonomyChipEditor';
+} from "lucide-react";
+import { Button, IconButton, FormField, Input, Switch } from "../ui";
+import { TaxonomyChipEditor } from "../common/TaxonomyChipEditor";
 
 interface RepoSetupWizardModalProps {
   isOpen: boolean;
@@ -24,23 +29,51 @@ interface RepoSetupWizardModalProps {
 }
 
 const DEFAULT_CATEGORIES: TaxonomyItem[] = [
-  { id: 'visao-geral', name: 'Visão Geral', label: 'Visão Geral', color: '#1a73e8', description: 'Arquitetura e visão geral' },
-  { id: 'especificacoes', name: 'Especificações', label: 'Especificações', color: '#10b981', description: 'Regras de negócio e PRDs' },
-  { id: 'engenharia', name: 'Engenharia', label: 'Engenharia', color: '#8b5cf6', description: 'Guias técnicos e padrões' },
+  {
+    id: "visao-geral",
+    name: "Visão Geral",
+    label: "Visão Geral",
+    color: "#1a73e8",
+    description: "Arquitetura e visão geral",
+  },
+  {
+    id: "especificacoes",
+    name: "Especificações",
+    label: "Especificações",
+    color: "#10b981",
+    description: "Regras de negócio e PRDs",
+  },
+  {
+    id: "engenharia",
+    name: "Engenharia",
+    label: "Engenharia",
+    color: "#8b5cf6",
+    description: "Guias técnicos e padrões",
+  },
 ];
 
 const DEFAULT_BADGES: TaxonomyItem[] = [
-  { id: 'ssot', name: 'SSOT', label: 'SSOT', color: '#1a73e8' },
-  { id: 'rfc', name: 'RFC', label: 'RFC', color: '#8b5cf6' },
-  { id: 'sdd', name: 'SDD', label: 'SDD', color: '#10b981' },
-  { id: 'prd', name: 'PRD', label: 'PRD', color: '#06b6d4' },
+  { id: "ssot", name: "SSOT", label: "SSOT", color: "#1a73e8" },
+  { id: "rfc", name: "RFC", label: "RFC", color: "#8b5cf6" },
+  { id: "sdd", name: "SDD", label: "SDD", color: "#10b981" },
+  { id: "prd", name: "PRD", label: "PRD", color: "#06b6d4" },
 ];
 
 const DEFAULT_STATUSES: TaxonomyItem[] = [
-  { id: 'draft', name: 'Rascunho', label: 'Rascunho', color: '#94a3b8' },
-  { id: 'in_review', name: 'Em Revisão', label: 'Em Revisão', color: '#f59e0b' },
-  { id: 'approved', name: 'Aprovado', label: 'Aprovado', color: '#10b981' },
-  { id: 'deprecated', name: 'Depreciado', label: 'Depreciado', color: '#ef4444' },
+  { id: "-", name: "Rascunho", label: "Rascunho", color: "#94a3b8" },
+  {
+    id: "in_review",
+    name: "Em Revisão",
+    label: "Em Revisão",
+    color: "#f59e0b",
+  },
+  { id: "approved", name: "Aprovado", label: "Aprovado", color: "#10b981" },
+  {
+    id: "deprecated",
+    name: "Depreciado",
+    label: "Depreciado",
+    color: "#ef4444",
+  },
 ];
 
 export const RepoSetupWizardModal: React.FC<RepoSetupWizardModalProps> = ({
@@ -50,48 +83,59 @@ export const RepoSetupWizardModal: React.FC<RepoSetupWizardModalProps> = ({
   onComplete,
   onClose,
 }) => {
-  const [activeTab, setActiveTab] = useState<'general' | 'categories' | 'badges' | 'statuses'>('general');
+  const [activeTab, setActiveTab] = useState<
+    "general" | "categories" | "badges" | "statuses"
+  >("general");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // Form State
-  const [projectName, setProjectName] = useState(repo?.name || '');
-  const [projectDesc, setProjectDesc] = useState(repo?.description || 'Repositório de especificações e governança.');
-  const [defaultLanguage, setDefaultLanguage] = useState('pt-BR');
+  const [projectName, setProjectName] = useState(repo?.name || "");
+  const [projectDesc, setProjectDesc] = useState(
+    repo?.description || "Repositório de especificações e governança.",
+  );
+  const [defaultLanguage, setDefaultLanguage] = useState("pt-BR");
   const [enableProtection, setEnableProtection] = useState(true);
   const [requiredApprovals, setRequiredApprovals] = useState(1);
 
   // Categories State
-  const [categories, setCategories] = useState<TaxonomyItem[]>(DEFAULT_CATEGORIES);
+  const [categories, setCategories] =
+    useState<TaxonomyItem[]>(DEFAULT_CATEGORIES);
   const [isAddingCategory, setIsAddingCategory] = useState(false);
-  const [newCatName, setNewCatName] = useState('');
-  const [newCatColor, setNewCatColor] = useState('#1a73e8');
+  const [newCatName, setNewCatName] = useState("");
+  const [newCatColor, setNewCatColor] = useState("#1a73e8");
   const [editingCatIndex, setEditingCatIndex] = useState<number | null>(null);
-  const [editCatName, setEditCatName] = useState('');
-  const [editCatColor, setEditCatColor] = useState('#1a73e8');
+  const [editCatName, setEditCatName] = useState("");
+  const [editCatColor, setEditCatColor] = useState("#1a73e8");
 
   // Badges State
   const [badges, setBadges] = useState<TaxonomyItem[]>(DEFAULT_BADGES);
   const [isAddingBadge, setIsAddingBadge] = useState(false);
-  const [newBadgeName, setNewBadgeName] = useState('');
-  const [newBadgeColor, setNewBadgeColor] = useState('#8b5cf6');
-  const [editingBadgeIndex, setEditingBadgeIndex] = useState<number | null>(null);
-  const [editBadgeName, setEditBadgeName] = useState('');
-  const [editBadgeColor, setEditBadgeColor] = useState('#8b5cf6');
+  const [newBadgeName, setNewBadgeName] = useState("");
+  const [newBadgeColor, setNewBadgeColor] = useState("#8b5cf6");
+  const [editingBadgeIndex, setEditingBadgeIndex] = useState<number | null>(
+    null,
+  );
+  const [editBadgeName, setEditBadgeName] = useState("");
+  const [editBadgeColor, setEditBadgeColor] = useState("#8b5cf6");
 
   // Statuses State
   const [statuses, setStatuses] = useState<TaxonomyItem[]>(DEFAULT_STATUSES);
   const [isAddingStatus, setIsAddingStatus] = useState(false);
-  const [newStatusName, setNewStatusName] = useState('');
-  const [newStatusColor, setNewStatusColor] = useState('#10b981');
-  const [editingStatusIndex, setEditingStatusIndex] = useState<number | null>(null);
-  const [editStatusName, setEditStatusName] = useState('');
-  const [editStatusColor, setEditStatusColor] = useState('#10b981');
+  const [newStatusName, setNewStatusName] = useState("");
+  const [newStatusColor, setNewStatusColor] = useState("#10b981");
+  const [editingStatusIndex, setEditingStatusIndex] = useState<number | null>(
+    null,
+  );
+  const [editStatusName, setEditStatusName] = useState("");
+  const [editStatusColor, setEditStatusColor] = useState("#10b981");
 
   React.useEffect(() => {
     if (repo) {
       setProjectName(repo.name);
-      setProjectDesc(repo.description || 'Repositório de especificações e governança.');
+      setProjectDesc(
+        repo.description || "Repositório de especificações e governança.",
+      );
       setCategories(DEFAULT_CATEGORIES);
       setBadges(DEFAULT_BADGES);
       setStatuses(DEFAULT_STATUSES);
@@ -101,42 +145,54 @@ export const RepoSetupWizardModal: React.FC<RepoSetupWizardModalProps> = ({
 
   if (!isOpen || !repo) return null;
 
-  const canAdmin = diagnosis?.can_admin ?? (repo.permissions?.admin || repo.is_owner || repo.is_local);
-  const isLocal = Boolean(repo.is_local || !diagnosis?.checks?.branch_protection?.supported);
+  const canAdmin =
+    diagnosis?.can_admin ??
+    (repo.permissions?.admin || repo.is_owner || repo.is_local);
+  const isLocal = Boolean(
+    repo.is_local || !diagnosis?.checks?.branch_protection?.supported,
+  );
 
   const handleSaveAndInitialize = async (isRecommended = false) => {
     setIsSubmitting(true);
     setErrorMsg(null);
 
     try {
-      const formattedCategories = (isRecommended ? DEFAULT_CATEGORIES : categories).map((c) => ({
-        id: c.id || c.name.toLowerCase().replace(/\s+/g, '-'),
+      const formattedCategories = (
+        isRecommended ? DEFAULT_CATEGORIES : categories
+      ).map((c) => ({
+        id: c.id || c.name.toLowerCase().replace(/\s+/g, "-"),
         label: c.label || c.name,
         name: c.name || c.label,
-        color: c.color || '#1a73e8',
-        description: c.description || '',
+        color: c.color || "#1a73e8",
+        description: c.description || "",
       }));
 
-      const formattedBadges = (isRecommended ? DEFAULT_BADGES : badges).map((b) => ({
-        id: b.id || b.name.toLowerCase().replace(/\s+/g, '-'),
-        label: b.label || b.name,
-        name: b.name || b.label,
-        color: b.color || '#8b5cf6',
-      }));
+      const formattedBadges = (isRecommended ? DEFAULT_BADGES : badges).map(
+        (b) => ({
+          id: b.id || b.name.toLowerCase().replace(/\s+/g, "-"),
+          label: b.label || b.name,
+          name: b.name || b.label,
+          color: b.color || "#8b5cf6",
+        }),
+      );
 
-      const formattedStatuses = (isRecommended ? DEFAULT_STATUSES : statuses).map((s) => ({
-        id: s.id || s.name.toLowerCase().replace(/\s+/g, '-'),
+      const formattedStatuses = (
+        isRecommended ? DEFAULT_STATUSES : statuses
+      ).map((s) => ({
+        id: s.id || s.name.toLowerCase().replace(/\s+/g, "-"),
         label: s.label || s.name,
         name: s.name || s.label,
-        color: s.color || '#10b981',
+        color: s.color || "#10b981",
       }));
 
       const payload: RepoInitializePayload = {
         name: repo.name,
-        preset: isRecommended ? 'recommended' : 'custom',
+        preset: isRecommended ? "recommended" : "custom",
         project_config: {
-          name: isRecommended ? repo.name : (projectName.trim() || repo.name),
-          description: isRecommended ? (repo.description || 'Repositório de especificações e governança.') : projectDesc.trim(),
+          name: isRecommended ? repo.name : projectName.trim() || repo.name,
+          description: isRecommended
+            ? repo.description || "Repositório de especificações e governança."
+            : projectDesc.trim(),
           categories: formattedCategories,
           badges: formattedBadges,
           statuses: formattedStatuses,
@@ -154,10 +210,10 @@ export const RepoSetupWizardModal: React.FC<RepoSetupWizardModalProps> = ({
       if (res.ok && res.data?.active_repo) {
         onComplete(res.data.active_repo);
       } else {
-        setErrorMsg(res.data?.error || 'Erro ao inicializar o repositório');
+        setErrorMsg(res.data?.error || "Erro ao inicializar o repositório");
       }
     } catch (err: any) {
-      setErrorMsg(err.message || 'Falha de comunicação com o servidor');
+      setErrorMsg(err.message || "Falha de comunicação com o servidor");
     } finally {
       setIsSubmitting(false);
     }
@@ -166,65 +222,78 @@ export const RepoSetupWizardModal: React.FC<RepoSetupWizardModalProps> = ({
   return (
     <div
       style={{
-        position: 'fixed',
+        position: "fixed",
         inset: 0,
-        backgroundColor: 'rgba(15, 23, 42, 0.75)',
-        backdropFilter: 'blur(8px)',
+        backgroundColor: "rgba(15, 23, 42, 0.75)",
+        backdropFilter: "blur(8px)",
         zIndex: 9999,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '24px',
-        boxSizing: 'border-box',
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "24px",
+        boxSizing: "border-box",
       }}
     >
       <div
         style={{
-          width: '100%',
-          maxWidth: '680px',
-          maxHeight: '90vh',
-          backgroundColor: 'var(--color-surface, #ffffff)',
-          color: 'var(--color-on-surface, #1e293b)',
-          borderRadius: '16px',
-          border: '1px solid var(--color-outline-variant, #e2e8f0)',
-          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-          animation: 'fadeIn 0.2s ease-out',
+          width: "100%",
+          maxWidth: "680px",
+          maxHeight: "90vh",
+          backgroundColor: "var(--color-surface, #ffffff)",
+          color: "var(--color-on-surface, #1e293b)",
+          borderRadius: "16px",
+          border: "1px solid var(--color-outline-variant, #e2e8f0)",
+          boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+          animation: "fadeIn 0.2s ease-out",
         }}
       >
         {/* Header */}
         <div
           style={{
-            padding: '18px 24px',
-            borderBottom: '1px solid var(--color-outline-variant, #e2e8f0)',
-            backgroundColor: 'var(--color-surface-container-low, #f8fafc)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
+            padding: "18px 24px",
+            borderBottom: "1px solid var(--color-outline-variant, #e2e8f0)",
+            backgroundColor: "var(--color-surface-container-low, #f8fafc)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
             <div
               style={{
-                width: '38px',
-                height: '38px',
-                borderRadius: '10px',
-                background: 'linear-gradient(135deg, var(--color-primary, #1a73e8) 0%, #6366f1 100%)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#ffffff',
+                width: "38px",
+                height: "38px",
+                borderRadius: "10px",
+                background:
+                  "linear-gradient(135deg, var(--color-primary, #1a73e8) 0%, #6366f1 100%)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#ffffff",
               }}
             >
               <ShieldCheck size={20} />
             </div>
             <div>
-              <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: 'var(--color-on-surface, #0f172a)' }}>
+              <h2
+                style={{
+                  margin: 0,
+                  fontSize: "16px",
+                  fontWeight: 600,
+                  color: "var(--color-on-surface, #0f172a)",
+                }}
+              >
                 Configuração de Governança
               </h2>
-              <span style={{ fontSize: '12px', color: 'var(--color-on-surface-variant, #64748b)' }}>
+              <span
+                style={{
+                  fontSize: "12px",
+                  color: "var(--color-on-surface-variant, #64748b)",
+                }}
+              >
                 {repo.full_name || repo.name}
               </span>
             </div>
@@ -238,29 +307,35 @@ export const RepoSetupWizardModal: React.FC<RepoSetupWizardModalProps> = ({
         {/* Abas de Configuração de Governança */}
         <div
           style={{
-            display: 'flex',
-            borderBottom: '1px solid var(--color-outline-variant, #e2e8f0)',
-            backgroundColor: 'var(--color-surface, #ffffff)',
-            padding: '0 24px',
-            gap: '16px',
+            display: "flex",
+            borderBottom: "1px solid var(--color-outline-variant, #e2e8f0)",
+            backgroundColor: "var(--color-surface, #ffffff)",
+            padding: "0 24px",
+            gap: "16px",
           }}
         >
           <button
             type="button"
-            className={`tab-btn ${activeTab === 'general' ? 'active' : ''}`}
-            onClick={() => setActiveTab('general')}
+            className={`tab-btn ${activeTab === "general" ? "active" : ""}`}
+            onClick={() => setActiveTab("general")}
             style={{
-              padding: '12px 4px',
-              border: 'none',
-              background: 'transparent',
-              borderBottom: activeTab === 'general' ? '2px solid var(--color-primary, #1a73e8)' : '2px solid transparent',
-              color: activeTab === 'general' ? 'var(--color-primary, #1a73e8)' : 'var(--color-outline, #64748b)',
-              fontWeight: activeTab === 'general' ? 600 : 500,
-              fontSize: '13px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
+              padding: "12px 4px",
+              border: "none",
+              background: "transparent",
+              borderBottom:
+                activeTab === "general"
+                  ? "2px solid var(--color-primary, #1a73e8)"
+                  : "2px solid transparent",
+              color:
+                activeTab === "general"
+                  ? "var(--color-primary, #1a73e8)"
+                  : "var(--color-outline, #64748b)",
+              fontWeight: activeTab === "general" ? 600 : 500,
+              fontSize: "13px",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
             }}
           >
             <Sliders size={14} />
@@ -269,20 +344,26 @@ export const RepoSetupWizardModal: React.FC<RepoSetupWizardModalProps> = ({
 
           <button
             type="button"
-            className={`tab-btn ${activeTab === 'categories' ? 'active' : ''}`}
-            onClick={() => setActiveTab('categories')}
+            className={`tab-btn ${activeTab === "categories" ? "active" : ""}`}
+            onClick={() => setActiveTab("categories")}
             style={{
-              padding: '12px 4px',
-              border: 'none',
-              background: 'transparent',
-              borderBottom: activeTab === 'categories' ? '2px solid var(--color-primary, #1a73e8)' : '2px solid transparent',
-              color: activeTab === 'categories' ? 'var(--color-primary, #1a73e8)' : 'var(--color-outline, #64748b)',
-              fontWeight: activeTab === 'categories' ? 600 : 500,
-              fontSize: '13px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
+              padding: "12px 4px",
+              border: "none",
+              background: "transparent",
+              borderBottom:
+                activeTab === "categories"
+                  ? "2px solid var(--color-primary, #1a73e8)"
+                  : "2px solid transparent",
+              color:
+                activeTab === "categories"
+                  ? "var(--color-primary, #1a73e8)"
+                  : "var(--color-outline, #64748b)",
+              fontWeight: activeTab === "categories" ? 600 : 500,
+              fontSize: "13px",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
             }}
           >
             <FolderTree size={14} />
@@ -291,20 +372,26 @@ export const RepoSetupWizardModal: React.FC<RepoSetupWizardModalProps> = ({
 
           <button
             type="button"
-            className={`tab-btn ${activeTab === 'badges' ? 'active' : ''}`}
-            onClick={() => setActiveTab('badges')}
+            className={`tab-btn ${activeTab === "badges" ? "active" : ""}`}
+            onClick={() => setActiveTab("badges")}
             style={{
-              padding: '12px 4px',
-              border: 'none',
-              background: 'transparent',
-              borderBottom: activeTab === 'badges' ? '2px solid var(--color-primary, #1a73e8)' : '2px solid transparent',
-              color: activeTab === 'badges' ? 'var(--color-primary, #1a73e8)' : 'var(--color-outline, #64748b)',
-              fontWeight: activeTab === 'badges' ? 600 : 500,
-              fontSize: '13px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
+              padding: "12px 4px",
+              border: "none",
+              background: "transparent",
+              borderBottom:
+                activeTab === "badges"
+                  ? "2px solid var(--color-primary, #1a73e8)"
+                  : "2px solid transparent",
+              color:
+                activeTab === "badges"
+                  ? "var(--color-primary, #1a73e8)"
+                  : "var(--color-outline, #64748b)",
+              fontWeight: activeTab === "badges" ? 600 : 500,
+              fontSize: "13px",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
             }}
           >
             <FileBadge size={14} />
@@ -313,20 +400,26 @@ export const RepoSetupWizardModal: React.FC<RepoSetupWizardModalProps> = ({
 
           <button
             type="button"
-            className={`tab-btn ${activeTab === 'statuses' ? 'active' : ''}`}
-            onClick={() => setActiveTab('statuses')}
+            className={`tab-btn ${activeTab === "statuses" ? "active" : ""}`}
+            onClick={() => setActiveTab("statuses")}
             style={{
-              padding: '12px 4px',
-              border: 'none',
-              background: 'transparent',
-              borderBottom: activeTab === 'statuses' ? '2px solid var(--color-primary, #1a73e8)' : '2px solid transparent',
-              color: activeTab === 'statuses' ? 'var(--color-primary, #1a73e8)' : 'var(--color-outline, #64748b)',
-              fontWeight: activeTab === 'statuses' ? 600 : 500,
-              fontSize: '13px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
+              padding: "12px 4px",
+              border: "none",
+              background: "transparent",
+              borderBottom:
+                activeTab === "statuses"
+                  ? "2px solid var(--color-primary, #1a73e8)"
+                  : "2px solid transparent",
+              color:
+                activeTab === "statuses"
+                  ? "var(--color-primary, #1a73e8)"
+                  : "var(--color-outline, #64748b)",
+              fontWeight: activeTab === "statuses" ? 600 : 500,
+              fontSize: "13px",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
             }}
           >
             <Tag size={14} />
@@ -335,19 +428,28 @@ export const RepoSetupWizardModal: React.FC<RepoSetupWizardModalProps> = ({
         </div>
 
         {/* Content Body */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div
+          style={{
+            flex: 1,
+            overflowY: "auto",
+            padding: "20px 24px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "16px",
+          }}
+        >
           {errorMsg && (
             <div
               style={{
-                padding: '10px 14px',
-                borderRadius: '8px',
-                backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                border: '1px solid #ef4444',
-                color: '#ef4444',
-                fontSize: '13px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
+                padding: "10px 14px",
+                borderRadius: "8px",
+                backgroundColor: "rgba(239, 68, 68, 0.1)",
+                border: "1px solid #ef4444",
+                color: "#ef4444",
+                fontSize: "13px",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
               }}
             >
               <AlertCircle size={16} />
@@ -356,9 +458,17 @@ export const RepoSetupWizardModal: React.FC<RepoSetupWizardModalProps> = ({
           )}
 
           {/* TAB 1: GERAL & SEGURANÇA */}
-          {activeTab === 'general' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+          {activeTab === "general" && (
+            <div
+              style={{ display: "flex", flexDirection: "column", gap: "14px" }}
+            >
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: "12px",
+                }}
+              >
                 <FormField label="Nome do Projeto:">
                   <Input
                     value={projectName}
@@ -390,17 +500,26 @@ export const RepoSetupWizardModal: React.FC<RepoSetupWizardModalProps> = ({
               {/* Segurança */}
               <div
                 style={{
-                  padding: '14px',
-                  borderRadius: '10px',
-                  border: '1px solid var(--color-outline-variant, #e2e8f0)',
-                  backgroundColor: 'var(--color-surface-container-low, #f8fafc)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '10px',
-                  marginTop: '4px',
+                  padding: "14px",
+                  borderRadius: "10px",
+                  border: "1px solid var(--color-outline-variant, #e2e8f0)",
+                  backgroundColor:
+                    "var(--color-surface-container-low, #f8fafc)",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "10px",
+                  marginTop: "4px",
                 }}
               >
-                <span style={{ fontSize: '13px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span
+                  style={{
+                    fontSize: "13px",
+                    fontWeight: 600,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                  }}
+                >
                   <Lock size={14} />
                   Segurança no Git Provider
                 </span>
@@ -410,13 +529,18 @@ export const RepoSetupWizardModal: React.FC<RepoSetupWizardModalProps> = ({
                   checked={enableProtection}
                   onChange={setEnableProtection}
                   disabled={!canAdmin || isLocal}
-                  label={<span>Bloquear branch <code>main</code> (Exige PR para alterações)</span>}
+                  label={
+                    <span>
+                      Bloquear branch <code>main</code> (Exige PR para
+                      alterações)
+                    </span>
+                  }
                   description={
                     !canAdmin
-                      ? 'Requer permissão de administrador no repositório'
+                      ? "Requer permissão de administrador no repositório"
                       : isLocal
-                      ? 'Não aplicável a repositórios locais'
-                      : 'Evita force push e alterações sem revisão de código'
+                        ? "Não aplicável a repositórios locais"
+                        : "Evita force push e alterações sem revisão de código"
                   }
                 />
 
@@ -425,7 +549,9 @@ export const RepoSetupWizardModal: React.FC<RepoSetupWizardModalProps> = ({
                     <select
                       className="ui-input"
                       value={requiredApprovals}
-                      onChange={(e) => setRequiredApprovals(Number(e.target.value))}
+                      onChange={(e) =>
+                        setRequiredApprovals(Number(e.target.value))
+                      }
                     >
                       <option value="1">1 Aprovação (1-of-N)</option>
                       <option value="2">2 Aprovações</option>
@@ -437,18 +563,28 @@ export const RepoSetupWizardModal: React.FC<RepoSetupWizardModalProps> = ({
           )}
 
           {/* TAB 2: CATEGORIAS */}
-          {activeTab === 'categories' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <p style={{ margin: 0, fontSize: '13px', color: 'var(--color-on-surface-variant, #64748b)' }}>
-                Clique no chip para editar o nome, no ponto de cor para alterar a cor, ou adicione novas categorias:
+          {activeTab === "categories" && (
+            <div
+              style={{ display: "flex", flexDirection: "column", gap: "12px" }}
+            >
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: "13px",
+                  color: "var(--color-on-surface-variant, #64748b)",
+                }}
+              >
+                Clique no chip para editar o nome, no ponto de cor para alterar
+                a cor, ou adicione novas categorias:
               </p>
 
               <div
                 style={{
-                  padding: '16px',
-                  borderRadius: '10px',
-                  border: '1px solid var(--color-outline-variant, #e2e8f0)',
-                  backgroundColor: 'var(--color-surface-container-low, #f8fafc)',
+                  padding: "16px",
+                  borderRadius: "10px",
+                  border: "1px solid var(--color-outline-variant, #e2e8f0)",
+                  backgroundColor:
+                    "var(--color-surface-container-low, #f8fafc)",
                 }}
               >
                 <TaxonomyChipEditor
@@ -458,8 +594,10 @@ export const RepoSetupWizardModal: React.FC<RepoSetupWizardModalProps> = ({
                   editColor={editCatColor}
                   onStartEdit={(idx) => {
                     setEditingCatIndex(idx);
-                    setEditCatName(categories[idx].name || categories[idx].label || '');
-                    setEditCatColor(categories[idx].color || '#1a73e8');
+                    setEditCatName(
+                      categories[idx].name || categories[idx].label || "",
+                    );
+                    setEditCatColor(categories[idx].color || "#1a73e8");
                   }}
                   onEditNameChange={setEditCatName}
                   onEditColorChange={setEditCatColor}
@@ -485,8 +623,8 @@ export const RepoSetupWizardModal: React.FC<RepoSetupWizardModalProps> = ({
                   newColor={newCatColor}
                   onStartAdd={() => {
                     setIsAddingCategory(true);
-                    setNewCatName('');
-                    setNewCatColor('#1a73e8');
+                    setNewCatName("");
+                    setNewCatColor("#1a73e8");
                   }}
                   onNewNameChange={setNewCatName}
                   onNewColorChange={setNewCatColor}
@@ -495,14 +633,14 @@ export const RepoSetupWizardModal: React.FC<RepoSetupWizardModalProps> = ({
                       setCategories([
                         ...categories,
                         {
-                          id: newCatName.toLowerCase().replace(/\s+/g, '-'),
+                          id: newCatName.toLowerCase().replace(/\s+/g, "-"),
                           name: newCatName.trim(),
                           label: newCatName.trim(),
                           color: newCatColor,
                         },
                       ]);
                       setIsAddingCategory(false);
-                      setNewCatName('');
+                      setNewCatName("");
                     }
                   }}
                   onCancelAdd={() => setIsAddingCategory(false)}
@@ -514,18 +652,28 @@ export const RepoSetupWizardModal: React.FC<RepoSetupWizardModalProps> = ({
           )}
 
           {/* TAB 3: TIPOS DE DOCUMENTO (BADGES) */}
-          {activeTab === 'badges' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <p style={{ margin: 0, fontSize: '13px', color: 'var(--color-on-surface-variant, #64748b)' }}>
-                Tipos de documento canônicos e badges de governança para catalogação (ex: SSOT, RFC, PRD, SDD):
+          {activeTab === "badges" && (
+            <div
+              style={{ display: "flex", flexDirection: "column", gap: "12px" }}
+            >
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: "13px",
+                  color: "var(--color-on-surface-variant, #64748b)",
+                }}
+              >
+                Tipos de documento canônicos e badges de governança para
+                catalogação (ex: SSOT, RFC, PRD, SDD):
               </p>
 
               <div
                 style={{
-                  padding: '16px',
-                  borderRadius: '10px',
-                  border: '1px solid var(--color-outline-variant, #e2e8f0)',
-                  backgroundColor: 'var(--color-surface-container-low, #f8fafc)',
+                  padding: "16px",
+                  borderRadius: "10px",
+                  border: "1px solid var(--color-outline-variant, #e2e8f0)",
+                  backgroundColor:
+                    "var(--color-surface-container-low, #f8fafc)",
                 }}
               >
                 <TaxonomyChipEditor
@@ -535,8 +683,10 @@ export const RepoSetupWizardModal: React.FC<RepoSetupWizardModalProps> = ({
                   editColor={editBadgeColor}
                   onStartEdit={(idx) => {
                     setEditingBadgeIndex(idx);
-                    setEditBadgeName(badges[idx].name || badges[idx].label || '');
-                    setEditBadgeColor(badges[idx].color || '#8b5cf6');
+                    setEditBadgeName(
+                      badges[idx].name || badges[idx].label || "",
+                    );
+                    setEditBadgeColor(badges[idx].color || "#8b5cf6");
                   }}
                   onEditNameChange={setEditBadgeName}
                   onEditColorChange={setEditBadgeColor}
@@ -562,8 +712,8 @@ export const RepoSetupWizardModal: React.FC<RepoSetupWizardModalProps> = ({
                   newColor={newBadgeColor}
                   onStartAdd={() => {
                     setIsAddingBadge(true);
-                    setNewBadgeName('');
-                    setNewBadgeColor('#8b5cf6');
+                    setNewBadgeName("");
+                    setNewBadgeColor("#8b5cf6");
                   }}
                   onNewNameChange={setNewBadgeName}
                   onNewColorChange={setNewBadgeColor}
@@ -572,14 +722,14 @@ export const RepoSetupWizardModal: React.FC<RepoSetupWizardModalProps> = ({
                       setBadges([
                         ...badges,
                         {
-                          id: newBadgeName.toLowerCase().replace(/\s+/g, '-'),
+                          id: newBadgeName.toLowerCase().replace(/\s+/g, "-"),
                           name: newBadgeName.trim(),
                           label: newBadgeName.trim(),
                           color: newBadgeColor,
                         },
                       ]);
                       setIsAddingBadge(false);
-                      setNewBadgeName('');
+                      setNewBadgeName("");
                     }
                   }}
                   onCancelAdd={() => setIsAddingBadge(false)}
@@ -591,18 +741,28 @@ export const RepoSetupWizardModal: React.FC<RepoSetupWizardModalProps> = ({
           )}
 
           {/* TAB 4: STATUS DE GOVERNANÇA */}
-          {activeTab === 'statuses' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <p style={{ margin: 0, fontSize: '13px', color: 'var(--color-on-surface-variant, #64748b)' }}>
-                Ciclos de vida e status de aprovação de documentos (ex: Rascunho, Em Revisão, Aprovado):
+          {activeTab === "statuses" && (
+            <div
+              style={{ display: "flex", flexDirection: "column", gap: "12px" }}
+            >
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: "13px",
+                  color: "var(--color-on-surface-variant, #64748b)",
+                }}
+              >
+                Ciclos de vida e status de aprovação de documentos (ex:
+                Rascunho, Em Revisão, Aprovado):
               </p>
 
               <div
                 style={{
-                  padding: '16px',
-                  borderRadius: '10px',
-                  border: '1px solid var(--color-outline-variant, #e2e8f0)',
-                  backgroundColor: 'var(--color-surface-container-low, #f8fafc)',
+                  padding: "16px",
+                  borderRadius: "10px",
+                  border: "1px solid var(--color-outline-variant, #e2e8f0)",
+                  backgroundColor:
+                    "var(--color-surface-container-low, #f8fafc)",
                 }}
               >
                 <TaxonomyChipEditor
@@ -612,8 +772,10 @@ export const RepoSetupWizardModal: React.FC<RepoSetupWizardModalProps> = ({
                   editColor={editStatusColor}
                   onStartEdit={(idx) => {
                     setEditingStatusIndex(idx);
-                    setEditStatusName(statuses[idx].name || statuses[idx].label || '');
-                    setEditStatusColor(statuses[idx].color || '#10b981');
+                    setEditStatusName(
+                      statuses[idx].name || statuses[idx].label || "",
+                    );
+                    setEditStatusColor(statuses[idx].color || "#10b981");
                   }}
                   onEditNameChange={setEditStatusName}
                   onEditColorChange={setEditStatusColor}
@@ -639,8 +801,8 @@ export const RepoSetupWizardModal: React.FC<RepoSetupWizardModalProps> = ({
                   newColor={newStatusColor}
                   onStartAdd={() => {
                     setIsAddingStatus(true);
-                    setNewStatusName('');
-                    setNewStatusColor('#10b981');
+                    setNewStatusName("");
+                    setNewStatusColor("#10b981");
                   }}
                   onNewNameChange={setNewStatusName}
                   onNewColorChange={setNewStatusColor}
@@ -649,14 +811,14 @@ export const RepoSetupWizardModal: React.FC<RepoSetupWizardModalProps> = ({
                       setStatuses([
                         ...statuses,
                         {
-                          id: newStatusName.toLowerCase().replace(/\s+/g, '-'),
+                          id: newStatusName.toLowerCase().replace(/\s+/g, "-"),
                           name: newStatusName.trim(),
                           label: newStatusName.trim(),
                           color: newStatusColor,
                         },
                       ]);
                       setIsAddingStatus(false);
-                      setNewStatusName('');
+                      setNewStatusName("");
                     }
                   }}
                   onCancelAdd={() => setIsAddingStatus(false)}
@@ -671,24 +833,19 @@ export const RepoSetupWizardModal: React.FC<RepoSetupWizardModalProps> = ({
         {/* Footer */}
         <div
           style={{
-            padding: '14px 24px',
-            borderTop: '1px solid var(--color-outline-variant, #e2e8f0)',
-            backgroundColor: 'var(--color-surface-container-low, #f8fafc)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
+            padding: "14px 24px",
+            borderTop: "1px solid var(--color-outline-variant, #e2e8f0)",
+            backgroundColor: "var(--color-surface-container-low, #f8fafc)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
           }}
         >
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={onClose}
-          >
+          <Button type="button" variant="ghost" size="sm" onClick={onClose}>
             Cancelar
           </Button>
 
-          <div style={{ display: 'flex', gap: '10px' }}>
+          <div style={{ display: "flex", gap: "10px" }}>
             <Button
               type="button"
               variant="secondary"

@@ -35,7 +35,7 @@ const PRESETS: DocPreset[] = [
     defaultFolder: "rfcs",
     generateContent: (title) => `---
 title: "${title}"
-status: "draft"
+status: "-"
 type: "rfc"
 date: "${new Date().toISOString().split("T")[0]}"
 ---
@@ -64,7 +64,7 @@ Detalhamento técnico da implementação recomendada.
     defaultFolder: "docs/product",
     generateContent: (title) => `---
 title: "${title}"
-status: "draft"
+status: "-"
 type: "prd"
 date: "${new Date().toISOString().split("T")[0]}"
 ---
@@ -96,7 +96,7 @@ Qual dor do cliente ou meta de negócio estamos atacando?
     defaultFolder: "docs/specs",
     generateContent: (title) => `---
 title: "${title}"
-status: "draft"
+status: "-"
 type: "tech-spec"
 version: "1.0.0"
 ---
@@ -226,13 +226,23 @@ export const ScaffoldModal: React.FC<ScaffoldModalProps> = ({
       size="md"
       title={
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <FilePlus size={20} style={{ color: "var(--md-sys-color-primary, #1a73e8)" }} />
+          <FilePlus
+            size={20}
+            style={{ color: "var(--md-sys-color-primary, #1a73e8)" }}
+          />
           <span>Criar Novo Documento</span>
         </div>
       }
       subtitle="Escolha um modelo e estruture um documento no workspace"
       footer={
-        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", width: "100%" }}>
+        <div
+          style={{
+            display: "flex",
+            gap: 8,
+            justifyContent: "flex-end",
+            width: "100%",
+          }}
+        >
           <Button variant="secondary" size="sm" onClick={onClose}>
             Cancelar
           </Button>
@@ -287,7 +297,9 @@ export const ScaffoldModal: React.FC<ScaffoldModalProps> = ({
                 >
                   {preset.icon}
                 </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                <div
+                  style={{ display: "flex", flexDirection: "column", gap: 2 }}
+                >
                   <strong
                     style={{
                       fontSize: "13px",
@@ -313,7 +325,9 @@ export const ScaffoldModal: React.FC<ScaffoldModalProps> = ({
         </div>
 
         {/* Campos de Pasta e Nome */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <div
+          style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}
+        >
           <FormField label="Pasta de Destino:">
             <Input
               id="scaffold-folder"
@@ -352,7 +366,9 @@ export const ScaffoldModal: React.FC<ScaffoldModalProps> = ({
             border: "1px solid var(--md-sys-color-outline-variant, #dadce0)",
           }}
         >
-          <span style={{ color: "var(--md-sys-color-on-surface-variant, #5f6368)" }}>
+          <span
+            style={{ color: "var(--md-sys-color-on-surface-variant, #5f6368)" }}
+          >
             Arquivo gerado:{" "}
           </span>
           <code

@@ -262,32 +262,41 @@ export class SlashMenuEngine {
     const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
     const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
     const margin = 14;
-    const menuWidth = this.element.offsetWidth || 320;
+    const menuWidth = this.element.offsetWidth || 340;
     const menuHeight = this.element.offsetHeight || 320;
-    const maxAllowedHeight = 360;
+    const maxAllowedHeight = Math.min(380, viewportHeight - 28);
 
-    // 1. Horizontal Calculation (Clamp to viewport)
+    // Obtém o wrapper do editor para respeitar os limites do canvas
+    const editorWrapper = document.getElementById('notion-editor-wrapper') || this.container;
+    const wrapperRect = editorWrapper ? editorWrapper.getBoundingClientRect() : null;
+
+    // 1. Cálculo Horizontal (Clamp para viewport e wrapper do editor)
     let left = rect.left;
-    if (left + menuWidth > viewportWidth - margin) {
-      left = viewportWidth - menuWidth - margin;
-    }
-    if (left < margin) {
-      left = margin;
+    const minLeft = wrapperRect ? Math.max(margin, wrapperRect.left + 8) : margin;
+    const maxLeft = wrapperRect 
+      ? Math.min(viewportWidth - menuWidth - margin, wrapperRect.right - menuWidth - 8)
+      : viewportWidth - menuWidth - margin;
+
+    if (maxLeft >= minLeft) {
+      left = Math.max(minLeft, Math.min(left, maxLeft));
+    } else {
+      left = Math.max(margin, Math.min(left, viewportWidth - menuWidth - margin));
     }
 
-    // 2. Vertical Calculation (Smart Flip & Clamp)
+    // 2. Cálculo Vertical (Smart Flip & Clamp para não cortar no topo ou rodapé)
     const spaceBelow = viewportHeight - rect.bottom - margin;
     const spaceAbove = rect.top - margin;
 
-    // Prefer below if at least 220px of space or if spaceBelow >= spaceAbove
+    // Se houver pelo menos 220px abaixo ou se o espaço abaixo for maior que acima
     if (spaceBelow >= 220 || spaceBelow >= spaceAbove) {
-      const availableHeight = Math.min(maxAllowedHeight, Math.max(120, Math.floor(spaceBelow - 8)));
+      const availableHeight = Math.min(maxAllowedHeight, Math.max(140, Math.floor(spaceBelow - 8)));
       this.element.style.maxHeight = `${availableHeight}px`;
-      this.element.style.top = `${Math.round(rect.bottom + 6)}px`;
+      const topPos = Math.min(viewportHeight - availableHeight - margin, Math.max(margin, rect.bottom + 6));
+      this.element.style.top = `${Math.round(topPos)}px`;
       this.element.style.bottom = 'auto';
     } else {
-      // Flip upwards above the caret
-      const availableHeight = Math.min(maxAllowedHeight, Math.max(120, Math.floor(spaceAbove - 8)));
+      // Inverte para cima (Flip upwards)
+      const availableHeight = Math.min(maxAllowedHeight, Math.max(140, Math.floor(spaceAbove - 8)));
       this.element.style.maxHeight = `${availableHeight}px`;
       const currentH = Math.min(menuHeight, availableHeight);
       const topPos = Math.max(margin, Math.round(rect.top - currentH - 6));
@@ -304,6 +313,7 @@ export class SlashMenuEngine {
 
     this.triggerRange = selection.getRangeAt(0).cloneRange();
     this.isOpen = true;
+    this.selectedIndex = 0;
     this.query = initialQuery;
 
     if (this.searchInput) {
@@ -318,31 +328,63 @@ export class SlashMenuEngine {
 
     this.element.style.visibility = 'visible';
 
+    // Foco imediato no campo de pesquisa das ferramentas
+    this.focusSearchInput();
+
+    // Reforça foco e cálculo de posição após renderização
+    requestAnimationFrame(() => {
+      this.positionMenu();
+      this.focusSearchInput();
+    });
+
     setTimeout(() => {
       this.positionMenu();
-      this.searchInput?.focus();
-    }, 30);
+      this.focusSearchInput();
+    }, 25);
+  }
+
+  focusSearchInput() {
+    if (this.searchInput) {
+      this.searchInput.focus();
+      this.searchInput.select();
+    }
   }
 
   renderList() {
     if (!this.listContainer) return;
 
+    // Combina comandos padrão com termos do dicionário
+    const allAvailableCommands: SlashCommand[] = [...this.commands];
+    if (this.dictionaryTerms && this.dictionaryTerms.length > 0) {
+      this.dictionaryTerms.forEach((dt) => {
+        allAvailableCommands.push({
+          id: `term:${dt.term}`,
+          category: 'Glossário & Termos',
+          title: dt.term,
+          desc: dt.definition || 'Termo do dicionário do workspace',
+          icon: '<span class="material-symbols-outlined icon-sm" style="color: var(--primary, #2563eb)">menu_book</span>',
+          keywords: [dt.term.toLowerCase(), ...(dt.synonyms || []).map(s => s.toLowerCase()), 'termo', 'glossario', 'dicionario']
+        });
+      });
+    }
+
     if (!this.query) {
-      this.filteredItems = [...this.commands];
+      this.filteredItems = allAvailableCommands;
     } else {
-      this.filteredItems = this.commands.filter((cmd) => {
+      const q = this.query.toLowerCase();
+      this.filteredItems = allAvailableCommands.filter((cmd) => {
         return (
-          cmd.title.toLowerCase().includes(this.query) ||
-          cmd.desc.toLowerCase().includes(this.query) ||
-          cmd.keywords.some((k) => k.toLowerCase().includes(this.query))
+          cmd.title.toLowerCase().includes(q) ||
+          cmd.desc.toLowerCase().includes(q) ||
+          cmd.keywords.some((k) => k.toLowerCase().includes(q))
         );
       });
     }
 
     if (this.filteredItems.length === 0) {
       this.listContainer.innerHTML = `
-        <div style="padding: 16px; text-align: center; color: #94a3b8; font-size: 13px;">
-          Nenhum comando encontrado para "<strong>${escapeHtml(this.query)}</strong>"
+        <div style="padding: 16px; text-align: center; color: var(--text-dim, #94a3b8); font-size: 13px;">
+          Nenhuma ferramenta encontrada para "<strong>${escapeHtml(this.query)}</strong>"
         </div>
       `;
       this.selectedIndex = 0;
@@ -359,12 +401,12 @@ export class SlashMenuEngine {
     this.filteredItems.forEach((cmd, idx) => {
       if (cmd.category !== currentCat) {
         currentCat = cmd.category;
-        html += `<div class="slash-menu-category">${currentCat}</div>`;
+        html += `<div class="slash-menu-category">${escapeHtml(currentCat)}</div>`;
       }
 
       const isActive = idx === this.selectedIndex;
       html += `
-        <div class="slash-menu-item ${isActive ? 'active' : ''}" data-index="${idx}" data-id="${cmd.id}">
+        <div class="slash-menu-item ${isActive ? 'active' : ''}" data-index="${idx}" data-id="${escapeHtml(cmd.id)}">
           <div class="slash-item-icon">${cmd.icon}</div>
           <div class="slash-item-info">
             <span class="slash-item-title">${escapeHtml(cmd.title)}</span>
@@ -377,7 +419,9 @@ export class SlashMenuEngine {
     this.listContainer.innerHTML = html;
 
     this.listContainer.querySelectorAll('.slash-menu-item').forEach(item => {
-      item.addEventListener('click', () => {
+      item.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
         const cmdId = (item as HTMLElement).dataset.id;
         if (cmdId) {
           this.selectCommand(cmdId);
@@ -412,40 +456,65 @@ export class SlashMenuEngine {
     }
   }
 
+  navigateDown() {
+    if (this.filteredItems.length > 0) {
+      this.selectedIndex = (this.selectedIndex + 1) % this.filteredItems.length;
+      this.updateActiveItem();
+      this.scrollActiveItemIntoView();
+    }
+  }
+
+  navigateUp() {
+    if (this.filteredItems.length > 0) {
+      this.selectedIndex = (this.selectedIndex - 1 + this.filteredItems.length) % this.filteredItems.length;
+      this.updateActiveItem();
+      this.scrollActiveItemIntoView();
+    }
+  }
+
+  applySelected() {
+    if (this.filteredItems.length > 0 && this.filteredItems[this.selectedIndex]) {
+      this.selectCommand(this.filteredItems[this.selectedIndex].id);
+    }
+  }
+
   handleKeydown(e: KeyboardEvent) {
     if (!this.isOpen) return;
 
     if (e.key === 'ArrowDown') {
       e.preventDefault();
-      if (this.filteredItems.length > 0) {
-        this.selectedIndex = (this.selectedIndex + 1) % this.filteredItems.length;
-        this.updateActiveItem();
-        this.scrollActiveItemIntoView();
-      }
+      e.stopPropagation();
+      this.navigateDown();
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
-      if (this.filteredItems.length > 0) {
-        this.selectedIndex = (this.selectedIndex - 1 + this.filteredItems.length) % this.filteredItems.length;
-        this.updateActiveItem();
-        this.scrollActiveItemIntoView();
-      }
+      e.stopPropagation();
+      this.navigateUp();
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      if (this.filteredItems.length > 0 && this.filteredItems[this.selectedIndex]) {
-        this.selectCommand(this.filteredItems[this.selectedIndex].id);
-      }
+      e.stopPropagation();
+      this.applySelected();
     } else if (e.key === 'Escape') {
       e.preventDefault();
-      this.close();
+      e.stopPropagation();
+      this.close(true);
+    } else if (e.key === 'Tab') {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.shiftKey) {
+        this.navigateUp();
+      } else {
+        this.navigateDown();
+      }
     }
   }
 
   selectCommand(commandId: string) {
-    this.close();
-    this.onSelectCommand(commandId, this.triggerRange);
+    const range = this.triggerRange;
+    this.close(false);
+    this.onSelectCommand(commandId, range);
   }
 
-  close() {
+  close(restoreFocus = true) {
     if (this.isOpen && this.element) {
       this.element.style.display = 'none';
       this.isOpen = false;
@@ -453,11 +522,21 @@ export class SlashMenuEngine {
       if (this.searchInput) {
         this.searchInput.value = '';
       }
+
+      if (restoreFocus && this.triggerRange) {
+        const sel = window.getSelection();
+        if (sel) {
+          try {
+            sel.removeAllRanges();
+            sel.addRange(this.triggerRange);
+          } catch (_) {}
+        }
+      }
     }
   }
 
   hide() {
-    this.close();
+    this.close(false);
   }
 
   destroy() {

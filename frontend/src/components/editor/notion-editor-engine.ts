@@ -1098,13 +1098,19 @@ export class NotionEditorEngine {
         }
       }
 
-      // 12. Paragraph
+      // 12. Empty lines between markdown blocks are ignored (they are markdown separators, not DOM nodes)
       if (!line.trim()) {
-        htmlFragments.push('<p><br></p>');
-      } else {
-        htmlFragments.push(`<p>${this.parseInlineMarkdown(line)}</p>`);
+        i++;
+        continue;
       }
+
+      // 13. Regular Paragraph
+      htmlFragments.push(`<p>${this.parseInlineMarkdown(line)}</p>`);
       i++;
+    }
+
+    if (htmlFragments.length === 0) {
+      return '<p><br></p>';
     }
 
     return htmlFragments.join('\n');
@@ -1334,8 +1340,10 @@ export class NotionEditorEngine {
         lines.push('');
       } else if (tag === 'p') {
         const text = this.serializeInline(node).trim();
-        lines.push(text);
-        lines.push('');
+        if (text) {
+          lines.push(text);
+          lines.push('');
+        }
       } else if (tag === 'hr') {
         lines.push('---');
         lines.push('');
@@ -1980,6 +1988,21 @@ export class NotionEditorEngine {
     const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
     const modifier = isMac ? e.metaKey : e.ctrlKey;
 
+    if (this.slashMenu && this.slashMenu.isOpen) {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        this.slashMenu.close(true);
+        return;
+      }
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        e.stopPropagation();
+        this.slashMenu.handleKeydown(e);
+        return;
+      }
+    }
+
     if (e.key === 'Escape') {
       this.hideLinkPopover();
     }
@@ -2396,6 +2419,12 @@ export class NotionEditorEngine {
         break;
       case 'quote':
         this.insertBlockHtml('<blockquote>Citação em destaque...</blockquote>');
+        break;
+      default:
+        if (cmdId.startsWith('term:')) {
+          const termName = cmdId.replace(/^term:/, '');
+          this.insertBlockHtml(`<p><span class="dict-term-highlight" data-term-key="${escapeHtml(termName.toLowerCase())}">${escapeHtml(termName)}</span></p>`);
+        }
         break;
     }
 

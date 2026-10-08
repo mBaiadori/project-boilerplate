@@ -60,42 +60,65 @@ export abstract class BaseTranslationProvider implements ITranslationProvider {
 
     // 5. Tratar Frontmatter YAML apenas se preserveFrontmatter for true
     let translatedFrontmatter = '';
-    if (options.preserveFrontmatter === true && rawFrontmatter && frontmatterLines) {
-      const translatedLines: string[] = [];
-      for (const line of frontmatterLines) {
-        // Capturar chave title com ou sem aspas
-        const titleMatch = line.match(/^(\s*title\s*:\s*)(["']?)(.*?)\2(\s*)$/i);
-        // Capturar chave description com ou sem aspas
-        const descMatch = line.match(/^(\s*description\s*:\s*)(["']?)(.*?)\2(\s*)$/i);
+    if (options.preserveFrontmatter === true) {
+      if (rawFrontmatter && frontmatterLines) {
+        const translatedLines: string[] = [];
+        let hasTitle = false;
+        for (const line of frontmatterLines) {
+          // Capturar chave title com ou sem aspas
+          const titleMatch = line.match(/^(\s*title\s*:\s*)(["']?)(.*?)\2(\s*)$/i);
+          // Capturar chave description com ou sem aspas
+          const descMatch = line.match(/^(\s*description\s*:\s*)(["']?)(.*?)\2(\s*)$/i);
 
-        if (titleMatch && titleMatch[3].trim()) {
+          if (titleMatch) {
+            hasTitle = true;
+            const rawTitle = titleMatch[3].trim() || options.documentTitle || '';
+            if (rawTitle) {
+              try {
+                const transTitle = await this.executeRawTranslation(rawTitle, sourceLang, targetLang, options.glossary);
+                const safeTitle = transTitle.trim().replace(/"/g, '\\"');
+                translatedLines.push(`${titleMatch[1]}"${safeTitle}"${titleMatch[4]}`);
+                continue;
+              } catch (e) {
+                console.warn('[BaseTranslationProvider] Falha ao traduzir title do frontmatter:', e);
+              }
+            }
+          }
+
+          if (descMatch && descMatch[3].trim()) {
+            try {
+              const rawDesc = descMatch[3].trim();
+              const transDesc = await this.executeRawTranslation(rawDesc, sourceLang, targetLang, options.glossary);
+              const safeDesc = transDesc.trim().replace(/"/g, '\\"');
+              translatedLines.push(`${descMatch[1]}"${safeDesc}"${descMatch[4]}`);
+              continue;
+            } catch (e) {
+              console.warn('[BaseTranslationProvider] Falha ao traduzir description do frontmatter:', e);
+            }
+          }
+
+          // Mantém as demais chaves oficiais 100% inalteradas (category, status, tags, author, etc.)
+          translatedLines.push(line);
+        }
+
+        if (!hasTitle && options.documentTitle) {
           try {
-            const rawTitle = titleMatch[3].trim();
-            const transTitle = await this.executeRawTranslation(rawTitle, sourceLang, targetLang, options.glossary);
+            const transTitle = await this.executeRawTranslation(options.documentTitle, sourceLang, targetLang, options.glossary);
             const safeTitle = transTitle.trim().replace(/"/g, '\\"');
-            translatedLines.push(`${titleMatch[1]}"${safeTitle}"${titleMatch[4]}`);
-            continue;
-          } catch (e) {
-            console.warn('[BaseTranslationProvider] Falha ao traduzir title do frontmatter:', e);
-          }
+            translatedLines.unshift(`title: "${safeTitle}"`);
+          } catch {}
         }
 
-        if (descMatch && descMatch[3].trim()) {
-          try {
-            const rawDesc = descMatch[3].trim();
-            const transDesc = await this.executeRawTranslation(rawDesc, sourceLang, targetLang, options.glossary);
-            const safeDesc = transDesc.trim().replace(/"/g, '\\"');
-            translatedLines.push(`${descMatch[1]}"${safeDesc}"${descMatch[4]}`);
-            continue;
-          } catch (e) {
-            console.warn('[BaseTranslationProvider] Falha ao traduzir description do frontmatter:', e);
-          }
+        translatedFrontmatter = `---\n${translatedLines.join('\n')}\n---\n\n`;
+      } else if (options.documentTitle) {
+        try {
+          const transTitle = await this.executeRawTranslation(options.documentTitle, sourceLang, targetLang, options.glossary);
+          const safeTitle = transTitle.trim().replace(/"/g, '\\"');
+          translatedFrontmatter = `---\ntitle: "${safeTitle}"\n---\n\n`;
+        } catch (e) {
+          translatedFrontmatter = `---\ntitle: "${options.documentTitle}"\n---\n\n`;
         }
-
-        // Mantém as demais chaves oficiais 100% inalteradas (category, status, tags, author, etc.)
-        translatedLines.push(line);
       }
-      translatedFrontmatter = `---\n${translatedLines.join('\n')}\n---\n\n`;
     }
 
     return translatedFrontmatter + translatedBody.trim();

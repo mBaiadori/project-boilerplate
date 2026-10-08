@@ -29,6 +29,7 @@ export interface TranslationOptions {
   preserveFrontmatter?: boolean;
   glossary?: Record<string, string>;
   engineId?: string;
+  documentTitle?: string;
 }
 
 export interface ITranslationProvider {

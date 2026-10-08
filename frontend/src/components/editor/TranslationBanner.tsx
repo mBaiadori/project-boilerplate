@@ -118,9 +118,7 @@ export const TranslationBanner: React.FC<TranslationBannerProps> = ({
             >
               autorenew
             </span>
-            <span>
-              {isUpdating ? "Atualizando..." : "Re-traduzir do Oficial"}
-            </span>
+            <span>{isUpdating ? "Atualizando..." : "Traduzir do Oficial"}</span>
           </button>
         )}
 

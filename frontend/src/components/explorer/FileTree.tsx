@@ -1593,20 +1593,27 @@ export const FileTree: React.FC<FileTreeProps> = ({
         return owner === currentOrgLogin;
       });
 
-      // Garante que o activeRepo esteja incluso se pertencer a esta mesma organização
+      // Garante que o activeRepo esteja incluso se pertencer a esta mesma organização ou se for o repo ativo
       if (activeRepo) {
         const activeOwner = (
           activeRepo.owner || (activeRepo.full_name ? activeRepo.full_name.split("/")[0] : "")
         ).toLowerCase().trim();
-        if (
-          activeOwner === currentOrgLogin &&
-          !filtered.some((r) => r.name.toLowerCase() === activeRepo.name.toLowerCase())
-        ) {
-          filtered.push(activeRepo);
+        if (!filtered.some((r) => r.name.toLowerCase() === activeRepo.name.toLowerCase())) {
+          if (activeOwner === currentOrgLogin || !activeOwner || activeOwner === "local" || filtered.length === 0) {
+            filtered.push(activeRepo);
+          }
         }
       }
 
-      return filtered;
+      if (filtered.length > 0) {
+        return filtered;
+      }
+
+      if (activeRepo) {
+        return [activeRepo];
+      }
+
+      return [];
     }
 
     // Caso 2: Navegando em escopo local ou sem organização
@@ -1616,6 +1623,10 @@ export const FileTree: React.FC<FileTreeProps> = ({
       ).toLowerCase().trim();
       return r.is_local || owner === "local" || owner === (user?.login || "").toLowerCase() || !owner;
     });
+
+    if (activeRepo && !localOrPersonalRepos.some((r) => r.name.toLowerCase() === activeRepo.name.toLowerCase())) {
+      localOrPersonalRepos.unshift(activeRepo);
+    }
 
     if (localOrPersonalRepos.length > 0) {
       return localOrPersonalRepos;

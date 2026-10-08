@@ -1,8 +1,9 @@
+import { FolderLock, Tag } from "lucide-react";
 import React from "react";
+import { useSecurity } from "../../context/SecurityContext";
+import { useWorkspace } from "../../context/WorkspaceContext";
 import type { DocumentMetadata } from "../../services/frontmatter";
 import { Badge, Input } from "../ui";
-import { Tag, FolderLock } from "lucide-react";
-import { useSecurity } from "../../context/SecurityContext";
 
 interface FrontmatterHeaderProps {
   metadata: DocumentMetadata;
@@ -14,15 +15,18 @@ export const FrontmatterHeader: React.FC<FrontmatterHeaderProps> = ({
   onChange,
 }) => {
   const { departments } = useSecurity();
+  const { projectMetaOptions } = useWorkspace();
 
-  const statusOptions = [
-    "draft",
-    "proposed",
-    "review",
-    "approved",
-    "superseded",
-    "deprecated",
-  ];
+  const statusOptions: string[] = (projectMetaOptions?.statuses || []).map(
+    (s: any) =>
+      typeof s === "string" ? s : s.key || s.name || s.label || "",
+  ).filter(Boolean);
+
+  if (statusOptions.length === 0) {
+    statusOptions.push(metadata.status || "-");
+  } else if (metadata.status && !statusOptions.includes(metadata.status)) {
+    statusOptions.unshift(metadata.status);
+  }
 
   const handleFieldChange = (field: string, value: any) => {
     onChange({
@@ -32,12 +36,8 @@ export const FrontmatterHeader: React.FC<FrontmatterHeaderProps> = ({
   };
 
   const currentDept = departments.find(
-    (d) => d.id === metadata.department || d.folder === metadata.department
+    (d) => d.id === metadata.department || d.folder === metadata.department,
   );
-
-  const handleDepartmentChange = (deptId: string) => {
-    handleFieldChange("department", deptId === "none" ? undefined : deptId);
-  };
 
   const categoryLabel = metadata.categories || metadata.category || "";
 
@@ -119,11 +119,17 @@ export const FrontmatterHeader: React.FC<FrontmatterHeaderProps> = ({
       >
         {/* Status */}
         <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-          <span style={{ fontSize: "12px", color: "var(--color-outline)", fontWeight: 600 }}>
+          <span
+            style={{
+              fontSize: "12px",
+              color: "var(--color-outline)",
+              fontWeight: 600,
+            }}
+          >
             Status:
           </span>
           <select
-            value={metadata.status || "draft"}
+            value={metadata.status || "-"}
             onChange={(e) => handleFieldChange("status", e.target.value)}
             style={{
               fontSize: "12px",
@@ -143,39 +149,15 @@ export const FrontmatterHeader: React.FC<FrontmatterHeaderProps> = ({
           </select>
         </div>
 
-        {/* Cofre / Departamento */}
-        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-          <span style={{ fontSize: "12px", color: "var(--color-outline)", fontWeight: 600 }}>
-            Cofre:
-          </span>
-          <select
-            value={metadata.department || "none"}
-            onChange={(e) => handleDepartmentChange(e.target.value)}
-            style={{
-              fontSize: "12px",
-              padding: "4px 8px",
-              borderRadius: "var(--radius-md, 6px)",
-              border: "1px solid var(--color-outline-variant)",
-              background: "var(--color-surface-container)",
-              color: currentDept?.color || "var(--color-on-surface)",
-              fontWeight: 500,
-              outline: "none",
-            }}
-          >
-            <option value="none" style={{ color: "var(--color-on-surface)" }}>
-              Público / Padrão
-            </option>
-            {departments.map((dept) => (
-              <option key={dept.id} value={dept.id} style={{ color: "var(--color-on-surface)" }}>
-                {dept.name} ({dept.folder})
-              </option>
-            ))}
-          </select>
-        </div>
-
         {/* Categoria */}
         <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-          <span style={{ fontSize: "12px", color: "var(--color-outline)", fontWeight: 600 }}>
+          <span
+            style={{
+              fontSize: "12px",
+              color: "var(--color-outline)",
+              fontWeight: 600,
+            }}
+          >
             Categoria:
           </span>
           <div style={{ width: "130px" }}>

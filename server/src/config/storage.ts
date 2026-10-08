@@ -192,6 +192,18 @@ export function loadConfig(): AppConfig {
     cfg.accounts = [];
   }
 
+  // Fallback: se cfg.token não estiver preenchido, recupera da conta ativa ou primeira conta disponível
+  if (!cfg.token && Array.isArray(cfg.accounts) && cfg.accounts.length > 0) {
+    const activeAcc = cfg.user?.login
+      ? cfg.accounts.find((a: any) => a.user?.login?.toLowerCase() === cfg.user?.login?.toLowerCase() && a.token)
+      : cfg.accounts.find((a: any) => a.token);
+    const candidateToken = activeAcc?.token || cfg.accounts[0]?.token;
+    if (candidateToken) {
+      cfg.token = candidateToken;
+      cfg.authenticated = true;
+    }
+  }
+
   // Auto-seed active user into accounts if missing
   if (cfg.user?.login) {
     const currentId = `github:${cfg.user.login}`;

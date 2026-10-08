@@ -94,17 +94,60 @@ export class ReposService {
           item !== "default" &&
           item !== "_default"
         ) {
+          let detectedOwner = cfg.user?.login || "local";
+          let detectedFullName = `${detectedOwner}/${item}`;
+          let isDetectedOrg = false;
+
+          // 1. Tenta obter owner a partir do active_repo se coincide o nome
+          if (cfg.active_repo && cfg.active_repo.name.toLowerCase() === item.toLowerCase()) {
+            if (cfg.active_repo.owner) detectedOwner = cfg.active_repo.owner;
+            if (cfg.active_repo.full_name) detectedFullName = cfg.active_repo.full_name;
+            if (typeof cfg.active_repo.is_org === 'boolean') isDetectedOrg = cfg.active_repo.is_org;
+          }
+
+          // 2. Tenta obter owner a partir do .git/config
+          const gitConfigPath = path.join(fullPath, ".git", "config");
+          if (fs.existsSync(gitConfigPath)) {
+            try {
+              const gitCfg = fs.readFileSync(gitConfigPath, "utf-8");
+              const match = gitCfg.match(/url\s*=\s*.*github\.com[/:]([^/]+)\/([^/\s.]+)/i);
+              if (match && match[1]) {
+                detectedOwner = match[1];
+                detectedFullName = `${match[1]}/${item}`;
+              }
+            } catch {}
+          }
+
+          // 3. Tenta obter owner a partir do .project.config.json
+          const projectConfigPath = path.join(fullPath, ".project.config.json");
+          if (fs.existsSync(projectConfigPath)) {
+            try {
+              const pcfg = JSON.parse(fs.readFileSync(projectConfigPath, "utf-8"));
+              if (pcfg.project?.repository_url) {
+                const match = pcfg.project.repository_url.match(/github\.com[/:]([^/]+)\/([^/\s.]+)/i);
+                if (match && match[1]) {
+                  detectedOwner = match[1];
+                  detectedFullName = `${match[1]}/${item}`;
+                }
+              }
+            } catch {}
+          }
+
+          const isOwner = detectedOwner.toLowerCase() === userLogin;
+          const isOrg = isDetectedOrg || (!isOwner && detectedOwner !== "local" && detectedOwner !== "");
+
           localRepos.push({
             name: item,
-            full_name: `local/${item}`,
-            description: "Repositório local de especificações",
-            is_local: true,
+            full_name: detectedFullName,
+            description: "Repositório de especificações",
+            is_local: !fs.existsSync(path.join(fullPath, ".git")),
+            is_cloned_locally: true,
             is_private: false,
             default_branch: "main",
-            owner: cfg.user?.login || "local",
-            owner_type: "User",
-            is_owner: true,
-            is_org: false,
+            owner: detectedOwner,
+            owner_type: isOrg ? "Organization" : "User",
+            is_owner: isOwner,
+            is_org: isOrg,
             is_fork: false,
             permissions: { admin: true, push: true, pull: true },
           });
