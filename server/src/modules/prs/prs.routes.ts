@@ -145,7 +145,7 @@ export async function prsRoutes(fastify: FastifyInstance) {
   });
 
   fastify.post('/api/prs/approve', async (request, reply) => {
-    const body = request.body as { id?: number | string; approver?: string; role?: string; comment?: string };
+    const body = request.body as { id?: number | string; approver?: string; role?: string; comment?: string; repo?: string };
     try {
       const result = await prsService.approvePR(body.id || '', body);
       return reply.send(result);
@@ -164,9 +164,9 @@ export async function prsRoutes(fastify: FastifyInstance) {
   });
 
   fastify.post('/api/prs/merge', async (request, reply) => {
-    const body = request.body as { id?: number | string };
+    const body = request.body as { id?: number | string; repo?: string };
     try {
-      const result = await prsService.mergePR(body.id || '');
+      const result = await prsService.mergePR(body.id || '', body.repo);
       return reply.send(result);
     } catch (err: any) {
       return reply.status(400).send({ error: err.message });
@@ -174,9 +174,9 @@ export async function prsRoutes(fastify: FastifyInstance) {
   });
 
   fastify.post('/api/prs/reject', async (request, reply) => {
-    const body = request.body as { id?: number | string; reason?: string };
+    const body = request.body as { id?: number | string; reason?: string; repo?: string };
     try {
-      const result = await prsService.rejectPR(body.id || '', body.reason);
+      const result = await prsService.rejectPR(body.id || '', body.reason, body.repo);
       return reply.send(result);
     } catch (err: any) {
       return reply.status(400).send({ error: err.message });

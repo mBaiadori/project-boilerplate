@@ -703,7 +703,7 @@ export const API = {
 
   async approvePR(
     id: number | string,
-    options?: { approver?: string; role?: string; comment?: string }
+    options?: { approver?: string; role?: string; comment?: string; repo?: string }
   ): Promise<ApiResponse<any>> {
     const res = await fetch('/api/prs/approve', {
       method: 'POST',
@@ -793,20 +793,20 @@ export const API = {
     return { ok: res.ok, data: await res.json() };
   },
 
-  async mergePR(id: number | string): Promise<ApiResponse<any>> {
+  async mergePR(id: number | string, repo?: string): Promise<ApiResponse<any>> {
     const res = await fetch('/api/prs/merge', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id })
+      body: JSON.stringify({ id, repo })
     });
     return { ok: res.ok, data: await res.json() };
   },
 
-  async rejectPR(id: number | string, reason?: string): Promise<ApiResponse<any>> {
+  async rejectPR(id: number | string, reason?: string, repo?: string): Promise<ApiResponse<any>> {
     const res = await fetch('/api/prs/reject', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, reason })
+      body: JSON.stringify({ id, reason, repo })
     });
     return { ok: res.ok, data: await res.json() };
   },

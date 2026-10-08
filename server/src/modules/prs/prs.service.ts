@@ -1043,9 +1043,9 @@ export class PRsService {
     };
   }
 
-  async mergePR(prId: number | string) {
+  async mergePR(prId: number | string, repoNameParam?: string) {
     const cfg = loadConfig();
-    const repoName = cfg.active_repo?.name || 'local';
+    const repoName = repoNameParam || cfg.active_repo?.name || 'local';
     let prs = this.loadRepoPRs(repoName);
     let target = prs.find((p: any) => String(p.id) === String(prId));
 
@@ -1103,7 +1103,7 @@ export class PRsService {
       );
     }
 
-    await this.executeMerge(target);
+    await this.executeMerge(target, repoName);
     await prWorktreeService.removePRWorktree(repoName, target.id);
 
     target.status = 'MERGED';
@@ -1117,9 +1117,9 @@ export class PRsService {
     };
   }
 
-  async rejectPR(prId: number | string, reason?: string) {
+  async rejectPR(prId: number | string, reason?: string, repoNameParam?: string) {
     const cfg = loadConfig();
-    const repoName = cfg.active_repo?.name || 'local';
+    const repoName = repoNameParam || cfg.active_repo?.name || 'local';
     let prs = this.loadRepoPRs(repoName);
     let target = prs.find((p: any) => String(p.id) === String(prId));
 
@@ -1207,10 +1207,10 @@ export class PRsService {
     };
   }
 
-  private async executeMerge(targetPR: any) {
+  private async executeMerge(targetPR: any, repoNameParam?: string) {
     const cfg = loadConfig();
     const activeRepo = cfg.active_repo;
-    const repoName = targetPR.repo_name || activeRepo?.name || 'local';
+    const repoName = repoNameParam || targetPR.repo_name || activeRepo?.name || 'local';
     const repoDir = this.getRepoDir(repoName);
     const targetBranch = targetPR.target_branch || 'main';
 

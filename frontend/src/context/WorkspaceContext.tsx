@@ -931,8 +931,8 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
   const updateFileMetadata = useCallback(
     async (partialMeta: Partial<DocumentMetadataItem>) => {
       const currentFile = activeFileRef.current;
-      const currentRepo = activeRepoRef.current;
-      if (!currentFile || !currentRepo) return;
+      const repoName = activeDocRepoRef.current || activeRepoRef.current?.name;
+      if (!currentFile || !repoName) return;
 
       const merged = {
         ...fileMetadataRef.current,
@@ -969,7 +969,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
         const res = await API.updateDocumentMetadataItem({
           path: currentFile,
           meta: partialMeta,
-          repo: currentRepo.name,
+          repo: repoName,
         });
         if (res.ok && res.data?.meta) {
           setFileMetadataState(res.data.meta);

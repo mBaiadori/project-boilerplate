@@ -799,7 +799,7 @@ export const GovernanceMembersSubView: React.FC = () => {
                         <td style={{ padding: "12px 16px" }}>
                           {collab.is_owner ? (
                             <Badge variant="primary" size="xs">
-                              Owner da Org
+                              Owner
                             </Badge>
                           ) : (
                             <Badge variant="neutral" size="xs">

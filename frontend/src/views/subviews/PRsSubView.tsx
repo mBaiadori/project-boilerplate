@@ -15,6 +15,7 @@ import {
   Row,
   SearchInput,
 } from "../../components/ui";
+import { RepoSelectorDropdown } from "../../components/layout/RepoSelectorDropdown";
 import { useAuth } from "../../context/AuthContext";
 import { useWorkspace } from "../../context/WorkspaceContext";
 import { API } from "../../services/api";
@@ -69,14 +70,17 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
   const navigate = useNavigate();
   const {
     activeRepo,
+    repos,
     refreshGitStatus,
     refreshPendingChanges,
     projectConfig,
   } = useWorkspace();
   const repoName = activeRepo?.name || "local";
 
+  const [selectedRepoFilter, setSelectedRepoFilter] = useState<string>("all");
   const [prs, setPrs] = useState<PR[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [repoOpenCounts, setRepoOpenCounts] = useState<Record<string, number>>({});
   const [activeStatus, setActiveStatus] = useState<
     "all" | "open" | "merged" | "closed"
   >("all");
@@ -113,30 +117,93 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
   // Rollback modal state
   const [rollbackTarget, setRollbackTarget] = useState<PR | null>(null);
 
-  const loadPRs = useCallback(async () => {
+  const loadPRs = useCallback(async (targetFilter?: string) => {
+    const filter = targetFilter !== undefined ? targetFilter : selectedRepoFilter;
     setIsLoading(true);
     try {
-      const res = await API.getPRs(repoName);
-      if (res && Array.isArray(res.prs)) {
-        setPrs(res.prs);
+      if (filter === "all") {
+        if (!repos || repos.length === 0) {
+          const res = await API.getPRs();
+          setPrs(res && Array.isArray(res.prs) ? res.prs : []);
+        } else {
+          const allResults = await Promise.all(
+            repos.map(async (r) => {
+              try {
+                const res = await API.getPRs(r.name);
+                if (res && Array.isArray(res.prs)) {
+                  return res.prs.map((p: PR) => ({
+                    ...p,
+                    repo_name: p.repo_name || r.name,
+                  }));
+                }
+              } catch (err) {
+                console.warn(`[PRsSubView] Erro ao carregar PRs de ${r.name}:`, err);
+              }
+              return [];
+            })
+          );
+          const combined = allResults.flat();
+          combined.sort((a, b) => {
+            const tA = a.created_at ? new Date(a.created_at).getTime() : 0;
+            const tB = b.created_at ? new Date(b.created_at).getTime() : 0;
+            return tB - tA;
+          });
+          setPrs(combined);
+        }
       } else {
-        setPrs([]);
+        const res = await API.getPRs(filter);
+        if (res && Array.isArray(res.prs)) {
+          setPrs(res.prs.map((p: PR) => ({ ...p, repo_name: p.repo_name || filter })));
+        } else {
+          setPrs([]);
+        }
       }
     } catch (err) {
       console.error(
-        `[PRsSubView] Erro ao carregar revisões do repositório ${repoName}:`,
+        `[PRsSubView] Erro ao carregar revisões:`,
         err,
       );
     } finally {
       setIsLoading(false);
     }
-  }, [repoName]);
+  }, [selectedRepoFilter, repos]);
 
   useEffect(() => {
     loadPRs();
   }, [loadPRs]);
 
+  // Carrega contadores de propostas abertas por repositório para o seletor
+  useEffect(() => {
+    if (!repos || repos.length === 0) return;
+    let isMounted = true;
+    const fetchCounts = async () => {
+      const counts: Record<string, number> = {};
+      await Promise.all(
+        repos.map(async (r) => {
+          try {
+            const data = await API.getPRs(r.name);
+            if (data && Array.isArray(data.prs)) {
+              const openCount = data.prs.filter((p: any) => {
+                const s = (p.status || "").toLowerCase();
+                return s === "open" || s === "in_review";
+              }).length;
+              counts[r.name] = openCount;
+            }
+          } catch {}
+        })
+      );
+      if (isMounted) {
+        setRepoOpenCounts(counts);
+      }
+    };
+    fetchCounts();
+    return () => {
+      isMounted = false;
+    };
+  }, [repos, prs]);
+
   const fetchDiffForFile = useCallback(async (pr: PR, filePath: string) => {
+    const prRepo = pr.repo_name || repoName;
     const fileKey = `${pr.id}-${filePath}`;
     if (fileDiffsData[fileKey] || loadingDiffs[fileKey]) return;
     setLoadingDiffs((prev) => ({ ...prev, [fileKey]: true }));
@@ -145,7 +212,7 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
         path: filePath,
         pr_id: pr.id,
         commit: pr.commit_hash || pr.head_sha,
-        repo: repoName,
+        repo: prRepo,
       });
       if (diffRes.ok && diffRes.data) {
         setFileDiffsData((prev) => ({
@@ -167,8 +234,9 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
   }, [fileDiffsData, loadingDiffs, repoName]);
 
   const fetchMergeability = useCallback(async (pr: PR) => {
+    const prRepo = pr.repo_name || repoName;
     try {
-      const res = await API.getPRMergeability({ pr_id: pr.id, repo: repoName });
+      const res = await API.getPRMergeability({ pr_id: pr.id, repo: prRepo });
       if (res.ok && res.data) {
         setMergeabilityMap((prev) => ({ ...prev, [pr.id]: res.data }));
       }
@@ -178,10 +246,11 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
   }, [repoName]);
 
   const handleUpdateFromBase = async (pr: PR) => {
+    const prRepo = pr.repo_name || repoName;
     setSyncingFromBase((prev) => ({ ...prev, [pr.id]: true }));
     setActionFeedback(null);
     try {
-      const res = await API.updatePRFromBase({ pr_id: pr.id, repo: repoName });
+      const res = await API.updatePRFromBase({ pr_id: pr.id, repo: prRepo });
       if (res.ok) {
         setActionFeedback({
           id: pr.id,
@@ -209,8 +278,9 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
   };
 
   const handleOpenConflictResolution = async (pr: PR, filePath: string) => {
+    const prRepo = pr.repo_name || repoName;
     try {
-      const res = await API.getPRConflict({ pr_id: pr.id, path: filePath, repo: repoName });
+      const res = await API.getPRConflict({ pr_id: pr.id, path: filePath, repo: prRepo });
       if (res.ok && res.data) {
         setActiveConflictPR({ pr, filePath, bundle: res.data });
       } else {
@@ -224,12 +294,13 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
   const handleSaveConflictResolution = async (resolvedContent: string) => {
     if (!activeConflictPR) return;
     const { pr, filePath } = activeConflictPR;
+    const prRepo = pr.repo_name || repoName;
     try {
       const res = await API.resolvePRConflict({
         pr_id: pr.id,
         filePath,
         resolvedContent,
-        repo: repoName,
+        repo: prRepo,
       });
       if (res.ok) {
         setActiveConflictPR(null);
@@ -306,6 +377,7 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
   const handleApproveSubmit = async () => {
     if (!approvalModalPR) return;
     const id = approvalModalPR.id;
+    const prRepo = approvalModalPR.repo_name || repoName;
     setActionLoading({ id, action: "approve" });
     setActionFeedback(null);
     try {
@@ -313,6 +385,7 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
         approver: user?.login ? `@${user.login}` : undefined,
         role: approvalRole,
         comment: approvalComment,
+        repo: prRepo,
       });
       if (res.ok) {
         setActionFeedback({
@@ -344,16 +417,18 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
   };
 
   const handleEditDocumentInPR = (pr: PR, filePath: string) => {
+    const prRepo = pr.repo_name || repoName;
     navigate(
-      `/repo/${encodeURIComponent(repoName)}/editor?file=${encodeURIComponent(filePath)}&pr=${encodeURIComponent(String(pr.id))}&base=${encodeURIComponent(pr.head_sha || '')}`,
+      `/repo/${encodeURIComponent(prRepo)}/editor?file=${encodeURIComponent(filePath)}&pr=${encodeURIComponent(String(pr.id))}&base=${encodeURIComponent(pr.head_sha || '')}`,
     );
   };
 
-  const handleMerge = async (id: number | string) => {
+  const handleMerge = async (id: number | string, customRepo?: string) => {
+    const prRepo = customRepo || repoName;
     setActionLoading({ id, action: "merge" });
     setActionFeedback(null);
     try {
-      const res = await API.mergePR(id);
+      const res = await API.mergePR(id, prRepo);
       if (res.ok) {
         setActionFeedback({
           id,
@@ -382,14 +457,15 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
     }
   };
 
-  const handleReject = async (id: number | string) => {
+  const handleReject = async (id: number | string, customRepo?: string) => {
+    const prRepo = customRepo || repoName;
     const reason = window.prompt("Informe o motivo da rejeição (opcional):");
     if (reason === null) return;
 
     setActionLoading({ id, action: "reject" });
     setActionFeedback(null);
     try {
-      const res = await API.rejectPR(id, reason || "Rejeitado pelo revisor");
+      const res = await API.rejectPR(id, reason || "Rejeitado pelo revisor", prRepo);
       if (res.ok) {
         setActionFeedback({
           id,
@@ -420,6 +496,7 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
   const handleRollback = async () => {
     if (!rollbackTarget) return;
     const target = rollbackTarget;
+    const prRepo = target.repo_name || repoName;
     setActionLoading({ id: target.id, action: "rollback" });
     setActionFeedback(null);
 
@@ -427,7 +504,7 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
       const res = await API.rollbackVersion({
         id: target.id,
         commit_hash: target.commit_hash,
-        repo: repoName,
+        repo: prRepo,
       });
 
       if (res.ok) {
@@ -500,11 +577,18 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
       <PageHeader
         title="Revisões & Versões"
         subtitle={
-          <Row gap="xs" align="center" style={{ marginTop: "2px" }}>
-            <Badge variant="primary" size="sm">
-              <FolderGit2 size={12} style={{ marginRight: 3 }} />
-              Repositório: <strong>{repoName}</strong>
-            </Badge>
+          <Row gap="sm" align="center" style={{ marginTop: "4px", flexWrap: "wrap" }}>
+            {/* Seletor de Repositório estilizado em Pill idêntico ao OrgSelectorDropdown */}
+            <RepoSelectorDropdown
+              value={selectedRepoFilter}
+              onChange={(val) => {
+                setSelectedRepoFilter(val);
+                loadPRs(val);
+              }}
+              repoOpenCounts={repoOpenCounts}
+              allowAll={true}
+            />
+
             <span className="ui-text-muted" style={{ fontSize: "12.5px" }}>
               Acompanhe aprovações, revisões ativas e histórico com restauração
               segura.
@@ -567,7 +651,7 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
               id="btn-refresh-prs"
               variant="secondary"
               size="sm"
-              title={`Recarregar revisões de ${repoName}`}
+              title={`Recarregar revisões ${selectedRepoFilter === "all" ? "de todos os repositórios" : `de ${selectedRepoFilter}`}`}
               icon={<RefreshCw size={14} />}
               onClick={() => loadPRs()}
             >
@@ -642,7 +726,7 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
                   color: "var(--md-sys-color-on-surface-variant)",
                 }}
               >
-                Carregando histórico de revisões de {repoName}...
+                Carregando histórico de revisões {selectedRepoFilter === "all" ? "de todos os repositórios" : `de ${selectedRepoFilter}`}...
               </div>
             </div>
           ) : filteredPRs.length === 0 ? (
@@ -667,7 +751,7 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
                   color: "var(--color-text-primary, #0f172a)",
                 }}
               >
-                Nenhuma Revisão Encontrada em "{repoName}"
+                Nenhuma Revisão Encontrada {selectedRepoFilter === "all" ? "nos repositórios" : `em "${selectedRepoFilter}"`}
               </div>
               <p
                 className="ui-text-muted"
@@ -842,6 +926,24 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
                           >
                             Revisão #{revisionId}: {pr.title}
                           </span>
+                          {pr.repo_name && (
+                            <Badge
+                              variant="neutral"
+                              size="sm"
+                              title={`Repositório: ${pr.repo_name}`}
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "4px",
+                                backgroundColor: "var(--md-sys-color-surface-container-high, #e8eaed)",
+                                color: "var(--md-sys-color-on-surface, #202124)",
+                                borderColor: "var(--md-sys-color-outline-variant, #dadce0)",
+                              }}
+                            >
+                              <FolderGit2 size={11} style={{ flexShrink: 0 }} />
+                              {pr.repo_name}
+                            </Badge>
+                          )}
                           {pr.github_number && (
                             <Badge
                               variant="neutral"
@@ -1777,7 +1879,7 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
                                 style={{
                                   color: "var(--color-danger, #ef4444)",
                                 }}
-                                onClick={() => handleReject(pr.id)}
+                                onClick={() => handleReject(pr.id, pr.repo_name)}
                                 disabled={actionLoading?.id === pr.id}
                                 icon={
                                   <span className="material-symbols-outlined icon-xs">
@@ -1834,7 +1936,7 @@ export const PRsSubView: React.FC<PRsSubViewProps> = () => {
                               <Button
                                 variant="primary"
                                 size="sm"
-                                onClick={() => handleMerge(pr.id)}
+                                onClick={() => handleMerge(pr.id, pr.repo_name)}
                                 disabled={
                                   actionLoading?.id === pr.id || !quorumMet
                                 }

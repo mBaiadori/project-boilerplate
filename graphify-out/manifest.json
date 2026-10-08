@@ -606,9 +606,9 @@
     "semantic_hash": ""
   },
   "frontend/src/context/WorkspaceContext.tsx": {
-    "mtime": 1791474773.974115,
-    "seen": 1791474796.487742,
-    "ast_hash": "ea8b5c7ae802b08986c8ee2a2ed371a5",
+    "mtime": 1791475832.8707356,
+    "seen": 1791476027.5558789,
+    "ast_hash": "556a92eadf3bbd618f1e54763b6c2e9a",
     "semantic_hash": ""
   },
   "frontend/src/hooks/useEditorGitWatcher.ts": {
@@ -684,9 +684,9 @@
     "semantic_hash": ""
   },
   "frontend/src/services/api.ts": {
-    "mtime": 1791386786.7936103,
-    "seen": 1791452911.3696141,
-    "ast_hash": "0276943d069f4f6e4297453e61fedc7e",
+    "mtime": 1791475819.1349092,
+    "seen": 1791476027.555891,
+    "ast_hash": "3cba790d74fff2ad0abe53459cdc6501",
     "semantic_hash": ""
   },
   "frontend/src/services/chat-memory.ts": {
@@ -828,9 +828,9 @@
     "semantic_hash": ""
   },
   "frontend/src/views/subviews/PRsSubView.tsx": {
-    "mtime": 1791309031.6015065,
-    "seen": 1791452911.369632,
-    "ast_hash": "d5453016fda84940d84b4ae0d9d7eefb",
+    "mtime": 1791476630.8186014,
+    "seen": 1791476650.82049,
+    "ast_hash": "49b9b4fbb77ec4546127200a44b825f9",
     "semantic_hash": ""
   },
   "frontend/src/views/subviews/SettingsSubView.tsx": {
@@ -1086,15 +1086,15 @@
     "semantic_hash": ""
   },
   "server/src/modules/prs/prs.routes.ts": {
-    "mtime": 1791111720.3417454,
-    "seen": 1791452911.369664,
-    "ast_hash": "9436a8c013b9ce0e154d411b9c8b0d49",
+    "mtime": 1791475771.1742206,
+    "seen": 1791476027.555959,
+    "ast_hash": "b13a6a281c0915168b526d4ff1b24124",
     "semantic_hash": ""
   },
   "server/src/modules/prs/prs.service.ts": {
-    "mtime": 1791365875.648535,
-    "seen": 1791452911.369665,
-    "ast_hash": "71f0c34321c2dfeb8cf233be4a694114",
+    "mtime": 1791475803.6549823,
+    "seen": 1791476027.5559602,
+    "ast_hash": "26aa80c094d79d75eec068dbeccae448",
     "semantic_hash": ""
   },
   "server/src/modules/prs/prs.test.ts": {
@@ -1521,6 +1521,12 @@
     "mtime": 1789839166.893693,
     "seen": 1791452911.369718,
     "ast_hash": "9960a24288958394ac50e57ff638b036",
+    "semantic_hash": ""
+  },
+  "frontend/src/components/layout/RepoSelectorDropdown.tsx": {
+    "mtime": 1791476544.9325023,
+    "seen": 1791476650.820406,
+    "ast_hash": "17dc5d3242321e1daa711292ddfb951c",
     "semantic_hash": ""
   }
 }

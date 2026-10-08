@@ -606,9 +606,9 @@
     "semantic_hash": ""
   },
   "frontend/src/context/WorkspaceContext.tsx": {
-    "mtime": 1791474347.7379527,
-    "seen": 1791474406.949708,
-    "ast_hash": "7cee64d95bc5f45ed665e2c10dfdeb36",
+    "mtime": 1791475832.8707356,
+    "seen": 1791476027.5558789,
+    "ast_hash": "556a92eadf3bbd618f1e54763b6c2e9a",
     "semantic_hash": ""
   },
   "frontend/src/hooks/useEditorGitWatcher.ts": {
@@ -684,9 +684,9 @@
     "semantic_hash": ""
   },
   "frontend/src/services/api.ts": {
-    "mtime": 1791386786.7936103,
-    "seen": 1791452911.3696141,
-    "ast_hash": "0276943d069f4f6e4297453e61fedc7e",
+    "mtime": 1791475819.1349092,
+    "seen": 1791476027.555891,
+    "ast_hash": "3cba790d74fff2ad0abe53459cdc6501",
     "semantic_hash": ""
   },
   "frontend/src/services/chat-memory.ts": {
@@ -828,9 +828,9 @@
     "semantic_hash": ""
   },
   "frontend/src/views/subviews/PRsSubView.tsx": {
-    "mtime": 1791309031.6015065,
-    "seen": 1791452911.369632,
-    "ast_hash": "d5453016fda84940d84b4ae0d9d7eefb",
+    "mtime": 1791476279.9086297,
+    "seen": 1791476300.068088,
+    "ast_hash": "e7d0f37222cc319c1ddb5ee2ea39e34c",
     "semantic_hash": ""
   },
   "frontend/src/views/subviews/SettingsSubView.tsx": {
@@ -1050,9 +1050,9 @@
     "semantic_hash": ""
   },
   "server/src/modules/governance/governance.service.ts": {
-    "mtime": 1791474210.7036672,
-    "seen": 1791474406.949777,
-    "ast_hash": "0b8bff9d984e01f9f9f4e94b615085f0",
+    "mtime": 1791474760.542407,
+    "seen": 1791474796.487809,
+    "ast_hash": "4eafcab0b04b8fdd7c3bba37eaf66c5b",
     "semantic_hash": ""
   },
   "server/src/modules/governance/governance.test.ts": {
@@ -1086,15 +1086,15 @@
     "semantic_hash": ""
   },
   "server/src/modules/prs/prs.routes.ts": {
-    "mtime": 1791111720.3417454,
-    "seen": 1791452911.369664,
-    "ast_hash": "9436a8c013b9ce0e154d411b9c8b0d49",
+    "mtime": 1791475771.1742206,
+    "seen": 1791476027.555959,
+    "ast_hash": "b13a6a281c0915168b526d4ff1b24124",
     "semantic_hash": ""
   },
   "server/src/modules/prs/prs.service.ts": {
-    "mtime": 1791365875.648535,
-    "seen": 1791452911.369665,
-    "ast_hash": "71f0c34321c2dfeb8cf233be4a694114",
+    "mtime": 1791475803.6549823,
+    "seen": 1791476027.5559602,
+    "ast_hash": "26aa80c094d79d75eec068dbeccae448",
     "semantic_hash": ""
   },
   "server/src/modules/prs/prs.test.ts": {

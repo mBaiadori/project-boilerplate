@@ -162,7 +162,8 @@ export class GovernanceService {
 
     // 7. Se há organizações nas credenciais do usuário
     if (Array.isArray(cfg.orgs) && cfg.orgs.length > 0) {
-      const firstOrg = typeof cfg.orgs[0] === "string" ? cfg.orgs[0] : cfg.orgs[0]?.login;
+      const firstOrg =
+        typeof cfg.orgs[0] === "string" ? cfg.orgs[0] : cfg.orgs[0]?.login;
       if (firstOrg && firstOrg !== "local") {
         return `${firstOrg}/${targetRepoName}`;
       }
@@ -256,8 +257,9 @@ export class GovernanceService {
                 : isOwner
                   ? ["*"]
                   : ["*"];
-            const deniedPaths: string[] =
-              Array.isArray(meta.denied_paths) ? meta.denied_paths : [];
+            const deniedPaths: string[] = Array.isArray(meta.denied_paths)
+              ? meta.denied_paths
+              : [];
 
             return {
               login,
@@ -391,7 +393,9 @@ export class GovernanceService {
           role_name: memberRole,
           departments: memberDepts,
           allowed_paths: memberPaths,
-          denied_paths: Array.isArray(meta.denied_paths) ? meta.denied_paths : [],
+          denied_paths: Array.isArray(meta.denied_paths)
+            ? meta.denied_paths
+            : [],
           is_owner: false,
           status: meta.status || "active",
         });
@@ -448,8 +452,9 @@ export class GovernanceService {
       Array.isArray(payload.allowed_paths) && payload.allowed_paths.length > 0
         ? payload.allowed_paths
         : ["*"];
-    const deniedPaths =
-      Array.isArray(payload.denied_paths) ? payload.denied_paths : [];
+    const deniedPaths = Array.isArray(payload.denied_paths)
+      ? payload.denied_paths
+      : [];
     const resolvedFullName = this.resolveRepoFullName(targetRepoName);
 
     // 1. If remote GitHub repo, send invite via GitHub API
@@ -687,7 +692,9 @@ export class GovernanceService {
     for (const [, meta] of Object.entries(
       pConfig.governance_collaborators as Record<string, any>,
     )) {
-      const updatePathList = (paths: string[]): { updated: string[]; changed: boolean } => {
+      const updatePathList = (
+        paths: string[],
+      ): { updated: string[]; changed: boolean } => {
         let changed = false;
         const updated = paths.map((p: string) => {
           const cleanP = p.replace(/\\/g, "/").replace(/^\/+/, "");
@@ -1133,7 +1140,11 @@ export class GovernanceService {
       return [];
     }
     try {
-      const res = await callGitHubAPI(`/orgs/${orgLogin}/teams?per_page=100`, cfg.token, "GET");
+      const res = await callGitHubAPI(
+        `/orgs/${orgLogin}/teams?per_page=100`,
+        cfg.token,
+        "GET",
+      );
       if (res.statusCode === 200 && Array.isArray(res.data)) {
         return res.data.map((t: any) => ({
           id: t.id,
@@ -1147,7 +1158,10 @@ export class GovernanceService {
       }
       return [];
     } catch (err) {
-      console.warn(`[GovernanceService] Falha ao listar times da org ${orgLogin}:`, err);
+      console.warn(
+        `[GovernanceService] Falha ao listar times da org ${orgLogin}:`,
+        err,
+      );
       return [];
     }
   }
@@ -1161,7 +1175,11 @@ export class GovernanceService {
       return [];
     }
     try {
-      const res = await callGitHubAPI(`/orgs/${orgLogin}/members?per_page=100`, cfg.token, "GET");
+      const res = await callGitHubAPI(
+        `/orgs/${orgLogin}/members?per_page=100`,
+        cfg.token,
+        "GET",
+      );
       if (res.statusCode === 200 && Array.isArray(res.data)) {
         return res.data.map((m: any) => ({
           id: m.id,
@@ -1173,7 +1191,10 @@ export class GovernanceService {
       }
       return [];
     } catch (err) {
-      console.warn(`[GovernanceService] Falha ao listar membros da org ${orgLogin}:`, err);
+      console.warn(
+        `[GovernanceService] Falha ao listar membros da org ${orgLogin}:`,
+        err,
+      );
       return [];
     }
   }
@@ -1187,7 +1208,11 @@ export class GovernanceService {
       return [];
     }
     try {
-      const res = await callGitHubAPI(`/repos/${owner}/${repo}/teams?per_page=100`, cfg.token, "GET");
+      const res = await callGitHubAPI(
+        `/repos/${owner}/${repo}/teams?per_page=100`,
+        cfg.token,
+        "GET",
+      );
       if (res.statusCode === 200 && Array.isArray(res.data)) {
         return res.data.map((t: any) => ({
           id: t.id,
@@ -1200,7 +1225,10 @@ export class GovernanceService {
       }
       return [];
     } catch (err) {
-      console.warn(`[GovernanceService] Falha ao listar times do repo ${owner}/${repo}:`, err);
+      console.warn(
+        `[GovernanceService] Falha ao listar times do repo ${owner}/${repo}:`,
+        err,
+      );
       return [];
     }
   }
@@ -1224,12 +1252,22 @@ export class GovernanceService {
       `/orgs/${org}/teams/${teamSlug}/repos/${owner}/${repo}`,
       cfg.token,
       "PUT",
-      { permission: permission || "push" }
+      { permission: permission || "push" },
     );
-    if (res.statusCode === 204 || res.statusCode === 200 || res.statusCode === 201) {
-      return { success: true, message: `Time @${org}/${teamSlug} adicionado ao repositório ${owner}/${repo} com permissão '${permission}'` };
+    if (
+      res.statusCode === 204 ||
+      res.statusCode === 200 ||
+      res.statusCode === 201
+    ) {
+      return {
+        success: true,
+        message: `Time @${org}/${teamSlug} adicionado ao repositório ${owner}/${repo} com permissão '${permission}'`,
+      };
     }
-    throw new Error(res.data?.message || `Erro ao associar time ao repositório (${res.statusCode})`);
+    throw new Error(
+      res.data?.message ||
+        `Erro ao associar time ao repositório (${res.statusCode})`,
+    );
   }
 
   /**
@@ -1249,18 +1287,28 @@ export class GovernanceService {
     const res = await callGitHubAPI(
       `/orgs/${org}/teams/${teamSlug}/repos/${owner}/${repo}`,
       cfg.token,
-      "DELETE"
+      "DELETE",
     );
     if (res.statusCode === 204 || res.statusCode === 200) {
-      return { success: true, message: `Time @${org}/${teamSlug} removido do repositório ${owner}/${repo}` };
+      return {
+        success: true,
+        message: `Time @${org}/${teamSlug} removido do repositório ${owner}/${repo}`,
+      };
     }
-    throw new Error(res.data?.message || `Erro ao remover time do repositório (${res.statusCode})`);
+    throw new Error(
+      res.data?.message ||
+        `Erro ao remover time do repositório (${res.statusCode})`,
+    );
   }
 
   /**
    * Cria um novo time na organização do GitHub
    */
-  async createOrgTeam(payload: CreateOrgTeamPayload): Promise<{ success: boolean; team?: OrganizationTeamInfo; message?: string }> {
+  async createOrgTeam(payload: CreateOrgTeamPayload): Promise<{
+    success: boolean;
+    team?: OrganizationTeamInfo;
+    message?: string;
+  }> {
     const cfg = loadConfig();
     if (!cfg.token) {
       throw new Error("Token do GitHub não autenticado");
@@ -1288,34 +1336,56 @@ export class GovernanceService {
         },
       };
     }
-    throw new Error(res.data?.message || `Falha ao criar time na organização (${res.statusCode})`);
+    throw new Error(
+      res.data?.message ||
+        `Falha ao criar time na organização (${res.statusCode})`,
+    );
   }
 
   /**
    * Exclui um time da organização do GitHub
    */
-  async deleteOrgTeam(org: string, teamSlug: string): Promise<{ success: boolean; message?: string }> {
+  async deleteOrgTeam(
+    org: string,
+    teamSlug: string,
+  ): Promise<{ success: boolean; message?: string }> {
     const cfg = loadConfig();
     if (!cfg.token) {
       throw new Error("Token do GitHub não autenticado");
     }
-    const res = await callGitHubAPI(`/orgs/${org}/teams/${teamSlug}`, cfg.token, "DELETE");
+    const res = await callGitHubAPI(
+      `/orgs/${org}/teams/${teamSlug}`,
+      cfg.token,
+      "DELETE",
+    );
     if (res.statusCode === 204 || res.statusCode === 200) {
-      return { success: true, message: `Time @${org}/${teamSlug} excluído com sucesso.` };
+      return {
+        success: true,
+        message: `Time @${org}/${teamSlug} excluído com sucesso.`,
+      };
     }
-    throw new Error(res.data?.message || `Falha ao excluir time (${res.statusCode})`);
+    throw new Error(
+      res.data?.message || `Falha ao excluir time (${res.statusCode})`,
+    );
   }
 
   /**
    * Lista membros de um time específico na organização
    */
-  async getOrgTeamMembers(org: string, teamSlug: string): Promise<OrgTeamMemberInfo[]> {
+  async getOrgTeamMembers(
+    org: string,
+    teamSlug: string,
+  ): Promise<OrgTeamMemberInfo[]> {
     const cfg = loadConfig();
     if (!cfg.token || !org || !teamSlug) {
       return [];
     }
     try {
-      const res = await callGitHubAPI(`/orgs/${org}/teams/${teamSlug}/members?per_page=100`, cfg.token, "GET");
+      const res = await callGitHubAPI(
+        `/orgs/${org}/teams/${teamSlug}/members?per_page=100`,
+        cfg.token,
+        "GET",
+      );
       if (res.statusCode === 200 && Array.isArray(res.data)) {
         return res.data.map((m: any) => ({
           id: m.id,
@@ -1327,7 +1397,10 @@ export class GovernanceService {
       }
       return [];
     } catch (err) {
-      console.warn(`[GovernanceService] Falha ao listar membros do time @${org}/${teamSlug}:`, err);
+      console.warn(
+        `[GovernanceService] Falha ao listar membros do time @${org}/${teamSlug}:`,
+        err,
+      );
       return [];
     }
   }
@@ -1339,7 +1412,7 @@ export class GovernanceService {
     org: string,
     teamSlug: string,
     username: string,
-    role: "member" | "maintainer" = "member"
+    role: "member" | "maintainer" = "member",
   ): Promise<{ success: boolean; message?: string }> {
     const cfg = loadConfig();
     if (!cfg.token) {
@@ -1350,12 +1423,18 @@ export class GovernanceService {
       `/orgs/${org}/teams/${teamSlug}/memberships/${cleanUsername}`,
       cfg.token,
       "PUT",
-      { role }
+      { role },
     );
     if (res.statusCode === 200 || res.statusCode === 201) {
-      return { success: true, message: `@${cleanUsername} adicionado ao time @${org}/${teamSlug} como ${role}.` };
+      return {
+        success: true,
+        message: `@${cleanUsername} adicionado ao time @${org}/${teamSlug} como ${role}.`,
+      };
     }
-    throw new Error(res.data?.message || `Erro ao adicionar membro ao time (${res.statusCode})`);
+    throw new Error(
+      res.data?.message ||
+        `Erro ao adicionar membro ao time (${res.statusCode})`,
+    );
   }
 
   /**
@@ -1364,7 +1443,7 @@ export class GovernanceService {
   async removeMemberFromOrgTeam(
     org: string,
     teamSlug: string,
-    username: string
+    username: string,
   ): Promise<{ success: boolean; message?: string }> {
     const cfg = loadConfig();
     if (!cfg.token) {
@@ -1374,18 +1453,25 @@ export class GovernanceService {
     const res = await callGitHubAPI(
       `/orgs/${org}/teams/${teamSlug}/memberships/${cleanUsername}`,
       cfg.token,
-      "DELETE"
+      "DELETE",
     );
     if (res.statusCode === 204 || res.statusCode === 200) {
-      return { success: true, message: `@${cleanUsername} removido do time @${org}/${teamSlug}.` };
+      return {
+        success: true,
+        message: `@${cleanUsername} removido do time @${org}/${teamSlug}.`,
+      };
     }
-    throw new Error(res.data?.message || `Erro ao remover membro do time (${res.statusCode})`);
+    throw new Error(
+      res.data?.message || `Erro ao remover membro do time (${res.statusCode})`,
+    );
   }
 
   /**
    * Convida um novo membro para a organização no GitHub
    */
-  async inviteOrgMember(payload: OrgInvitePayload): Promise<{ success: boolean; message: string }> {
+  async inviteOrgMember(
+    payload: OrgInvitePayload,
+  ): Promise<{ success: boolean; message: string }> {
     const cfg = loadConfig();
     if (!cfg.token) {
       throw new Error("Token do GitHub não autenticado");
@@ -1395,7 +1481,11 @@ export class GovernanceService {
 
     if (username) {
       const cleanUsername = username.trim().replace(/^@/, "");
-      const userRes = await callGitHubAPI(`/users/${cleanUsername}`, cfg.token, "GET");
+      const userRes = await callGitHubAPI(
+        `/users/${cleanUsername}`,
+        cfg.token,
+        "GET",
+      );
       if (userRes.statusCode === 200 && userRes.data?.id) {
         inviteeId = userRes.data.id;
       }
@@ -1406,33 +1496,60 @@ export class GovernanceService {
     if (email) body.email = email;
     if (team_ids && team_ids.length > 0) body.team_ids = team_ids;
 
-    const res = await callGitHubAPI(`/orgs/${org}/invitations`, cfg.token, "POST", body);
+    const res = await callGitHubAPI(
+      `/orgs/${org}/invitations`,
+      cfg.token,
+      "POST",
+      body,
+    );
     if (res.statusCode === 201 || res.statusCode === 200) {
-      return { success: true, message: `Convite para a organização ${org} enviado com sucesso!` };
+      return {
+        success: true,
+        message: `Convite para a organização ${org} enviado com sucesso!`,
+      };
     }
-    throw new Error(res.data?.message || `Erro ao convidar para a organização (${res.statusCode})`);
+    throw new Error(
+      res.data?.message ||
+        `Erro ao convidar para a organização (${res.statusCode})`,
+    );
   }
 
   /**
    * Remove um membro da organização
    */
-  async removeOrgMember(org: string, username: string): Promise<{ success: boolean; message: string }> {
+  async removeOrgMember(
+    org: string,
+    username: string,
+  ): Promise<{ success: boolean; message: string }> {
     const cfg = loadConfig();
     if (!cfg.token) {
       throw new Error("Token do GitHub não autenticado");
     }
     const cleanUsername = username.trim().replace(/^@/, "");
-    const res = await callGitHubAPI(`/orgs/${org}/members/${cleanUsername}`, cfg.token, "DELETE");
+    const res = await callGitHubAPI(
+      `/orgs/${org}/members/${cleanUsername}`,
+      cfg.token,
+      "DELETE",
+    );
     if (res.statusCode === 204 || res.statusCode === 200) {
-      return { success: true, message: `@${cleanUsername} removido da organização ${org}.` };
+      return {
+        success: true,
+        message: `@${cleanUsername} removido da organização ${org}.`,
+      };
     }
-    throw new Error(res.data?.message || `Erro ao remover membro da organização (${res.statusCode})`);
+    throw new Error(
+      res.data?.message ||
+        `Erro ao remover membro da organização (${res.statusCode})`,
+    );
   }
 
   /**
    * Calcula a permissão efetiva do usuário autenticado no repositório e organização atual
    */
-  async getEffectiveUserPermission(repoName?: string, orgLogin?: string): Promise<EffectiveUserPermission> {
+  async getEffectiveUserPermission(
+    repoName?: string,
+    orgLogin?: string,
+  ): Promise<EffectiveUserPermission> {
     const cfg = loadConfig();
     const activeUser = cfg.user?.login || "local-user";
     const targetRepoName = repoName || cfg.active_repo?.name || "local";
@@ -1446,7 +1563,7 @@ export class GovernanceService {
         isOrgMember: true,
         isOutsideCollaborator: false,
         repoPermission: "admin",
-        roleName: "Owner da Org",
+        roleName: "Owner",
         allowedActions: {
           canRead: true,
           canWrite: true,
@@ -1465,7 +1582,13 @@ export class GovernanceService {
     let isOrgOwner = false;
     let isOrgMember = false;
     let isOutsideCollaborator = false;
-    let repoPermission: "admin" | "maintain" | "push" | "triage" | "pull" | "none" = "pull";
+    let repoPermission:
+      | "admin"
+      | "maintain"
+      | "push"
+      | "triage"
+      | "pull"
+      | "none" = "pull";
     const teamMemberships: string[] = [];
 
     // 1. Identificar se o repositório pertence a uma Organização ou Usuário
@@ -1486,7 +1609,9 @@ export class GovernanceService {
       // Checa se a organização está presente no storage do app
       if (Array.isArray(cfg.orgs)) {
         const found = cfg.orgs.find(
-          (o: any) => (typeof o === "string" ? o : o?.login)?.toLowerCase() === targetOrg.toLowerCase()
+          (o: any) =>
+            (typeof o === "string" ? o : o?.login)?.toLowerCase() ===
+            targetOrg.toLowerCase(),
         );
         if (found) {
           isOrgMember = true;
@@ -1498,7 +1623,11 @@ export class GovernanceService {
 
       // Checa via endpoint de memberships do usuário
       try {
-        const userOrgMemRes = await callGitHubAPI(`/user/memberships/orgs/${targetOrg}`, cfg.token, "GET");
+        const userOrgMemRes = await callGitHubAPI(
+          `/user/memberships/orgs/${targetOrg}`,
+          cfg.token,
+          "GET",
+        );
         if (userOrgMemRes.statusCode === 200 && userOrgMemRes.data) {
           isOrgMember = userOrgMemRes.data.state === "active";
           if (userOrgMemRes.data.role === "admin") {
@@ -1509,7 +1638,11 @@ export class GovernanceService {
 
       if (!isOrgMember) {
         try {
-          const orgMemRes = await callGitHubAPI(`/orgs/${targetOrg}/memberships/${activeUser}`, cfg.token, "GET");
+          const orgMemRes = await callGitHubAPI(
+            `/orgs/${targetOrg}/memberships/${activeUser}`,
+            cfg.token,
+            "GET",
+          );
           if (orgMemRes.statusCode === 200 && orgMemRes.data) {
             isOrgMember = orgMemRes.data.state === "active";
             if (orgMemRes.data.role === "admin") {
@@ -1521,10 +1654,18 @@ export class GovernanceService {
 
       if (!isOrgMember) {
         try {
-          const userOrgsRes = await callGitHubAPI(`/user/orgs?per_page=100`, cfg.token, "GET");
-          if (userOrgsRes.statusCode === 200 && Array.isArray(userOrgsRes.data)) {
+          const userOrgsRes = await callGitHubAPI(
+            `/user/orgs?per_page=100`,
+            cfg.token,
+            "GET",
+          );
+          if (
+            userOrgsRes.statusCode === 200 &&
+            Array.isArray(userOrgsRes.data)
+          ) {
             const foundOrg = userOrgsRes.data.find(
-              (o: any) => o?.login && o.login.toLowerCase() === targetOrg.toLowerCase()
+              (o: any) =>
+                o?.login && o.login.toLowerCase() === targetOrg.toLowerCase(),
             );
             if (foundOrg) {
               isOrgMember = true;
@@ -1540,7 +1681,7 @@ export class GovernanceService {
       const permRes = await callGitHubAPI(
         `/repos/${resolvedFullName}/collaborators/${activeUser}/permission`,
         cfg.token,
-        "GET"
+        "GET",
       );
       if (permRes.statusCode === 200 && permRes.data?.permission) {
         const p = permRes.data.permission;
@@ -1555,7 +1696,11 @@ export class GovernanceService {
     // Fallback: consulta direta aos dados do repositório no GitHub
     if (repoPermission === "pull" || isOrgMember || isOrgOwner) {
       try {
-        const repoRes = await callGitHubAPI(`/repos/${resolvedFullName}`, cfg.token, "GET");
+        const repoRes = await callGitHubAPI(
+          `/repos/${resolvedFullName}`,
+          cfg.token,
+          "GET",
+        );
         if (repoRes.statusCode === 200 && repoRes.data?.permissions) {
           const p = repoRes.data.permissions;
           if (p.admin) {
@@ -1593,7 +1738,7 @@ export class GovernanceService {
 
     let roleName = "Leitura (Pull)";
     if (isOrgOwner) {
-      roleName = "Owner da Org";
+      roleName = "Owner";
     } else if (canAdmin) {
       roleName = "Admin do Repositório";
     } else if (canMaintain) {
@@ -1631,9 +1776,16 @@ export class GovernanceService {
   /**
    * Verifica o status do workflow de governança do GitHub Actions (.github/workflows/governance-check.yml)
    */
-  async getGovernanceWorkflowStatus(repoName?: string): Promise<GovernanceActionWorkflowStatus> {
+  async getGovernanceWorkflowStatus(
+    repoName?: string,
+  ): Promise<GovernanceActionWorkflowStatus> {
     const repoDir = this.getRepoDir(repoName);
-    const workflowPath = path.join(repoDir, ".github", "workflows", "governance-check.yml");
+    const workflowPath = path.join(
+      repoDir,
+      ".github",
+      "workflows",
+      "governance-check.yml",
+    );
     const exists = fs.existsSync(workflowPath);
     let content: string | undefined;
     if (exists) {
@@ -1651,7 +1803,9 @@ export class GovernanceService {
   /**
    * Instala ou atualiza o workflow de governança automatizada do GitHub Actions
    */
-  async installGovernanceWorkflow(repoName?: string): Promise<{ success: boolean; message: string }> {
+  async installGovernanceWorkflow(
+    repoName?: string,
+  ): Promise<{ success: boolean; message: string }> {
     const repoDir = this.getRepoDir(repoName);
     const workflowsDir = path.join(repoDir, ".github", "workflows");
     const workflowPath = path.join(workflowsDir, "governance-check.yml");
@@ -1714,17 +1868,20 @@ jobs:
       this.logAudit(repoName, {
         action: "BRANCH_PROTECTED",
         actor: "System / Tech Lead",
-        details: "Workflow de governança GitHub Actions instalado (.github/workflows/governance-check.yml).",
+        details:
+          "Workflow de governança GitHub Actions instalado (.github/workflows/governance-check.yml).",
       });
       return {
         success: true,
-        message: "Workflow de governança do GitHub Actions instalado com sucesso em .github/workflows/governance-check.yml",
+        message:
+          "Workflow de governança do GitHub Actions instalado com sucesso em .github/workflows/governance-check.yml",
       };
     } catch (err: any) {
-      throw new Error(`Falha ao instalar workflow de GitHub Actions: ${err.message}`);
+      throw new Error(
+        `Falha ao instalar workflow de GitHub Actions: ${err.message}`,
+      );
     }
   }
 }
 
 export const governanceService = new GovernanceService();
-
