@@ -1,10 +1,16 @@
 import { ITranslationProvider, TranslationOptions } from '../translation.types.js';
 
+export interface PlaceholderItem {
+  prefix: string;
+  counter: number;
+  originalText: string;
+}
+
 export interface MaskedMarkdown {
   rawFrontmatter: string | null;
   frontmatterLines: string[] | null;
   maskedBody: string;
-  placeholders: Map<string, string>;
+  placeholders: PlaceholderItem[];
 }
 
 export abstract class BaseTranslationProvider implements ITranslationProvider {
@@ -16,7 +22,7 @@ export abstract class BaseTranslationProvider implements ITranslationProvider {
   abstract executeRawTranslation(text: string, sourceLang: string, targetLang: string, glossary?: Record<string, string>): Promise<string>;
 
   /**
-   * Executa a tradução de um documento Markdown completo preservando frontmatter, blocos de código e links
+   * Executa a tradução de um documento Markdown completo preservando frontmatter, blocos de código e elementos de formatação
    */
   async translate(markdownContent: string, options: TranslationOptions): Promise<string> {
     if (!markdownContent || !markdownContent.trim()) {
@@ -36,36 +42,57 @@ export abstract class BaseTranslationProvider implements ITranslationProvider {
     // 2. Traduzir o corpo mascarado
     let translatedBody = await this.executeRawTranslation(maskedBody, sourceLang, targetLang, options.glossary);
 
-    // 3. Restaurar placeholders
-    placeholders.forEach((originalText, placeholderKey) => {
-      const escapedKey = placeholderKey.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
-      translatedBody = translatedBody.replace(new RegExp(escapedKey, 'g'), () => originalText);
-    });
+    // 3. Restaurar placeholders de forma ultra-resiliente
+    // Motores de tradução automáticos costumam inserir espaços ou alterar a caixa dos delimitadores:
+    // Ex: [[__CALLOUT_PLH_1__]] pode virar [[ __CALLOUT_PLH_1__ ]] ou [[__callout_plh_1__]]
+    for (const item of placeholders) {
+      const { prefix, counter, originalText } = item;
+      const escapedPrefix = prefix.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
+      const pattern = new RegExp(
+        `(?:\\[\\[|\\[\\s*\\[)\\s*_*\\s*${escapedPrefix}_(?:PLH_)?${counter}\\s*_*\\s*(?:\\]\\]|\\]\\s*\\])`,
+        'gi'
+      );
+      translatedBody = translatedBody.replace(pattern, () => originalText);
+    }
 
-    // 4. Tratar Frontmatter YAML apenas se preserveFrontmatter for true (por padrão traduções não têm frontmatter)
+    // 4. Pós-processamento: normalizar pontuações e delimitadores Markdown que o tradutor possa ter espaçado
+    translatedBody = this.sanitizePostTranslation(translatedBody);
+
+    // 5. Tratar Frontmatter YAML apenas se preserveFrontmatter for true
     let translatedFrontmatter = '';
     if (options.preserveFrontmatter === true && rawFrontmatter && frontmatterLines) {
       const translatedLines: string[] = [];
       for (const line of frontmatterLines) {
-        const titleMatch = line.match(/^(\s*title\s*:\s*["']?)(.*?)(["']?\s*)$/i);
-        const descMatch = line.match(/^(\s*description\s*:\s*["']?)(.*?)(["']?\s*)$/i);
+        // Capturar chave title com ou sem aspas
+        const titleMatch = line.match(/^(\s*title\s*:\s*)(["']?)(.*?)\2(\s*)$/i);
+        // Capturar chave description com ou sem aspas
+        const descMatch = line.match(/^(\s*description\s*:\s*)(["']?)(.*?)\2(\s*)$/i);
 
-        if (titleMatch && titleMatch[2].trim()) {
+        if (titleMatch && titleMatch[3].trim()) {
           try {
-            const transTitle = await this.executeRawTranslation(titleMatch[2], sourceLang, targetLang, options.glossary);
-            translatedLines.push(`${titleMatch[1]}${transTitle.trim()}${titleMatch[3]}`);
+            const rawTitle = titleMatch[3].trim();
+            const transTitle = await this.executeRawTranslation(rawTitle, sourceLang, targetLang, options.glossary);
+            const safeTitle = transTitle.trim().replace(/"/g, '\\"');
+            translatedLines.push(`${titleMatch[1]}"${safeTitle}"${titleMatch[4]}`);
             continue;
-          } catch {}
+          } catch (e) {
+            console.warn('[BaseTranslationProvider] Falha ao traduzir title do frontmatter:', e);
+          }
         }
 
-        if (descMatch && descMatch[2].trim()) {
+        if (descMatch && descMatch[3].trim()) {
           try {
-            const transDesc = await this.executeRawTranslation(descMatch[2], sourceLang, targetLang, options.glossary);
-            translatedLines.push(`${descMatch[1]}${transDesc.trim()}${descMatch[3]}`);
+            const rawDesc = descMatch[3].trim();
+            const transDesc = await this.executeRawTranslation(rawDesc, sourceLang, targetLang, options.glossary);
+            const safeDesc = transDesc.trim().replace(/"/g, '\\"');
+            translatedLines.push(`${descMatch[1]}"${safeDesc}"${descMatch[4]}`);
             continue;
-          } catch {}
+          } catch (e) {
+            console.warn('[BaseTranslationProvider] Falha ao traduzir description do frontmatter:', e);
+          }
         }
 
+        // Mantém as demais chaves oficiais 100% inalteradas (category, status, tags, author, etc.)
         translatedLines.push(line);
       }
       translatedFrontmatter = `---\n${translatedLines.join('\n')}\n---\n\n`;
@@ -75,17 +102,20 @@ export abstract class BaseTranslationProvider implements ITranslationProvider {
   }
 
   /**
-   * Extrai o Frontmatter e mascara blocos de código, tags HTML, links e termos especiais
+   * Extrai o Frontmatter e mascara blocos de código, tags HTML, links, callouts, checkboxes e tabelas
    */
   protected extractAndMask(markdown: string): MaskedMarkdown {
-    const placeholders = new Map<string, string>();
+    const placeholders: PlaceholderItem[] = [];
     let counter = 0;
 
     const createPlaceholder = (prefix: string, content: string) => {
       counter++;
-      const key = `[[__${prefix}_PLH_${counter}__]]`;
-      placeholders.set(key, content);
-      return key;
+      placeholders.push({
+        prefix,
+        counter,
+        originalText: content,
+      });
+      return `[[__${prefix}_PLH_${counter}__]]`;
     };
 
     let body = markdown;
@@ -100,7 +130,7 @@ export abstract class BaseTranslationProvider implements ITranslationProvider {
       body = markdown.slice(frontmatterMatch[0].length);
     }
 
-    // 2. Mascarar blocos de código com cercas (``` ... ```)
+    // 2. Mascarar blocos de código com cercas (``` ... ```) incluindo diagramas Mermaid
     body = body.replace(/```[\s\S]*?```/g, (match) => {
       return createPlaceholder('CODEBLOCK', match);
     });
@@ -110,13 +140,52 @@ export abstract class BaseTranslationProvider implements ITranslationProvider {
       return createPlaceholder('INLINECODE', match);
     });
 
-    // 4. Mascarar URLs em links markdown [texto](url) -> preserva texto, mascara a url
+    // 4. Mascarar cabeçalhos de Callouts / Alertas
+    // Suporta tanto GFM: > [!NOTE], > [!TIP], > [!WARNING], > [!DANGER], > [!CAUTION], > [!INFO], > [!SUCCESS]
+    // quanto variantes em português: > [!NOTA], > [!DICA], > [!AVISO], etc.
+    body = body.replace(/^>\s*\[!\s*([a-zA-ZÀ-ÿ0-9_-]+)\s*\]/gmi, (_match, rawType) => {
+      const norm = rawType.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      let canonical = 'NOTE';
+      if (['tip', 'dica', 'success', 'sucesso'].includes(norm)) canonical = 'TIP';
+      else if (['warning', 'aviso', 'atencao', 'important', 'importante'].includes(norm)) canonical = 'WARNING';
+      else if (['danger', 'perigo', 'caution', 'cuidado'].includes(norm)) canonical = 'DANGER';
+      else if (['info', 'informacao'].includes(norm)) canonical = 'INFO';
+      return createPlaceholder('CALLOUT', `> [!${canonical}]`);
+    });
+
+    // Mascarar containers estilo :::note ... :::
+    body = body.replace(/^:::\s*([a-zA-ZÀ-ÿ0-9_-]+)(?:\s+(.*))?$/gmi, (_match, rawType, extraTitle) => {
+      const norm = rawType.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      let canonical = 'NOTE';
+      if (['tip', 'dica', 'success', 'sucesso'].includes(norm)) canonical = 'TIP';
+      else if (['warning', 'aviso', 'atencao', 'important', 'importante'].includes(norm)) canonical = 'WARNING';
+      else if (['danger', 'perigo', 'caution', 'cuidado'].includes(norm)) canonical = 'DANGER';
+      else if (['info', 'informacao'].includes(norm)) canonical = 'INFO';
+      const heading = extraTitle ? ` ${extraTitle.trim()}` : '';
+      return createPlaceholder('CALLOUT', `> [!${canonical}]${heading}`);
+    });
+    body = body.replace(/^:::\s*$/gm, '');
+
+    // 5. Mascarar prefixos de Checkbox / To-Do (- [ ] , - [x] , * [ ] , – [ ])
+    body = body.replace(/^(\s*[-*+–—]\s*\[[ xX]?\]\s*)/gm, (match) => {
+      const isChecked = match.toLowerCase().includes('x');
+      const indent = match.match(/^\s*/)?.[0] || '';
+      const canonicalBox = `${indent}- [${isChecked ? 'x' : ' '}] `;
+      return createPlaceholder('TODOBOX', canonicalBox);
+    });
+
+    // 6. Mascarar separadores estruturais de tabelas GFM (| --- | --- |)
+    body = body.replace(/^\s*\|(?:\s*:?-+:?\s*\|)+\s*$/gm, (match) => {
+      return createPlaceholder('TABLESEP', match.trim());
+    });
+
+    // 7. Mascarar URLs em links markdown [texto](url) -> preserva texto, mascara a url
     body = body.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_match, text, url) => {
-      const urlPlh = createPlaceholder('URL', url);
+      const urlPlh = createPlaceholder('URL', url.trim());
       return `[${text}](${urlPlh})`;
     });
 
-    // 5. Mascarar tags HTML
+    // 8. Mascarar tags HTML completas (<details>, <summary>, <span>, <kbd>, etc.)
     body = body.replace(/<[^>]+>/g, (match) => {
       return createPlaceholder('HTMLTAG', match);
     });
@@ -128,4 +197,29 @@ export abstract class BaseTranslationProvider implements ITranslationProvider {
       placeholders,
     };
   }
+
+  /**
+   * Corrige pequenas anomalias de formatação introduzidas por serviços de Machine Translation
+   */
+  protected sanitizePostTranslation(text: string): string {
+    let result = text;
+
+    // Normalizar links: [ texto ] ( URL ) -> [texto](URL)
+    result = result.replace(/\[\s*([^\]]+?)\s*\]\s*\(\s*([^)]+?)\s*\)/g, '[$1]($2)');
+
+    // Normalizar negrito: ** texto ** -> **texto**
+    result = result.replace(/\*\*\s+([^*]+?)\s+\*\*/g, '**$1**');
+
+    // Normalizar itálico com asterisco: * texto * -> *texto*
+    result = result.replace(/(^|[^*])\*\s+([^*\n]+?)\s+\*([^*]|$)/g, '$1*$2*$3');
+
+    // Normalizar tachado: ~~ texto ~~ -> ~~texto~~
+    result = result.replace(/~~\s+([^~]+?)\s+~~/g, '~~$1~~');
+
+    // Normalizar espaçamento pós-blockquote de callout
+    result = result.replace(/^>\s*\[!\s*(NOTE|TIP|WARNING|DANGER|INFO)\s*\]\s*$/gmi, '> [!$1]');
+
+    return result;
+  }
 }
+

@@ -361,10 +361,10 @@ export class TranslationsService {
       sourceLang: defaultLanguage,
       targetLang,
       glossary,
-      preserveFrontmatter: false, // Traduções sob demanda NÃO contêm metadados Frontmatter
+      preserveFrontmatter: true, // Preserva e traduz metadados textuais (title, description)
     });
 
-    // Salvar arquivo traduzido (apenas corpo puro traduzido)
+    // Salvar arquivo traduzido (com frontmatter traduzido e corpo traduzido)
     const translationRelPath = path.join('.translations', targetLang, cleanPath).replace(/\\/g, '/');
     const translationFullPath = path.join(repoDir, translationRelPath);
     const dir = path.dirname(translationFullPath);
@@ -411,21 +411,67 @@ export class TranslationsService {
       }
     }
 
-    // 1. Traduz o corpo do idioma de preferência para o idioma oficial padrão
-    const translatedBody = await provider.translate(translatedContent, {
+    // 1. Extrair título do frontmatter da versão traduzida (caso o usuário tenha editado o título no idioma alvo)
+    const transFmMatch = translatedContent.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
+    let transTitle: string | null = null;
+    let pureTranslatedBody = translatedContent;
+    if (transFmMatch) {
+      pureTranslatedBody = translatedContent.slice(transFmMatch[0].length);
+      const titleLineMatch = transFmMatch[1].match(/^\s*title\s*:\s*(?:["'](.*?)["']|(.*))$/m);
+      if (titleLineMatch) {
+        transTitle = (titleLineMatch[1] || titleLineMatch[2] || '').trim();
+      }
+    }
+
+    // 2. Traduz o corpo do idioma de preferência para o idioma oficial padrão mantendo formatações
+    const translatedBody = await provider.translate(pureTranslatedBody, {
       sourceLang: fromLang,
       targetLang: defaultLanguage,
       glossary,
       preserveFrontmatter: false,
     });
 
-    // 2. Extrai o Frontmatter ORIGINAL do documento oficial para preservar 100% dos metadados
-    const frontmatterMatch = originalMainContent.match(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/);
-    const originalFrontmatter = frontmatterMatch ? frontmatterMatch[0].trim() : '';
+    // 3. Tratar Frontmatter do documento oficial (SSOT)
+    const origFmMatch = originalMainContent.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
+    let finalFrontmatter = '';
 
-    // 3. Monta o conteúdo final do documento oficial: Frontmatter original intacto + novo corpo traduzido
-    const translatedToMainContent = originalFrontmatter
-      ? `${originalFrontmatter}\n\n${translatedBody.trim()}`
+    if (origFmMatch) {
+      let fmContent = origFmMatch[1];
+      // Se a versão traduzida continha um título, traduz o título de volta para o idioma padrão
+      if (transTitle) {
+        try {
+          const backTranslatedTitle = await provider.translate(transTitle, {
+            sourceLang: fromLang,
+            targetLang: defaultLanguage,
+            glossary,
+            preserveFrontmatter: false,
+          });
+          const safeBackTitle = backTranslatedTitle.trim().replace(/"/g, '\\"');
+          if (/^\s*title\s*:/im.test(fmContent)) {
+            fmContent = fmContent.replace(/^(\s*title\s*:\s*).*$/im, `$1"${safeBackTitle}"`);
+          } else {
+            fmContent = `title: "${safeBackTitle}"\n${fmContent}`;
+          }
+        } catch (e) {
+          console.warn('[TranslationsService] Falha ao traduzir título reverso:', e);
+        }
+      }
+      finalFrontmatter = `---\n${fmContent.trim()}\n---\n\n`;
+    } else if (transTitle) {
+      try {
+        const backTranslatedTitle = await provider.translate(transTitle, {
+          sourceLang: fromLang,
+          targetLang: defaultLanguage,
+          glossary,
+          preserveFrontmatter: false,
+        });
+        finalFrontmatter = `---\ntitle: "${backTranslatedTitle.trim().replace(/"/g, '\\"')}"\n---\n\n`;
+      } catch {}
+    }
+
+    // 4. Monta o conteúdo final do documento oficial
+    const translatedToMainContent = finalFrontmatter
+      ? `${finalFrontmatter}${translatedBody.trim()}`
       : translatedBody.trim();
 
     return {
@@ -434,7 +480,7 @@ export class TranslationsService {
       sourceLang: fromLang,
       originalMainContent,
       translatedToMainContent,
-      summary: `Tradução reversa gerada de ${fromLang.toUpperCase()} para o idioma oficial ${defaultLanguage.toUpperCase()} via ${provider.name} com metadados oficiais preservados.`,
+      summary: `Tradução reversa gerada de ${fromLang.toUpperCase()} para o idioma oficial ${defaultLanguage.toUpperCase()} via ${provider.name} com metadados e formatação estrutural preservados.`,
     };
   }
 

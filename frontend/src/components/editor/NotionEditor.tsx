@@ -94,6 +94,17 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [importText, setImportText] = useState("");
   const [titleValue, setTitleValue] = useState<string>("");
+  const titleValueRef = useRef(titleValue);
+  titleValueRef.current = titleValue;
+  const translationParsedRef = useRef<{
+    hasFrontmatter: boolean;
+    metadata: Record<string, any>;
+    body: string;
+  }>({
+    hasFrontmatter: false,
+    metadata: {},
+    body: "",
+  });
   const [dictionaryPopoverData, setDictionaryPopoverData] =
     useState<DictionaryPopoverData | null>(null);
 
@@ -362,12 +373,47 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
 
   const [isUpdatingFromMain, setIsUpdatingFromMain] = useState(false);
 
+  // Gravar tradução ativa no disco preservando frontmatter e título traduzido
+  const saveActiveTranslation = async () => {
+    if (
+      !filePath ||
+      activeLanguageRef.current.toLowerCase() ===
+        defaultLanguageRef.current.toLowerCase()
+    ) {
+      return;
+    }
+    const currentMd = engineRef.current
+      ? engineRef.current.getMarkdown()
+      : docBodyRef.current;
+
+    const meta = {
+      ...(translationParsedRef.current?.metadata || {}),
+      title: titleValueRef.current || translationParsedRef.current?.metadata?.title || "",
+    };
+
+    const fullTransContent = serializeFrontmatter(meta, currentMd ? currentMd.trim() : "");
+
+    try {
+      await API.saveTranslation({
+        path: filePath,
+        lang: activeLanguageRef.current,
+        content: fullTransContent,
+      });
+    } catch (e) {
+      console.warn("[NotionEditor] Falha ao salvar tradução:", e);
+    }
+  };
+
   // Sincronizar o título local com os metadados do documento ou customTitle
   useEffect(() => {
     if (isTemplateMode) {
       if (customTitle !== undefined) {
         setTitleValue(customTitle);
       }
+      return;
+    }
+    // Se estiver em modo tradução, NÃO sobrescreve com o título do documento oficial!
+    if (activeLanguage.toLowerCase() !== defaultLanguage.toLowerCase()) {
       return;
     }
     const metaTitle =
@@ -381,6 +427,8 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
     filePath,
     isTemplateMode,
     customTitle,
+    activeLanguage,
+    defaultLanguage,
   ]);
 
   const handleTitleChange = (newVal: string) => {
@@ -389,9 +437,19 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
       if (onCustomTitleChange) onCustomTitleChange(newVal);
       return;
     }
-    // Metadados pertencem exclusivamente ao Documento Oficial.
-    // Não altera metadados do documento oficial se estiver visualizando/editando uma tradução.
+    // Se estiver visualizando/editando uma tradução, atualiza os metadados da tradução e persiste
     if (activeLanguage.toLowerCase() !== defaultLanguage.toLowerCase()) {
+      translationParsedRef.current.metadata = {
+        ...translationParsedRef.current.metadata,
+        title: newVal,
+      };
+      translationParsedRef.current.hasFrontmatter = true;
+      if (titleDebounceTimerRef.current) {
+        clearTimeout(titleDebounceTimerRef.current);
+      }
+      titleDebounceTimerRef.current = setTimeout(() => {
+        saveActiveTranslation();
+      }, 500);
       return;
     }
     if (titleDebounceTimerRef.current) {
@@ -454,21 +512,12 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
     const isTargetMain =
       lang.toLowerCase() === defaultLanguageRef.current.toLowerCase();
 
-    // Se estiver saindo de uma tradução, grava rascunho de tradução pendente no arquivo oculto
+    // Se estiver saindo de uma tradução, grava rascunho de tradução com metadados completos
     if (
       activeLanguageRef.current.toLowerCase() !==
       defaultLanguageRef.current.toLowerCase()
     ) {
-      const currentTransMd = engineRef.current
-        ? engineRef.current.getMarkdown()
-        : docBodyRef.current;
-      if (currentTransMd && currentTransMd.trim()) {
-        API.saveTranslation({
-          path: filePath,
-          lang: activeLanguageRef.current,
-          content: currentTransMd.trim(),
-        }).catch(() => {});
-      }
+      await saveActiveTranslation();
     }
 
     if (isTargetMain) {
@@ -479,9 +528,11 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
       const rawOfficial = officialContentRef.current || content || "";
       const mainParsed = parseFrontmatter(rawOfficial);
       const metaTitle =
-        fileMetadata?.title !== undefined
+        mainParsed.metadata?.title !== undefined
+          ? mainParsed.metadata.title
+          : fileMetadata?.title !== undefined
           ? fileMetadata.title
-          : docMetadata?.title || mainParsed.metadata?.title || "";
+          : docMetadata?.title || "";
       setTitleValue(metaTitle);
       parsedRef.current = mainParsed;
       docBodyRef.current = mainParsed.body;
@@ -500,10 +551,18 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
         setActiveLanguage(lang);
         setIsTranslationOutdated(res.data.isOutdated);
 
-        // Traduções são puro Markdown para leitura/edição na língua de preferência
+        // Traduções carregam Frontmatter para metadados locais (title, etc.) e corpo traduzido
         const parsedTrans = parseFrontmatter(res.data.content);
+        translationParsedRef.current = parsedTrans;
         const transBody = parsedTrans.body || res.data.content;
         docBodyRef.current = transBody;
+
+        const transTitle =
+          parsedTrans.metadata?.title !== undefined
+            ? parsedTrans.metadata.title
+            : "";
+        setTitleValue(transTitle);
+
         if (engineRef.current) {
           isInternalChangeRef.current = true;
           engineRef.current.setMarkdown(transBody);
@@ -538,8 +597,16 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
       if (res.ok && res.data) {
         setIsTranslationOutdated(false);
         const parsedTrans = parseFrontmatter(res.data.content);
+        translationParsedRef.current = parsedTrans;
         const transBody = parsedTrans.body || res.data.content;
         docBodyRef.current = transBody;
+
+        const transTitle =
+          parsedTrans.metadata?.title !== undefined
+            ? parsedTrans.metadata.title
+            : "";
+        setTitleValue(transTitle);
+
         if (engineRef.current) {
           isInternalChangeRef.current = true;
           engineRef.current.setMarkdown(transBody);
@@ -631,9 +698,11 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
       // 3. Extrai metadados e corpo do novo documento oficial
       const mainParsed = parseFrontmatter(newMainContent);
       const metaTitle =
-        fileMetadata?.title !== undefined
+        mainParsed.metadata?.title !== undefined
+          ? mainParsed.metadata.title
+          : fileMetadata?.title !== undefined
           ? fileMetadata.title
-          : docMetadata?.title || mainParsed.metadata?.title || "";
+          : docMetadata?.title || "";
       setTitleValue(metaTitle);
       parsedRef.current = mainParsed;
       docBodyRef.current = mainParsed.body;
@@ -646,6 +715,11 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
 
       // 5. Propaga o novo conteúdo oficial completo para o buffer do workspace pai
       onChangeRef.current(newMainContent);
+
+      // Se o título mudou nos metadados oficiais, propaga alteração
+      if (metaTitle && metaTitle !== fileMetadata?.title) {
+        updateFileMetadataRef.current({ title: metaTitle });
+      }
 
       // 6. Recarrega árvores e referências
       if (onReload) onReload();
@@ -745,31 +819,20 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
       return;
     }
 
-    // Se estiver em modo tradução, salva apenas o corpo traduzido no arquivo oculto de tradução
+    // Se estiver em modo tradução, salva com frontmatter traduzido no arquivo oculto de tradução
     if (
       activeLanguageRef.current.toLowerCase() !==
       defaultLanguageRef.current.toLowerCase()
     ) {
-      const currentMd = engineRef.current
-        ? engineRef.current.getMarkdown()
-        : docBodyRef.current;
-
-      const res = await API.saveTranslation({
-        path: filePath,
-        lang: activeLanguageRef.current,
-        content: currentMd.trim(),
-      });
-
-      if (res.ok) {
-        if (engineRef.current) {
-          engineRef.current.applyDictionaryHighlights();
-        }
-        setEditorToast({
-          text: `Tradução (${activeLanguageRef.current.toUpperCase()}) gravada no disco!`,
-          type: "success",
-        });
-        setTimeout(() => setEditorToast(null), 2500);
+      await saveActiveTranslation();
+      if (engineRef.current) {
+        engineRef.current.applyDictionaryHighlights();
       }
+      setEditorToast({
+        text: `Tradução (${activeLanguageRef.current.toUpperCase()}) gravada no disco!`,
+        type: "success",
+      });
+      setTimeout(() => setEditorToast(null), 2500);
       return;
     }
 
@@ -1370,6 +1433,7 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
                 onTranslationCreated={(lang, transContent) => {
                   setActiveLanguage(lang);
                   const parsedTrans = parseFrontmatter(transContent);
+                  translationParsedRef.current = parsedTrans;
                   const bodyContent = parsedTrans.body || transContent;
                   docBodyRef.current = bodyContent;
                   setTitleValue(parsedTrans.metadata?.title || "");

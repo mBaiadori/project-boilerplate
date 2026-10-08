@@ -965,16 +965,19 @@ export class NotionEditorEngine {
         continue;
       }
 
-      // 4. Callout / Alert Box
-      const calloutMatch = line.match(/^>\s*\[!(NOTE|TIP|WARNING|DANGER|CAUTION|INFO|SUCCESS)\]/i);
+      // 4. Callout / Alert Box (> [!NOTE], > [!NOTA], > [!TIP], > [!DICA], etc.)
+      const calloutMatch = line.match(/^>\s*\[!\s*([a-zA-ZÀ-ÿ0-9_-]+)\s*\](?:\s*(.*))?$/i);
       if (calloutMatch) {
-        const rawType = calloutMatch[1].toLowerCase();
+        const rawType = calloutMatch[1].toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
         let type = 'note';
-        if (['tip', 'success'].includes(rawType)) type = 'tip';
-        else if (['warning'].includes(rawType)) type = 'warning';
-        else if (['danger', 'caution'].includes(rawType)) type = 'danger';
+        if (['tip', 'dica', 'success', 'sucesso'].includes(rawType)) type = 'tip';
+        else if (['warning', 'aviso', 'atencao', 'important', 'importante', 'caution', 'cuidado'].includes(rawType)) type = 'warning';
+        else if (['danger', 'perigo'].includes(rawType)) type = 'danger';
 
         const calloutLines: string[] = [];
+        if (calloutMatch[2] && calloutMatch[2].trim()) {
+          calloutLines.push(calloutMatch[2].trim());
+        }
         i++;
         while (i < lines.length && lines[i].startsWith('>')) {
           calloutLines.push(lines[i].replace(/^>\s?/, ''));
@@ -985,19 +988,50 @@ export class NotionEditorEngine {
         continue;
       }
 
-      // 5. GFM Table
-      if (line.trim().startsWith('|') && line.trim().endsWith('|')) {
-        const tableLines: string[] = [];
-        while (i < lines.length && lines[i].trim().startsWith('|') && lines[i].trim().endsWith('|')) {
-          tableLines.push(lines[i]);
+      // 4.1. Admonition Container (:::note, :::tip, :::warning, etc.)
+      const containerMatch = line.match(/^:::\s*([a-zA-ZÀ-ÿ0-9_-]+)(?:\s+(.*))?$/i);
+      if (containerMatch) {
+        const rawType = containerMatch[1].toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        let type = 'note';
+        if (['tip', 'dica', 'success', 'sucesso'].includes(rawType)) type = 'tip';
+        else if (['warning', 'aviso', 'atencao', 'important', 'importante', 'caution', 'cuidado'].includes(rawType)) type = 'warning';
+        else if (['danger', 'perigo'].includes(rawType)) type = 'danger';
+
+        const containerLines: string[] = [];
+        if (containerMatch[2] && containerMatch[2].trim()) {
+          containerLines.push(containerMatch[2].trim());
+        }
+        i++;
+        while (i < lines.length && !lines[i].trim().startsWith(':::')) {
+          containerLines.push(lines[i]);
           i++;
         }
-        htmlFragments.push(this.createTableFromMarkdown(tableLines));
+        if (i < lines.length && lines[i].trim().startsWith(':::')) {
+          i++;
+        }
+        const containerBody = containerLines.join('\n');
+        htmlFragments.push(this.createCalloutBlockHtml(type, containerBody.trim()));
         continue;
       }
 
-      // 6. To-Do Checklist
-      const todoMatch = line.match(/^(\s*)[-*+]\s+\[([ xX])\]\s+(.*)$/);
+      // 5. GFM Table
+      if (line.trim().startsWith('|')) {
+        const tableLines: string[] = [];
+        while (i < lines.length && lines[i].trim().startsWith('|')) {
+          tableLines.push(lines[i]);
+          i++;
+        }
+        if (tableLines.length >= 2) {
+          htmlFragments.push(this.createTableFromMarkdown(tableLines));
+          continue;
+        } else {
+          // Se for apenas uma linha isolada com pipes, retrocede o índice para processar normalmente
+          i -= tableLines.length;
+        }
+      }
+
+      // 6. To-Do Checklist (- [ ] , - [x] , * [ ] , – [ ])
+      const todoMatch = line.match(/^(\s*)[-*+–—]\s*\[([ xX]?)\]\s*(.*)$/);
       if (todoMatch) {
         const indentSpaces = todoMatch[1].length;
         const indentLevel = Math.floor(indentSpaces / 2);
