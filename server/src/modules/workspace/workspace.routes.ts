@@ -404,11 +404,11 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
     try {
       const created = await workspaceService.createFile(
         fullRelPath,
-        `# ${body.title || "Nova Especificação"}\n\nEspecificação estruturada.`,
+        "",
         false,
         {
-          title: body.title || "Nova Especificação",
-          categories: "geral",
+          title: body.title || "Novo Documento",
+          categories: "",
           status: "-",
         },
       );

@@ -861,7 +861,7 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
                       ? [
                           {
                             id: "proposals" as WhatsNewFilterType,
-                            label: `Propostas Integradas (${whatsNewProposals.length})`,
+                            label: `Propostas (${whatsNewProposals.length})`,
                           },
                         ]
                       : []),
@@ -889,7 +889,7 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
                       <div className="ui-row ui-row--align-center ui-row--xs">
                         <span
                           className="material-symbols-outlined"
-                          style={{ fontSize: "20px", color: "#7c3aed" }}
+                          style={{ fontSize: "20px", color: "var(--color-primary, #4f46e5)" }}
                         >
                           verified
                         </span>
@@ -899,7 +899,7 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
                             color: "var(--color-text-primary, #0f172a)",
                           }}
                         >
-                          Propostas Aprovadas e Integradas ({whatsNewProposals.length})
+                          Propostas de Alteração & Versões ({whatsNewProposals.length})
                         </strong>
                       </div>
 
@@ -938,48 +938,93 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
                           padding: "14px 18px",
                         }}
                       >
-                        {whatsNewProposals.map((pr, idx) => (
-                          <div
-                            key={idx}
-                            className="ui-card ui-card--flat"
-                            style={{
-                              padding: "12px 16px",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "space-between",
-                            }}
-                          >
-                            <div className="ui-row ui-row--align-center ui-row--sm">
-                              <Badge variant="primary" size="sm">
-                                Proposta #{pr.id}
-                              </Badge>
-                              <span
-                                style={{
-                                  fontSize: "13.5px",
-                                  fontWeight: 600,
-                                  color: "var(--color-text-primary, #1e293b)",
-                                }}
-                              >
-                                {pr.title}
-                              </span>
-                            </div>
-                            {pr.author && (
-                              <span
-                                className="ui-text-muted"
-                                style={{ fontSize: "12.5px" }}
-                              >
-                                Autor:{" "}
-                                <strong
+                        {whatsNewProposals.map((pr, idx) => {
+                          const statusLower = (pr.status || "merged").toLowerCase();
+                          const isMerged = statusLower === "merged";
+                          const isClosed = statusLower === "closed";
+                          const repo = pr.repo_name || pr.repoName || (selectedRepoFilter !== "all" ? selectedRepoFilter : activeRepo?.name || "local");
+
+                          const statusLabel = isMerged
+                            ? "INTEGRADA"
+                            : isClosed
+                              ? "ARQUIVADA"
+                              : "EM REVISÃO";
+
+                          const statusVariant = isMerged
+                            ? "success"
+                            : isClosed
+                              ? "danger"
+                              : "warning";
+
+                          return (
+                            <div
+                              key={idx}
+                              className="ui-card ui-card--flat"
+                              style={{
+                                padding: "12px 16px",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "space-between",
+                                gap: "12px",
+                                flexWrap: "wrap",
+                              }}
+                            >
+                              <div className="ui-row ui-row--align-center ui-row--sm" style={{ flexWrap: "wrap" }}>
+                                <Badge variant="primary" size="sm">
+                                  Proposta #{pr.id}
+                                </Badge>
+
+                                <Badge variant={statusVariant} size="xs">
+                                  {statusLabel}
+                                </Badge>
+
+                                {repo && (
+                                  <Badge
+                                    variant="neutral"
+                                    size="xs"
+                                    style={{
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: "4px",
+                                      backgroundColor: "var(--md-sys-color-surface-container-high, #e8eaed)",
+                                      color: "var(--md-sys-color-on-surface, #202124)",
+                                      borderColor: "var(--md-sys-color-outline-variant, #dadce0)",
+                                    }}
+                                  >
+                                    <FolderGit2 size={11} style={{ flexShrink: 0 }} />
+                                    {repo}
+                                  </Badge>
+                                )}
+
+                                <span
                                   style={{
+                                    fontSize: "13.5px",
+                                    fontWeight: 600,
                                     color: "var(--color-text-primary, #1e293b)",
                                   }}
                                 >
-                                  {pr.author}
-                                </strong>
-                              </span>
-                            )}
-                          </div>
-                        ))}
+                                  {pr.title}
+                                </span>
+                              </div>
+
+                              {pr.author && (
+                                <span
+                                  className="ui-text-muted"
+                                  style={{ fontSize: "12.5px" }}
+                                >
+                                  Autor:{" "}
+                                  <strong
+                                    style={{
+                                      color: "var(--color-text-primary, #1e293b)",
+                                    }}
+                                  >
+                                    {pr.author}
+                                  </strong>
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                   </Card>

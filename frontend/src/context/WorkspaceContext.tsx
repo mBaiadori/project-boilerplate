@@ -533,7 +533,16 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
   const loadFile = useCallback(
     async (rawFilePath: string, targetRepo?: string) => {
       const currentRepoName = targetRepo || activeRepoRef.current?.name;
-      if (!currentRepoName || !rawFilePath) return;
+      if (!rawFilePath) {
+        activeFileRef.current = "";
+        setActiveFile("");
+        setFileContentState("");
+        setOriginalContent("");
+        setFileMetadataState({});
+        fileCacheRef.current.clear();
+        return;
+      }
+      if (!currentRepoName) return;
 
       const hashIndex = rawFilePath.indexOf("#");
       const cleanPath =

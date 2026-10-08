@@ -87,8 +87,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onBackToRepos }) =
     if (fileParam && fileParam !== activeFile && activeRepo) {
       const currentHash = window.location.hash || '';
       loadFile(`${fileParam}${currentHash}`, repoName || activeRepo.name);
+    } else if (!fileParam && activeFile && activeSubView === 'editor') {
+      loadFile('', repoName || activeRepo?.name);
     }
-  }, [fileParam, activeFile, activeRepo?.name, repoName, loadFile]);
+  }, [fileParam, activeFile, activeRepo?.name, repoName, loadFile, activeSubView]);
 
   const [aiWidth, setAiWidth] = useState<number>(() => {
     try {
@@ -200,11 +202,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onBackToRepos }) =
   }, []);
 
   const handleOpenFile = (rawPath: string) => {
+    const base = buildRepoBaseUrl('editor');
+    if (!rawPath) {
+      navigate(base);
+      loadFile('', repoName || activeRepo?.name);
+      return;
+    }
     const hashIndex = rawPath.indexOf('#');
     const cleanPath = hashIndex !== -1 ? rawPath.slice(0, hashIndex) : rawPath;
     const hash = hashIndex !== -1 ? rawPath.slice(hashIndex) : '';
 
-    const base = buildRepoBaseUrl('editor');
     navigate(`${base}?file=${encodeURIComponent(cleanPath)}${hash}`);
   };
 

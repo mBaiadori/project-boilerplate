@@ -13,7 +13,7 @@ import {
 interface ScaffoldModalProps {
   isOpen: boolean;
   onClose: () => void;
-  defaultType?: "rfc" | "prd" | "spec" | "notes" | "doc";
+  defaultType?: "blank" | "rfc" | "prd" | "spec" | "notes" | "doc";
   onCreated?: (filePath: string) => void;
 }
 
@@ -27,6 +27,14 @@ interface DocPreset {
 }
 
 const PRESETS: DocPreset[] = [
+  {
+    id: "blank",
+    name: "Documento em Branco",
+    description: "Documento limpo e vazio para iniciar do zero",
+    icon: <FilePlus size={20} />,
+    defaultFolder: "docs",
+    generateContent: () => "",
+  },
   {
     id: "rfc",
     name: "RFC / Proposta",
@@ -153,12 +161,12 @@ date: "${new Date().toISOString().split("T")[0]}"
 export const ScaffoldModal: React.FC<ScaffoldModalProps> = ({
   isOpen,
   onClose,
-  defaultType = "rfc",
+  defaultType = "blank",
   onCreated,
 }) => {
   const { loadTree, loadFile } = useWorkspace();
   const [selectedPresetId, setSelectedPresetId] = useState<string>(
-    defaultType === "spec" ? "spec" : "rfc",
+    defaultType || "blank",
   );
   const [targetFolder, setTargetFolder] = useState<string>("docs");
   const [docName, setDocName] = useState("");
@@ -182,7 +190,7 @@ export const ScaffoldModal: React.FC<ScaffoldModalProps> = ({
     .replace(/-+/g, "-");
   const slug =
     rawSlug ||
-    (selectedPresetId === "rfc" ? "rfc-001-proposta" : "meu-documento");
+    (selectedPresetId === "rfc" ? "rfc-001-proposta" : "novo-documento");
   const finalFolder = targetFolder.trim().replace(/^\/+|\/+$/g, "");
   const targetPath = finalFolder ? `${finalFolder}/${slug}.md` : `${slug}.md`;
 

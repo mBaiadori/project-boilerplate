@@ -843,16 +843,7 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
       ...(parsedRef.current?.metadata || {}),
       ...(fileMetadata || {}),
     };
-    const hasMeaningfulMeta =
-      parsedRef.current?.hasFrontmatter ||
-      Boolean(
-        metaToUse.status ||
-        metaToUse.categories ||
-        metaToUse.category ||
-        (metaToUse.tags && metaToUse.tags.length > 0) ||
-        metaToUse.department
-      );
-    const fullContent = hasMeaningfulMeta
+    const fullContent = parsedRef.current?.hasFrontmatter
       ? serializeFrontmatter(metaToUse, currentMd)
       : currentMd;
 
@@ -911,16 +902,7 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
             ...(parsedRef.current?.metadata || {}),
             ...(fileMetadata || {}),
           };
-          const hasMeaningfulMeta =
-            parsedRef.current?.hasFrontmatter ||
-            Boolean(
-              metaToUse.status ||
-              metaToUse.categories ||
-              metaToUse.category ||
-              (metaToUse.tags && metaToUse.tags.length > 0) ||
-              metaToUse.department
-            );
-          const newContent = hasMeaningfulMeta
+          const newContent = parsedRef.current?.hasFrontmatter
             ? serializeFrontmatter(metaToUse, currentMd)
             : currentMd;
           onChangeRef.current(newContent);

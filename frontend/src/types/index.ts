@@ -571,6 +571,8 @@ export interface WhatsNewFile {
   statusLabel: string;
   additions: number;
   deletions: number;
+  repo_name?: string;
+  repoName?: string;
 }
 
 export interface WhatsNewProposal {
@@ -578,6 +580,9 @@ export interface WhatsNewProposal {
   title: string;
   author?: string;
   commitHash?: string;
+  status?: string;
+  repo_name?: string;
+  repoName?: string;
 }
 
 export interface WhatsNewSummary {
