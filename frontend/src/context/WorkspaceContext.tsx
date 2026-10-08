@@ -25,46 +25,6 @@ import { DraftStore } from "../services/draft-store";
 import { useAuth } from "./AuthContext";
 import { isPathHidden, isSystemPath } from "../utils/hidden-files";
 
-function computeInitialPermission(repo: Repo, userLogin?: string): EffectiveUserPermission {
-  const isOwner = Boolean(
-    repo.is_owner ||
-    (userLogin && (repo.owner === userLogin || (repo.owner as any)?.login === userLogin))
-  );
-  const p = repo.permissions;
-  const canAdmin = Boolean(isOwner || p?.admin);
-  const canWrite = Boolean(canAdmin || p?.push);
-  const canRead = Boolean(p?.pull ?? true);
-
-  const repoPermission: EffectiveUserPermission["repoPermission"] = canAdmin
-    ? "admin"
-    : canWrite
-    ? "push"
-    : "pull";
-
-  const roleName = canAdmin ? "Administrador" : canWrite ? "Escrita" : "Leitura";
-
-  return {
-    login: userLogin || "",
-    isOrgOwner: isOwner,
-    isOrgMember: true,
-    isOutsideCollaborator: false,
-    repoPermission,
-    roleName,
-    allowedActions: {
-      canRead,
-      canWrite,
-      canTriage: canWrite,
-      canMaintain: canAdmin,
-      canAdmin,
-      canManageGovernance: canAdmin,
-      canManageTeams: canAdmin,
-      canDeleteRepo: canAdmin,
-      canManageBranchProtection: canAdmin,
-    },
-    teamMemberships: [],
-  };
-}
-
 function findFirstMdFile(nodes: TreeNode[]): string | null {
   for (const node of nodes) {
     if (node.type === "file" && node.path.endsWith(".md")) {
@@ -182,6 +142,7 @@ interface WorkspaceContextType {
     targetRepo?: string,
   ) => Promise<{ success: boolean; newPath?: string; error?: string }>;
   effectivePermission: EffectiveUserPermission | null;
+  isLoadingPermission: boolean;
   refreshEffectivePermission: (repo?: Repo) => Promise<void>;
 }
 
@@ -224,6 +185,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingWorkspace] = useState(false);
   const [isLoadingTree, setIsLoadingTree] = useState(false);
+  const [isLoadingPermission, setIsLoadingPermission] = useState(false);
   const [gitStatus, setGitStatus] = useState<GitStatus | null>(null);
   const [gitLog, setGitLog] = useState<GitCommitInfo[]>([]);
   const [whatsNewSummary, setWhatsNewSummary] =
@@ -260,37 +222,55 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const statusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const getRepoOwnerOrOrg = useCallback((r?: Repo | null): string | undefined => {
+    if (!r) return undefined;
+    if (typeof r.owner === "string" && r.owner && r.owner !== "local") return r.owner;
+    if ((r.owner as any)?.login && (r.owner as any).login !== "local") return (r.owner as any).login;
+    if (r.full_name && r.full_name.includes("/")) {
+      const orgPart = r.full_name.split("/")[0];
+      if (orgPart && orgPart !== "local") return orgPart;
+    }
+    const match = window.location.pathname.match(/\/org\/([^\/]+)/);
+    if (match && match[1]) {
+      const decoded = decodeURIComponent(match[1]);
+      if (decoded !== "local") return decoded;
+    }
+    if (activeOrg?.login && activeOrg.login !== "local") return activeOrg.login;
+    try {
+      const saved = localStorage.getItem("spec_active_org_login");
+      if (saved && saved !== "local") return saved;
+    } catch {}
+    if (user?.login && user.login !== "local") return user.login;
+    return undefined;
+  }, [activeOrg?.login, user?.login]);
+
   const refreshEffectivePermission = useCallback(async (targetRepo?: Repo) => {
     const r = targetRepo || activeRepoRef.current;
     if (!r?.name) return;
-    const initialPerm =
-      effectivePermissionsByRepoRef.current[r.name] ||
-      computeInitialPermission(r, user?.login);
-    setEffectivePermission(initialPerm);
+    const cached = effectivePermissionsByRepoRef.current[r.name];
+    if (cached) {
+      setEffectivePermission(cached);
+      setIsLoadingPermission(false);
+    } else {
+      setEffectivePermission(null);
+      setIsLoadingPermission(true);
+    }
 
     try {
-      const ownerLogin = typeof r.owner === "string" ? r.owner : (r.owner as any)?.login;
+      const ownerLogin = getRepoOwnerOrOrg(r);
       const res = await API.getEffectiveUserPermission(r.name, ownerLogin);
       if (res.ok && res.data) {
         effectivePermissionsByRepoRef.current[r.name] = res.data;
         if (activeRepoRef.current?.name === r.name) {
-          setEffectivePermission((prev) => {
-            if (
-              prev &&
-              prev.roleName === res.data.roleName &&
-              prev.repoPermission === res.data.repoPermission &&
-              prev.isOrgOwner === res.data.isOrgOwner &&
-              prev.allowedActions?.canAdmin === res.data.allowedActions?.canAdmin &&
-              prev.allowedActions?.canWrite === res.data.allowedActions?.canWrite
-            ) {
-              return prev;
-            }
-            return res.data;
-          });
+          setEffectivePermission(res.data);
         }
       }
-    } catch {}
-  }, [user?.login]);
+    } catch {} finally {
+      if (activeRepoRef.current?.name === r.name) {
+        setIsLoadingPermission(false);
+      }
+    }
+  }, [user?.login, getRepoOwnerOrOrg]);
 
   useEffect(() => {
     activeFileRef.current = activeFile;
@@ -1118,8 +1098,13 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
       setHasRemoteUpdates(cachedRemote);
 
       const cachedPerm = effectivePermissionsByRepoRef.current[repo.name];
-      const initialPerm = cachedPerm || computeInitialPermission(repo, user?.login);
-      setEffectivePermission(initialPerm);
+      if (cachedPerm) {
+        setEffectivePermission(cachedPerm);
+        setIsLoadingPermission(false);
+      } else {
+        setEffectivePermission(null);
+        setIsLoadingPermission(true);
+      }
 
       try {
         const prevRepo = activeRepoRef.current;
@@ -1165,29 +1150,31 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
         }
 
         // Atualiza permissão refinada em segundo plano
-        const ownerLogin = typeof repo.owner === "string" ? repo.owner : (repo.owner as any)?.login;
+        const cachedPerm = effectivePermissionsByRepoRef.current[repo.name];
+        if (cachedPerm) {
+          setEffectivePermission(cachedPerm);
+          setIsLoadingPermission(false);
+        } else {
+          setEffectivePermission(null);
+          setIsLoadingPermission(true);
+        }
+
+        const ownerLogin = getRepoOwnerOrOrg(repo);
         API.getEffectiveUserPermission(repo.name, ownerLogin)
           .then((res) => {
             if (res.ok && res.data) {
               effectivePermissionsByRepoRef.current[repo.name] = res.data;
               if (activeRepoRef.current?.name === repo.name) {
-                setEffectivePermission((prev) => {
-                  if (
-                    prev &&
-                    prev.roleName === res.data.roleName &&
-                    prev.repoPermission === res.data.repoPermission &&
-                    prev.isOrgOwner === res.data.isOrgOwner &&
-                    prev.allowedActions?.canAdmin === res.data.allowedActions?.canAdmin &&
-                    prev.allowedActions?.canWrite === res.data.allowedActions?.canWrite
-                  ) {
-                    return prev;
-                  }
-                  return res.data;
-                });
+                setEffectivePermission(res.data);
               }
             }
           })
-          .catch(() => {});
+          .catch(() => {})
+          .finally(() => {
+            if (activeRepoRef.current?.name === repo.name) {
+              setIsLoadingPermission(false);
+            }
+          });
 
         const selectRes = await API.selectRepo(repo);
         const isReady = selectRes.data?.is_ready !== false;
@@ -1242,6 +1229,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
     [
       user?.login,
       tree,
+      getRepoOwnerOrOrg,
       loadProjectMetadataOptions,
       loadProjectConfig,
       loadDictionaryTerms,
@@ -1287,9 +1275,12 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
         await selectRepo(found, initialFile);
         return true;
       }
+      const detectedOrg = getRepoOwnerOrOrg();
       const fallbackRepo: Repo = {
         id: 0,
         name: repoName,
+        owner: detectedOrg,
+        full_name: detectedOrg ? `${detectedOrg}/${repoName}` : repoName,
         is_local: false,
       };
       await selectRepo(fallbackRepo, initialFile);
@@ -1663,6 +1654,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
         moveFileOrFolder,
         duplicateFile,
         effectivePermission,
+        isLoadingPermission,
         refreshEffectivePermission,
       }}
     >

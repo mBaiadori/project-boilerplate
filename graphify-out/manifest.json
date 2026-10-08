@@ -324,9 +324,9 @@
     "semantic_hash": ""
   },
   "frontend/src/components/layout/TopHeader.tsx": {
-    "mtime": 1791400378.2643285,
-    "seen": 1791452911.369569,
-    "ast_hash": "2489d2ed32afca3f918a007e066ec944",
+    "mtime": 1791474575.9263463,
+    "seen": 1791474597.500404,
+    "ast_hash": "7a4d5b9f1c1df08ac45ab9b54e83c118",
     "semantic_hash": ""
   },
   "frontend/src/components/modals/AISettingsModal.tsx": {
@@ -606,9 +606,9 @@
     "semantic_hash": ""
   },
   "frontend/src/context/WorkspaceContext.tsx": {
-    "mtime": 1791461631.3432512,
-    "seen": 1791461716.0092108,
-    "ast_hash": "050d69e96922bb6fdf2b948cec7f8890",
+    "mtime": 1791474773.974115,
+    "seen": 1791474796.487742,
+    "ast_hash": "ea8b5c7ae802b08986c8ee2a2ed371a5",
     "semantic_hash": ""
   },
   "frontend/src/hooks/useEditorGitWatcher.ts": {
@@ -732,9 +732,9 @@
     "semantic_hash": ""
   },
   "frontend/src/types/index.ts": {
-    "mtime": 1791368439.2987883,
-    "seen": 1791452911.36962,
-    "ast_hash": "3b31c537825b7e62d668ff799ff002cb",
+    "mtime": 1791473551.8029008,
+    "seen": 1791473570.904448,
+    "ast_hash": "c59d9f7173311d514e7a63da50d30eb5",
     "semantic_hash": ""
   },
   "frontend/src/utils/dictionary-matcher.ts": {
@@ -912,9 +912,9 @@
     "semantic_hash": ""
   },
   "server/src/config/storage.ts": {
-    "mtime": 1791452854.7729044,
-    "seen": 1791452911.369642,
-    "ast_hash": "6c1a46034041e80ee3661d13c523b615",
+    "mtime": 1791474385.9365942,
+    "seen": 1791474406.949755,
+    "ast_hash": "78877dffeab6ec327829724a7d782c91",
     "semantic_hash": ""
   },
   "server/src/modules/ai/ai.routes.ts": {
@@ -1050,9 +1050,9 @@
     "semantic_hash": ""
   },
   "server/src/modules/governance/governance.service.ts": {
-    "mtime": 1791368594.3324602,
-    "seen": 1791452911.36966,
-    "ast_hash": "fd2da03f711d940cc1effd1085473e0a",
+    "mtime": 1791474760.542407,
+    "seen": 1791474796.487809,
+    "ast_hash": "4eafcab0b04b8fdd7c3bba37eaf66c5b",
     "semantic_hash": ""
   },
   "server/src/modules/governance/governance.test.ts": {

@@ -94,12 +94,17 @@ export class GovernanceService {
     this.writeProjectConfig(repoName, pConfig);
   }
 
-  private resolveRepoFullName(repoName?: string): string {
+  private resolveRepoFullName(repoName?: string, orgLogin?: string): string {
     const cfg = loadConfig();
     const activeRepo = cfg.active_repo;
     const targetRepoName = repoName || activeRepo?.name || "local";
 
-    // 1. Repositórios locais ou padrão do sistema nunca devem apontar para repositório remoto acidentalmente
+    // 1. Se o nome já contiver '/', ex: 'MinhaOrg/MeuRepo', retorna diretamente
+    if (targetRepoName.includes("/") && !targetRepoName.startsWith("local/")) {
+      return targetRepoName;
+    }
+
+    // 2. Repositórios locais ou padrão do sistema
     if (
       targetRepoName === "local" ||
       targetRepoName === "default" ||
@@ -116,17 +121,7 @@ export class GovernanceService {
       return `local/${targetRepoName}`;
     }
 
-    // 2. Se o repositório ativo selecionado for o mesmo e for explicitamente local
-    if (activeRepo?.name?.toLowerCase() === targetRepoName.toLowerCase()) {
-      if (activeRepo.is_local || activeRepo.full_name?.startsWith("local/")) {
-        return `local/${targetRepoName}`;
-      }
-      if (activeRepo.full_name && !activeRepo.full_name.startsWith("local/")) {
-        return activeRepo.full_name;
-      }
-    }
-
-    // 3. Inspeciona o .git/config específico da pasta deste repositório
+    // 3. Inspeciona o .git/config específico da pasta deste repositório no disco (fonte de verdade número 1)
     const repoDir = this.getRepoDir(targetRepoName);
     const gitConfigPath = path.join(repoDir, ".git", "config");
     if (fs.existsSync(gitConfigPath)) {
@@ -144,7 +139,40 @@ export class GovernanceService {
       } catch {}
     }
 
-    // 4. Se não há remote configurado no .git/config, o repositório opera em modo local
+    // 4. Se orgLogin foi explicitamente passado e não for "local"
+    if (orgLogin && orgLogin !== "local") {
+      return `${orgLogin}/${targetRepoName}`;
+    }
+
+    // 5. Se o repositório ativo selecionado for o mesmo e tiver full_name válido
+    if (activeRepo?.name?.toLowerCase() === targetRepoName.toLowerCase()) {
+      if (activeRepo.is_local || activeRepo.full_name?.startsWith("local/")) {
+        return `local/${targetRepoName}`;
+      }
+      if (activeRepo.full_name && !activeRepo.full_name.startsWith("local/")) {
+        return activeRepo.full_name;
+      }
+    }
+
+    // 6. Se há organização ativa configurada no storage
+    const fallbackOrg = (cfg as any).active_org?.login;
+    if (fallbackOrg && fallbackOrg !== "local") {
+      return `${fallbackOrg}/${targetRepoName}`;
+    }
+
+    // 7. Se há organizações nas credenciais do usuário
+    if (Array.isArray(cfg.orgs) && cfg.orgs.length > 0) {
+      const firstOrg = typeof cfg.orgs[0] === "string" ? cfg.orgs[0] : cfg.orgs[0]?.login;
+      if (firstOrg && firstOrg !== "local") {
+        return `${firstOrg}/${targetRepoName}`;
+      }
+    }
+
+    // 8. Se há login de usuário
+    if (cfg.user?.login && cfg.user.login !== "local") {
+      return `${cfg.user.login}/${targetRepoName}`;
+    }
+
     return `local/${targetRepoName}`;
   }
 
@@ -1408,7 +1436,7 @@ export class GovernanceService {
     const cfg = loadConfig();
     const activeUser = cfg.user?.login || "local-user";
     const targetRepoName = repoName || cfg.active_repo?.name || "local";
-    const resolvedFullName = this.resolveRepoFullName(targetRepoName);
+    const resolvedFullName = this.resolveRepoFullName(targetRepoName, orgLogin);
 
     // Fallback completo para repositório local / sem token remoto
     if (!cfg.token || resolvedFullName.startsWith("local/")) {
@@ -1418,7 +1446,7 @@ export class GovernanceService {
         isOrgMember: true,
         isOutsideCollaborator: false,
         repoPermission: "admin",
-        roleName: "Owner / Tech Lead",
+        roleName: "Owner da Org",
         allowedActions: {
           canRead: true,
           canWrite: true,
@@ -1440,22 +1468,71 @@ export class GovernanceService {
     let repoPermission: "admin" | "maintain" | "push" | "triage" | "pull" | "none" = "pull";
     const teamMemberships: string[] = [];
 
-    // 1. Identificar se o repositório pertence a uma Organização
+    // 1. Identificar se o repositório pertence a uma Organização ou Usuário
     const parts = resolvedFullName.split("/");
     const repoOwner = parts[0];
-    const targetOrg = orgLogin || (repoOwner && repoOwner !== activeUser ? repoOwner : null);
+    const isPersonalRepo = repoOwner.toLowerCase() === activeUser.toLowerCase();
+    const targetOrg = orgLogin || (!isPersonalRepo ? repoOwner : null);
 
-    // 2. Checar papel na organização se aplicável
-    if (targetOrg) {
+    // Se for o próprio repositório pessoal do usuário
+    if (isPersonalRepo) {
+      isOrgOwner = true;
+      isOrgMember = true;
+      repoPermission = "admin";
+    }
+
+    // 2. Checar papel na organização via credenciais locais e endpoints do GitHub
+    if (targetOrg && !isPersonalRepo) {
+      // Checa se a organização está presente no storage do app
+      if (Array.isArray(cfg.orgs)) {
+        const found = cfg.orgs.find(
+          (o: any) => (typeof o === "string" ? o : o?.login)?.toLowerCase() === targetOrg.toLowerCase()
+        );
+        if (found) {
+          isOrgMember = true;
+          if (found.role === "admin" || found.is_admin !== false) {
+            isOrgOwner = true;
+          }
+        }
+      }
+
+      // Checa via endpoint de memberships do usuário
       try {
-        const orgMemRes = await callGitHubAPI(`/orgs/${targetOrg}/memberships/${activeUser}`, cfg.token, "GET");
-        if (orgMemRes.statusCode === 200 && orgMemRes.data) {
-          isOrgMember = orgMemRes.data.state === "active";
-          if (orgMemRes.data.role === "admin") {
+        const userOrgMemRes = await callGitHubAPI(`/user/memberships/orgs/${targetOrg}`, cfg.token, "GET");
+        if (userOrgMemRes.statusCode === 200 && userOrgMemRes.data) {
+          isOrgMember = userOrgMemRes.data.state === "active";
+          if (userOrgMemRes.data.role === "admin") {
             isOrgOwner = true;
           }
         }
       } catch {}
+
+      if (!isOrgMember) {
+        try {
+          const orgMemRes = await callGitHubAPI(`/orgs/${targetOrg}/memberships/${activeUser}`, cfg.token, "GET");
+          if (orgMemRes.statusCode === 200 && orgMemRes.data) {
+            isOrgMember = orgMemRes.data.state === "active";
+            if (orgMemRes.data.role === "admin") {
+              isOrgOwner = true;
+            }
+          }
+        } catch {}
+      }
+
+      if (!isOrgMember) {
+        try {
+          const userOrgsRes = await callGitHubAPI(`/user/orgs?per_page=100`, cfg.token, "GET");
+          if (userOrgsRes.statusCode === 200 && Array.isArray(userOrgsRes.data)) {
+            const foundOrg = userOrgsRes.data.find(
+              (o: any) => o?.login && o.login.toLowerCase() === targetOrg.toLowerCase()
+            );
+            if (foundOrg) {
+              isOrgMember = true;
+              isOrgOwner = true;
+            }
+          }
+        } catch {}
+      }
     }
 
     // 3. Checar permissão específica no repositório
@@ -1473,20 +1550,35 @@ export class GovernanceService {
         else if (p === "triage") repoPermission = "triage";
         else if (p === "read" || p === "pull") repoPermission = "pull";
       }
-    } catch {
-      // Se não for retornado via rota de permissão, inspeciona repositório direto
-      if (repoOwner.toLowerCase() === activeUser.toLowerCase()) {
-        repoPermission = "admin";
-        isOrgOwner = true;
-      }
+    } catch {}
+
+    // Fallback: consulta direta aos dados do repositório no GitHub
+    if (repoPermission === "pull" || isOrgMember || isOrgOwner) {
+      try {
+        const repoRes = await callGitHubAPI(`/repos/${resolvedFullName}`, cfg.token, "GET");
+        if (repoRes.statusCode === 200 && repoRes.data?.permissions) {
+          const p = repoRes.data.permissions;
+          if (p.admin) {
+            repoPermission = "admin";
+            isOrgMember = true;
+            if (targetOrg) {
+              isOrgOwner = true;
+            }
+          } else if (p.maintain) {
+            repoPermission = "maintain";
+          } else if (p.push) {
+            repoPermission = "push";
+          } else if (p.triage) {
+            repoPermission = "triage";
+          } else if (p.pull) {
+            repoPermission = "pull";
+          }
+        }
+      } catch {}
     }
 
     if (isOrgOwner) {
       repoPermission = "admin";
-    }
-
-    if (!isOrgMember && targetOrg && Boolean(repoPermission)) {
-      isOutsideCollaborator = true;
     }
 
     const canAdmin = repoPermission === "admin" || isOrgOwner;
@@ -1495,13 +1587,24 @@ export class GovernanceService {
     const canTriage = canWrite || repoPermission === "triage";
     const canRead = canTriage || repoPermission === "pull";
 
-    let roleName = "Leitor";
-    if (isOrgOwner) roleName = "Owner da Org";
-    else if (canAdmin) roleName = "Admin do Repositório";
-    else if (canMaintain) roleName = "Mantenedor";
-    else if (canWrite) roleName = "Engenheiro (Write)";
-    else if (canTriage) roleName = "Triagem";
-    else if (isOutsideCollaborator) roleName = "Colaborador Externo";
+    if (!isOrgMember && targetOrg && !canAdmin && !canMaintain && !canWrite) {
+      isOutsideCollaborator = true;
+    }
+
+    let roleName = "Leitura (Pull)";
+    if (isOrgOwner) {
+      roleName = "Owner da Org";
+    } else if (canAdmin) {
+      roleName = "Admin do Repositório";
+    } else if (canMaintain) {
+      roleName = "Mantenedor";
+    } else if (canWrite) {
+      roleName = "Escrita (Push)";
+    } else if (canTriage) {
+      roleName = "Triagem";
+    } else if (isOutsideCollaborator) {
+      roleName = "Colaborador Externo";
+    }
 
     return {
       login: activeUser,

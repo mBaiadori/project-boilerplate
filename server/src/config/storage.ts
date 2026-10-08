@@ -38,6 +38,7 @@ export interface AppConfig {
   orgs: any[];
   repos?: any[];
   active_repo: any;
+  active_org?: any;
   accounts?: SavedAccount[];
   ai_settings: {
     provider: string;

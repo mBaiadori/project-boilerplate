@@ -12,6 +12,8 @@ export interface RepoPermissions {
   admin: boolean;
   push: boolean;
   pull: boolean;
+  maintain?: boolean;
+  triage?: boolean;
 }
 
 export interface RepoDiagnosisCheckItem {

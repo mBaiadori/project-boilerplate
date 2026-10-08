@@ -198,15 +198,15 @@
     "semantic_hash": ""
   },
   "frontend/src/components/editor/LanguageSelectorDropdown.tsx": {
-    "mtime": 1791461113.7580185,
-    "seen": 1791461137.2527559,
-    "ast_hash": "f9b0ddb1f0b3daf0eb53ecb33c023c1a",
+    "mtime": 1791461692.131297,
+    "seen": 1791461716.0091462,
+    "ast_hash": "1ffbe4a489cd2fdfc9220dd897816bf2",
     "semantic_hash": ""
   },
   "frontend/src/components/editor/NotionEditor.tsx": {
-    "mtime": 1791460888.8147087,
-    "seen": 1791460912.033453,
-    "ast_hash": "16c2c29c0c1402f10bf738a923a52155",
+    "mtime": 1791461674.4722853,
+    "seen": 1791461716.009147,
+    "ast_hash": "b5d66a8da8dd63a5a24a94ac0d83a18e",
     "semantic_hash": ""
   },
   "frontend/src/components/editor/SlashMenu.tsx": {
@@ -324,9 +324,9 @@
     "semantic_hash": ""
   },
   "frontend/src/components/layout/TopHeader.tsx": {
-    "mtime": 1791400378.2643285,
-    "seen": 1791452911.369569,
-    "ast_hash": "2489d2ed32afca3f918a007e066ec944",
+    "mtime": 1791474575.9263463,
+    "seen": 1791474597.500404,
+    "ast_hash": "7a4d5b9f1c1df08ac45ab9b54e83c118",
     "semantic_hash": ""
   },
   "frontend/src/components/modals/AISettingsModal.tsx": {
@@ -606,9 +606,9 @@
     "semantic_hash": ""
   },
   "frontend/src/context/WorkspaceContext.tsx": {
-    "mtime": 1791460877.8790526,
-    "seen": 1791460912.033519,
-    "ast_hash": "050d69e96922bb6fdf2b948cec7f8890",
+    "mtime": 1791474347.7379527,
+    "seen": 1791474406.949708,
+    "ast_hash": "7cee64d95bc5f45ed665e2c10dfdeb36",
     "semantic_hash": ""
   },
   "frontend/src/hooks/useEditorGitWatcher.ts": {
@@ -732,9 +732,9 @@
     "semantic_hash": ""
   },
   "frontend/src/types/index.ts": {
-    "mtime": 1791368439.2987883,
-    "seen": 1791452911.36962,
-    "ast_hash": "3b31c537825b7e62d668ff799ff002cb",
+    "mtime": 1791473551.8029008,
+    "seen": 1791473570.904448,
+    "ast_hash": "c59d9f7173311d514e7a63da50d30eb5",
     "semantic_hash": ""
   },
   "frontend/src/utils/dictionary-matcher.ts": {
@@ -912,9 +912,9 @@
     "semantic_hash": ""
   },
   "server/src/config/storage.ts": {
-    "mtime": 1791452854.7729044,
-    "seen": 1791452911.369642,
-    "ast_hash": "6c1a46034041e80ee3661d13c523b615",
+    "mtime": 1791474385.9365942,
+    "seen": 1791474406.949755,
+    "ast_hash": "78877dffeab6ec327829724a7d782c91",
     "semantic_hash": ""
   },
   "server/src/modules/ai/ai.routes.ts": {
@@ -1050,9 +1050,9 @@
     "semantic_hash": ""
   },
   "server/src/modules/governance/governance.service.ts": {
-    "mtime": 1791368594.3324602,
-    "seen": 1791452911.36966,
-    "ast_hash": "fd2da03f711d940cc1effd1085473e0a",
+    "mtime": 1791474210.7036672,
+    "seen": 1791474406.949777,
+    "ast_hash": "0b8bff9d984e01f9f9f4e94b615085f0",
     "semantic_hash": ""
   },
   "server/src/modules/governance/governance.test.ts": {

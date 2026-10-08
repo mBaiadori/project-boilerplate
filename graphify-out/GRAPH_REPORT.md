@@ -1,32 +1,32 @@
 # Graph Report - project-boilerplate  (2026-10-08)
 
 ## Corpus Check
-- 248 files · ~264,583 words
+- 248 files · ~264,954 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 11 file(s) not represented in the graph (top: .css 9, (none) 2)
 
 ## Summary
-- 2024 nodes · 5738 edges · 90 communities (72 shown, 18 thin omitted)
+- 2023 nodes · 5736 edges · 98 communities (74 shown, 24 thin omitted)
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS · INFERRED: 23 edges (avg confidence: 0.86)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `b08116ef`
+- Built from commit: `3fd57c33`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
 ## Community Hubs (Navigation)
-- aicenter.service.ts
+- custom-tools.service.ts
 - useWorkspace
-- ai.routes.ts
+- AntigravityAdapter.ts
 - Button
-- useAuth
+- ReposView.tsx
 - schema.validator.ts
 - Chip.tsx
-- SettingsSubView.tsx
+- NotionEditor.tsx
 - translationsService
 - types/index.ts
-- loadConfig
+- saveConfig
 - desktop/package.json
 - server/package.json
 - properties
@@ -34,37 +34,37 @@
 - app.ts
 - governanceService
 - properties
-- scripts
-- NotionEditorEngine
-- customToolsService
+- api.ts
+- loadConfig
 - properties
 - dependencies
 - git.ts
 - i18n/index.ts
-- RagSearchModal.tsx
+- AICopilotPanel.tsx
 - rag.indexer.ts
 - Layout.tsx
-- compile-bytecode.js
+- ai.service.ts
 - templates.service.ts
 - workspaceService
-- storage.ts
-- notion-editor-engine.ts
-- devDependencies
+- constants.ts
+- DictionaryTerm
+- prs.service.ts
 - docsMetadataService
-- dependencies
+- NotionEditorEngine
+- FileTree.tsx
 - compilerOptions
 - scripts
-- NotionEditor.tsx
+- VisualMarkdownDiff.tsx
 - react
 - prsService
 - compilerOptions
-- StatCard.tsx
+- AIContext.tsx
 - TestProjectConfigEngine
 - SlashMenuEngine
 - events.service.ts
 - compilerOptions
 - BubbleMenuEngine
-- storage-vault.test.ts
+- storage.ts
 - NotionTable
 - 3. Standard Component Archetypes
 - compilerOptions
@@ -73,26 +73,31 @@
 - devDependencies
 - ContextSidebar.tsx
 - .handleSlashCommand
-- .scrollToFragment
-- TemplatesSubView.tsx
+- notion-editor-engine.ts
+- SettingsSubView.tsx
 - ChatMemoryStore
 - properties
 - properties
 - test_ai_memory_engine.py
-- saveConfig
+- prSecurityService
+- IAgentProvider
 - Regra Arquitetural: Taxonomias Dinâmicas e Uso Obrigatório de Cores do `.project.config.json`
 - wikiService
 - anyOf
 - Regra Arquitetural: Zero Hardcoded Data & Configuração Dinâmica
+- aiService
+- ContextSelectorModal.tsx
 - prWorktreeService
 - properties
 - .oxlintrc.json
+- frontmatter.ts
 - TestAuditEngine
 - TestWorkspaceGraph
 - TestScaffoldEngine
 - scripts
 - SlashMenu.tsx
 - main/index.ts
+- ensureDefaultRepoFiles
 - project.config.schema.json
 - governance_rules
 - TestPRAutoMerge
@@ -100,10 +105,13 @@
 - React + TypeScript + Vite
 - reviewers
 - BubbleMenu.tsx
+- LanguageSelectorDropdown.tsx
 - frontend/tsconfig.json
 - ui-design-standards.md
+- AntigravityAdapter
 - dependencies
-- Button.tsx
+- ClaudeCodeAdapter
+- prConflictsService
 
 ## God Nodes (most connected - your core abstractions)
 1. `loadConfig()` - 169 edges
@@ -132,27 +140,27 @@
 ## Import Cycles
 - None detected.
 
-## Communities (90 total, 18 thin omitted)
+## Communities (98 total, 24 thin omitted)
 
-### Community 0 - "aicenter.service.ts"
-Cohesion: 0.11
-Nodes (14): BASE_DIR, aiCenterService, eccSeedAgents, eccSeedMcpTemplates, ECC_SEED_SKILLS, getSafeRepo(), skillsService, AgentDefinition (+6 more)
+### Community 0 - "custom-tools.service.ts"
+Cohesion: 0.06
+Nodes (28): BASE_DIR, nativeTools, AgentTool, ToolExecutionContext, ToolParameterProperty, ToolParametersSchema, ToolResult, convertPropToGeminiSchema() (+20 more)
 
 ### Community 1 - "useWorkspace"
-Cohesion: 0.08
-Nodes (52): AgentApprovalCard(), AgentApprovalCardProps, AICopilotPanel(), AICopilotPanelProps, formatRelativeTime(), HistorySidebar(), HistorySidebarProps, PromptSidebar() (+44 more)
+Cohesion: 0.12
+Nodes (36): formatRelativeTime(), HistorySidebar(), HistorySidebarProps, PromptSidebar(), PromptSidebarProps, RawCodeViewer(), RawCodeViewerProps, RawInspectorSidebar() (+28 more)
 
-### Community 2 - "ai.routes.ts"
-Cohesion: 0.07
-Nodes (23): aiService, contextPointerService, ActiveProcessSession, AntigravityAdapter, ActiveProcessSession, ClaudeCodeAdapter, DirectApiProvider, IAgentProvider (+15 more)
+### Community 2 - "AntigravityAdapter.ts"
+Cohesion: 0.26
+Nodes (11): ActiveProcessSession, ActiveProcessSession, DirectApiProvider, ProviderCapabilities, ProviderId, ProviderMessage, ProviderMode, ProviderSessionConfig (+3 more)
 
 ### Community 3 - "Button"
 Cohesion: 0.08
-Nodes (67): AccountSwitcherMenu(), DocActionBar(), DocActionBarProps, DraggedItem, filesToScannedList(), FileTree(), FileTreeProps, getCollapsedStorageKey() (+59 more)
+Nodes (62): DocActionBar(), DocActionBarProps, AccessGovernanceManager(), AddAccountModal(), AddAccountModalProps, AddDictionaryTermModal(), AISettingsModal(), DetailedModelItem (+54 more)
 
-### Community 4 - "useAuth"
-Cohesion: 0.12
-Nodes (27): AdminAuthRoute(), App(), CollaboratorAuthRoute(), OrgRepoRedirect(), ProtectedRoute(), RepoRedirect(), LanguageSwitcher(), AuthContext (+19 more)
+### Community 4 - "ReposView.tsx"
+Cohesion: 0.17
+Nodes (22): AdminAuthRoute(), App(), CollaboratorAuthRoute(), OrgRepoRedirect(), ProtectedRoute(), RepoRedirect(), AccountSwitcherMenu(), LanguageSwitcher() (+14 more)
 
 ### Community 5 - "schema.validator.ts"
 Cohesion: 0.14
@@ -162,29 +170,29 @@ Nodes (14): ajv, ajv-formats, syncBlueprint(), validateAndReportSchema(), verify
 Cohesion: 0.14
 Nodes (11): BadgeProps, BadgeSize, BadgeVariant, ChipProps, ChipSize, ChipVariant, FilterChipItem, FilterChipsProps (+3 more)
 
-### Community 7 - "SettingsSubView.tsx"
+### Community 7 - "NotionEditor.tsx"
 Cohesion: 0.08
-Nodes (36): ColorDotPicker(), ColorDotPickerProps, RAINBOW_28_HUES, DiffViewer(), DiffViewerProps, TaxonomyChipEditor(), TaxonomyChipEditorProps, GitModal() (+28 more)
+Nodes (28): ColorDotPicker(), ColorDotPickerProps, RAINBOW_28_HUES, DiffViewer(), DiffViewerProps, TaxonomyChipEditorProps, DocConnectivityBar(), DocConnectivityBarProps (+20 more)
 
 ### Community 8 - "translationsService"
 Cohesion: 0.10
 Nodes (13): AiContextualProvider, BaseTranslationProvider, MaskedMarkdown, PlaceholderItem, LightweightLocalProvider, translationProviderManager, DocumentTranslationItem, ITranslationProvider (+5 more)
 
 ### Community 9 - "types/index.ts"
-Cohesion: 0.05
-Nodes (66): DocumentHistoryDrawerProps, AccessGovernanceManagerProps, PERMISSION_OPTIONS, SelectedGovernanceMember, SelectedGovernanceTeam, DEFAULT_BADGES, DEFAULT_CATEGORIES, DEFAULT_STATUSES (+58 more)
+Cohesion: 0.06
+Nodes (41): AccessGovernanceManagerProps, PERMISSION_OPTIONS, SelectedGovernanceMember, SelectedGovernanceTeam, WorkspaceContextType, AIProviderMeta, BadgeOption, CategoryOption (+33 more)
 
-### Community 10 - "loadConfig"
-Cohesion: 0.09
-Nodes (8): loadConfig(), authService, RFC-8628, gitService, prConflictsService, prSecurityService, settingsService, systemService
+### Community 10 - "saveConfig"
+Cohesion: 0.13
+Nodes (10): saveConfig(), authService, RFC-8628, RepoDiagnosis, RepoDiagnosisCheckItem, RepoInitializePayload, reposService, applyBranchProtection() (+2 more)
 
 ### Community 11 - "desktop/package.json"
-Cohesion: 0.14
-Nodes (13): author, description, @napi-rs/keyring, tsx, @types/node, typescript, license, main (+5 more)
+Cohesion: 0.06
+Nodes (31): author, dependencies, bytenode, electron-updater, @napi-rs/keyring, description, devDependencies, electron (+23 more)
 
 ### Community 12 - "server/package.json"
 Cohesion: 0.08
-Nodes (25): @fastify/cors, @fastify/sensible, @fastify/static, openai, pino-pretty, devDependencies, tsx, @types/diff (+17 more)
+Nodes (24): @fastify/cors, @fastify/sensible, @fastify/static, pino-pretty, devDependencies, tsx, @types/diff, @types/node (+16 more)
 
 ### Community 13 - "properties"
 Cohesion: 0.05
@@ -192,27 +200,27 @@ Nodes (39): additionalProperties, items, type, type, type, type, type, type (+31
 
 ### Community 14 - "frontend/package.json"
 Cohesion: 0.06
-Nodes (37): diff, @types/diff, @types/node, typescript, name, private, type, version (+29 more)
+Nodes (39): diff, @types/diff, @types/node, typescript, name, private, type, version (+31 more)
 
 ### Community 15 - "app.ts"
-Cohesion: 0.13
-Nodes (21): fastify, buildApp(), loadCanonicalTutorials(), resolveUiDistDir(), aiRoutes(), authRoutes(), dictionaryRoutes(), eventsRoutes() (+13 more)
+Cohesion: 0.14
+Nodes (19): fastify, buildApp(), loadCanonicalTutorials(), resolveUiDistDir(), authRoutes(), dictionaryRoutes(), eventsRoutes(), gitRoutes() (+11 more)
 
 ### Community 16 - "governanceService"
-Cohesion: 0.08
-Nodes (24): EphemeralAIToken, ephemeralTokens, governanceService, BranchProtectionConfig, BranchProtectionStatus, CollaboratorInfo, CreateOrgTeamPayload, DEFAULT_DEPARTMENTS (+16 more)
+Cohesion: 0.07
+Nodes (28): EphemeralAIToken, ephemeralTokens, governanceService, BranchProtectionConfig, BranchProtectionStatus, CollaboratorInfo, CreateOrgTeamPayload, DEFAULT_DEPARTMENTS (+20 more)
 
 ### Community 17 - "properties"
 Cohesion: 0.06
 Nodes (37): items, type, type, type, type, items, additionalProperties, properties (+29 more)
 
-### Community 18 - "scripts"
-Cohesion: 0.25
-Nodes (8): scripts, build:ts, compile:bytecode, dev, package:all, package:linux, package:mac, package:win
+### Community 18 - "api.ts"
+Cohesion: 0.06
+Nodes (41): CsvEditor(), CsvEditorProps, DocxViewer(), DocxViewerProps, ExcelViewer(), ExcelViewerProps, ImageViewer(), ImageViewerProps (+33 more)
 
-### Community 20 - "customToolsService"
-Cohesion: 0.12
-Nodes (13): nativeTools, AgentTool, ToolExecutionContext, ToolParameterProperty, ToolParametersSchema, ToolResult, convertPropToGeminiSchema(), toolRegistry (+5 more)
+### Community 20 - "loadConfig"
+Cohesion: 0.23
+Nodes (3): loadConfig(), gitService, settingsService
 
 ### Community 21 - "properties"
 Cohesion: 0.06
@@ -227,12 +235,12 @@ Cohesion: 0.16
 Nodes (30): checkRemoteGitUpdates(), commitChanges(), createAndCheckoutBranch(), ensureGitIgnore(), ensureGitRepo(), execAsync, executeGitCommand(), getActiveBearerToken() (+22 more)
 
 ### Community 24 - "i18n/index.ts"
-Cohesion: 0.11
-Nodes (15): LanguageSwitcherProps, AppNamespace, DEFAULT_LANGUAGE, FALLBACK_LANGUAGE, LANGUAGE_STORAGE_KEY, LanguageOption, NAMESPACES, SUPPORTED_LANGUAGES (+7 more)
+Cohesion: 0.10
+Nodes (14): AppNamespace, DEFAULT_LANGUAGE, FALLBACK_LANGUAGE, LANGUAGE_STORAGE_KEY, LanguageOption, NAMESPACES, SUPPORTED_LANGUAGES, CustomTypeOptions (+6 more)
 
-### Community 25 - "RagSearchModal.tsx"
-Cohesion: 0.36
-Nodes (4): RagSearchResult, ragService, RagStats, react-dom
+### Community 25 - "AICopilotPanel.tsx"
+Cohesion: 0.25
+Nodes (9): AgentApprovalCard(), AgentApprovalCardProps, AICopilotPanel(), AICopilotPanelProps, RagSearchModal(), RagSearchResult, ragService, RagStats (+1 more)
 
 ### Community 26 - "rag.indexer.ts"
 Cohesion: 0.17
@@ -242,37 +250,37 @@ Nodes (11): ragIndexer, STOPWORDS, tokenizeText(), IndexCache, ragService, RagCh
 Cohesion: 0.08
 Nodes (16): Box, DividerProps, GridProps, PageBodyProps, PageContainerProps, PanelProps, RowProps, SectionProps (+8 more)
 
-### Community 28 - "compile-bytecode.js"
-Cohesion: 0.29
-Nodes (3): __dirname, __filename, bytenode
+### Community 28 - "ai.service.ts"
+Cohesion: 0.13
+Nodes (18): @anthropic-ai/sdk, @google/generative-ai, openai, DEFAULT_GLOBAL_SYSTEM_PROMPT, aiRoutes(), AIExecutionResult, AIServiceCallOptions, ChatMessage (+10 more)
 
 ### Community 29 - "templates.service.ts"
 Cohesion: 0.27
 Nodes (10): getCommunityTemplatesPath(), loadCommunityTemplates(), loadProjectTemplates(), ProjectTemplate, sanitizeTemplateItem(), saveCommunityTemplates(), saveProjectTemplates(), generateTemplateSlug() (+2 more)
 
 ### Community 30 - "workspaceService"
-Cohesion: 0.21
-Nodes (9): loadRepoWorkspaceChanges(), recordChange(), DocumentMetadataItem, extractDocLinksFromMarkdown(), workspaceService, getGitStatus(), isPathHidden(), isSystemPath() (+1 more)
+Cohesion: 0.32
+Nodes (3): recordChange(), extractDocLinksFromMarkdown(), workspaceService
 
-### Community 31 - "storage.ts"
-Cohesion: 0.05
-Nodes (58): @anthropic-ai/sdk, @google/generative-ai, CanonicalTemplate, CanonicalTutorial, DEFAULT_GLOBAL_SYSTEM_PROMPT, DEFAULT_PROJECT_ABOUT_PROMPT, DEFAULT_TEMPLATE_CREATOR_PROMPT, __dirname (+50 more)
+### Community 31 - "constants.ts"
+Cohesion: 0.09
+Nodes (27): CanonicalTemplate, CanonicalTutorial, DEFAULT_PROJECT_ABOUT_PROMPT, DEFAULT_TEMPLATE_CREATOR_PROMPT, __dirname, DOCS_DIR, __filename, FRONTEND_DIR (+19 more)
 
-### Community 32 - "notion-editor-engine.ts"
-Cohesion: 0.16
-Nodes (16): DictionaryPopoverData, FragmentStatusInfo, AddDictionaryTermModalProps, LinkSynonymModalProps, DictionaryTerm, buildMatchEntries(), decorateHtmlWithTerms(), escapeHtml() (+8 more)
+### Community 32 - "DictionaryTerm"
+Cohesion: 0.17
+Nodes (14): DictionaryPopoverData, AddDictionaryTermModalProps, LinkSynonymModalProps, DictionaryTerm, buildMatchEntries(), decorateHtmlWithTerms(), escapeHtml(), escapeRegex() (+6 more)
 
-### Community 33 - "devDependencies"
-Cohesion: 0.33
-Nodes (6): devDependencies, electron, electron-builder, tsx, @types/node, typescript
+### Community 33 - "prs.service.ts"
+Cohesion: 0.20
+Nodes (14): loadRepoWorkspaceChanges(), PRApprovalAudit, DocumentMetadataItem, TreeNode, computeDiff(), DiffResult, getGitStatus(), DEFAULT_HIDDEN_FILES (+6 more)
 
 ### Community 34 - "docsMetadataService"
-Cohesion: 0.24
-Nodes (4): docsMetadataService, extractDocTitleFromMarkdown(), generateDocId(), updateFrontmatterInMarkdown()
+Cohesion: 0.22
+Nodes (5): docsMetadataService, extractDocTitleFromMarkdown(), extractFrontmatterMeta(), generateDocId(), updateFrontmatterInMarkdown()
 
-### Community 36 - "dependencies"
-Cohesion: 0.50
-Nodes (4): dependencies, bytenode, electron-updater, @napi-rs/keyring
+### Community 36 - "FileTree.tsx"
+Cohesion: 0.17
+Nodes (17): DraggedItem, filesToScannedList(), FileTree(), FileTreeProps, getCollapsedStorageKey(), getScrollStorageKey(), getSelectedFolderStorageKey(), InlineCreatingState (+9 more)
 
 ### Community 37 - "compilerOptions"
 Cohesion: 0.10
@@ -282,37 +290,37 @@ Nodes (19): compilerOptions, allowArbitraryExtensions, allowImportingTsExtension
 Cohesion: 0.11
 Nodes (18): name, private, scripts, build, build:frontend, build:server, desktop:build, desktop:dev (+10 more)
 
-### Community 39 - "NotionEditor.tsx"
-Cohesion: 0.07
-Nodes (38): DocConnectivityBar(), DocConnectivityBarProps, getTagStyle(), TAG_PALETTES, DocumentHistoryDrawer(), FrontmatterHeaderProps, LanguageSelectorDropdown(), LanguageSelectorDropdownProps (+30 more)
+### Community 39 - "VisualMarkdownDiff.tsx"
+Cohesion: 0.18
+Nodes (13): VisualMarkdownDiff(), VisualMarkdownDiffProps, EditorGitWatcherState, useEditorGitWatcher(), UseEditorGitWatcherOptions, ClientDiffResult, computeClientDiff(), computeLineDiff() (+5 more)
 
 ### Community 40 - "react"
-Cohesion: 0.05
-Nodes (35): SelectDropdown(), SelectDropdownProps, SelectOption, SkillsSidebarProps, CsvEditor(), CsvEditorProps, DocxViewer(), DocxViewerProps (+27 more)
+Cohesion: 0.06
+Nodes (27): OrgSelectorDropdown(), TopHeaderProps, AlertBannerProps, AlertType, ButtonGroupProps, ButtonProps, ButtonSize, ButtonVariant (+19 more)
 
 ### Community 42 - "compilerOptions"
 Cohesion: 0.12
 Nodes (16): compilerOptions, allowImportingTsExtensions, erasableSyntaxOnly, lib, module, moduleDetection, noEmit, noFallthroughCasesInSwitch (+8 more)
+
+### Community 43 - "AIContext.tsx"
+Cohesion: 0.21
+Nodes (14): AIContext, AIContextType, CopilotStoreState, DynamicContext, AISettingsState, ChatMessage, RawTurnMetrics, RawTurnTelemetry (+6 more)
 
 ### Community 45 - "SlashMenuEngine"
 Cohesion: 0.23
 Nodes (3): escapeHtml(), SlashCommand, SlashMenuEngine
 
 ### Community 46 - "events.service.ts"
-Cohesion: 0.17
+Cohesion: 0.15
 Nodes (7): chokidar, UI_DIR, UI_DIST_DIR, Client, eventsService, start(), findAvailablePort()
 
 ### Community 47 - "compilerOptions"
 Cohesion: 0.12
 Nodes (15): compilerOptions, esModuleInterop, forceConsistentCasingInFileNames, lib, module, moduleResolution, outDir, resolveJsonModule (+7 more)
 
-### Community 48 - "BubbleMenuEngine"
-Cohesion: 0.26
-Nodes (3): BubbleMenuEngine, createTextFragmentFromSelection(), formatTextFragmentUrl()
-
-### Community 49 - "storage-vault.test.ts"
-Cohesion: 0.18
-Nodes (5): CONFIG_PATH, VAULT_KEYS, VaultKey, vaultService, scanContentForSecrets()
+### Community 49 - "storage.ts"
+Cohesion: 0.13
+Nodes (12): CONFIG_PATH, AppConfig, BINARY_EXTENSIONS, getRepoWorkspaceChangesPath(), loadProjectsMasterConfig(), sanitizeContentForStorage(), SavedAccount, saveRepoWorkspaceChanges() (+4 more)
 
 ### Community 51 - "3. Standard Component Archetypes"
 Cohesion: 0.15
@@ -323,8 +331,8 @@ Cohesion: 0.15
 Nodes (12): compilerOptions, esModuleInterop, forceConsistentCasingInFileNames, module, moduleResolution, outDir, rootDir, skipLibCheck (+4 more)
 
 ### Community 53 - "WorkbenchCanvas.tsx"
-Cohesion: 0.14
-Nodes (21): CodeMirrorEditor(), ExcelViewer(), ExcelViewerProps, GenericFileViewer(), GenericFileViewerProps, CodeMirrorEditor, CsvEditor, DocxViewer (+13 more)
+Cohesion: 0.19
+Nodes (17): CodeMirrorEditor(), GenericFileViewer(), GenericFileViewerProps, CodeMirrorEditor, CsvEditor, DocxViewer, ExcelViewer, GenericFileViewer (+9 more)
 
 ### Community 54 - "DraftStoreService"
 Cohesion: 0.27
@@ -335,16 +343,16 @@ Cohesion: 0.18
 Nodes (11): devDependencies, oxlint, @types/diff, @types/js-yaml, @types/marked, @types/node, @types/react, @types/react-dom (+3 more)
 
 ### Community 57 - "ContextSidebar.tsx"
-Cohesion: 0.12
-Nodes (26): collapseFilesToReferences(), processNode(), ContextSelectorModal(), ContextSelectorModalProps, expandReferencesToFiles(), findNodeByPath(), getFilesUnderNode(), IndeterminateCheckbox() (+18 more)
+Cohesion: 0.36
+Nodes (10): collapseFilesToReferences(), processNode(), ContextSidebar(), ContextSidebarProps, expandReferencesToFiles(), findNodeByPath(), getAllDirPaths(), getAllFilePaths() (+2 more)
 
-### Community 59 - ".scrollToFragment"
-Cohesion: 0.33
-Nodes (7): calculateSimilarity(), createRangeFromNodeAndOffsets(), findTextFragmentInElement(), levenshteinDistance(), normalizeForSearch(), parseTextFragmentUrl(), TextFragmentQuery
+### Community 59 - "notion-editor-engine.ts"
+Cohesion: 0.22
+Nodes (11): FragmentStatusInfo, calculateSimilarity(), createRangeFromNodeAndOffsets(), createTextFragmentFromSelection(), findTextFragmentInElement(), formatTextFragmentUrl(), levenshteinDistance(), normalizeForSearch() (+3 more)
 
-### Community 60 - "TemplatesSubView.tsx"
-Cohesion: 0.10
-Nodes (39): SkillsHubModal(), SkillsHubModalProps, TabMode, TemplatePickerModal(), TemplatePickerModalProps, AlertBanner(), Card(), CardContent() (+31 more)
+### Community 60 - "SettingsSubView.tsx"
+Cohesion: 0.08
+Nodes (54): SelectDropdown(), SelectDropdownProps, SelectOption, TaxonomyChipEditor(), SkillsHubModal(), SkillsHubModalProps, TabMode, TemplatePickerModal() (+46 more)
 
 ### Community 61 - "ChatMemoryStore"
 Cohesion: 0.27
@@ -358,10 +366,6 @@ Nodes (11): type, type, type, properties, architecture_pattern, description, lea
 Cohesion: 0.18
 Nodes (11): type, type, properties, type, handle, id, name, role (+3 more)
 
-### Community 65 - "saveConfig"
-Cohesion: 0.23
-Nodes (8): saveConfig(), RepoDiagnosis, RepoDiagnosisCheckItem, RepoInitializePayload, reposService, applyBranchProtection(), callGitProviderAPI, checkBranchProtection()
-
 ### Community 67 - "Regra Arquitetural: Taxonomias Dinâmicas e Uso Obrigatório de Cores do `.project.config.json`"
 Cohesion: 0.25
 Nodes (7): 1. Proibição de Listas Fixas (Zero Hardcoded Taxonomies), 2. Uso Obrigatório das Cores Configuradas nas Chips / Badges, 3. Checklist Obrigatório para Agentes & PRs, O que fazer:, Regra Arquitetural: Taxonomias Dinâmicas e Uso Obrigatório de Cores do `.project.config.json`, Regras Visuais para Chips / Badges:, ADR
@@ -374,6 +378,10 @@ Nodes (8): items, anyOf, statuses, tags, items, type, items, type
 Cohesion: 0.29
 Nodes (6): 1. Princípio Fundamental (Zero Hardcoding), 2. Padrão Universal: Sugestão $\rightarrow$ Customização $\rightarrow$ Persistência, 3. Checklist de Implementação de Novos Campos / Listas, 4. Validação de Identificadores (Slugs) & Prevenção de Conflitos, 5. Padrão Global de Ícones & Componente `IconPicker`, Regra Arquitetural: Zero Hardcoded Data & Configuração Dinâmica
 
+### Community 72 - "ContextSelectorModal.tsx"
+Cohesion: 0.44
+Nodes (8): collapseFilesToReferences(), processNode(), ContextSelectorModal(), ContextSelectorModalProps, expandReferencesToFiles(), findNodeByPath(), getFilesUnderNode(), IndeterminateCheckbox()
+
 ### Community 74 - "properties"
 Cohesion: 0.29
 Nodes (7): type, type, type, properties, ai_template_prompt, categories, project
@@ -381,6 +389,10 @@ Nodes (7): type, type, type, properties, ai_template_prompt, categories, project
 ### Community 75 - ".oxlintrc.json"
 Cohesion: 0.33
 Nodes (5): plugins, rules, react/only-export-components, react/rules-of-hooks, $schema
+
+### Community 76 - "frontmatter.ts"
+Cohesion: 0.28
+Nodes (8): FrontmatterHeaderProps, createDefaultMetadata(), DocumentMetadata, ParsedDocument, parseFrontmatter(), serializeFrontmatter(), stripFrontmatter(), js-yaml
 
 ### Community 80 - "scripts"
 Cohesion: 0.40
@@ -391,8 +403,12 @@ Cohesion: 0.40
 Nodes (3): SLASH_COMMANDS, SlashCommandItem, SlashMenuProps
 
 ### Community 82 - "main/index.ts"
-Cohesion: 0.20
-Nodes (5): __dirname, __filename, findAvailablePort(), startEmbeddedServer(), electron
+Cohesion: 0.13
+Nodes (8): __dirname, __filename, __dirname, __filename, findAvailablePort(), startEmbeddedServer(), bytenode, electron
+
+### Community 83 - "ensureDefaultRepoFiles"
+Cohesion: 0.28
+Nodes (3): ensureDefaultRepoFiles(), getSSOTDefaultDir(), systemService
 
 ### Community 84 - "project.config.schema.json"
 Cohesion: 0.40
@@ -414,33 +430,33 @@ Nodes (3): Expanding the Oxlint configuration, React Compiler, React + TypeScrip
 Cohesion: 0.50
 Nodes (4): type, reviewers, items, type
 
+### Community 91 - "LanguageSelectorDropdown.tsx"
+Cohesion: 0.29
+Nodes (6): LanguageSelectorDropdown(), LanguageSelectorDropdownProps, TranslationBanner(), TranslationBannerProps, DocumentTranslationItem, SupportedLanguage
+
 ### Community 95 - "dependencies"
 Cohesion: 0.14
 Nodes (14): dependencies, ajv, ajv-formats, @anthropic-ai/sdk, chokidar, diff, fastify, @fastify/cors (+6 more)
 
-### Community 98 - "Button.tsx"
-Cohesion: 0.33
-Nodes (4): ButtonGroupProps, ButtonProps, ButtonSize, ButtonVariant
-
 ## Knowledge Gaps
 - **570 isolated node(s):** `name`, `version`, `description`, `type`, `main` (+565 more)
   These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 684 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
-- **18 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **24 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `react` connect `react` to `useWorkspace`, `Button.tsx`, `Button`, `useAuth`, `Chip.tsx`, `SettingsSubView.tsx`, `NotionEditor.tsx`, `types/index.ts`, `StatCard.tsx`, `frontend/package.json`, `SlashMenu.tsx`, `WorkbenchCanvas.tsx`, `i18n/index.ts`, `ContextSidebar.tsx`, `BubbleMenu.tsx`, `Layout.tsx`, `TemplatesSubView.tsx`, `RagSearchModal.tsx`?**
-  _High betweenness centrality (0.152) - this node is a cross-community bridge._
+- **Why does `react` connect `react` to `useWorkspace`, `Button`, `ReposView.tsx`, `Chip.tsx`, `NotionEditor.tsx`, `types/index.ts`, `frontend/package.json`, `api.ts`, `i18n/index.ts`, `AICopilotPanel.tsx`, `Layout.tsx`, `FileTree.tsx`, `VisualMarkdownDiff.tsx`, `AIContext.tsx`, `WorkbenchCanvas.tsx`, `ContextSidebar.tsx`, `SettingsSubView.tsx`, `ContextSelectorModal.tsx`, `SlashMenu.tsx`, `BubbleMenu.tsx`, `LanguageSelectorDropdown.tsx`?**
+  _High betweenness centrality (0.151) - this node is a cross-community bridge._
 - **What connects `name`, `version`, `description` to the rest of the system?**
   _570 weakly-connected nodes found - possible documentation gaps or missing edges._
-- **Should `aicenter.service.ts` be split into smaller, more focused modules?**
-  _Cohesion score 0.11014492753623188 - nodes in this community are weakly interconnected._
-- **Why does `loadConfig()` connect `loadConfig` to `aicenter.service.ts`, `saveConfig`, `ai.routes.ts`, `wikiService`, `schema.validator.ts`, `translationsService`, `prWorktreeService`, `prsService`, `app.ts`, `governanceService`, `storage-vault.test.ts`, `customToolsService`, `git.ts`, `templates.service.ts`, `workspaceService`, `storage.ts`?**
-  _High betweenness centrality (0.100) - this node is a cross-community bridge._
+- **Should `custom-tools.service.ts` be split into smaller, more focused modules?**
+  _Cohesion score 0.05747126436781609 - nodes in this community are weakly interconnected._
+- **Why does `loadConfig()` connect `loadConfig` to `custom-tools.service.ts`, `AntigravityAdapter.ts`, `schema.validator.ts`, `translationsService`, `saveConfig`, `app.ts`, `governanceService`, `git.ts`, `ai.service.ts`, `templates.service.ts`, `workspaceService`, `constants.ts`, `prs.service.ts`, `prsService`, `storage.ts`, `prSecurityService`, `wikiService`, `aiService`, `prWorktreeService`, `ensureDefaultRepoFiles`, `AntigravityAdapter`, `ClaudeCodeAdapter`, `prConflictsService`?**
+  _High betweenness centrality (0.124) - this node is a cross-community bridge._
 - **Should `useWorkspace` be split into smaller, more focused modules?**
-  _Cohesion score 0.08205128205128205 - nodes in this community are weakly interconnected._
-- **Why does `marked` connect `NotionEditor.tsx` to `useWorkspace`, `frontend/package.json`, `SettingsSubView.tsx`?**
-  _High betweenness centrality (0.073) - this node is a cross-community bridge._
-- **Should `ai.routes.ts` be split into smaller, more focused modules?**
-  _Cohesion score 0.07236544549977386 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.11616161616161616 - nodes in this community are weakly interconnected._
+- **Why does `marked` connect `VisualMarkdownDiff.tsx` to `AICopilotPanel.tsx`, `SettingsSubView.tsx`, `frontend/package.json`, `useWorkspace`?**
+  _High betweenness centrality (0.074) - this node is a cross-community bridge._
+- **Should `Button` be split into smaller, more focused modules?**
+  _Cohesion score 0.0780701754385965 - nodes in this community are weakly interconnected._
