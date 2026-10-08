@@ -52,7 +52,7 @@ export function parseFrontmatter(rawContent = ""): ParsedDocument {
     };
   }
 
-  const match = rawContent.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/);
+  const match = rawContent.match(/^---\s*\r?\n([\s\S]*?)\r?\n---\s*(\r?\n[\s\S]*)?$/);
   if (!match) {
     return {
       hasFrontmatter: false,
@@ -63,7 +63,11 @@ export function parseFrontmatter(rawContent = ""): ParsedDocument {
 
   const yamlBlock = match[1];
   const rawBody = match[2] || "";
-  const body = rawBody.startsWith("\n") ? rawBody.slice(1) : rawBody.startsWith("\r\n") ? rawBody.slice(2) : rawBody;
+  const body = rawBody.startsWith("\r\n")
+    ? rawBody.slice(2)
+    : rawBody.startsWith("\n")
+    ? rawBody.slice(1)
+    : rawBody;
 
   try {
     const parsed = yaml.load(yamlBlock) as DocumentMetadata;

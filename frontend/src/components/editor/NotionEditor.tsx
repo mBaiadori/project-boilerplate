@@ -257,7 +257,7 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
   defaultLanguageRef.current = defaultLanguage;
 
   const parsed = parseFrontmatter(content || "");
-  const docBody = parsed.body || content || "";
+  const docBody = parsed.hasFrontmatter ? parsed.body : (content || "");
   const effectivePrompt =
     promptContent !== undefined ? promptContent : fileMetadata?.prompt || "";
 
@@ -554,7 +554,9 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
         // Traduções carregam Frontmatter para metadados locais (title, etc.) e corpo traduzido
         const parsedTrans = parseFrontmatter(res.data.content);
         translationParsedRef.current = parsedTrans;
-        const transBody = parsedTrans.body || res.data.content;
+        const transBody = parsedTrans.hasFrontmatter
+          ? parsedTrans.body
+          : res.data.content || "";
         docBodyRef.current = transBody;
 
         const transTitle =
@@ -598,7 +600,9 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
         setIsTranslationOutdated(false);
         const parsedTrans = parseFrontmatter(res.data.content);
         translationParsedRef.current = parsedTrans;
-        const transBody = parsedTrans.body || res.data.content;
+        const transBody = parsedTrans.hasFrontmatter
+          ? parsedTrans.body
+          : res.data.content || "";
         docBodyRef.current = transBody;
 
         const transTitle =
@@ -1162,8 +1166,10 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
     ? currentContent.trim().split(/\s+/).length
     : 0;
   const lineCount = currentContent ? currentContent.split(/\r?\n/).length : 0;
-  const originalBody =
-    parseFrontmatter(originalContent || "").body || originalContent || "";
+  const parsedOriginal = parseFrontmatter(originalContent || "");
+  const originalBody = parsedOriginal.hasFrontmatter
+    ? parsedOriginal.body
+    : originalContent || "";
   const isDirty = (originalBody || "").trim() !== (docBody || "").trim();
 
   if (!filePath) {
@@ -1450,7 +1456,9 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
                   setActiveLanguage(lang);
                   const parsedTrans = parseFrontmatter(transContent);
                   translationParsedRef.current = parsedTrans;
-                  const bodyContent = parsedTrans.body || transContent;
+                  const bodyContent = parsedTrans.hasFrontmatter
+                    ? parsedTrans.body
+                    : transContent || "";
                   docBodyRef.current = bodyContent;
                   setTitleValue(parsedTrans.metadata?.title || "");
                   if (engineRef.current) {
