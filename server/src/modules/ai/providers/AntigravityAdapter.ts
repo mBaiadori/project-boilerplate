@@ -2,8 +2,8 @@ import { spawn, ChildProcess } from 'node:child_process';
 import path from 'node:path';
 import fs from 'node:fs';
 import { IAgentProvider, ProviderCapabilities, ProviderId, ProviderMessage, ProviderMode, ProviderSessionConfig, ProviderStatus, ProviderStreamEvent } from './provider.types.js';
+import { PROJECTS_DIR, resolveRepoDir } from '../../../config/constants.js';
 import { loadConfig } from '../../../config/storage.js';
-import { PROJECTS_DIR } from '../../../config/constants.js';
 
 interface ActiveProcessSession {
   config: ProviderSessionConfig;
@@ -128,7 +128,7 @@ export class AntigravityAdapter implements IAgentProvider {
 
     let session = this.activeSessions.get(sessionId);
     if (!session) {
-      const targetPath = path.join(PROJECTS_DIR, 'local');
+      const targetPath = resolveRepoDir('local');
       session = {
         config: { sessionId, repoName: 'local', projectPath: targetPath },
         outputBuffer: '',
@@ -141,7 +141,7 @@ export class AntigravityAdapter implements IAgentProvider {
     session.outputBuffer = '';
     session.isWaitingApproval = false;
 
-    const targetCwd = session.config.projectPath || path.join(PROJECTS_DIR, session.config.repoName || 'local');
+    const targetCwd = session.config.projectPath || resolveRepoDir(session.config.repoName || 'local');
     if (!fs.existsSync(targetCwd)) {
       fs.mkdirSync(targetCwd, { recursive: true });
     }

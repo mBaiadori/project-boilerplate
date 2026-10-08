@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
-import { PROJECTS_DIR } from '../../config/constants.js';
+import { PROJECTS_DIR, resolveRepoDir } from '../../config/constants.js';
 import { loadConfig, recordChange } from '../../config/storage.js';
 import { CustomToolDefinition, ProjectToolsManifest } from './skills.types.js';
 import { ToolResult } from '../ai/tools/tool.types.js';
@@ -17,7 +17,10 @@ function getSafeRepo(repoName?: string): string {
 
 export class CustomToolsService {
   private getRepoDir(repoName: string): string {
-    return path.join(PROJECTS_DIR, getSafeRepo(repoName));
+    const cfg = loadConfig();
+    const safeName = getSafeRepo(repoName);
+    const effectiveOwner = cfg.active_repo?.name === safeName ? cfg.active_repo?.owner : undefined;
+    return resolveRepoDir(safeName, effectiveOwner);
   }
 
   private getToolsDir(repoName: string): string {
@@ -198,7 +201,7 @@ export class CustomToolsService {
       };
     }
 
-    const safeRepoDir = path.resolve(PROJECTS_DIR, getSafeRepo(context.repoName));
+    const safeRepoDir = resolveRepoDir(getSafeRepo(context.repoName));
 
     // Sandbox helper functions exposed to the custom script
     const safeUtils = {
@@ -335,7 +338,7 @@ export class CustomToolsService {
       command = command.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), String(val));
     }
 
-    const safeRepoDir = path.resolve(PROJECTS_DIR, getSafeRepo(context.repoName));
+    const safeRepoDir = resolveRepoDir(getSafeRepo(context.repoName));
 
     const { stdout, stderr } = await execAsync(command, {
       cwd: safeRepoDir,

@@ -11,8 +11,10 @@ import { DiffModal } from '../components/modals/DiffModal';
 import { ScaffoldModal } from '../components/modals/ScaffoldModal';
 import { AISettingsModal } from '../components/modals/AISettingsModal';
 import { OnboardingModal } from '../components/modals/OnboardingModal';
+import { AlertBanner } from '../components/ui/AlertBanner';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { useAI } from '../context/AIContext';
+import { useAuth } from '../context/AuthContext';
 
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { EditorSubView } from './subviews/EditorSubView';
@@ -25,16 +27,14 @@ import { AICenterSubView } from './subviews/AICenterSubView';
 import { GovernanceMembersSubView } from './subviews/GovernanceMembersSubView';
 import { SettingsSubView } from './subviews/SettingsSubView';
 
-interface DashboardViewProps {
-  onBackToRepos?: () => void;
-}
+interface DashboardViewProps {}
 
 const AI_WIDTH_STORAGE_KEY = 'spec_ai_pane_width';
 const DEFAULT_AI_WIDTH = 360;
 
 const VALID_SUBVIEWS: SubViewType[] = ['editor', 'edits', 'versions', 'dictionary', 'wiki', 'templates', 'skills', 'aicenter', 'prs', 'governance', 'settings'];
 
-export const DashboardView: React.FC<DashboardViewProps> = ({ onBackToRepos }) => {
+export const DashboardView: React.FC<DashboardViewProps> = () => {
   const { org, repoName, subview } = useParams<{ org?: string; repoName: string; subview?: string }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -49,7 +49,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onBackToRepos }) =
   const [isScaffoldModalOpen, setIsScaffoldModalOpen] = useState(false);
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
 
-  const { activeFile, activeRepo, fileContent, selectRepoByName, loadFile, hasUnreadWhatsNew, activeOrg, selectOrg } = useWorkspace();
+  const { activeFile, activeRepo, fileContent, selectRepoByName, loadFile, hasUnreadWhatsNew, activeOrg, selectOrg, authError, setAuthError } = useWorkspace();
+  const { logout } = useAuth();
   const { messages, aiSettings, openSettingsModal } = useAI();
   const [systemPrompt, setSystemPrompt] = useState('');
   const fileParam = searchParams.get('file');
@@ -87,10 +88,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onBackToRepos }) =
     if (fileParam && fileParam !== activeFile && activeRepo) {
       const currentHash = window.location.hash || '';
       loadFile(`${fileParam}${currentHash}`, repoName || activeRepo.name);
-    } else if (!fileParam && activeFile && activeSubView === 'editor') {
-      loadFile('', repoName || activeRepo?.name);
     }
-  }, [fileParam, activeFile, activeRepo?.name, repoName, loadFile, activeSubView]);
+  }, [fileParam, activeFile, activeRepo?.name, repoName, loadFile]);
 
   const [aiWidth, setAiWidth] = useState<number>(() => {
     try {
@@ -181,14 +180,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onBackToRepos }) =
     navigate(`${base}?tab=${targetTab}`);
   }, [buildRepoBaseUrl, hasUnreadWhatsNew, navigate]);
 
-  const handleBackToRepos = useCallback(() => {
-    if (onBackToRepos) {
-      onBackToRepos();
-    } else {
-      navigate('/repos');
-    }
-  }, [onBackToRepos, navigate]);
-
   const handleOpenDiffModal = useCallback(() => {
     handleNavigateToEdits('drafts');
   }, [handleNavigateToEdits]);
@@ -219,7 +210,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onBackToRepos }) =
     <div id="view-dashboard" className="screen-view" style={{ display: 'flex' }}>
       {/* Top Global Header */}
       <TopHeader
-        onBackToRepos={handleBackToRepos}
         onOpenDiffModal={handleOpenDiffModal}
         onToggleCopilot={toggleCopilot}
         onOpenGitModal={handleOpenGitModal}
@@ -238,6 +228,40 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onBackToRepos }) =
 
         {/* Main Views Container */}
         <main className="dash-views-container">
+          {authError && (
+            <div style={{ padding: '8px 16px', background: 'var(--bg-surface)', borderBottom: '1px solid var(--border)' }}>
+              <AlertBanner
+                type="error"
+                title="Autenticação com GitHub Necessária"
+                message={authError}
+                onClose={() => setAuthError(null)}
+                action={
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <button
+                      type="button"
+                      className="btn btn--primary btn--sm"
+                      onClick={() => navigate('/login')}
+                      style={{ fontSize: '12px', padding: '4px 10px', height: '28px' }}
+                    >
+                      Reconectar Conta
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn--secondary btn--sm"
+                      onClick={async () => {
+                        await logout();
+                        navigate('/login');
+                      }}
+                      style={{ fontSize: '12px', padding: '4px 10px', height: '28px' }}
+                    >
+                      Desconectar
+                    </button>
+                  </div>
+                }
+              />
+            </div>
+          )}
+
           {activeSubView === 'editor' && (
             <EditorSubView
               onOpenScaffoldWizard={() => setIsScaffoldModalOpen(true)}

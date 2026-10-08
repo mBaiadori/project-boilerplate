@@ -1,14 +1,17 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { PROJECTS_DIR } from '../../config/constants.js';
+import { PROJECTS_DIR, resolveRepoDir } from '../../config/constants.js';
 import { loadConfig, recordChange } from '../../config/storage.js';
 
 import { validateJsonSchema } from '../../utils/schema.validator.js';
 
 export class DictionaryService {
   private getDictionaryPath(repoName: string): string {
-    const hiddenPath = path.join(PROJECTS_DIR, repoName || 'local', '.dictionary.json');
-    const legacyPath = path.join(PROJECTS_DIR, repoName || 'local', 'project', 'dictionary.json');
+    const cfg = loadConfig();
+    const effectiveOwner = cfg.active_repo?.name === repoName ? cfg.active_repo?.owner : undefined;
+    const repoDir = resolveRepoDir(repoName || 'local', effectiveOwner);
+    const hiddenPath = path.join(repoDir, '.dictionary.json');
+    const legacyPath = path.join(repoDir, 'project', 'dictionary.json');
     if (!fs.existsSync(hiddenPath) && fs.existsSync(legacyPath)) {
       return legacyPath;
     }

@@ -1,6 +1,6 @@
 import path from 'node:path';
 import fs from 'node:fs';
-import { PROJECTS_DIR } from '../../../config/constants.js';
+import { resolveRepoDir, FRAMEWORK_DEFAULT_DIR } from '../../../config/constants.js';
 
 export interface ContextPointerOptions {
   repoName: string;
@@ -18,12 +18,12 @@ export class ContextPointerService {
     const { repoName, activeFilePath, skillId, skillIds, skillsMeta } = options;
     const pointers: string[] = [];
 
-    const projectRoot = path.join(PROJECTS_DIR, repoName || 'local');
+    const projectRoot = resolveRepoDir(repoName || 'local');
     pointers.push(`- Diretório raiz do projeto ativo: ${projectRoot}`);
 
     // Dicionário Ubíquo
     const projectDict = path.join(projectRoot, '.dictionary.json');
-    const defaultDict = path.join(PROJECTS_DIR, 'default', '.dictionary.json');
+    const defaultDict = path.join(FRAMEWORK_DEFAULT_DIR, '.dictionary.json');
     if (fs.existsSync(projectDict)) {
       pointers.push(`- Dicionário Ubíquo do projeto: ${projectDict} (consulte para termos de domínio e tipos)`);
     } else if (fs.existsSync(defaultDict)) {

@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { execFile, exec } from "node:child_process";
-import { PROJECTS_DIR } from "../../config/constants.js";
+import { PROJECTS_DIR, resolveRepoDir } from "../../config/constants.js";
 import {
   loadConfig,
   saveConfig,
@@ -54,7 +54,12 @@ export class WorkspaceService {
   }
 
   private getRepoDir(repoName: string): string {
-    return path.join(PROJECTS_DIR, repoName || "local");
+    const cfg = loadConfig();
+    let effectiveOwner = cfg.active_repo?.name === repoName ? cfg.active_repo?.owner : undefined;
+    if (!effectiveOwner && repoName && repoName.includes("/")) {
+      effectiveOwner = repoName.split("/")[0];
+    }
+    return resolveRepoDir(repoName || "local", effectiveOwner);
   }
 
   loadDocsMetadata(repoName: string): DocumentMetadataItem[] {
@@ -145,9 +150,11 @@ export class WorkspaceService {
       }
     }
 
-    await ensureDefaultRepoFiles(repoName, true);
+    const effectiveOwner =
+      cfg.active_repo?.name === repoName ? cfg.active_repo?.owner : (repoName.includes("/") ? repoName.split("/")[0] : undefined);
+    await ensureDefaultRepoFiles(repoName, true, effectiveOwner);
 
-    const docsMetadata = docsMetadataService.loadDocsMetadata(repoName);
+    const docsMetadata = docsMetadataService.loadDocsMetadata(repoName, effectiveOwner);
     const metaMap = new Map(docsMetadata.map((d) => [d.path, d]));
     const tree = this.buildTree(repoDir, repoDir, metaMap);
 

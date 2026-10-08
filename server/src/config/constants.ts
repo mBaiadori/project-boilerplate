@@ -53,7 +53,73 @@ export const FRONTEND_DIR = path.join(PROJECT_ROOT, "frontend");
 export const UI_DIST_DIR = resolveUiDistDir();
 export const UI_DIR = UI_DIST_DIR;
 export const TEMPLATES_DIR = path.join(PROJECT_ROOT, "templates");
+export const FRAMEWORK_DEFAULT_DIR = path.join(TEMPLATES_DIR, "default");
 export const DOCS_DIR = path.join(PROJECT_ROOT, "docs");
+
+/**
+ * Resolve o diretório local de um repositório, com escopo por organização / owner.
+ * Ex: projects/enursy/teste ou projects/local/financeiro ou projects/mBaiadori/meu-repo
+ */
+export function resolveRepoDir(repoName: string, ownerOrOrg?: string | { login?: string } | any): string {
+  const cleanRepo = (repoName || "local").trim();
+  if (cleanRepo.includes("/")) {
+    const parts = cleanRepo.split("/");
+    const specificPath = path.join(PROJECTS_DIR, parts[0], parts.slice(1).join("/"));
+    if (fs.existsSync(specificPath)) return specificPath;
+    const flatSub = path.join(PROJECTS_DIR, parts.slice(1).join("/"));
+    if (fs.existsSync(flatSub)) return flatSub;
+    return specificPath;
+  }
+
+  const rawOwner =
+    typeof ownerOrOrg === "string"
+      ? ownerOrOrg
+      : typeof (ownerOrOrg as any)?.login === "string"
+        ? (ownerOrOrg as any).login
+        : "";
+  const cleanOwner = rawOwner.trim();
+  const canonicalPath =
+    cleanOwner && cleanOwner !== "all" && cleanOwner !== "personal"
+      ? path.join(PROJECTS_DIR, cleanOwner, cleanRepo)
+      : path.join(PROJECTS_DIR, "local", cleanRepo);
+
+  // 1. Se foi especificado um owner/org explícito (diferente de "all" ou "personal"):
+  if (cleanOwner && cleanOwner !== "all" && cleanOwner !== "personal") {
+    const scopedPath = path.join(PROJECTS_DIR, cleanOwner, cleanRepo);
+    // Se existe ou se ainda será clonado, deve residir exatamente na pasta com escopo da organização
+    return scopedPath;
+  }
+
+  // 2. Se for local / genérico, verifica se existe dentro da pasta 'local'
+  const localScoped = path.join(PROJECTS_DIR, "local", cleanRepo);
+  if (fs.existsSync(localScoped)) {
+    return localScoped;
+  }
+
+  // 3. Varre subdiretórios de organizações em projects/ para encontrar onde o repositório está
+  if (fs.existsSync(PROJECTS_DIR)) {
+    try {
+      const entries = fs.readdirSync(PROJECTS_DIR, { withFileTypes: true });
+      for (const entry of entries) {
+        if (entry.isDirectory() && !entry.name.startsWith(".") && entry.name !== "default" && entry.name !== "_default") {
+          const subPath = path.join(PROJECTS_DIR, entry.name, cleanRepo);
+          if (fs.existsSync(subPath)) {
+            return subPath;
+          }
+        }
+      }
+    } catch {}
+  }
+
+  // 4. Verifica se existe estrutura plana legada projects/{cleanRepo}
+  const flatPath = path.join(PROJECTS_DIR, cleanRepo);
+  if (fs.existsSync(flatPath) && fs.statSync(flatPath).isDirectory()) {
+    return flatPath;
+  }
+
+  // 5. Se não existir no disco, retorna o caminho canônico esperado
+  return canonicalPath;
+}
 
 export const DEFAULT_TEMPLATE_CREATOR_PROMPT = `Você é o Especialista em Criação e Curadoria de Templates Técnicos e de Produto pars.`;
 export const DEFAULT_GLOBAL_SYSTEM_PROMPT = `Você é um Assistente Especialista em Documentação Técnica, Engenharia de Software e Colaboração de Equipes.
@@ -102,13 +168,10 @@ export interface TemplatesMetadataItem {
   updated_at: string;
 }
 
-export function getProjectTemplatesPath(repoName: string): string {
-  const primaryPath = path.join(PROJECTS_DIR, repoName, ".templates.json");
-  const legacyMetaPath = path.join(
-    PROJECTS_DIR,
-    repoName,
-    ".templates.metadata.json",
-  );
+export function getProjectTemplatesPath(repoName: string, ownerOrOrg?: string): string {
+  const repoDir = resolveRepoDir(repoName, ownerOrOrg);
+  const primaryPath = path.join(repoDir, ".templates.json");
+  const legacyMetaPath = path.join(repoDir, ".templates.metadata.json");
   if (!fs.existsSync(primaryPath) && fs.existsSync(legacyMetaPath)) {
     return legacyMetaPath;
   }
@@ -170,8 +233,8 @@ function sanitizeTemplateItem(
   };
 }
 
-export function loadProjectTemplates(repoName: string): ProjectTemplate[] {
-  const filePath = getProjectTemplatesPath(repoName);
+export function loadProjectTemplates(repoName: string, ownerOrOrg?: string): ProjectTemplate[] {
+  const filePath = getProjectTemplatesPath(repoName, ownerOrOrg);
   if (!fs.existsSync(filePath)) return [];
   try {
     const raw = fs.readFileSync(filePath, "utf-8").trim();
@@ -191,8 +254,10 @@ export function loadProjectTemplates(repoName: string): ProjectTemplate[] {
 export function saveProjectTemplates(
   repoName: string,
   items: ProjectTemplate[],
+  ownerOrOrg?: string,
 ): void {
-  const filePath = path.join(PROJECTS_DIR, repoName, ".templates.json");
+  const repoDir = resolveRepoDir(repoName, ownerOrOrg);
+  const filePath = path.join(repoDir, ".templates.json");
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   const sanitized = items.map((t) =>
     sanitizeTemplateItem(t, (t.source as any) || "local"),

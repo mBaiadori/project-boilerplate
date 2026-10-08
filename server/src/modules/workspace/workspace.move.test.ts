@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert";
 import fs from "node:fs";
 import path from "node:path";
-import { PROJECTS_DIR } from "../../config/constants.js";
+import { resolveRepoDir } from "../../config/constants.js";
 import { workspaceService } from "./workspace.service.js";
 import { docsMetadataService } from "./docs-metadata.service.js";
 
@@ -10,8 +10,8 @@ test("Cross-Repository File Move Suite", async (t) => {
   const repoA = "test-move-repo-a";
   const repoB = "test-move-repo-b";
 
-  const dirA = path.join(PROJECTS_DIR, repoA);
-  const dirB = path.join(PROJECTS_DIR, repoB);
+  const dirA = resolveRepoDir(repoA);
+  const dirB = resolveRepoDir(repoB);
 
   // Setup test environment
   fs.mkdirSync(path.join(dirA, "domains"), { recursive: true });

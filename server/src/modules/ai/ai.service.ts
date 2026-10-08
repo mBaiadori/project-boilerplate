@@ -3,7 +3,7 @@ import path from 'node:path';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import OpenAI from 'openai';
 import Anthropic from '@anthropic-ai/sdk';
-import { PROJECTS_DIR, DEFAULT_GLOBAL_SYSTEM_PROMPT } from '../../config/constants.js';
+import { PROJECTS_DIR, DEFAULT_GLOBAL_SYSTEM_PROMPT, resolveRepoDir } from '../../config/constants.js';
 import { loadConfig } from '../../config/storage.js';
 import { toolRegistry } from './tools/ToolRegistry.js';
 import { ToolCallExecutionRecord } from './tools/tool.types.js';
@@ -83,9 +83,9 @@ export class AIService {
       ? repoName
       : (cfg.active_repo?.name || 'default');
 
-    const targetDir = path.join(PROJECTS_DIR, resolvedRepo, '.spec-memory');
+    const targetDir = path.join(resolveRepoDir(resolvedRepo), '.spec-memory');
     if (!fs.existsSync(targetDir) && cfg.active_repo?.name) {
-      const activeDir = path.join(PROJECTS_DIR, cfg.active_repo.name, '.spec-memory');
+      const activeDir = path.join(resolveRepoDir(cfg.active_repo.name), '.spec-memory');
       if (fs.existsSync(activeDir)) {
         return activeDir;
       }
@@ -679,7 +679,7 @@ export class AIService {
     if (!fs.existsSync(sessionsDir)) {
       const cfg = loadConfig();
       if (cfg.active_repo?.name && cfg.active_repo.name !== repoName) {
-        const fallbackDir = path.join(PROJECTS_DIR, cfg.active_repo.name, '.spec-memory', 'sessions');
+        const fallbackDir = path.join(resolveRepoDir(cfg.active_repo.name), '.spec-memory', 'sessions');
         if (fs.existsSync(fallbackDir)) {
           sessionsDir = fallbackDir;
         } else {
@@ -770,7 +770,7 @@ export class AIService {
     if (!fs.existsSync(sessionFile)) {
       const cfg = loadConfig();
       if (cfg.active_repo?.name && cfg.active_repo.name !== repoName) {
-        const fallbackFile = path.join(PROJECTS_DIR, cfg.active_repo.name, '.spec-memory', 'sessions', `${sessionId}.json`);
+        const fallbackFile = path.join(resolveRepoDir(cfg.active_repo.name), '.spec-memory', 'sessions', `${sessionId}.json`);
         if (fs.existsSync(fallbackFile)) {
           sessionFile = fallbackFile;
         }
@@ -790,7 +790,7 @@ export class AIService {
     if (!fs.existsSync(sessionFile)) {
       const cfg = loadConfig();
       if (cfg.active_repo?.name && cfg.active_repo.name !== repoName) {
-        const fallbackFile = path.join(PROJECTS_DIR, cfg.active_repo.name, '.spec-memory', 'sessions', `${sessionId}.json`);
+        const fallbackFile = path.join(resolveRepoDir(cfg.active_repo.name), '.spec-memory', 'sessions', `${sessionId}.json`);
         if (fs.existsSync(fallbackFile)) {
           sessionFile = fallbackFile;
         }

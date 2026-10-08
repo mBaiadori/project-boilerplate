@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { PROJECTS_DIR } from '../../config/constants.js';
+import { PROJECTS_DIR, resolveRepoDir } from '../../config/constants.js';
 import { loadConfig, clearWorkspaceChanges } from '../../config/storage.js';
 import { workspaceService } from '../workspace/workspace.service.js';
 import {
@@ -27,7 +27,8 @@ export class GitService {
   private getRepoDir(repoName?: string): string {
     const cfg = loadConfig();
     const activeRepoName = repoName || cfg.active_repo?.name || 'local';
-    return path.join(PROJECTS_DIR, activeRepoName);
+    const effectiveOwner = cfg.active_repo?.name === activeRepoName ? cfg.active_repo?.owner : undefined;
+    return resolveRepoDir(activeRepoName, effectiveOwner);
   }
 
   async ensureActiveRepoGit(repoNameParam?: string) {

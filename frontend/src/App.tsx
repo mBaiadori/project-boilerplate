@@ -2,12 +2,11 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import { WorkspaceProvider } from './context/WorkspaceContext';
+import { WorkspaceProvider, useWorkspace } from './context/WorkspaceContext';
 import { SecurityProvider } from './context/SecurityContext';
 import { AIProvider } from './context/AIContext';
 import { AuthView } from './views/AuthView';
 import { AdminAuthView } from './views/AdminAuthView';
-import { ReposView } from './views/ReposView';
 import { DashboardView } from './views/DashboardView';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -63,10 +62,10 @@ const CollaboratorAuthRoute: React.FC = () => {
   }
 
   if (isAuthenticated) {
-    return <Navigate to="/repos" replace />;
+    return <Navigate to="/" replace />;
   }
 
-  return <AuthView onLoginSuccess={() => navigate('/repos')} />;
+  return <AuthView onLoginSuccess={() => navigate('/')} />;
 };
 
 const AdminAuthRoute: React.FC = () => {
@@ -93,10 +92,10 @@ const AdminAuthRoute: React.FC = () => {
   }
 
   if (isAuthenticated) {
-    return <Navigate to="/repos" replace />;
+    return <Navigate to="/" replace />;
   }
 
-  return <AdminAuthView onLoginSuccess={() => navigate('/repos')} />;
+  return <AdminAuthView onLoginSuccess={() => navigate('/')} />;
 };
 
 const OrgRepoRedirect: React.FC = () => {
@@ -109,6 +108,41 @@ const RepoRedirect: React.FC = () => {
   return <Navigate to={`/repo/${encodeURIComponent(repoName || '')}/editor`} replace />;
 };
 
+const RootRedirect: React.FC = () => {
+  const { activeRepo, repos, isLoadingWorkspace } = useWorkspace();
+  const { t } = useTranslation('common');
+
+  if (isLoadingWorkspace && !activeRepo && repos.length === 0) {
+    return (
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          height: '100vh',
+          background: 'var(--color-surface, #1e1e2e)',
+          color: 'var(--color-outline, #a6adc8)',
+          fontFamily: 'var(--font-sans, system-ui)',
+        }}
+      >
+        {t('loadingPlatform')}
+      </div>
+    );
+  }
+
+  const targetRepo = activeRepo || repos[0];
+  if (targetRepo) {
+    const owner = targetRepo.owner || (targetRepo.full_name?.includes('/') ? targetRepo.full_name.split('/')[0] : '');
+    const repoName = targetRepo.name || (targetRepo.full_name?.includes('/') ? targetRepo.full_name.split('/')[1] : targetRepo.full_name) || '';
+    if (owner && owner !== 'local' && owner !== 'personal') {
+      return <Navigate to={`/org/${encodeURIComponent(owner)}/repo/${encodeURIComponent(repoName)}/editor`} replace />;
+    }
+    return <Navigate to={`/repo/${encodeURIComponent(repoName)}/editor`} replace />;
+  }
+
+  return <DashboardView />;
+};
+
 export const App: React.FC = () => {
   return (
     <BrowserRouter>
@@ -118,21 +152,11 @@ export const App: React.FC = () => {
             <AIProvider>
               <div style={{ width: '100%', height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
                 <Routes>
-                  {/* Rotas de Autenticação Separadas */}
+                  {/* Rotas de Autenticação */}
                   <Route path="/login" element={<CollaboratorAuthRoute />} />
                   <Route path="/admin" element={<AdminAuthRoute />} />
                   <Route path="/login/admin" element={<AdminAuthRoute />} />
                   <Route path="/auth" element={<Navigate to="/login" replace />} />
-
-                  {/* Seleção de Repositórios */}
-                  <Route
-                    path="/repos"
-                    element={
-                      <ProtectedRoute>
-                        <ReposView />
-                      </ProtectedRoute>
-                    }
-                  />
 
                   {/* Rotas COM Organização: /org/:org/repo/:repoName */}
                   <Route
@@ -171,8 +195,15 @@ export const App: React.FC = () => {
                   />
 
                   {/* Rota raiz e Fallback */}
-                  <Route path="/" element={<Navigate to="/repos" replace />} />
-                  <Route path="*" element={<Navigate to="/repos" replace />} />
+                  <Route
+                    path="/"
+                    element={
+                      <ProtectedRoute>
+                        <RootRedirect />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
               </div>
             </AIProvider>

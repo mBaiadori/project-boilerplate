@@ -1,11 +1,12 @@
 import fs from "node:fs";
 import path from "node:path";
-import { PROJECTS_DIR } from "../../config/constants.js";
+import { PROJECTS_DIR, resolveRepoDir } from "../../config/constants.js";
 import { validateJsonSchema } from "../../utils/schema.validator.js";
 import {
   DEFAULT_DEPARTMENTS,
   DepartmentConfig,
 } from "../governance/governance.types.js";
+import { loadConfig } from "../../config/storage.js";
 
 export interface DocumentMetadataItem {
   id: string;
@@ -179,7 +180,9 @@ export function extractDocTitleFromMarkdown(content: string): string | null {
 
 export class DocsMetadataService {
   private getRepoDir(repoName: string): string {
-    return path.join(PROJECTS_DIR, repoName || "local");
+    const cfg = loadConfig();
+    const effectiveOwner = cfg.active_repo?.name === repoName ? cfg.active_repo?.owner : undefined;
+    return resolveRepoDir(repoName || "local", effectiveOwner);
   }
 
   getDocsMetadataPath(repoName: string): string {

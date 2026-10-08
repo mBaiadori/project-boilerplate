@@ -104,7 +104,7 @@ export const API = {
     return safeParseJson(res, { success: true });
   },
 
-  async getRepos(): Promise<ApiResponse<{ repos: Repo[] }>> {
+  async getRepos(): Promise<ApiResponse<{ repos: Repo[]; auth_error?: string; authenticated?: boolean; active_repo?: Repo }>> {
     const res = await fetch('/api/repos');
     return { ok: res.ok, data: await safeParseJson(res, { repos: [] }) };
   },

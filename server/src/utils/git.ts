@@ -302,8 +302,12 @@ async function internalEnsureGitRepo(
   // Auto-resolve remoteUrl if missing and token exists (only for real remote repositories, never for 'local' or 'default')
   let targetRemoteUrl = remoteUrl;
   const isExplicitLocal = !repoName || repoName === "local" || repoName === "default" || repoName === "_default";
-  if (!targetRemoteUrl && token && user?.login && repoName && !isExplicitLocal) {
-    targetRemoteUrl = `https://github.com/${user.login}/${repoName}.git`;
+  if (!targetRemoteUrl && token && repoName && !isExplicitLocal) {
+    if (repoName.includes("/")) {
+      targetRemoteUrl = `https://github.com/${repoName}.git`;
+    } else if (user?.login) {
+      targetRemoteUrl = `https://github.com/${user.login}/${repoName}.git`;
+    }
   }
 
   // Form authenticated clone URL if applicable

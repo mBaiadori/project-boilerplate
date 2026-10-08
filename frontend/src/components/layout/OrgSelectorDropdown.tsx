@@ -2,13 +2,26 @@ import React, { useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Building2, ChevronDown, Check } from "lucide-react";
 import { useWorkspace } from "../../context/WorkspaceContext";
+import { useAuth } from "../../context/AuthContext";
 import { useOrgUiStore } from "../../stores/orgUiStore";
 
 export const OrgSelectorDropdown: React.FC = () => {
   const { activeOrg, orgs, selectOrg, repos } = useWorkspace();
+  const { user } = useAuth();
   const { isOrgDropdownOpen, toggleOrgDropdown, closeOrgDropdown } = useOrgUiStore();
   const navigate = useNavigate();
   const containerRef = useRef<HTMLDivElement>(null);
+
+  const displayOrgs = (orgs && orgs.length > 0)
+    ? orgs
+    : user?.login
+      ? [{
+          login: user.login,
+          full_name: `${user.name || user.login} (Pessoal)`,
+          avatar_url: user.avatar_url,
+          is_personal: true,
+        }]
+      : [];
 
   // Fecha o dropdown ao clicar fora ou pressionar Escape
   useEffect(() => {
@@ -40,7 +53,9 @@ export const OrgSelectorDropdown: React.FC = () => {
     };
   }, [isOrgDropdownOpen, closeOrgDropdown]);
 
-  if (!orgs || orgs.length === 0) return null;
+  if (displayOrgs.length === 0 && !user?.login) return null;
+
+  const currentOrg = activeOrg || displayOrgs[0] || (user?.login ? { login: user.login, full_name: user.name || user.login } : null);
 
   return (
     <div
@@ -75,10 +90,10 @@ export const OrgSelectorDropdown: React.FC = () => {
           maxWidth: "200px",
         }}
       >
-        {activeOrg?.avatar_url ? (
+        {currentOrg?.avatar_url ? (
           <img
-            src={activeOrg.avatar_url}
-            alt={activeOrg.login}
+            src={currentOrg.avatar_url}
+            alt={currentOrg.login}
             style={{
               width: "20px",
               height: "20px",
@@ -114,7 +129,7 @@ export const OrgSelectorDropdown: React.FC = () => {
             textAlign: "left",
           }}
         >
-          {activeOrg?.full_name || activeOrg?.login || "Organização"}
+          {currentOrg?.full_name || currentOrg?.login || "Organização"}
         </span>
 
         <ChevronDown
@@ -137,7 +152,7 @@ export const OrgSelectorDropdown: React.FC = () => {
             position: "absolute",
             top: "calc(100% + 6px)",
             right: 0,
-            minWidth: "220px",
+            minWidth: "230px",
             backgroundColor: "var(--md-sys-color-surface, #ffffff)",
             borderRadius: "var(--md-shape-corner-md, 12px)",
             border: "1px solid var(--md-sys-color-outline-variant, #dadce0)",
@@ -148,8 +163,8 @@ export const OrgSelectorDropdown: React.FC = () => {
             animation: "fadeIn 0.12s ease-out",
           }}
         >
-          {orgs.map((o) => {
-            const isSelected = (activeOrg?.login || "").toLowerCase() === o.login.toLowerCase();
+          {displayOrgs.map((o) => {
+            const isSelected = (currentOrg?.login || "").toLowerCase() === o.login.toLowerCase();
             return (
               <div
                 key={o.login}

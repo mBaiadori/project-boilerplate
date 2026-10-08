@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { BASE_DIR, PROJECTS_DIR } from '../../config/constants.js';
+import { BASE_DIR, PROJECTS_DIR, resolveRepoDir } from '../../config/constants.js';
 import { loadConfig, recordChange } from '../../config/storage.js';
 import { SkillDefinition, ProjectSkillsManifest, SkillMetadata } from './skills.types.js';
 import { ECC_SEED_SKILLS } from './seeds/seeds.data.js';
@@ -13,7 +13,10 @@ function getSafeRepo(repoName?: string): string {
 
 export class SkillsService {
   private getRepoDir(repoName: string): string {
-    return path.join(PROJECTS_DIR, getSafeRepo(repoName));
+    const cfg = loadConfig();
+    const safeName = getSafeRepo(repoName);
+    const effectiveOwner = cfg.active_repo?.name === safeName ? cfg.active_repo?.owner : undefined;
+    return resolveRepoDir(safeName, effectiveOwner);
   }
 
   private getSkillsDir(repoName: string): string {

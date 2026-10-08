@@ -4,7 +4,6 @@ import { useAuth } from "../../context/AuthContext";
 import { isPathHidden } from "../../utils/hidden-files";
 import { IconButton, Button, Badge } from "../ui";
 import {
-  ArrowLeft,
   Sparkles,
   HelpCircle,
   User,
@@ -14,7 +13,6 @@ import {
 import { OrgSelectorDropdown } from "./OrgSelectorDropdown";
 
 interface TopHeaderProps {
-  onBackToRepos: () => void;
   onOpenDiffModal: () => void;
   onToggleCopilot: () => void;
   onOpenGitModal?: () => void;
@@ -24,7 +22,6 @@ interface TopHeaderProps {
 
 export const TopHeader: React.FC<TopHeaderProps> = React.memo(
   ({
-    onBackToRepos,
     onOpenDiffModal,
     onToggleCopilot,
     onOpenGitModal = () => {},
@@ -60,16 +57,6 @@ export const TopHeader: React.FC<TopHeaderProps> = React.memo(
     return (
       <header className="dashboard-navbar" style={{ position: "relative" }}>
         <div className="dash-brand">
-          <IconButton
-            id="btn-back-to-repos"
-            bordered
-            size="md"
-            tooltip="Voltar para a lista de Repositórios"
-            onClick={onBackToRepos}
-          >
-            <ArrowLeft size={18} />
-          </IconButton>
-
           {user?.avatar_url ? (
             <img
               id="dash-user-avatar"

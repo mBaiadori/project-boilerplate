@@ -38,6 +38,17 @@ function findFirstMdFile(nodes: TreeNode[]): string | null {
   return null;
 }
 
+function fileExistsInTree(nodes: TreeNode[], targetPath: string): boolean {
+  if (!targetPath) return false;
+  for (const node of nodes) {
+    if (node.type === "file" && node.path === targetPath) return true;
+    if (node.children && node.children.length > 0) {
+      if (fileExistsInTree(node.children, targetPath)) return true;
+    }
+  }
+  return false;
+}
+
 export type AutoSaveStatus =
   | "Pronto"
   | "Salvando..."
@@ -144,6 +155,8 @@ interface WorkspaceContextType {
   effectivePermission: EffectiveUserPermission | null;
   isLoadingPermission: boolean;
   refreshEffectivePermission: (repo?: Repo) => Promise<void>;
+  authError: string | null;
+  setAuthError: (err: string | null) => void;
 }
 
 const WorkspaceContext = createContext<WorkspaceContextType | undefined>(
@@ -203,6 +216,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
   }, [dictionaryTerms]);
 
   const [effectivePermission, setEffectivePermission] = useState<EffectiveUserPermission | null>(null);
+  const [authError, setAuthError] = useState<string | null>(null);
   const fileCacheRef = useRef<Map<string, { content: string; originalContent: string; meta: any }>>(new Map());
   const activeFileRef = useRef<string>("");
   const fileContentRef = useRef<string>("");
@@ -326,7 +340,12 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
     setIsLoading(true);
     try {
       const res = await API.getRepos();
-      if (res.ok && res.data.repos) {
+      if (res.data?.auth_error) {
+        setAuthError(res.data.auth_error);
+      } else if (res.ok) {
+        setAuthError(null);
+      }
+      if (res.ok && res.data?.repos) {
         const cleanRepos = res.data.repos.filter((r) => r.name !== 'default' && r.name !== '_default');
         setRepos(cleanRepos);
       }
@@ -572,8 +591,8 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
         }
       }
 
-      // Se o arquivo já for o ativo atual, apenas disparar a navegação de fragmento sem recarregar o arquivo do zero
-      if (cleanPath === activeFileRef.current) {
+      // Se o arquivo já for o ativo atual no mesmo repositório, apenas disparar a navegação de fragmento sem recarregar o arquivo do zero
+      if (cleanPath === activeFileRef.current && currentRepoName === activeDocRepoRef.current) {
         if (hash) {
           window.dispatchEvent(
             new CustomEvent("workspace:navigate-fragment", {
@@ -1203,18 +1222,22 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
 
         setIsLoadingTree(false);
 
-        // Mantém o editor no último documento selecionado.
-        // Só altera se um arquivo inicial foi explicitamente solicitado,
-        // ou se o editor estiver completamente vazio na primeira inicialização.
-        const fileToOpen =
-          initialFile !== undefined
-            ? initialFile
-            : (!activeFileRef.current ? findFirstMdFile(data.tree || []) : null);
+        const treeNodes = data.tree || [];
+        let fileToOpen: string | null = null;
+        if (initialFile !== undefined) {
+          fileToOpen = initialFile;
+        } else if (activeFileRef.current && fileExistsInTree(treeNodes, activeFileRef.current)) {
+          fileToOpen = activeFileRef.current;
+        } else {
+          fileToOpen = findFirstMdFile(treeNodes);
+        }
 
         if (fileToOpen) {
           loadFile(fileToOpen, repo.name).catch((e) =>
             console.warn("[WorkspaceContext] Erro ao carregar arquivo inicial:", e)
           );
+        } else {
+          loadFile("", repo.name).catch(() => {});
         }
 
         // Executa carregamentos secundários e verificação de commits remotos em segundo plano sem bloquear a árvore/editor
@@ -1676,6 +1699,8 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
         effectivePermission,
         isLoadingPermission,
         refreshEffectivePermission,
+        authError,
+        setAuthError,
       }}
     >
       {children}

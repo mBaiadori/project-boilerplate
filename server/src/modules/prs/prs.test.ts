@@ -3,14 +3,14 @@ import assert from 'node:assert';
 import fs from 'node:fs';
 import path from 'node:path';
 import { prsService } from './prs.service.js';
-import { PROJECTS_DIR } from '../../config/constants.js';
+import { resolveRepoDir } from '../../config/constants.js';
 
 describe('PRsService - Isolamento de PRs por Repositório', () => {
   const TEST_REPO_A = 'test-repo-alpha';
   const TEST_REPO_B = 'test-repo-beta';
 
-  const repoADir = path.join(PROJECTS_DIR, TEST_REPO_A);
-  const repoBDir = path.join(PROJECTS_DIR, TEST_REPO_B);
+  const repoADir = resolveRepoDir(TEST_REPO_A);
+  const repoBDir = resolveRepoDir(TEST_REPO_B);
 
   after(() => {
     try {

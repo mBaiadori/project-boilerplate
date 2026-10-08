@@ -21,8 +21,26 @@ export class AuthService {
       throw new Error(`Falha na autenticação com GitHub (${statusCode})${msg}.`);
     }
 
+    const cfg = loadConfig();
     const orgsMap = new Map<string, any>();
 
+    // 1. Preserva organizações já salvas ou vinculadas anteriormente
+    if (Array.isArray(cfg.orgs)) {
+      for (const o of cfg.orgs) {
+        if (o?.login) orgsMap.set(o.login.toLowerCase(), o);
+      }
+    }
+
+    // 2. Namespace pessoal do usuário
+    orgsMap.set(user.login.toLowerCase(), {
+      login: user.login,
+      avatar_url: user.avatar_url,
+      description: 'Conta Pessoal',
+      full_name: `${user.name || user.login} (Pessoal)`,
+      is_personal: true,
+    });
+
+    // 3. Organizações diretas (/user/orgs)
     try {
       const { data: orgs } = await callGitHubAPI('/user/orgs?per_page=100', token, 'GET');
       if (Array.isArray(orgs)) {
@@ -41,6 +59,7 @@ export class AuthService {
       console.warn('[AuthService] Erro ao buscar /user/orgs:', e);
     }
 
+    // 4. Memberships ativas (/user/memberships/orgs)
     try {
       const { data: memData } = await callGitHubAPI('/user/memberships/orgs?state=active&per_page=100', token, 'GET');
       if (Array.isArray(memData)) {
@@ -52,6 +71,7 @@ export class AuthService {
               avatar_url: org.avatar_url,
               description: org.description || '',
               full_name: org.name || org.login,
+              role: item.role,
             });
           }
         }
@@ -60,9 +80,61 @@ export class AuthService {
       console.warn('[AuthService] Erro ao buscar /user/memberships/orgs:', e);
     }
 
+    // 5. Auto-descobre organizações a partir de repositórios do usuário (/user/repos)
+    try {
+      const { data: repoData } = await callGitHubAPI(
+        '/user/repos?per_page=100&affiliation=owner,collaborator,organization_member&sort=updated',
+        token,
+        'GET',
+      );
+      if (Array.isArray(repoData)) {
+        for (const r of repoData) {
+          if (r.owner && (r.owner.type === 'Organization' || r.owner.login?.toLowerCase() !== user.login.toLowerCase()) && r.owner.login) {
+            const oLogin = r.owner.login;
+            if (!orgsMap.has(oLogin.toLowerCase())) {
+              orgsMap.set(oLogin.toLowerCase(), {
+                login: oLogin,
+                avatar_url: r.owner.avatar_url || `https://github.com/${encodeURIComponent(oLogin)}.png`,
+                description: '',
+                full_name: oLogin,
+              });
+            }
+          }
+        }
+      }
+    } catch (repoErr) {
+      console.warn('[AuthService] Erro ao auto-descobrir orgs de repos:', repoErr);
+    }
+
+    // 6. Auto-descobre organizações a partir de pastas locais em projects/
+    try {
+      const { PROJECTS_DIR } = await import('../../config/constants.js');
+      const fs = await import('node:fs');
+      if (fs.existsSync(PROJECTS_DIR)) {
+        const entries = fs.readdirSync(PROJECTS_DIR, { withFileTypes: true });
+        for (const entry of entries) {
+          if (entry.isDirectory()) {
+            const folderName = entry.name;
+            const skip = ['default', '_default', 'local', '.spec-memory', 'node_modules', '.git'];
+            if (!skip.includes(folderName) && !folderName.startsWith('.')) {
+              if (!orgsMap.has(folderName.toLowerCase())) {
+                orgsMap.set(folderName.toLowerCase(), {
+                  login: folderName,
+                  avatar_url: `https://github.com/${encodeURIComponent(folderName)}.png`,
+                  description: 'Workspace / Organização Local',
+                  full_name: folderName,
+                });
+              }
+            }
+          }
+        }
+      }
+    } catch (diskErr) {
+      console.warn('[AuthService] Erro ao escanear diretórios de projetos:', diskErr);
+    }
+
     const orgList = Array.from(orgsMap.values());
 
-    const cfg = loadConfig();
     cfg.authenticated = true;
     cfg.token = token;
     cfg.git_provider = 'github';

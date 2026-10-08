@@ -3,7 +3,7 @@ import path from 'node:path';
 import { AgentDefinition, MCPServerDefinition, CommunityToolDefinition } from './skills.types.js';
 import { eccSeedAgents } from './seeds/agents.seeds.js';
 import { eccSeedMcpTemplates } from './seeds/mcp.seeds.js';
-import { BASE_DIR, PROJECTS_DIR } from '../../config/constants.js';
+import { BASE_DIR, PROJECTS_DIR, resolveRepoDir } from '../../config/constants.js';
 import { toolRegistry } from '../ai/tools/ToolRegistry.js';
 
 export class AICenterService {
@@ -174,8 +174,8 @@ export class AICenterService {
   }
 
   public getProjectAgents(repoName: string): AgentDefinition[] {
-    const safeRepo = repoName.replace(/[^a-zA-Z0-9_-]/g, '') || 'local';
-    const agentsDir = path.join(PROJECTS_DIR, safeRepo, '.agents');
+    const repoDir = resolveRepoDir(repoName);
+    const agentsDir = path.join(repoDir, '.agents');
     const manifestPath = path.join(agentsDir, 'agents.manifest.json');
 
     if (!fs.existsSync(manifestPath)) {
@@ -197,8 +197,8 @@ export class AICenterService {
       throw new Error(`Agente '${agentId}' não encontrado no catálogo global.`);
     }
 
-    const safeRepo = repoName.replace(/[^a-zA-Z0-9_-]/g, '') || 'local';
-    const agentsDir = path.join(PROJECTS_DIR, safeRepo, '.agents');
+    const repoDir = resolveRepoDir(repoName);
+    const agentsDir = path.join(repoDir, '.agents');
     if (!fs.existsSync(agentsDir)) {
       fs.mkdirSync(agentsDir, { recursive: true });
     }
@@ -250,8 +250,8 @@ ${installedAgent.system_prompt}
   }
 
   public uninstallAgent(repoName: string, agentId: string): { success: boolean; message: string } {
-    const safeRepo = repoName.replace(/[^a-zA-Z0-9_-]/g, '') || 'local';
-    const agentsDir = path.join(PROJECTS_DIR, safeRepo, '.agents');
+    const repoDir = resolveRepoDir(repoName);
+    const agentsDir = path.join(repoDir, '.agents');
     const manifestPath = path.join(agentsDir, 'agents.manifest.json');
 
     if (!fs.existsSync(manifestPath)) {
@@ -458,8 +458,8 @@ ${installedAgent.system_prompt}
   }
 
   public getProjectMcpServers(repoName: string): MCPServerDefinition[] {
-    const safeRepo = repoName.replace(/[^a-zA-Z0-9_-]/g, '') || 'local';
-    const mcpConfigPath = path.join(PROJECTS_DIR, safeRepo, '.mcp.json');
+    const repoDir = resolveRepoDir(repoName);
+    const mcpConfigPath = path.join(repoDir, '.mcp.json');
 
     if (!fs.existsSync(mcpConfigPath)) {
       return [];
@@ -474,8 +474,7 @@ ${installedAgent.system_prompt}
   }
 
   public saveProjectMcpServer(repoName: string, server: MCPServerDefinition): { success: boolean; server: MCPServerDefinition } {
-    const safeRepo = repoName.replace(/[^a-zA-Z0-9_-]/g, '') || 'local';
-    const repoDir = path.join(PROJECTS_DIR, safeRepo);
+    const repoDir = resolveRepoDir(repoName);
     if (!fs.existsSync(repoDir)) {
       fs.mkdirSync(repoDir, { recursive: true });
     }
@@ -497,8 +496,8 @@ ${installedAgent.system_prompt}
   }
 
   public removeProjectMcpServer(repoName: string, serverId: string): { success: boolean; message: string } {
-    const safeRepo = repoName.replace(/[^a-zA-Z0-9_-]/g, '') || 'local';
-    const mcpConfigPath = path.join(PROJECTS_DIR, safeRepo, '.mcp.json');
+    const repoDir = resolveRepoDir(repoName);
+    const mcpConfigPath = path.join(repoDir, '.mcp.json');
 
     if (!fs.existsSync(mcpConfigPath)) {
       return { success: true, message: 'Nenhum MCP configurado.' };

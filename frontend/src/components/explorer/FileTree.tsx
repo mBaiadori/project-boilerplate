@@ -3037,10 +3037,17 @@ export const FileTree: React.FC<FileTreeProps> = ({
               (x) => x.name.toLowerCase() !== target.name.toLowerCase(),
             );
             if (remaining.length > 0) {
-              navigate(`/repo/${encodeURIComponent(remaining[0].name)}/editor`);
-              await selectRepo(remaining[0]);
+              const r = remaining[0];
+              const rOwner = r.owner || (r.full_name?.includes('/') ? r.full_name.split('/')[0] : '');
+              const rName = r.name || (r.full_name?.includes('/') ? r.full_name.split('/')[1] : r.full_name) || '';
+              if (rOwner && rOwner !== 'local' && rOwner !== 'personal') {
+                navigate(`/org/${encodeURIComponent(rOwner)}/repo/${encodeURIComponent(rName)}/editor`);
+              } else {
+                navigate(`/repo/${encodeURIComponent(rName)}/editor`);
+              }
+              await selectRepo(r);
             } else {
-              navigate("/repos");
+              navigate("/");
             }
           }
         }}

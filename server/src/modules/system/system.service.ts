@@ -1,7 +1,7 @@
 import os from 'node:os';
 import fs from 'node:fs';
 import path from 'node:path';
-import { PROJECTS_DIR } from '../../config/constants.js';
+import { PROJECTS_DIR, resolveRepoDir } from '../../config/constants.js';
 import { loadConfig, saveConfig, ensureDefaultRepoFiles } from '../../config/storage.js';
 import { executeGitCommand } from '../../utils/git.js';
 import { providerManager } from '../ai/providers/ProviderManager.js';
@@ -62,10 +62,23 @@ class SystemService {
     let reposCount = 0;
     if (fs.existsSync(PROJECTS_DIR)) {
       try {
-        reposCount = fs.readdirSync(PROJECTS_DIR).filter((f) => {
-          const full = path.join(PROJECTS_DIR, f);
-          return fs.statSync(full).isDirectory() && !f.startsWith('.');
-        }).length;
+        const entries = fs.readdirSync(PROJECTS_DIR, { withFileTypes: true });
+        for (const entry of entries) {
+          if (!entry.isDirectory() || entry.name.startsWith('.')) continue;
+          const full = path.join(PROJECTS_DIR, entry.name);
+          // Check if this directory is a repo itself
+          if (fs.existsSync(path.join(full, '.project.config.json')) || fs.existsSync(path.join(full, '.git'))) {
+            reposCount++;
+          } else {
+            // Or an org directory containing repos
+            const subEntries = fs.readdirSync(full, { withFileTypes: true });
+            for (const sub of subEntries) {
+              if (sub.isDirectory() && !sub.name.startsWith('.')) {
+                reposCount++;
+              }
+            }
+          }
+        }
       } catch {}
     }
 
@@ -243,14 +256,14 @@ class SystemService {
    */
   async createDemoWorkspace(repoName: string = 'context-os-demo'): Promise<{ success: boolean; path: string }> {
     const safeName = repoName.replace(/[^a-zA-Z0-9_-]/g, '_');
-    const repoPath = path.join(PROJECTS_DIR, safeName);
+    const repoPath = resolveRepoDir(safeName, 'local');
 
     if (!fs.existsSync(repoPath)) {
       fs.mkdirSync(repoPath, { recursive: true });
     }
 
     // Inicializa estrutura e arquivos canônicos
-    ensureDefaultRepoFiles(safeName);
+    ensureDefaultRepoFiles(safeName, true, 'local');
 
     // Cria documento introdutório de boas-vindas com instruções
     const welcomeDocPath = path.join(repoPath, 'project', 'WELCOME.md');

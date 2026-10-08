@@ -4,6 +4,11 @@ import {
   CONFIG_PATH,
   PROJECTS_CONFIG_PATH,
   PROJECTS_DIR,
+  BASE_DIR,
+  PROJECT_ROOT,
+  TEMPLATES_DIR,
+  FRAMEWORK_DEFAULT_DIR,
+  resolveRepoDir,
   loadCanonicalTemplates,
   DEFAULT_GLOBAL_SYSTEM_PROMPT,
   DEFAULT_TEMPLATE_CREATOR_PROMPT,
@@ -307,19 +312,19 @@ export function saveConfig(cfg: AppConfig): void {
   }
 }
 
-export function getRepoWorkspaceChangesPath(repoName: string): string {
-  const repoDir = path.join(PROJECTS_DIR, repoName || "local");
+export function getRepoWorkspaceChangesPath(repoName: string, ownerOrOrg?: string): string {
+  const repoDir = resolveRepoDir(repoName, ownerOrOrg);
   return path.join(repoDir, ".spec-memory", "workspace_changes.json");
 }
 
-export function loadRepoWorkspaceChanges(repoName: string): WorkspaceChange[] {
-  const filePath = getRepoWorkspaceChangesPath(repoName);
+export function loadRepoWorkspaceChanges(repoName: string, ownerOrOrg?: string): WorkspaceChange[] {
+  const filePath = getRepoWorkspaceChangesPath(repoName, ownerOrOrg);
   if (fs.existsSync(filePath)) {
     try {
       const data = fs.readFileSync(filePath, "utf-8");
       const list = JSON.parse(data);
       if (Array.isArray(list)) {
-        const repoDir = path.join(PROJECTS_DIR, repoName || "local");
+        const repoDir = resolveRepoDir(repoName, ownerOrOrg);
         return list.filter((c: any) => c?.path && !isPathHidden(c.path, loadHiddenFiles(repoDir)));
       }
     } catch (e) {
@@ -329,8 +334,8 @@ export function loadRepoWorkspaceChanges(repoName: string): WorkspaceChange[] {
   return [];
 }
 
-export function saveRepoWorkspaceChanges(repoName: string, changes: WorkspaceChange[]): void {
-  const filePath = getRepoWorkspaceChangesPath(repoName);
+export function saveRepoWorkspaceChanges(repoName: string, changes: WorkspaceChange[], ownerOrOrg?: string): void {
+  const filePath = getRepoWorkspaceChangesPath(repoName, ownerOrOrg);
   try {
     fs.mkdirSync(path.dirname(filePath), { recursive: true });
     fs.writeFileSync(filePath, JSON.stringify(changes, null, 2), "utf-8");
@@ -388,11 +393,12 @@ export function recordChange(
   changeType: "ADDED" | "MODIFIED" | "DELETED",
   oldContent: string = "",
   newContent: string = "",
+  ownerOrOrg?: string,
 ): void {
   const cleanPath = relPath.trim().replace(/^\/+/, "");
   if (!cleanPath) return;
 
-  const repoDir = path.join(PROJECTS_DIR, repoName || "local");
+  const repoDir = resolveRepoDir(repoName, ownerOrOrg);
   if (isPathHidden(cleanPath, loadHiddenFiles(repoDir))) {
     return;
   }
@@ -400,7 +406,7 @@ export function recordChange(
   const safeOldContent = sanitizeContentForStorage(cleanPath, oldContent);
   const safeNewContent = sanitizeContentForStorage(cleanPath, newContent);
 
-  const changes = loadRepoWorkspaceChanges(repoName);
+  const changes = loadRepoWorkspaceChanges(repoName, ownerOrOrg);
   const existingIdx = changes.findIndex((c) => c.path === cleanPath);
   const now = new Date().toISOString();
 
@@ -413,7 +419,7 @@ export function recordChange(
 
     if (preservedOldContent === safeNewContent && changeType !== "DELETED") {
       changes.splice(existingIdx, 1);
-      saveRepoWorkspaceChanges(repoName, changes);
+      saveRepoWorkspaceChanges(repoName, changes, ownerOrOrg);
       return;
     }
 
@@ -441,21 +447,24 @@ export function recordChange(
     });
   }
 
-  saveRepoWorkspaceChanges(repoName, changes);
+  saveRepoWorkspaceChanges(repoName, changes, ownerOrOrg);
 }
 
-export function clearWorkspaceChanges(repoName: string): void {
-  saveRepoWorkspaceChanges(repoName, []);
+export function clearWorkspaceChanges(repoName: string, ownerOrOrg?: string): void {
+  saveRepoWorkspaceChanges(repoName, [], ownerOrOrg);
 }
 
 export function getSSOTDefaultDir(): string {
-  const defaultDir = path.join(PROJECTS_DIR, "default");
-  const altDefaultDir = path.join(PROJECTS_DIR, "_default");
+  const templatesDefault = path.join(TEMPLATES_DIR, "default");
+  const rootDefault = path.join(PROJECT_ROOT, "default");
+  const baseDefault = path.join(BASE_DIR, "default");
+  const projectsDefault = path.join(PROJECTS_DIR, "default");
 
-  if (fs.existsSync(altDefaultDir) && !fs.existsSync(defaultDir)) {
-    return altDefaultDir;
-  }
-  return defaultDir;
+  if (fs.existsSync(templatesDefault)) return templatesDefault;
+  if (fs.existsSync(rootDefault)) return rootDefault;
+  if (fs.existsSync(baseDefault)) return baseDefault;
+  if (fs.existsSync(projectsDefault)) return projectsDefault;
+  return templatesDefault;
 }
 
 export function syncBlueprint(
@@ -731,12 +740,16 @@ function verifyAndRepairStructure(
 export async function ensureDefaultRepoFiles(
   repoName: string,
   allowAutoCloneOrInit: boolean = false,
+  ownerOrOrg?: string,
 ): Promise<void> {
   if (!repoName) return;
 
   const defaultDir = getSSOTDefaultDir();
-  const targetDir = path.join(PROJECTS_DIR, repoName);
   const cfg = loadConfig();
+  const effectiveOwner =
+    ownerOrOrg ||
+    (cfg.active_repo?.name === repoName ? cfg.active_repo?.owner : undefined);
+  const targetDir = resolveRepoDir(repoName, effectiveOwner);
 
   // If directory does not exist and auto-creation is not explicitly requested, do not recreate!
   if (!fs.existsSync(targetDir)) {
@@ -776,10 +789,17 @@ export async function ensureDefaultRepoFiles(
       !isLocalRepo &&
       ((cfg.active_repo?.name === repoName && Boolean(cfg.active_repo?.html_url)) ||
        Boolean(cfg.token));
+    const resolvedFullName =
+      (cfg.active_repo?.name === repoName && cfg.active_repo?.full_name) ||
+      (effectiveOwner && effectiveOwner !== "local" ? `${effectiveOwner}/${repoName}` : repoName);
     let remoteUrl =
       !isLocalRepo && cfg.active_repo?.name === repoName ? cfg.active_repo?.html_url : undefined;
-    if (!remoteUrl && !isLocalRepo && cfg.token && cfg.user?.login) {
-      remoteUrl = `https://github.com/${cfg.user.login}/${repoName}.git`;
+    if (!remoteUrl && !isLocalRepo && cfg.token) {
+      if (resolvedFullName.includes("/")) {
+        remoteUrl = `https://github.com/${resolvedFullName}.git`;
+      } else if (cfg.user?.login) {
+        remoteUrl = `https://github.com/${cfg.user.login}/${repoName}.git`;
+      }
     }
     const token = isLocalRepo ? undefined : cfg.token;
 
@@ -788,7 +808,7 @@ export async function ensureDefaultRepoFiles(
       (!fs.existsSync(targetDir) || !fs.existsSync(path.join(targetDir, ".git")))
     ) {
       const { ensureGitRepo } = await import("../utils/git.js");
-      await ensureGitRepo(targetDir, cfg.user, remoteUrl, token, repoName, true);
+      await ensureGitRepo(targetDir, cfg.user, remoteUrl, token, resolvedFullName, true);
     }
   }
 

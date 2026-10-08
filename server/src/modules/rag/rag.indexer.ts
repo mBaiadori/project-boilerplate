@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { PROJECTS_DIR } from '../../config/constants.js';
+import { PROJECTS_DIR, resolveRepoDir } from '../../config/constants.js';
 import { RagChunk, RagDiskStorage, RagFileManifestItem } from './rag.types.js';
 
 // Normalizador e Tokenizador Simples e Rápido
@@ -31,7 +31,7 @@ export class RagIndexer {
   ]);
 
   private getDiskIndexPath(repoName: string): string {
-    const projectRoot = path.join(PROJECTS_DIR, repoName || 'local');
+    const projectRoot = resolveRepoDir(repoName || 'local');
     const memoryDir = path.join(projectRoot, '.spec-memory');
     if (!fs.existsSync(memoryDir)) {
       try {
@@ -76,7 +76,7 @@ export class RagIndexer {
    * Indexação Incremental com controle por mtime e manifesto de arquivos
    */
   indexRepositoryIncremental(repoName: string): { chunks: RagChunk[]; indexedFiles: string[]; updatedCount: number } {
-    const projectRoot = path.join(PROJECTS_DIR, repoName || 'local');
+    const projectRoot = resolveRepoDir(repoName || 'local');
     if (!fs.existsSync(projectRoot)) {
       return { chunks: [], indexedFiles: [], updatedCount: 0 };
     }
@@ -149,7 +149,7 @@ export class RagIndexer {
    * Indexa apenas um único arquivo pontual quando o evento do chokidar avisar
    */
   indexSingleFile(repoName: string, relativePath: string): { chunks: RagChunk[]; updated: boolean } {
-    const projectRoot = path.join(PROJECTS_DIR, repoName || 'local');
+    const projectRoot = resolveRepoDir(repoName || 'local');
     const fullPath = path.join(projectRoot, relativePath);
 
     if (!fs.existsSync(fullPath)) {

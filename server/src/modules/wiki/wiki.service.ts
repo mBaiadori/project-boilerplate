@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { PROJECTS_DIR } from '../../config/constants.js';
+import { PROJECTS_DIR, resolveRepoDir } from '../../config/constants.js';
 import { loadConfig } from '../../config/storage.js';
 
 export interface WikiPage {
@@ -23,7 +23,10 @@ export const WIKI_CATEGORIES = [
 
 export class WikiService {
   private getWikiRootDir(repoName: string): string {
-    return path.join(PROJECTS_DIR, repoName || 'local', '.spec-memory', 'wiki');
+    const cfg = loadConfig();
+    const effectiveOwner = cfg.active_repo?.name === repoName ? cfg.active_repo?.owner : undefined;
+    const repoDir = resolveRepoDir(repoName || 'local', effectiveOwner);
+    return path.join(repoDir, '.spec-memory', 'wiki');
   }
 
   private getCategoryDir(repoName: string, category: string): string {
