@@ -880,12 +880,16 @@ export class WorkspaceService {
     const repoDir = this.getRepoDir(repoName);
     const rawChanges = cfg.workspace_changes?.[repoName] || loadRepoWorkspaceChanges(repoName);
 
-    const targetPaths = paths && paths.length > 0 ? new Set(paths) : null;
+    const cleanPaths = paths && paths.length > 0 
+      ? paths.map((p) => p.trim().replace(/^\/+/, "")).filter(Boolean)
+      : null;
+    const targetSet = cleanPaths ? new Set(cleanPaths) : null;
     const remainingChanges = [];
 
     for (const change of rawChanges) {
-      if (!targetPaths || targetPaths.has(change.path)) {
-        const fullPath = path.join(repoDir, change.path);
+      const cleanChangePath = change.path.trim().replace(/^\/+/, "");
+      if (!targetSet || targetSet.has(cleanChangePath)) {
+        const fullPath = path.join(repoDir, cleanChangePath);
         try {
           if (change.type === "ADDED") {
             if (fs.existsSync(fullPath)) {
@@ -912,13 +916,15 @@ export class WorkspaceService {
     // Se o diretório for um repositório git, descartar alterações no git também
     if (await isGitRepo(repoDir)) {
       try {
-        if (targetPaths) {
-          for (const p of targetPaths) {
-            await executeGitCommand(`git checkout -- "${p}"`, repoDir);
+        if (cleanPaths && cleanPaths.length > 0) {
+          for (const p of cleanPaths) {
+            await executeGitCommand(`git restore --staged --worktree -- "${p}"`, repoDir);
+            await executeGitCommand(`git checkout HEAD -- "${p}"`, repoDir);
             await executeGitCommand(`git clean -fd "${p}"`, repoDir);
           }
         } else {
-          await executeGitCommand("git checkout -- .", repoDir);
+          await executeGitCommand("git restore --staged --worktree .", repoDir);
+          await executeGitCommand("git checkout HEAD -- .", repoDir);
           await executeGitCommand("git clean -fd", repoDir);
         }
       } catch (e) {

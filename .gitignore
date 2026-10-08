@@ -18,7 +18,8 @@ docs
 ECC-main
 skills-main
 .VSCodeCounter
-graphify-out
+graphify-out/
+/graphify-out/
 
 # =============================================================================
 # BUILD ARTIFACTS, DESKTOP RELEASES & DISTRIBUTIONS

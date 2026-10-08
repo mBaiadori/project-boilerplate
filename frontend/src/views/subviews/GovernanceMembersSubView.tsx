@@ -13,6 +13,7 @@ import {
   Plus,
   Layers,
   Play,
+  FolderGit2,
 } from "lucide-react";
 import { API } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
@@ -478,21 +479,16 @@ export const GovernanceMembersSubView: React.FC = () => {
             <Shield size={24} />
           </div>
           <div>
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <h1
-                style={{
-                  fontSize: "20px",
-                  fontWeight: 700,
-                  margin: 0,
-                  color: "var(--color-on-surface, #ffffff)",
-                }}
-              >
-                Governança de Acesso & Repositório
-              </h1>
-              <Badge variant="primary" size="xs">
-                @{orgLogin}/{repoName || "repositório"}
-              </Badge>
-            </div>
+            <h1
+              style={{
+                fontSize: "20px",
+                fontWeight: 700,
+                margin: 0,
+                color: "var(--color-on-surface, #ffffff)",
+              }}
+            >
+              Governança de Acesso & Repositório
+            </h1>
             <p
               style={{
                 fontSize: "13px",
@@ -506,12 +502,35 @@ export const GovernanceMembersSubView: React.FC = () => {
           </div>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-          <Badge variant={isSoloMode ? "neutral" : "success"} size="md">
-            {isSoloMode
-              ? "Modo Solo (1 Membro)"
-              : `Modo Equipe (${collaborators.length} Membros)`}
-          </Badge>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "flex-end",
+              gap: "4px",
+            }}
+          >
+            <Badge variant={isSoloMode ? "neutral" : "success"} size="md">
+              {isSoloMode
+                ? "Modo Solo (1 Membro)"
+                : `Modo Equipe (${collaborators.length} Membros)`}
+            </Badge>
+
+            <Badge
+              variant="primary"
+              size="xs"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "4px",
+                fontWeight: 600,
+              }}
+            >
+              <FolderGit2 size={11} style={{ flexShrink: 0 }} />
+              @{orgLogin}/{repoName || "repositório"}
+            </Badge>
+          </div>
 
           {activeTab === "members" && isAdmin && (
             <Button

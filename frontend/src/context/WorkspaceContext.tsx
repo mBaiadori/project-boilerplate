@@ -119,9 +119,9 @@ interface WorkspaceContextType {
     content?: string,
   ) => Promise<{ success: boolean; error?: string }>;
   flushPendingSave: () => Promise<void>;
-  refreshPendingChanges: () => Promise<void>;
-  discardChanges: (path?: string) => Promise<void>;
-  refreshGitStatus: () => Promise<void>;
+  refreshPendingChanges: (targetRepoName?: string) => Promise<void>;
+  discardChanges: (path?: string, targetRepo?: string) => Promise<void>;
+  refreshGitStatus: (targetRepoName?: string) => Promise<void>;
   refreshGitLog: (limit?: number) => Promise<void>;
   commitGit: (
     message: string,
@@ -1300,22 +1300,33 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
     return performDiskSave(activeFileRef.current, content, meta);
   };
 
-  const discardChanges = async (path?: string) => {
+  const discardChanges = async (path?: string, targetRepo?: string) => {
     const repo = activeRepoRef.current;
-    if (!repo) return;
-    await API.discardWorkspaceChanges(path || null, repo.name);
-    if (path) {
-      DraftStore.clearDocDraft(repo.name, path);
+    const repoName = targetRepo || repo?.name || "local";
+    const cleanPath = path ? path.replace(/^\/+/, "") : null;
+
+    await API.discardWorkspaceChanges(cleanPath, repoName);
+
+    if (cleanPath) {
+      DraftStore.clearDocDraft(repoName, cleanPath);
+      fileCacheRef.current.delete(`${repoName}:${cleanPath}`);
     } else {
-      DraftStore.clearDocDraft(repo.name, activeFileRef.current);
+      DraftStore.clearDocDraft(repoName, activeFileRef.current);
+      if (activeFileRef.current) {
+        fileCacheRef.current.delete(`${repoName}:${activeFileRef.current}`);
+      }
     }
+
     await Promise.all([
-      refreshPendingChanges(),
-      refreshGitStatus(),
-      loadTree(repo.name),
+      refreshPendingChanges(repoName),
+      refreshGitStatus(repoName),
+      loadTree(repoName),
+      refreshWhatsNew(),
     ]);
-    if (path === activeFileRef.current || (!path && activeFileRef.current)) {
-      await loadFile(activeFileRef.current);
+
+    const activeClean = activeFileRef.current ? activeFileRef.current.replace(/^\/+/, "") : null;
+    if (!cleanPath || cleanPath === activeClean) {
+      await reloadActiveFile(true);
     }
   };
 
