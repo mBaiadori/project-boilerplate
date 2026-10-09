@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useMemo,
+  useCallback,
+} from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   Folder,
@@ -1673,7 +1679,8 @@ export const FileTree: React.FC<FileTreeProps> = ({
         }
       }
 
-      const orgList = filtered.length > 0 ? filtered : activeRepo ? [activeRepo] : [];
+      const orgList =
+        filtered.length > 0 ? filtered : activeRepo ? [activeRepo] : [];
       return [...orgList].sort((a, b) =>
         a.name.localeCompare(b.name, undefined, {
           sensitivity: "base",
@@ -2637,7 +2644,9 @@ export const FileTree: React.FC<FileTreeProps> = ({
                     const isActive =
                       r.name.toLowerCase() === activeRepo?.name.toLowerCase();
                     const isCollapsed = collapsedRepos[r.name] ?? !isActive;
-                    const repoDisplayNodes = !isCollapsed ? getDisplayNodesForRepo(r.name) : [];
+                    const repoDisplayNodes = !isCollapsed
+                      ? getDisplayNodesForRepo(r.name)
+                      : [];
                     const isRepoLoading = Boolean(
                       loadingRepos[r.name] ||
                       (isActive &&

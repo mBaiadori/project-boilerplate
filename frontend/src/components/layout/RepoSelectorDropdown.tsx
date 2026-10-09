@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from "react";
+import React, { useRef, useEffect, useState, useMemo } from "react";
 import { FolderGit2, ChevronDown, Check, Layers } from "lucide-react";
 import { useWorkspace } from "../../context/WorkspaceContext";
 import type { Repo } from "../../types";
@@ -57,6 +57,15 @@ export const RepoSelectorDropdown: React.FC<RepoSelectorDropdownProps> = ({
   }, [isOpen]);
 
   if (!repos || repos.length === 0) return null;
+
+  const sortedRepos = useMemo(() => {
+    return [...(repos || [])].sort((a, b) =>
+      a.name.localeCompare(b.name, undefined, {
+        numeric: true,
+        sensitivity: "base",
+      }),
+    );
+  }, [repos]);
 
   const isAllSelected = value === "all";
   const currentRepoName = isAllSelected ? "Todos os Repositórios" : (value || activeRepo?.name || "local");
@@ -294,7 +303,7 @@ export const RepoSelectorDropdown: React.FC<RepoSelectorDropdownProps> = ({
           </div>
 
           <div style={{ maxHeight: "220px", overflowY: "auto" }}>
-            {repos.map((r) => {
+            {sortedRepos.map((r: Repo) => {
               const isSelected = !isAllSelected && (currentRepoName || "").toLowerCase() === r.name.toLowerCase();
               const count = repoOpenCounts[r.name] || 0;
 
