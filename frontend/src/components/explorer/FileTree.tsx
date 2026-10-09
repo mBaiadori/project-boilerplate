@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   Folder,
@@ -234,8 +234,8 @@ const readFileAsBase64 = (file: File): Promise<string> => {
   });
 };
 
-const getCollapsedStorageKey = (repoName?: string) =>
-  `spec_tree_collapsed_folders_${repoName || "default"}`;
+const getExpandedStorageKey = (repoName?: string) =>
+  `spec_tree_expanded_folders_${repoName || "default"}`;
 const getSelectedFolderStorageKey = (repoName?: string) =>
   `spec_tree_selected_folder_${repoName || "default"}`;
 const getScrollStorageKey = (repoName?: string) =>
@@ -265,6 +265,9 @@ export const FileTree: React.FC<FileTreeProps> = ({
     isLoadingTree,
     moveFileOrFolder,
     duplicateFile,
+    cloneLocalRepo,
+    pullLocalRepo,
+    repoProgress,
   } = useWorkspace();
   const { user } = useAuth();
   const { canAccessDoc, departments } = useSecurity();
@@ -319,7 +322,11 @@ export const FileTree: React.FC<FileTreeProps> = ({
       ? `?file=${encodeURIComponent(activeFile)}`
       : "";
     const owner = r.owner || (r.full_name ? r.full_name.split("/")[0] : "");
-    const isOrg = owner && owner !== "local" && !r.is_local && owner.toLowerCase() !== (user?.login || "").toLowerCase();
+    const isOrg =
+      owner &&
+      owner !== "local" &&
+      !r.is_local &&
+      owner.toLowerCase() !== (user?.login || "").toLowerCase();
     const repoPath = isOrg
       ? `/org/${encodeURIComponent(owner)}/repo/${encodeURIComponent(r.name)}/${subview || "editor"}${fileQuery}`
       : `/repo/${encodeURIComponent(r.name)}/${subview || "editor"}${fileQuery}`;
@@ -343,21 +350,25 @@ export const FileTree: React.FC<FileTreeProps> = ({
       willBeExpanded &&
       (!treesByRepo[r.name] || treesByRepo[r.name].length === 0)
     ) {
-      setLoadingRepos((prev) => ({ ...prev, [r.name]: true }));
-      try {
-        await loadTree(r.name);
-      } finally {
-        setLoadingRepos((prev) => ({ ...prev, [r.name]: false }));
+      if (!r.is_cloned_locally) {
+        await handleSelectRepo(r, e);
+      } else {
+        setLoadingRepos((prev) => ({ ...prev, [r.name]: true }));
+        try {
+          await loadTree(r.name);
+        } finally {
+          setLoadingRepos((prev) => ({ ...prev, [r.name]: false }));
+        }
       }
     }
   };
 
-  const [collapsedFolders, setCollapsedFolders] = useState<
+  const [expandedFolders, setExpandedFolders] = useState<
     Record<string, boolean>
   >(() => {
     try {
       const saved = localStorage.getItem(
-        getCollapsedStorageKey(activeRepo?.name),
+        getExpandedStorageKey(activeRepo?.name),
       );
       if (saved) return JSON.parse(saved);
     } catch (e) {}
@@ -377,31 +388,46 @@ export const FileTree: React.FC<FileTreeProps> = ({
   const treeScrollRef = useRef<HTMLDivElement>(null);
   const isRestoringScrollRef = useRef(false);
 
-  // Sync collapsed folders & selected folder when switching repositories
+  // Sync expanded folders & selected folder when switching repositories
   useEffect(() => {
     try {
-      const savedCollapsed = localStorage.getItem(
-        getCollapsedStorageKey(repoName),
+      const savedExpanded = localStorage.getItem(
+        getExpandedStorageKey(repoName),
       );
-      setCollapsedFolders(savedCollapsed ? JSON.parse(savedCollapsed) : {});
+      setExpandedFolders(savedExpanded ? JSON.parse(savedExpanded) : {});
       const savedFolder = sessionStorage.getItem(
         getSelectedFolderStorageKey(repoName),
       );
       setSelectedFolder(savedFolder || "");
     } catch (e) {
-      setCollapsedFolders({});
+      setExpandedFolders({});
     }
   }, [repoName]);
 
-  // Persist collapsed folders state changes
+  // Auto-expand ancestor directories of activeFile so it's immediately visible
+  useEffect(() => {
+    if (!activeFile) return;
+    const parts = activeFile.split("/").filter(Boolean);
+    if (parts.length > 1) {
+      const ancestors: Record<string, boolean> = {};
+      let acc = "";
+      for (let i = 0; i < parts.length - 1; i++) {
+        acc = acc ? `${acc}/${parts[i]}` : parts[i];
+        ancestors[acc] = true;
+      }
+      setExpandedFolders((prev) => ({ ...prev, ...ancestors }));
+    }
+  }, [activeFile]);
+
+  // Persist expanded folders state changes
   useEffect(() => {
     try {
       localStorage.setItem(
-        getCollapsedStorageKey(repoName),
-        JSON.stringify(collapsedFolders),
+        getExpandedStorageKey(repoName),
+        JSON.stringify(expandedFolders),
       );
     } catch (e) {}
-  }, [collapsedFolders, repoName]);
+  }, [expandedFolders, repoName]);
 
   // Persist selected folder state changes
   useEffect(() => {
@@ -489,10 +515,10 @@ export const FileTree: React.FC<FileTreeProps> = ({
 
       // 4. Expand all ancestor folders
       if (parentPaths.length > 0) {
-        setCollapsedFolders((prev) => {
+        setExpandedFolders((prev) => {
           const updated = { ...prev };
           for (const p of parentPaths) {
-            updated[p] = false;
+            updated[p] = true;
           }
           return updated;
         });
@@ -640,7 +666,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
         );
 
         if (targetFolder) {
-          setCollapsedFolders((prev) => ({ ...prev, [targetFolder]: false }));
+          setExpandedFolders((prev) => ({ ...prev, [targetFolder]: true }));
         }
 
         // If a single file was imported, open it automatically
@@ -731,10 +757,10 @@ export const FileTree: React.FC<FileTreeProps> = ({
         clearTimeout(dragHoverTimerRef.current);
       }
 
-      // If the folder is collapsed, auto-expand it after 400ms of hovering
-      if (collapsedFolders[folderPath]) {
+      // If the folder is not yet expanded, auto-expand it after 400ms of hovering
+      if (!expandedFolders[folderPath]) {
         dragHoverTimerRef.current = setTimeout(() => {
-          setCollapsedFolders((prev) => ({ ...prev, [folderPath]: false }));
+          setExpandedFolders((prev) => ({ ...prev, [folderPath]: true }));
         }, 400);
       }
     }
@@ -1193,9 +1219,9 @@ export const FileTree: React.FC<FileTreeProps> = ({
 
     // Ensure parent folder is expanded so inline input is visible
     if (parentPath) {
-      setCollapsedFolders((prev) => ({
+      setExpandedFolders((prev) => ({
         ...prev,
-        [parentPath]: false,
+        [parentPath]: true,
       }));
     }
 
@@ -1329,6 +1355,12 @@ export const FileTree: React.FC<FileTreeProps> = ({
 
   // Collapse All Folders (VS Code action)
   const handleCollapseAllFolders = () => {
+    setExpandedFolders({});
+    showToast("Todas as pastas foram recolhidas.", "info");
+  };
+
+  // Expand All Folders & Repos (VS Code action)
+  const handleExpandAllFolders = () => {
     const allFolderPaths: Record<string, boolean> = {};
     const collectDirs = (nodes: TreeNode[]) => {
       for (const n of nodes) {
@@ -1344,13 +1376,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
     Object.values(treesByRepo).forEach((t) => {
       if (t) collectDirs(t);
     });
-    setCollapsedFolders(allFolderPaths);
-    showToast("Todas as pastas foram recolhidas.", "info");
-  };
-
-  // Expand All Folders & Repos (VS Code action)
-  const handleExpandAllFolders = () => {
-    setCollapsedFolders({});
+    setExpandedFolders(allFolderPaths);
     setCollapsedRepos({});
     const uninitializedRepos = orgRepos.filter((r) => !treesByRepo[r.name]);
     if (uninitializedRepos.length > 0) {
@@ -1394,8 +1420,14 @@ export const FileTree: React.FC<FileTreeProps> = ({
         full_name: repoForNode,
         is_local: true,
       };
-      const targetOwner = targetRepoObj.owner || (targetRepoObj.full_name ? targetRepoObj.full_name.split("/")[0] : "");
-      const isOrg = targetOwner && targetOwner !== "local" && !targetRepoObj.is_local && targetOwner.toLowerCase() !== (user?.login || "").toLowerCase();
+      const targetOwner =
+        targetRepoObj.owner ||
+        (targetRepoObj.full_name ? targetRepoObj.full_name.split("/")[0] : "");
+      const isOrg =
+        targetOwner &&
+        targetOwner !== "local" &&
+        !targetRepoObj.is_local &&
+        targetOwner.toLowerCase() !== (user?.login || "").toLowerCase();
       const targetUrl = isOrg
         ? `/org/${encodeURIComponent(targetOwner)}/repo/${encodeURIComponent(repoForNode)}/editor?file=${encodeURIComponent(path)}`
         : `/repo/${encodeURIComponent(repoForNode)}/editor?file=${encodeURIComponent(path)}`;
@@ -1527,7 +1559,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
   const toggleFolder = (folderPath: string, e: React.MouseEvent) => {
     e.stopPropagation();
     setSelectedFolder(folderPath);
-    setCollapsedFolders((prev) => ({
+    setExpandedFolders((prev) => ({
       ...prev,
       [folderPath]: !prev[folderPath],
     }));
@@ -1564,13 +1596,35 @@ export const FileTree: React.FC<FileTreeProps> = ({
     return map;
   }, [pendingChanges]);
 
+  const departmentsMap = useMemo(() => {
+    const map = new Map<string, any>();
+    if (departments && Array.isArray(departments)) {
+      for (let i = 0; i < departments.length; i++) {
+        const d = departments[i];
+        if (d?.id) map.set(String(d.id).toLowerCase(), d);
+        if (d?.folder) map.set(String(d.folder).toLowerCase(), d);
+      }
+    }
+    return map;
+  }, [departments]);
+
   // Determina a organização em foco (URL :org, activeOrg ou owner do activeRepo)
   const currentOrgLogin = useMemo(() => {
     if (org && org.trim()) return org.toLowerCase().trim();
-    if (activeOrg?.login && activeOrg.login !== "local") return activeOrg.login.toLowerCase().trim();
+    if (activeOrg?.login && activeOrg.login !== "local")
+      return activeOrg.login.toLowerCase().trim();
     if (activeRepo && !activeRepo.is_local) {
-      const owner = (activeRepo.owner || (activeRepo.full_name ? activeRepo.full_name.split("/")[0] : "")).toLowerCase().trim();
-      if (owner && owner !== "local" && owner !== (user?.login || "").toLowerCase()) {
+      const owner = (
+        activeRepo.owner ||
+        (activeRepo.full_name ? activeRepo.full_name.split("/")[0] : "")
+      )
+        .toLowerCase()
+        .trim();
+      if (
+        owner &&
+        owner !== "local" &&
+        owner !== (user?.login || "").toLowerCase()
+      ) {
         return owner;
       }
     }
@@ -1589,94 +1643,124 @@ export const FileTree: React.FC<FileTreeProps> = ({
       const filtered = repos.filter((r) => {
         const owner = (
           r.owner || (r.full_name ? r.full_name.split("/")[0] : "")
-        ).toLowerCase().trim();
+        )
+          .toLowerCase()
+          .trim();
         return owner === currentOrgLogin;
       });
 
       // Garante que o activeRepo esteja incluso se pertencer a esta mesma organização ou se for o repo ativo
       if (activeRepo) {
         const activeOwner = (
-          activeRepo.owner || (activeRepo.full_name ? activeRepo.full_name.split("/")[0] : "")
-        ).toLowerCase().trim();
-        if (!filtered.some((r) => r.name.toLowerCase() === activeRepo.name.toLowerCase())) {
-          if (activeOwner === currentOrgLogin || !activeOwner || activeOwner === "local" || filtered.length === 0) {
+          activeRepo.owner ||
+          (activeRepo.full_name ? activeRepo.full_name.split("/")[0] : "")
+        )
+          .toLowerCase()
+          .trim();
+        if (
+          !filtered.some(
+            (r) => r.name.toLowerCase() === activeRepo.name.toLowerCase(),
+          )
+        ) {
+          if (
+            activeOwner === currentOrgLogin ||
+            !activeOwner ||
+            activeOwner === "local" ||
+            filtered.length === 0
+          ) {
             filtered.push(activeRepo);
           }
         }
       }
 
-      if (filtered.length > 0) {
-        return filtered;
-      }
-
-      if (activeRepo) {
-        return [activeRepo];
-      }
-
-      return [];
+      const orgList = filtered.length > 0 ? filtered : activeRepo ? [activeRepo] : [];
+      return [...orgList].sort((a, b) =>
+        a.name.localeCompare(b.name, undefined, {
+          sensitivity: "base",
+          numeric: true,
+        }),
+      );
     }
 
     // Caso 2: Navegando em escopo local ou sem organização
     const localOrPersonalRepos = repos.filter((r) => {
-      const owner = (
-        r.owner || (r.full_name ? r.full_name.split("/")[0] : "")
-      ).toLowerCase().trim();
-      return r.is_local || owner === "local" || owner === (user?.login || "").toLowerCase() || !owner;
+      const owner = (r.owner || (r.full_name ? r.full_name.split("/")[0] : ""))
+        .toLowerCase()
+        .trim();
+      return (
+        r.is_local ||
+        owner === "local" ||
+        owner === (user?.login || "").toLowerCase() ||
+        !owner
+      );
     });
 
-    if (activeRepo && !localOrPersonalRepos.some((r) => r.name.toLowerCase() === activeRepo.name.toLowerCase())) {
-      localOrPersonalRepos.unshift(activeRepo);
+    if (
+      activeRepo &&
+      !localOrPersonalRepos.some(
+        (r) => r.name.toLowerCase() === activeRepo.name.toLowerCase(),
+      )
+    ) {
+      localOrPersonalRepos.push(activeRepo);
     }
 
-    if (localOrPersonalRepos.length > 0) {
-      return localOrPersonalRepos;
-    }
+    const baseList =
+      localOrPersonalRepos.length > 0
+        ? localOrPersonalRepos
+        : activeRepo
+          ? [activeRepo]
+          : repos;
 
-    if (activeRepo) {
-      return [activeRepo];
-    }
-
-    return repos;
+    // Ordenação fixa de A a Z
+    return [...baseList].sort((a, b) =>
+      a.name.localeCompare(b.name, undefined, {
+        sensitivity: "base",
+        numeric: true,
+      }),
+    );
   }, [repos, activeRepo, currentOrgLogin, user?.login]);
 
   // Build display nodes for a given repository (or active repo)
-  const getDisplayNodesForRepo = (rName: string) => {
-    const nodes =
-      treesByRepo[rName] ||
-      (rName.toLowerCase() === activeRepo?.name.toLowerCase() ? tree : []);
-    if (!nodes || nodes.length === 0) return [];
-    if (!searchTerm.trim()) return nodes;
+  const getDisplayNodesForRepo = useCallback(
+    (rName: string) => {
+      const nodes =
+        treesByRepo[rName] ||
+        (rName.toLowerCase() === activeRepo?.name.toLowerCase() ? tree : []);
+      if (!nodes || nodes.length === 0) return [];
+      if (!searchTerm.trim()) return nodes;
 
-    const q = searchTerm.trim().toLowerCase();
-    const matchNode = (node: TreeNode): TreeNode | null => {
-      const nameMatch = Boolean(
-        (node.name && node.name.toLowerCase().includes(q)) ||
-        (node.title && node.title.toLowerCase().includes(q)),
-      );
-      const isDir =
-        node.type === "dir" ||
-        node.type === "directory" ||
-        (node as any).is_directory;
+      const q = searchTerm.trim().toLowerCase();
+      const matchNode = (node: TreeNode): TreeNode | null => {
+        const nameMatch = Boolean(
+          (node.name && node.name.toLowerCase().includes(q)) ||
+          (node.title && node.title.toLowerCase().includes(q)),
+        );
+        const isDir =
+          node.type === "dir" ||
+          node.type === "directory" ||
+          (node as any).is_directory;
 
-      if (!isDir) {
-        return nameMatch ? node : null;
-      }
+        if (!isDir) {
+          return nameMatch ? node : null;
+        }
 
-      const filteredChildren = (node.children || [])
-        .map(matchNode)
-        .filter((c): c is TreeNode => c !== null);
+        const filteredChildren = (node.children || [])
+          .map(matchNode)
+          .filter((c): c is TreeNode => c !== null);
 
-      if (nameMatch || filteredChildren.length > 0) {
-        return {
-          ...node,
-          children: filteredChildren,
-        };
-      }
-      return null;
-    };
+        if (nameMatch || filteredChildren.length > 0) {
+          return {
+            ...node,
+            children: filteredChildren,
+          };
+        }
+        return null;
+      };
 
-    return nodes.map(matchNode).filter((n): n is TreeNode => n !== null);
-  };
+      return nodes.map(matchNode).filter((n): n is TreeNode => n !== null);
+    },
+    [treesByRepo, tree, activeRepo, searchTerm],
+  );
 
   const displayNodes = useMemo(() => {
     return getDisplayNodesForRepo(activeRepo?.name || repoName);
@@ -1836,7 +1920,9 @@ export const FileTree: React.FC<FileTreeProps> = ({
   const renderTreeNode = (node: TreeNode, repoNameForNode?: string) => {
     const isDir =
       node.type === "dir" || node.type === "directory" || node.is_directory;
-    const isCollapsedFolder = !!collapsedFolders[node.path];
+    const isFolderExpanded = Boolean(
+      expandedFolders[node.path] || (searchTerm && searchTerm.trim()),
+    );
     const isFolderSelected = selectedFolder === node.path;
     const isDraggingThis = draggedItem?.path === node.path;
     const isDragOverThis = dragOverTarget === node.path;
@@ -1860,18 +1946,18 @@ export const FileTree: React.FC<FileTreeProps> = ({
           >
             <div className="tree-folder-left">
               <span
-                className={`tree-caret ${!isCollapsedFolder ? "expanded" : ""}`}
+                className={`tree-caret ${isFolderExpanded ? "expanded" : ""}`}
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  transform: !isCollapsedFolder ? "rotate(90deg)" : "none",
+                  transform: isFolderExpanded ? "rotate(90deg)" : "none",
                   transition: "transform 0.15s ease",
                 }}
               >
                 <ChevronRight size={12} />
               </span>
-              {isCollapsedFolder ? (
+              {!isFolderExpanded ? (
                 <Folder size={14} color="#64748b" style={{ flexShrink: 0 }} />
               ) : (
                 <FolderOpen
@@ -1971,7 +2057,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
             </div>
           </div>
 
-          {!isCollapsedFolder && (
+          {isFolderExpanded && (
             <div className="tree-children">
               {/* Inline input if creating inside this folder */}
               {renderInlineCreateInput(node.path)}
@@ -2035,11 +2121,9 @@ export const FileTree: React.FC<FileTreeProps> = ({
           : "M"
         : null;
 
-    const deptObj = departments.find(
-      (d) =>
-        d.id === (node as any).department ||
-        d.folder.toLowerCase() === (node as any).department?.toLowerCase(),
-    );
+    const deptObj = (node as any).department
+      ? departmentsMap.get(String((node as any).department).toLowerCase())
+      : undefined;
     const isAllowed = canAccessDoc(node as any);
     const isLocked = !isAllowed;
     const hasSecProtection = isLocked || deptObj !== undefined;
@@ -2553,7 +2637,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
                     const isActive =
                       r.name.toLowerCase() === activeRepo?.name.toLowerCase();
                     const isCollapsed = collapsedRepos[r.name] ?? !isActive;
-                    const repoDisplayNodes = getDisplayNodesForRepo(r.name);
+                    const repoDisplayNodes = !isCollapsed ? getDisplayNodesForRepo(r.name) : [];
                     const isRepoLoading = Boolean(
                       loadingRepos[r.name] ||
                       (isActive &&
@@ -2627,9 +2711,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
                             <FolderGit2
                               size={14}
                               color={
-                                isActive
-                                  ? "var(--primary, #2563eb)"
-                                  : "#64748b"
+                                isActive ? "var(--primary, #2563eb)" : "#64748b"
                               }
                               style={{ flexShrink: 0 }}
                             />
@@ -2682,18 +2764,26 @@ export const FileTree: React.FC<FileTreeProps> = ({
                             {/* 2. Sincronizar Git */}
                             <button
                               type="button"
-                              className="btn-tree-action"
-                              title="Sincronizar Repositório"
+                              className={`btn-tree-action ${loadingRepos[r.name] ? "is-loading" : ""}`}
+                              title={
+                                loadingRepos[r.name]
+                                  ? "Sincronizando..."
+                                  : "Sincronizar Repositório"
+                              }
+                              disabled={loadingRepos[r.name]}
                               onClick={async (e) => {
                                 e.stopPropagation();
-                                if (isActive) {
-                                  refreshGitStatus();
-                                }
                                 setLoadingRepos((prev) => ({
                                   ...prev,
                                   [r.name]: true,
                                 }));
                                 try {
+                                  if (r.is_cloned_locally) {
+                                    await pullLocalRepo(r);
+                                  }
+                                  if (isActive) {
+                                    await refreshGitStatus();
+                                  }
                                   await loadTree(r.name);
                                 } finally {
                                   setLoadingRepos((prev) => ({
@@ -2703,7 +2793,12 @@ export const FileTree: React.FC<FileTreeProps> = ({
                                 }
                               }}
                             >
-                              <RefreshCw size={12} />
+                              <RefreshCw
+                                size={12}
+                                className={
+                                  loadingRepos[r.name] ? "spinning" : ""
+                                }
+                              />
                             </button>
 
                             {/* 3. Abrir Repositório no Gerenciador de Arquivos do PC */}
@@ -2787,29 +2882,179 @@ export const FileTree: React.FC<FileTreeProps> = ({
                             onDragLeave={(e) => handleDragLeaveRepo(e, r.name)}
                             onDrop={(e) => handleDropOnRepo(e, r.name)}
                           >
+                            {/* Indicador de Sincronização / Pull com Porcentagem Real */}
+                            {(loadingRepos[r.name] ||
+                              (repoProgress[r.name] &&
+                                repoProgress[r.name].percent < 100)) && (
+                              <div
+                                className="tree-repo-sync-indicator"
+                                style={{
+                                  display: "flex",
+                                  flexDirection: "column",
+                                  gap: "4px",
+                                  padding: "6px 10px",
+                                  fontSize: "11px",
+                                  fontWeight: 500,
+                                  color: "var(--primary, #2563eb)",
+                                  backgroundColor: "rgba(37, 99, 235, 0.08)",
+                                  borderRadius: "6px",
+                                  margin: "2px 8px 6px 8px",
+                                  border: "1px solid rgba(37, 99, 235, 0.15)",
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "space-between",
+                                    width: "100%",
+                                  }}
+                                >
+                                  <div
+                                    style={{
+                                      display: "flex",
+                                      alignItems: "center",
+                                      gap: "6px",
+                                    }}
+                                  >
+                                    <span
+                                      className="material-symbols-outlined spinning"
+                                      style={{ fontSize: "13px" }}
+                                    >
+                                      progress_activity
+                                    </span>
+                                    <span>
+                                      {repoProgress[r.name]?.stage ||
+                                        "Sincronizando..."}
+                                    </span>
+                                  </div>
+                                  {repoProgress[r.name]?.percent !==
+                                    undefined && (
+                                    <span
+                                      style={{
+                                        fontWeight: 700,
+                                        fontSize: "10.5px",
+                                      }}
+                                    >
+                                      {repoProgress[r.name].percent}%
+                                    </span>
+                                  )}
+                                </div>
+                                <div
+                                  style={{
+                                    width: "100%",
+                                    height: "3px",
+                                    backgroundColor: "rgba(37, 99, 235, 0.2)",
+                                    borderRadius: "2px",
+                                    overflow: "hidden",
+                                  }}
+                                >
+                                  <div
+                                    style={{
+                                      height: "100%",
+                                      width:
+                                        repoProgress[r.name]?.percent !==
+                                        undefined
+                                          ? `${repoProgress[r.name].percent}%`
+                                          : "30%",
+                                      backgroundColor:
+                                        "var(--primary, #2563eb)",
+                                      borderRadius: "2px",
+                                      transition: "width 0.15s ease",
+                                    }}
+                                  />
+                                </div>
+                              </div>
+                            )}
+
                             {isActive && renderInlineCreateInput("")}
                             {repoDisplayNodes.length > 0 ? (
-                              repoDisplayNodes.map((node) =>
+                              repoDisplayNodes.map((node: TreeNode) =>
                                 renderTreeNode(node, r.name),
                               )
                             ) : isRepoLoading ? (
+                              <></>
+                            ) : !r.is_cloned_locally ? (
                               <div
                                 className="tree-repo-empty-hint"
                                 style={{
                                   display: "flex",
+                                  flexDirection: "column",
                                   alignItems: "center",
-                                  gap: "6px",
-                                  color: "var(--text-muted)",
-                                  padding: "8px 12px",
+                                  gap: "8px",
+                                  padding: "16px 12px",
+                                  textAlign: "center",
+                                  backgroundColor:
+                                    "var(--md-sys-color-surface-container-low, #f8f9fa)",
+                                  borderRadius: "8px",
+                                  margin: "4px 8px 8px 8px",
+                                  border:
+                                    "1px dashed var(--md-sys-color-outline-variant, #dadce0)",
                                 }}
                               >
                                 <span
-                                  className="material-symbols-outlined spinning"
-                                  style={{ fontSize: "14px" }}
+                                  style={{
+                                    fontSize: "12px",
+                                    fontWeight: 500,
+                                    color:
+                                      "var(--md-sys-color-on-surface, #202124)",
+                                  }}
                                 >
-                                  progress_activity
+                                  Repositório Remoto (GitHub)
                                 </span>
-                                <span>Carregando arquivos...</span>
+                                <span
+                                  style={{
+                                    fontSize: "11px",
+                                    color:
+                                      "var(--md-sys-color-on-surface-variant, #5f6368)",
+                                    lineHeight: 1.3,
+                                  }}
+                                >
+                                  Clone os arquivos para editar e propor
+                                  alterações.
+                                </span>
+                                <button
+                                  type="button"
+                                  className="btn btn-primary btn-sm"
+                                  style={{
+                                    fontSize: "11.5px",
+                                    fontWeight: 600,
+                                    padding: "5px 10px",
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "5px",
+                                    borderRadius: "6px",
+                                    marginTop: "2px",
+                                  }}
+                                  disabled={loadingRepos[r.name]}
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    setLoadingRepos((prev) => ({
+                                      ...prev,
+                                      [r.name]: true,
+                                    }));
+                                    try {
+                                      await cloneLocalRepo(r);
+                                    } finally {
+                                      setLoadingRepos((prev) => ({
+                                        ...prev,
+                                        [r.name]: false,
+                                      }));
+                                    }
+                                  }}
+                                >
+                                  {loadingRepos[r.name] ? (
+                                    <span
+                                      className="material-symbols-outlined spinning"
+                                      style={{ fontSize: "14px" }}
+                                    >
+                                      progress_activity
+                                    </span>
+                                  ) : (
+                                    <Upload size={12} />
+                                  )}
+                                  <span>Trabalhar localmente</span>
+                                </button>
                               </div>
                             ) : !inlineCreating ? (
                               <div
@@ -3038,10 +3283,19 @@ export const FileTree: React.FC<FileTreeProps> = ({
             );
             if (remaining.length > 0) {
               const r = remaining[0];
-              const rOwner = r.owner || (r.full_name?.includes('/') ? r.full_name.split('/')[0] : '');
-              const rName = r.name || (r.full_name?.includes('/') ? r.full_name.split('/')[1] : r.full_name) || '';
-              if (rOwner && rOwner !== 'local' && rOwner !== 'personal') {
-                navigate(`/org/${encodeURIComponent(rOwner)}/repo/${encodeURIComponent(rName)}/editor`);
+              const rOwner =
+                r.owner ||
+                (r.full_name?.includes("/") ? r.full_name.split("/")[0] : "");
+              const rName =
+                r.name ||
+                (r.full_name?.includes("/")
+                  ? r.full_name.split("/")[1]
+                  : r.full_name) ||
+                "";
+              if (rOwner && rOwner !== "local" && rOwner !== "personal") {
+                navigate(
+                  `/org/${encodeURIComponent(rOwner)}/repo/${encodeURIComponent(rName)}/editor`,
+                );
               } else {
                 navigate(`/repo/${encodeURIComponent(rName)}/editor`);
               }

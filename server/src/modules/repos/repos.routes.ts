@@ -93,6 +93,15 @@ export async function reposRoutes(fastify: FastifyInstance) {
     }
   });
 
+  fastify.post('/api/repos/clone-local', async (request, reply) => {
+    try {
+      const result = await reposService.cloneLocalRepo(request.body as any);
+      return reply.send(result);
+    } catch (err: any) {
+      return reply.status(400).send({ error: err.message });
+    }
+  });
+
   fastify.delete('/api/repos', async (request, reply) => {
     try {
       const result = await reposService.deleteRepo(request.body as any);

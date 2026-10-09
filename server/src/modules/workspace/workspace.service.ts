@@ -128,8 +128,12 @@ export class WorkspaceService {
     }
 
     return nodes.sort((a, b) => {
-      if (a.type === b.type) return a.name.localeCompare(b.name);
-      return a.type === "directory" ? -1 : 1;
+      const aIsDir = a.type === "directory";
+      const bIsDir = b.type === "directory";
+      if (aIsDir === bIsDir) {
+        return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" });
+      }
+      return aIsDir ? -1 : 1;
     });
   }
 
@@ -152,9 +156,8 @@ export class WorkspaceService {
 
     const effectiveOwner =
       cfg.active_repo?.name === repoName ? cfg.active_repo?.owner : (repoName.includes("/") ? repoName.split("/")[0] : undefined);
-    await ensureDefaultRepoFiles(repoName, true, effectiveOwner);
 
-    const docsMetadata = docsMetadataService.loadDocsMetadata(repoName, effectiveOwner);
+    const docsMetadata = docsMetadataService.loadDocsMetadata(repoName);
     const metaMap = new Map(docsMetadata.map((d) => [d.path, d]));
     const tree = this.buildTree(repoDir, repoDir, metaMap);
 

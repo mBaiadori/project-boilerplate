@@ -1,12 +1,101 @@
 import fs from "node:fs";
 import path from "node:path";
-import { exec } from "node:child_process";
+import { exec, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import { isPathHidden, loadHiddenFiles, isSystemPath } from "./hidden-files.js";
 import { vaultService, VAULT_KEYS } from "../modules/vault/vault.service.js";
 import { loadConfig } from "../config/storage.js";
 
 const execAsync = promisify(exec);
+
+export interface GitProgressEvent {
+  stage: string;
+  percent: number;
+  message?: string;
+}
+
+export function parseGitProgress(line: string): GitProgressEvent | null {
+  const match = line.match(/(Receiving objects|Resolving deltas|Compressing objects|Counting objects|Updating files):\s+(\d+)%/i);
+  if (match) {
+    const rawStage = match[1];
+    const percent = parseInt(match[2], 10);
+    let stageLabel = rawStage;
+    if (/receiving/i.test(rawStage)) stageLabel = "Recebendo objetos";
+    else if (/resolving/i.test(rawStage)) stageLabel = "Resolvendo deltas";
+    else if (/compressing/i.test(rawStage)) stageLabel = "Comprimindo";
+    else if (/counting/i.test(rawStage)) stageLabel = "Contando objetos";
+    else if (/updating/i.test(rawStage)) stageLabel = "Atualizando arquivos";
+    return {
+      stage: stageLabel,
+      percent,
+      message: line.trim(),
+    };
+  }
+  return null;
+}
+
+export function executeGitCommandWithProgress(
+  args: string[],
+  cwd: string,
+  token?: string,
+  onProgress?: (p: GitProgressEvent) => void,
+): Promise<{ stdout: string; stderr: string; success: boolean }> {
+  return new Promise((resolve) => {
+    const finalArgs = [...args];
+    const activeToken = getActiveBearerToken(token);
+    if (activeToken) {
+      const authHeader = `AUTHORIZATION: basic ${Buffer.from(`x-access-token:${activeToken}`).toString("base64")}`;
+      finalArgs.unshift("-c", `http.extraHeader=${authHeader}`);
+    }
+
+    let stdout = "";
+    let stderr = "";
+
+    const child = spawn("git", finalArgs, {
+      cwd,
+      shell: false,
+    });
+
+    const handleData = (chunk: Buffer) => {
+      const str = chunk.toString();
+      const lines = str.split(/[\r\n]+/);
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        const progress = parseGitProgress(line);
+        if (progress && onProgress) {
+          onProgress(progress);
+        }
+      }
+    };
+
+    child.stdout.on("data", (data) => {
+      stdout += data.toString();
+    });
+
+    child.stderr.on("data", (data) => {
+      stderr += data.toString();
+      handleData(data);
+    });
+
+    child.on("close", (code) => {
+      const safeStdout = activeToken ? stdout.replaceAll(activeToken, "[REDACTED_TOKEN]") : stdout;
+      const safeStderr = activeToken ? stderr.replaceAll(activeToken, "[REDACTED_TOKEN]") : stderr;
+      resolve({
+        stdout: safeStdout.trim(),
+        stderr: safeStderr.trim(),
+        success: code === 0,
+      });
+    });
+
+    child.on("error", (err) => {
+      resolve({
+        stdout,
+        stderr: err.message,
+        success: false,
+      });
+    });
+  });
+}
 
 /**
  * Obtém o Bearer Token ativo do cofre nativo de senhas ou configuração
@@ -41,12 +130,13 @@ export async function executeGitCommand(
   let finalCommand = command;
   const token = getActiveBearerToken(explicitToken);
 
-  // Injeção automática do Bearer Token nos cabeçalhos HTTP para comandos de rede Git
+  // Injeção automática de credencial nos cabeçalhos HTTP para comandos de rede Git
   const isNetworkCmd = /\bgit\s+(clone|fetch|pull|push|ls-remote)\b/.test(command);
-  if (isNetworkCmd && token && !command.includes("http.extraHeader")) {
+  if (isNetworkCmd && token && !command.includes("http.extraHeader") && !command.includes("http.extraheader") && !command.includes("x-access-token")) {
+    const authHeader = `AUTHORIZATION: basic ${Buffer.from(`x-access-token:${token}`).toString("base64")}`;
     finalCommand = command.replace(
       /^git\s+/,
-      `git -c http.extraHeader="Authorization: Bearer ${token}" `,
+      `git -c http.extraHeader="${authHeader}" `,
     );
   }
 
@@ -78,6 +168,7 @@ export async function callGitHubAPI(
   token?: string,
   method: string = "GET",
   data: any = null,
+  requestOptions?: { silentStatuses?: number[] },
 ): Promise<{ statusCode: number; data: any }> {
   const url = endpoint.startsWith("http://") || endpoint.startsWith("https://")
     ? endpoint
@@ -115,7 +206,12 @@ export async function callGitHubAPI(
     }
     const oauthScopes = res.headers.get("x-oauth-scopes");
     const acceptedScopes = res.headers.get("x-accepted-oauth-scopes");
-    if (res.status >= 400) {
+    
+    // No GitHub REST API, 404 em /branches/.../protection significa apenas que a branch não tem regras de proteção ativas.
+    const isProtection404 = res.status === 404 && endpoint.includes("/branches/") && endpoint.includes("/protection");
+    const isSilenced = requestOptions?.silentStatuses?.includes(res.status) || isProtection404;
+
+    if (res.status >= 400 && !isSilenced) {
       console.warn(`[GitHub API ${res.status}] ${method} ${url}:`, {
         error: resData,
         oauthScopes,
@@ -167,7 +263,7 @@ export async function checkBranchProtection(
   }
   try {
     const endpoint = `/repos/${repoFullName}/branches/${branch}/protection`;
-    const res = await callGitHubAPI(endpoint, token, "GET");
+    const res = await callGitHubAPI(endpoint, token, "GET", null, { silentStatuses: [404] });
     if (res.statusCode === 200) {
       return { isProtected: true, details: "Proteção ativa no GitHub" };
     }
@@ -263,157 +359,67 @@ export function ensureGitIgnore(repoDir: string): void {
 
 const gitSyncLocks = new Map<string, Promise<{ success: boolean; message: string }>>();
 
-export async function ensureGitRepo(
+export async function cloneGitRepo(
   repoDir: string,
-  user?: { name?: string; login?: string; email?: string } | null,
-  remoteUrl?: string,
+  remoteUrl: string,
   token?: string,
-  repoName?: string,
-  pullLatest: boolean = true,
-): Promise<{ success: boolean; message: string }> {
-  const lockKey = path.resolve(repoDir);
-  const existingLock = gitSyncLocks.get(lockKey);
-  if (existingLock) {
-    return await existingLock;
-  }
-
-  const syncPromise = (async () => {
-    try {
-      return await internalEnsureGitRepo(repoDir, user, remoteUrl, token, repoName, pullLatest);
-    } finally {
-      gitSyncLocks.delete(lockKey);
-    }
-  })();
-
-  gitSyncLocks.set(lockKey, syncPromise);
-  return await syncPromise;
-}
-
-async function internalEnsureGitRepo(
-  repoDir: string,
   user?: { name?: string; login?: string; email?: string } | null,
-  remoteUrl?: string,
-  token?: string,
-  repoName?: string,
-  pullLatest: boolean = true,
+  onProgress?: (p: GitProgressEvent) => void,
 ): Promise<{ success: boolean; message: string }> {
-  const gitExists = await isGitRepo(repoDir);
+  if (await isGitRepo(repoDir)) {
+    return { success: true, message: "Repositório já está clonado localmente." };
+  }
 
-  // Auto-resolve remoteUrl if missing and token exists (only for real remote repositories, never for 'local' or 'default')
-  let targetRemoteUrl = remoteUrl;
-  const isExplicitLocal = !repoName || repoName === "local" || repoName === "default" || repoName === "_default";
-  if (!targetRemoteUrl && token && repoName && !isExplicitLocal) {
-    if (repoName.includes("/")) {
-      targetRemoteUrl = `https://github.com/${repoName}.git`;
-    } else if (user?.login) {
-      targetRemoteUrl = `https://github.com/${user.login}/${repoName}.git`;
+  const cleanRemoteUrl = remoteUrl.startsWith("https://") && !remoteUrl.endsWith(".git")
+    ? `${remoteUrl}.git`
+    : remoteUrl;
+
+  // Diretório residual (sem .git) só é descartado se contiver apenas arquivos gerados automaticamente
+  const generated = [
+    ".gitignore",
+    ".project.config.json",
+    ".dictionary.json",
+    ".docs.metadata.json",
+    ".hidden_files.json",
+    ".templates.json",
+    ".templates.metadata.json",
+    ".github",
+  ];
+  if (fs.existsSync(repoDir)) {
+    const stray = fs.readdirSync(repoDir).filter((n) => n !== ".DS_Store");
+    if (!stray.every((n) => generated.includes(n))) {
+      return {
+        success: false,
+        message: "A pasta de destino já existe e contém arquivos locais sem repositório Git.",
+      };
     }
   }
 
-  // Form authenticated clone URL if applicable
-  let authRemoteUrl = targetRemoteUrl || "";
-  if (targetRemoteUrl && token) {
-    if (targetRemoteUrl.startsWith("https://github.com/")) {
-      const repoPath = targetRemoteUrl
-        .replace("https://github.com/", "")
-        .replace(/\.git$/, "");
-      authRemoteUrl = `https://x-access-token:${token}@github.com/${repoPath}.git`;
-    }
+  // Clona em pasta temporária com streaming de progresso e move de uma vez
+  const parentDir = path.dirname(repoDir);
+  fs.mkdirSync(parentDir, { recursive: true });
+  const tmpDir = path.join(parentDir, `.clone-tmp-${path.basename(repoDir)}-${Date.now()}`);
+
+  const cloneRes = await executeGitCommandWithProgress(
+    ["clone", "--progress", cleanRemoteUrl, tmpDir],
+    parentDir,
+    token,
+    onProgress,
+  );
+
+  if (!cloneRes.success || !(await isGitRepo(tmpDir))) {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+    return {
+      success: false,
+      message: cloneRes.stderr || "Falha ao clonar repositório do GitHub.",
+    };
   }
+  fs.rmSync(repoDir, { recursive: true, force: true });
+  fs.renameSync(tmpDir, repoDir);
 
-  if (authRemoteUrl) {
-    if (!gitExists) {
-      // Clean non-git directory if it was created as empty or partial folder
-      if (fs.existsSync(repoDir)) {
-        try {
-          fs.rmSync(repoDir, { recursive: true, force: true });
-        } catch {}
-      }
-      fs.mkdirSync(path.dirname(repoDir), { recursive: true });
-      const cloneRes = await executeGitCommand(
-        `git clone "${authRemoteUrl}" "${repoDir}"`,
-        path.dirname(repoDir),
-      );
-      if (!cloneRes.success || !(await isGitRepo(repoDir))) {
-        console.warn(`[Git] Fallback clone para ${repoDir}:`, cloneRes.stderr);
-        // Fallback init
-        if (fs.existsSync(repoDir)) {
-          try {
-            fs.rmSync(repoDir, { recursive: true, force: true });
-          } catch {}
-        }
-        fs.mkdirSync(repoDir, { recursive: true });
-        await executeGitCommand("git init -b main", repoDir);
-        await executeGitCommand(
-          `git remote add origin "${authRemoteUrl}"`,
-          repoDir,
-        );
-        await executeGitCommand("git fetch origin", repoDir);
-        await executeGitCommand(
-          "git reset --hard origin/main || git reset --hard origin/master || true",
-          repoDir,
-        );
-        await executeGitCommand("git clean -fd", repoDir);
-      }
-    } else {
-      // Ensure remote origin
-      const remoteCheck = await executeGitCommand(
-        "git remote get-url origin",
-        repoDir,
-      );
-      if (remoteCheck.success) {
-        await executeGitCommand(
-          `git remote set-url origin "${authRemoteUrl}"`,
-          repoDir,
-        );
-      } else {
-        await executeGitCommand(
-          `git remote add origin "${authRemoteUrl}"`,
-          repoDir,
-        );
-      }
+  const publicOrigin = cleanRemoteUrl;
+  await executeGitCommand(`git remote set-url origin "${publicOrigin}"`, repoDir);
 
-      // If pullLatest requested, fetch and pull remote changes
-      if (pullLatest) {
-        try {
-          await executeGitCommand("git fetch origin", repoDir);
-          const branchRes = await executeGitCommand(
-            "git rev-parse --abbrev-ref HEAD",
-            repoDir,
-          );
-          const activeBranch = branchRes.stdout?.trim() || "main";
-          await executeGitCommand(
-            `git pull origin ${activeBranch} --allow-unrelated-histories --no-edit`,
-            repoDir,
-          );
-        } catch (pullErr) {
-          console.warn(`[Git] Aviso ao sincronizar remote em ${repoDir}:`, pullErr);
-        }
-      }
-    }
-  } else {
-    // Local-only repository
-    if (!gitExists) {
-      if (!fs.existsSync(repoDir)) {
-        fs.mkdirSync(repoDir, { recursive: true });
-      }
-
-      const initRes = await executeGitCommand("git init -b main", repoDir);
-      if (!initRes.success) {
-        await executeGitCommand("git init", repoDir);
-        await executeGitCommand("git branch -M main", repoDir);
-      }
-
-      ensureGitIgnore(repoDir);
-
-      await executeGitCommand("git add .", repoDir);
-      await executeGitCommand('git commit -m "chore: initial commit"', repoDir);
-    }
-  }
-
-  ensureGitIgnore(repoDir);
-
-  // Configure author
   if (user?.name || user?.login) {
     const authorName = user.name || user.login;
     const authorEmail = user.email || `${user.login}@users.noreply.github.com`;
@@ -423,8 +429,66 @@ async function internalEnsureGitRepo(
 
   return {
     success: true,
-    message: "Repositório Git inicializado e sincronizado com sucesso.",
+    message: "Repositório clonado com sucesso para trabalhar localmente.",
   };
+}
+
+export async function pullGitRepo(
+  repoDir: string,
+  branch?: string,
+  token?: string,
+  onProgress?: (p: GitProgressEvent) => void,
+): Promise<{ success: boolean; message: string }> {
+  if (!(await isGitRepo(repoDir))) {
+    return { success: false, message: "Repositório não está clonado localmente." };
+  }
+
+  const branchRes = await executeGitCommand("git rev-parse --abbrev-ref HEAD", repoDir);
+  const activeBranch = branch || branchRes.stdout?.trim() || "main";
+
+  const fetchRes = await executeGitCommandWithProgress(
+    ["fetch", "--progress", "origin", activeBranch],
+    repoDir,
+    token,
+    onProgress,
+  );
+
+  if (!fetchRes.success) {
+    return { success: false, message: fetchRes.stderr || "Erro ao buscar atualizações remotas." };
+  }
+
+  const pullRes = await executeGitCommandWithProgress(
+    ["pull", "--progress", "origin", activeBranch, "--ff-only"],
+    repoDir,
+    token,
+    onProgress,
+  );
+
+  if (!pullRes.success) {
+    return {
+      success: false,
+      message: "Não foi possível avançar com fast-forward. Existem alterações locais ou histórico divergente.",
+    };
+  }
+
+  return {
+    success: true,
+    message: pullRes.stdout?.trim() || "Repositório atualizado com sucesso.",
+  };
+}
+
+export async function ensureGitRepo(
+  repoDir: string,
+  _user?: { name?: string; login?: string; email?: string } | null,
+  _remoteUrl?: string,
+  _token?: string,
+  _repoName?: string,
+  _pullLatest: boolean = false,
+): Promise<{ success: boolean; message: string }> {
+  if (await isGitRepo(repoDir)) {
+    return { success: true, message: "Repositório pronto." };
+  }
+  return { success: false, message: "Repositório não está clonado localmente." };
 }
 
 export async function getGitStatus(repoDir: string): Promise<GitStatusResult> {
@@ -440,8 +504,6 @@ export async function getGitStatus(repoDir: string): Promise<GitStatusResult> {
       systemFiles: [],
     };
   }
-
-  ensureGitIgnore(repoDir);
 
   // Current branch
   const branchRes = await executeGitCommand(

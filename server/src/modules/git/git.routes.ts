@@ -227,4 +227,29 @@ export async function gitRoutes(app: FastifyInstance) {
         .send({ error: err.message || "Erro ao verificar atualizações remotas" });
     }
   });
+
+  // 15. Explicit Clone Repo
+  app.post("/api/git/clone", async (req, reply) => {
+    try {
+      const { repo, owner, remote_url } = req.body as { repo: string; owner?: string; remote_url?: string };
+      if (!repo) {
+        return reply.status(400).send({ error: "Nome do repositório é obrigatório para clone." });
+      }
+      const res = await gitService.clone({ repo, owner, remote_url });
+      return res;
+    } catch (err: any) {
+      return reply.status(500).send({ error: err.message || "Erro ao clonar repositório" });
+    }
+  });
+
+  // 16. Explicit Pull Repo
+  app.post("/api/git/pull", async (req, reply) => {
+    try {
+      const { repo, branch, owner } = (req.body as { repo?: string; branch?: string; owner?: string }) || {};
+      const res = await gitService.pull(repo, branch, owner);
+      return res;
+    } catch (err: any) {
+      return reply.status(500).send({ error: err.message || "Erro ao puxar alterações do repositório" });
+    }
+  });
 }

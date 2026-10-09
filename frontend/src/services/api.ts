@@ -136,6 +136,24 @@ export const API = {
     return { ok: res.ok, data: await res.json() };
   },
 
+  async cloneLocalRepo(payload: { name: string; owner?: string }): Promise<ApiResponse<{ success: boolean; message: string; repo_dir?: string; is_cloned_locally?: boolean; error?: string }>> {
+    const res = await fetch('/api/repos/clone-local', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async pullLocalRepo(payload: { repo: string; owner?: string; branch?: string }): Promise<ApiResponse<{ success: boolean; message: string; error?: string }>> {
+    const res = await fetch('/api/git/pull', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
   async diagnoseRepo(name: string): Promise<ApiResponse<RepoDiagnosis>> {
     const res = await fetch('/api/repos/diagnose', {
       method: 'POST',

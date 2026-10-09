@@ -127,6 +127,21 @@ export const SecurityProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     [myAccess]
   );
 
+  const userAllowedPaths = useMemo(() => {
+    const userLogin = user?.login?.toLowerCase();
+    if (!userLogin) return null;
+    const collabs = projectConfig?.governance_collaborators || {};
+    const userMeta = Object.entries(collabs).find(([k]) => k.toLowerCase() === userLogin)?.[1] as any;
+    if (userMeta?.allowed_paths && Array.isArray(userMeta.allowed_paths)) {
+      if (!userMeta.allowed_paths.includes('*') && !userMeta.allowed_paths.includes('/**')) {
+        return userMeta.allowed_paths.map((pattern: string) =>
+          pattern.replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/\*+$/, '').toLowerCase()
+        );
+      }
+    }
+    return null;
+  }, [user?.login, projectConfig?.governance_collaborators]);
+
   /**
    * Avalia autorização de acesso ao documento com base em departamento e rotas de governança
    */
@@ -146,33 +161,20 @@ export const SecurityProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         }
       }
 
-      // 2. Verifica rota permitida para o colaborador se houver restrição
-      const userLogin = user?.login?.toLowerCase();
-      const collabs = projectConfig?.governance_collaborators || {};
-      const userMeta = Object.entries(collabs).find(([k]) => k.toLowerCase() === userLogin)?.[1] as any;
-
-      if (doc.path && userMeta?.allowed_paths) {
-        const allowedPaths: string[] = Array.isArray(userMeta.allowed_paths) ? userMeta.allowed_paths : ['*'];
-        if (!allowedPaths.includes('*') && !allowedPaths.includes('/**')) {
-          const cleanDocPath = doc.path.replace(/\\/g, '/').replace(/^\/+/, '').toLowerCase();
-          const hasPathAccess = allowedPaths.some((pattern) => {
-            if (pattern === '*' || pattern === '/**') return true;
-            const cleanPattern = pattern
-              .replace(/\\/g, '/')
-              .replace(/^\/+/, '')
-              .replace(/\/\*+$/, '')
-              .toLowerCase();
-            return cleanDocPath === cleanPattern || cleanDocPath.startsWith(cleanPattern + '/');
-          });
-          if (!hasPathAccess) {
-            return false;
-          }
+      // 2. Verifica rota permitida para o colaborador se houver restrição pré-calculada
+      if (doc.path && userAllowedPaths && userAllowedPaths.length > 0) {
+        const cleanDocPath = doc.path.replace(/\\/g, '/').replace(/^\/+/, '').toLowerCase();
+        const hasPathAccess = userAllowedPaths.some(
+          (cleanPattern: string) => cleanDocPath === cleanPattern || cleanDocPath.startsWith(cleanPattern + '/')
+        );
+        if (!hasPathAccess) {
+          return false;
         }
       }
 
       return true;
     },
-    [myAccess, hasFolderAccess, user?.login, projectConfig?.governance_collaborators]
+    [myAccess, hasFolderAccess, userAllowedPaths]
   );
 
   const grantFolderAccess = async (_targetUser: string, _folders: string[]) => {

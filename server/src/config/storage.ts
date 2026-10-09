@@ -739,7 +739,7 @@ function verifyAndRepairStructure(
 
 export async function ensureDefaultRepoFiles(
   repoName: string,
-  allowAutoCloneOrInit: boolean = false,
+  _allowAutoCloneOrInit: boolean = false,
   ownerOrOrg?: string,
 ): Promise<void> {
   if (!repoName) return;
@@ -751,11 +751,9 @@ export async function ensureDefaultRepoFiles(
     (cfg.active_repo?.name === repoName ? cfg.active_repo?.owner : undefined);
   const targetDir = resolveRepoDir(repoName, effectiveOwner);
 
-  // If directory does not exist and auto-creation is not explicitly requested, do not recreate!
+  // Se o repositório não existe no disco, não cria nada nem força clone
   if (!fs.existsSync(targetDir)) {
-    if (!allowAutoCloneOrInit) {
-      return;
-    }
+    return;
   }
 
   const defaultHiddenFiles = [
@@ -775,48 +773,6 @@ export async function ensureDefaultRepoFiles(
     ".mcp.json",
     ".hidden_files.json",
   ];
-
-  // 1. If remote repo is missing or has no .git, clone and pull FIRST ONLY IF allowed
-  if (allowAutoCloneOrInit) {
-    const isLocalRepo =
-      (cfg.active_repo?.name === repoName && Boolean(cfg.active_repo?.is_local)) ||
-      cfg.repos?.some((r: any) => r.name === repoName && Boolean(r.is_local)) ||
-      repoName.startsWith("test-") ||
-      repoName === "local" ||
-      repoName === "default" ||
-      repoName === "_default";
-    const isRemote =
-      !isLocalRepo &&
-      ((cfg.active_repo?.name === repoName && Boolean(cfg.active_repo?.html_url)) ||
-       Boolean(cfg.token));
-    const resolvedFullName =
-      (cfg.active_repo?.name === repoName && cfg.active_repo?.full_name) ||
-      (effectiveOwner && effectiveOwner !== "local" ? `${effectiveOwner}/${repoName}` : repoName);
-    let remoteUrl =
-      !isLocalRepo && cfg.active_repo?.name === repoName ? cfg.active_repo?.html_url : undefined;
-    if (!remoteUrl && !isLocalRepo && cfg.token) {
-      if (resolvedFullName.includes("/")) {
-        remoteUrl = `https://github.com/${resolvedFullName}.git`;
-      } else if (cfg.user?.login) {
-        remoteUrl = `https://github.com/${cfg.user.login}/${repoName}.git`;
-      }
-    }
-    const token = isLocalRepo ? undefined : cfg.token;
-
-    if (
-      isRemote &&
-      (!fs.existsSync(targetDir) || !fs.existsSync(path.join(targetDir, ".git")))
-    ) {
-      const { ensureGitRepo } = await import("../utils/git.js");
-      await ensureGitRepo(targetDir, cfg.user, remoteUrl, token, resolvedFullName, true);
-    }
-  }
-
-  // Ensure target directory exists only if we have permission to initialize
-  if (!fs.existsSync(targetDir)) {
-    if (!allowAutoCloneOrInit) return;
-    fs.mkdirSync(targetDir, { recursive: true });
-  }
 
   // 2. Now that repository files exist on disk, check and repair SSOT files
   // .hidden_files.json: verify schema if exists, create if missing

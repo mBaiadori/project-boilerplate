@@ -1,4 +1,4 @@
-import { describe, it } from 'node:test';
+import { describe, it, after } from 'node:test';
 import assert from 'node:assert';
 import fs from 'node:fs';
 import { loadConfig, saveConfig } from '../../config/storage.js';
@@ -8,6 +8,19 @@ import { CONFIG_PATH } from '../../config/constants.js';
 describe('Storage <-> VaultService Integração', () => {
   const TEST_GH_TOKEN = 'ghp_IntegrationTestToken1234567890abcdefgh';
   const TEST_AI_KEY = 'ai_IntegrationTestKey9876543210zyxwvutsrq';
+
+  // Guarda o estado real do usuário para restaurar depois (o teste usa o cofre/config reais)
+  const originalGhToken = vaultService.getSecret(VAULT_KEYS.GITHUB_TOKEN);
+  const originalAiKey = vaultService.getSecret(VAULT_KEYS.AI_API_KEY);
+  const originalConfigRaw = fs.existsSync(CONFIG_PATH) ? fs.readFileSync(CONFIG_PATH, 'utf-8') : null;
+
+  after(() => {
+    if (originalGhToken) vaultService.setSecret(VAULT_KEYS.GITHUB_TOKEN, originalGhToken);
+    else vaultService.deleteSecret(VAULT_KEYS.GITHUB_TOKEN);
+    if (originalAiKey) vaultService.setSecret(VAULT_KEYS.AI_API_KEY, originalAiKey);
+    else vaultService.deleteSecret(VAULT_KEYS.AI_API_KEY);
+    if (originalConfigRaw !== null) fs.writeFileSync(CONFIG_PATH, originalConfigRaw, 'utf-8');
+  });
 
   it('saveConfig deve persistir segredos no cofre e NÃO gravar em texto puro no config.json em disco', () => {
     const cfg = loadConfig();

@@ -11,11 +11,15 @@ import {
   applyBranchProtection,
   checkBranchProtection,
   ensureGitRepo,
+  cloneGitRepo,
+  pullGitRepo,
   executeGitCommand,
   isGitRepo,
 } from "../../utils/git.js";
+import { parseRepoRef, resolveRepoDirPath, RepoRef } from "../../utils/repo-ref.js";
 import { workspaceService } from "../workspace/workspace.service.js";
 import { governanceService } from "../governance/governance.service.js";
+import { eventsService } from "../events/events.service.js";
 
 export interface RepoDiagnosisCheckItem {
   exists: boolean;
@@ -309,12 +313,10 @@ export class ReposService {
       }
     }
 
-    // Ordenação: repositórios clonados localmente primeiro, depois em ordem alfabética
-    formattedRemote.sort((a, b) => {
-      if (a.is_cloned_locally && !b.is_cloned_locally) return -1;
-      if (!a.is_cloned_locally && b.is_cloned_locally) return 1;
-      return a.name.localeCompare(b.name);
-    });
+    // Ordenação fixa de A a Z
+    formattedRemote.sort((a, b) =>
+      a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }),
+    );
 
     return {
       authenticated: !authError,
@@ -324,7 +326,7 @@ export class ReposService {
     };
   }
 
-  async diagnoseRepo(repoName: string, ownerOrOrg?: string): Promise<RepoDiagnosis> {
+  async diagnoseRepo(repoName: string, ownerOrOrg?: string, checkRemote: boolean = false): Promise<RepoDiagnosis> {
     if (!repoName) {
       throw new Error("Nome do repositório é obrigatório para diagnóstico");
     }
@@ -412,14 +414,14 @@ export class ReposService {
       fs.existsSync(pSpecMemoryPath) &&
       fs.statSync(pSpecMemoryPath).isDirectory();
 
-    // 8. Check Branch Protection
+    // 8. Check Branch Protection (only if checkRemote is explicitly requested)
     let branchProtectionSupported = !isLocal && Boolean(cfg.token) && canAdmin;
     let branchProtectionActive = false;
     let branchProtectionDetails = isLocal
       ? "Não aplicável (modo local)"
       : "Não verificada";
 
-    if (branchProtectionSupported && cfg.token && fullName.includes("/")) {
+    if (checkRemote && branchProtectionSupported && cfg.token && fullName.includes("/")) {
       const defaultBranch = cfg.active_repo?.default_branch || "main";
       const protCheck = await checkBranchProtection(
         fullName,
@@ -575,6 +577,45 @@ export class ReposService {
 
     const isLocal = repo.is_local !== undefined ? Boolean(repo.is_local) : (!htmlUrl && !cfg.token);
 
+    const repoDir = resolveRepoDir(repo.name, effectiveOwner);
+    let isClonedLocally = fs.existsSync(repoDir) && (await isGitRepo(repoDir));
+
+    // Se o repositório ainda não está no disco, mas o usuário tem permissão de leitura/pull, clona automaticamente
+    const hasPullPermission =
+      !repo.permissions ||
+      repo.permissions.pull === undefined ||
+      Boolean(repo.permissions.pull || repo.permissions.admin || repo.is_owner);
+
+    if (!isClonedLocally && hasPullPermission && !isLocal && (htmlUrl || fullName.includes("/") || cfg.token)) {
+      const cloneTargetUrl = htmlUrl || `https://github.com/${fullName}.git`;
+      try {
+        const cloneResult = await cloneGitRepo(
+          repoDir,
+          cloneTargetUrl,
+          cfg.token,
+          cfg.user,
+          (p) => {
+            eventsService.broadcast("repo_progress", {
+              repo: repo.name,
+              owner: effectiveOwner,
+              ...p,
+            });
+          },
+        );
+        if (cloneResult.success) {
+          isClonedLocally = true;
+          eventsService.broadcast("repo_progress", {
+            repo: repo.name,
+            owner: effectiveOwner,
+            stage: "Concluído",
+            percent: 100,
+          });
+        }
+      } catch (cloneErr) {
+        console.warn(`[selectRepo] Não foi possível clonar automaticamente ${fullName}:`, cloneErr);
+      }
+    }
+
     cfg.active_repo = {
       name: repo.name,
       full_name: fullName,
@@ -583,39 +624,79 @@ export class ReposService {
       is_private: Boolean(repo.is_private),
       default_branch: repo.default_branch || "main",
       is_local: isLocal,
+      is_cloned_locally: isClonedLocally,
       owner: effectiveOwner,
       permissions: repo.permissions || { admin: true, push: true, pull: true },
     };
 
-    const repoDir = resolveRepoDir(repo.name, effectiveOwner);
+    saveConfig(cfg);
     workspaceService.invalidateTreeCache(repo.name);
 
-    // Se temos credenciais e URL remota (ou repo remoto), clona se não existir ou puxa a versão mais recente
-    if (!isLocal && (htmlUrl || fullName.includes("/"))) {
-      await ensureGitRepo(repoDir, cfg.user, htmlUrl, cfg.token, fullName || repo.name, true);
-    } else {
-      await ensureGitRepo(repoDir, cfg.user, undefined, undefined, repo.name, false);
-    }
-
-    // Realiza o diagnóstico de compatibilidade
-    const diagnosis = await this.diagnoseRepo(repo.name, effectiveOwner);
-
-    if (diagnosis.is_ready) {
-      saveConfig(cfg);
+    if (!isClonedLocally) {
       return {
         success: true,
-        is_ready: true,
+        is_ready: false,
         active_repo: cfg.active_repo,
-        diagnosis,
+        message: "Repositório não clonado localmente.",
       };
     }
 
-    // Se faltarem arquivos essenciais, não força criação indiscriminada; informa para o Wizard
+    // Realiza o diagnóstico de compatibilidade do repositório clonado no disco
+    const diagnosis = await this.diagnoseRepo(repo.name, effectiveOwner);
+
     return {
       success: true,
-      is_ready: false,
+      is_ready: diagnosis.is_ready,
       active_repo: cfg.active_repo,
       diagnosis,
+    };
+  }
+
+  async cloneLocalRepo(payload: { name: string; owner?: string }) {
+    const cfg = loadConfig();
+    const ref = parseRepoRef(payload.name, payload.owner || cfg.active_repo?.owner || cfg.user?.login);
+    if (!ref) {
+      throw new Error("Identificador de repositório inválido para clone.");
+    }
+    const repoDir = resolveRepoDirPath(ref);
+    const remoteUrl = `https://github.com/${ref.owner}/${ref.repo}.git`;
+    const res = await cloneGitRepo(
+      repoDir,
+      remoteUrl,
+      cfg.token,
+      cfg.user,
+      (p) => {
+        eventsService.broadcast("repo_progress", {
+          repo: ref.repo,
+          owner: ref.owner,
+          ...p,
+        });
+      },
+    );
+    if (!res.success) {
+      throw new Error(res.message);
+    }
+    workspaceService.invalidateTreeCache(ref.repo);
+    eventsService.broadcast("repo_progress", {
+      repo: ref.repo,
+      owner: ref.owner,
+      stage: "Concluído",
+      percent: 100,
+    });
+
+    if (cfg.active_repo && cfg.active_repo.name.toLowerCase() === ref.repo.toLowerCase()) {
+      cfg.active_repo.is_cloned_locally = true;
+      saveConfig(cfg);
+    }
+
+    return {
+      success: true,
+      message: `Repositório ${ref.owner}/${ref.repo} clonado com sucesso para ${repoDir}`,
+      repo_dir: repoDir,
+      owner: ref.owner,
+      name: ref.repo,
+      full_name: `${ref.owner}/${ref.repo}`,
+      is_cloned_locally: true,
     };
   }
 

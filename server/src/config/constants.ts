@@ -57,68 +57,32 @@ export const FRAMEWORK_DEFAULT_DIR = path.join(TEMPLATES_DIR, "default");
 export const DOCS_DIR = path.join(PROJECT_ROOT, "docs");
 
 /**
- * Resolve o diretório local de um repositório, com escopo por organização / owner.
- * Ex: projects/enursy/teste ou projects/local/financeiro ou projects/mBaiadori/meu-repo
+ * Resolve o diretório local de um repositório, com escopo por organização / owner:
+ * SEMPRE projects/<owner>/<repo>.
+ * Determinístico, seguro e livre de heurísticas destrutivas.
  */
 export function resolveRepoDir(repoName: string, ownerOrOrg?: string | { login?: string } | any): string {
-  const cleanRepo = (repoName || "local").trim();
-  if (cleanRepo.includes("/")) {
-    const parts = cleanRepo.split("/");
-    const specificPath = path.join(PROJECTS_DIR, parts[0], parts.slice(1).join("/"));
-    if (fs.existsSync(specificPath)) return specificPath;
-    const flatSub = path.join(PROJECTS_DIR, parts.slice(1).join("/"));
-    if (fs.existsSync(flatSub)) return flatSub;
-    return specificPath;
-  }
-
+  const cleanRepo = (repoName || "").trim();
   const rawOwner =
     typeof ownerOrOrg === "string"
       ? ownerOrOrg
       : typeof (ownerOrOrg as any)?.login === "string"
         ? (ownerOrOrg as any).login
-        : "";
-  const cleanOwner = rawOwner.trim();
-  const canonicalPath =
-    cleanOwner && cleanOwner !== "all" && cleanOwner !== "personal"
-      ? path.join(PROJECTS_DIR, cleanOwner, cleanRepo)
-      : path.join(PROJECTS_DIR, "local", cleanRepo);
+        : undefined;
 
-  // 1. Se foi especificado um owner/org explícito (diferente de "all" ou "personal"):
-  if (cleanOwner && cleanOwner !== "all" && cleanOwner !== "personal") {
-    const scopedPath = path.join(PROJECTS_DIR, cleanOwner, cleanRepo);
-    // Se existe ou se ainda será clonado, deve residir exatamente na pasta com escopo da organização
-    return scopedPath;
+  // Importacao dinamica segura ou construcao direta do path canonico
+  if (cleanRepo.includes("/")) {
+    const parts = cleanRepo.split("/").filter(Boolean);
+    if (parts.length >= 2) {
+      return path.resolve(PROJECTS_DIR, parts[0].trim(), parts.slice(1).join("-").trim());
+    }
   }
 
-  // 2. Se for local / genérico, verifica se existe dentro da pasta 'local'
-  const localScoped = path.join(PROJECTS_DIR, "local", cleanRepo);
-  if (fs.existsSync(localScoped)) {
-    return localScoped;
-  }
+  const effectiveOwner = rawOwner && rawOwner !== "all" && rawOwner !== "personal"
+    ? rawOwner.trim()
+    : undefined;
 
-  // 3. Varre subdiretórios de organizações em projects/ para encontrar onde o repositório está
-  if (fs.existsSync(PROJECTS_DIR)) {
-    try {
-      const entries = fs.readdirSync(PROJECTS_DIR, { withFileTypes: true });
-      for (const entry of entries) {
-        if (entry.isDirectory() && !entry.name.startsWith(".") && entry.name !== "default" && entry.name !== "_default") {
-          const subPath = path.join(PROJECTS_DIR, entry.name, cleanRepo);
-          if (fs.existsSync(subPath)) {
-            return subPath;
-          }
-        }
-      }
-    } catch {}
-  }
-
-  // 4. Verifica se existe estrutura plana legada projects/{cleanRepo}
-  const flatPath = path.join(PROJECTS_DIR, cleanRepo);
-  if (fs.existsSync(flatPath) && fs.statSync(flatPath).isDirectory()) {
-    return flatPath;
-  }
-
-  // 5. Se não existir no disco, retorna o caminho canônico esperado
-  return canonicalPath;
+  return path.resolve(PROJECTS_DIR, effectiveOwner || "local", cleanRepo || "local");
 }
 
 export const DEFAULT_TEMPLATE_CREATOR_PROMPT = `Você é o Especialista em Criação e Curadoria de Templates Técnicos e de Produto pars.`;

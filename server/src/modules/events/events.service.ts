@@ -1,6 +1,6 @@
+import fs from 'node:fs';
 import { FastifyReply } from 'fastify';
-import { watch, type FSWatcher } from 'chokidar';
-import { UI_DIR, UI_DIST_DIR, PROJECTS_DIR } from '../../config/constants.js';
+import { PROJECTS_DIR } from '../../config/constants.js';
 
 type Client = {
   reply: FastifyReply;
@@ -8,7 +8,8 @@ type Client = {
 
 class EventsService {
   private clients: Set<Client> = new Set();
-  private watcher: FSWatcher | null = null;
+  private nativeWatcher: fs.FSWatcher | null = null;
+  private debounceTimers = new Map<string, NodeJS.Timeout>();
 
   constructor() {
     this.initWatcher();
@@ -46,48 +47,106 @@ class EventsService {
       } catch {}
     }
     this.clients.clear();
-    if (this.watcher) {
+    if (this.nativeWatcher) {
       try {
-        this.watcher.close();
+        this.nativeWatcher.close();
       } catch {}
-      this.watcher = null;
+      this.nativeWatcher = null;
     }
+    for (const timer of this.debounceTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.debounceTimers.clear();
+  }
+
+  private isIgnored(relPath: string): boolean {
+    const normalized = relPath.replace(/\\/g, '/');
+    const basename = normalized.split('/').pop() || '';
+    return (
+      basename === '.docs.metadata.json' ||
+      basename === '.dictionary.json' ||
+      basename === '.templates.json' ||
+      basename === '.templates.metadata.json' ||
+      basename === '.hidden_files.json' ||
+      basename === '.project.config.json' ||
+      basename === '.gitignore' ||
+      basename === '.gitattributes' ||
+      basename === '.DS_Store' ||
+      normalized.includes('/.git/') ||
+      normalized.includes('/.git') ||
+      normalized.startsWith('.git/') ||
+      normalized.startsWith('.git') ||
+      normalized.includes('/.spec-memory/') ||
+      normalized.startsWith('.spec-memory') ||
+      normalized.includes('/.clone-tmp-') ||
+      normalized.startsWith('.clone-tmp-') ||
+      normalized.includes('/node_modules/') ||
+      normalized.startsWith('node_modules/') ||
+      normalized === 'node_modules' ||
+      normalized.includes('/.next/') ||
+      normalized.startsWith('.next/') ||
+      normalized === '.next' ||
+      normalized.includes('/dist/') ||
+      normalized.startsWith('dist/') ||
+      normalized === 'dist' ||
+      normalized.includes('/build/') ||
+      normalized.startsWith('build/') ||
+      normalized === 'build' ||
+      normalized.includes('/.turbo/') ||
+      normalized.includes('/coverage/') ||
+      normalized.includes('/.venv/') ||
+      normalized.includes('/venv/') ||
+      normalized.includes('/vendor/') ||
+      normalized.endsWith('.DS_Store')
+    );
   }
 
   private initWatcher(): void {
-    const watchPaths = [UI_DIR, UI_DIST_DIR, PROJECTS_DIR];
-    try {
-      this.watcher = watch(watchPaths, {
-        ignoreInitial: true,
-        ignored: [
-          /(^|[\/\\])\.git/,
-          /node_modules/,
-        ],
-        awaitWriteFinish: {
-          stabilityThreshold: 150,
-          pollInterval: 50,
-        },
-      });
+    if (!fs.existsSync(PROJECTS_DIR)) {
+      try {
+        fs.mkdirSync(PROJECTS_DIR, { recursive: true });
+      } catch {}
+    }
 
-      this.watcher.on('all', (event: string, filePath: string) => {
-        if (filePath.startsWith(PROJECTS_DIR)) {
-          const relativePath = filePath.replace(PROJECTS_DIR, '').replace(/^[/\\]/, '');
-          this.broadcast('refresh', {
-            timestamp: Date.now(),
-            file: relativePath,
-            action: event,
-          });
-          this.broadcast('file_changed', {
-            timestamp: Date.now(),
-            file: relativePath,
-            action: event,
-          });
-        } else if (filePath.match(/\.(html|css|js|svg|png)$/)) {
-          this.broadcast('reload', { timestamp: Date.now(), file: filePath });
-        }
+    try {
+      // Usa fs.watch nativo com suporte recursivo do SO (FSEvents no macOS / ReadDirectoryChangesW no Windows)
+      // Consome apenas 1 descritor de arquivo para toda a árvore de diretórios, exatamente como o VS Code e Electron.
+      this.nativeWatcher = fs.watch(
+        PROJECTS_DIR,
+        { recursive: true, persistent: false },
+        (eventType, filename) => {
+          if (!filename) return;
+          const relPath = String(filename);
+          if (this.isIgnored(relPath)) return;
+
+          const existingTimer = this.debounceTimers.get(relPath);
+          if (existingTimer) {
+            clearTimeout(existingTimer);
+          }
+
+          const timer = setTimeout(() => {
+            this.debounceTimers.delete(relPath);
+            this.broadcast('refresh', {
+              timestamp: Date.now(),
+              file: relPath,
+              action: eventType,
+            });
+            this.broadcast('file_changed', {
+              timestamp: Date.now(),
+              file: relPath,
+              action: eventType,
+            });
+          }, 150);
+
+          this.debounceTimers.set(relPath, timer);
+        },
+      );
+
+      this.nativeWatcher.on('error', (err: unknown) => {
+        console.warn('[Events] Aviso no file watcher:', (err as any)?.code || err);
       });
     } catch (err) {
-      console.error('Erro ao inicializar file watcher:', err);
+      console.warn('[Events] Não foi possível iniciar o file watcher nativo:', err);
     }
   }
 }

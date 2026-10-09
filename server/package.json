@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx watch --exclude 'dist/**' src/server.ts",
+    "dev": "tsx watch --exclude 'dist/**' --exclude 'projects/**' --exclude '../projects/**' src/server.ts",
     "test": "tsx --test 'src/**/*.test.ts'",
     "build": "tsc && cp -r src/schemas dist/schemas",
     "start": "node dist/server.js"

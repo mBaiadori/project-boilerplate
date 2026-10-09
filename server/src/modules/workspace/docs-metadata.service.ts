@@ -373,8 +373,8 @@ export class DocsMetadataService {
     // Save in cache immediately
     this.metaCache.set(cleanRepo, { data: metaList, timestamp: Date.now() });
 
-    // Schedule background reconciliation without blocking the current request
-    if (fs.existsSync(repoDir)) {
+    // Schedule background reconciliation only when forced or when meta was missing on disk
+    if (fs.existsSync(repoDir) && (forceDiskScan || (!fs.existsSync(metaPath) && metaList.length === 0))) {
       this.scheduleBackgroundReconciliation(cleanRepo);
     }
 
@@ -382,7 +382,7 @@ export class DocsMetadataService {
   }
 
   /**
-   * Executa reconciliação de metadados em segundo plano para não travar a Event Loop em repositórios grandes
+   * Executa reconciliação de metadados em segundo plano de forma assíncrona e eficiente
    */
   scheduleBackgroundReconciliation(repoName: string): void {
     const cleanRepo = repoName || "local";
@@ -399,7 +399,7 @@ export class DocsMetadataService {
           try {
             const entries = fs.readdirSync(dir, { withFileTypes: true });
             for (const entry of entries) {
-              if (entry.name.startsWith(".") || entry.name === "node_modules")
+              if (entry.name.startsWith(".") || entry.name === "node_modules" || entry.name === "dist" || entry.name === "build")
                 continue;
               const full = path.join(dir, entry.name);
               if (entry.isDirectory()) {
@@ -418,11 +418,11 @@ export class DocsMetadataService {
         scanDir(repoDir);
 
         const currentCached = this.metaCache.get(cleanRepo)?.data || [];
-        let metaList = [...currentCached];
+        const metaMap = new Map(currentCached.map((d) => [d.path, { ...d }]));
         let changed = false;
 
         for (const relPath of diskFiles) {
-          const existingIdx = metaList.findIndex((d) => d.path === relPath);
+          const item = metaMap.get(relPath);
           const full = path.join(repoDir, relPath);
           let content = "";
           try {
@@ -432,8 +432,7 @@ export class DocsMetadataService {
           const extractedTitle = extractDocTitleFromMarkdown(content);
           const frontmatterMeta = extractFrontmatterMeta(content);
 
-          if (existingIdx >= 0) {
-            const item = metaList[existingIdx];
+          if (item) {
             let itemModified = false;
             const currentLinksJson = JSON.stringify(
               Array.isArray(item.links) ? item.links : [],
@@ -448,12 +447,14 @@ export class DocsMetadataService {
               itemModified = true;
             }
             if (itemModified) {
+              metaMap.set(relPath, item);
               changed = true;
             }
           } else {
             const name = path.basename(relPath, path.extname(relPath));
             const ext = path.extname(relPath).replace(/^\./, "") || "md";
-            metaList.push(
+            metaMap.set(
+              relPath,
               this.sanitizeMetaItem({
                 id: generateDocId(relPath),
                 name,
@@ -473,15 +474,16 @@ export class DocsMetadataService {
           }
         }
 
-        const validMetaList = metaList.filter((d) =>
-          diskFiles.includes(d.path),
-        );
-        if (validMetaList.length !== metaList.length) {
-          metaList = validMetaList;
-          changed = true;
+        const diskSet = new Set(diskFiles);
+        for (const key of metaMap.keys()) {
+          if (!diskSet.has(key)) {
+            metaMap.delete(key);
+            changed = true;
+          }
         }
 
         if (changed) {
+          const metaList = Array.from(metaMap.values());
           this.saveDocsMetadata(cleanRepo, metaList);
         }
       } catch (err) {

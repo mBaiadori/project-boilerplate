@@ -152,6 +152,9 @@ interface WorkspaceContextType {
     filePath: string,
     targetRepo?: string,
   ) => Promise<{ success: boolean; newPath?: string; error?: string }>;
+  cloneLocalRepo: (repo?: Repo) => Promise<{ success: boolean; error?: string }>;
+  pullLocalRepo: (repo?: Repo) => Promise<{ success: boolean; message?: string; error?: string }>;
+  repoProgress: Record<string, { stage: string; percent: number; message?: string }>;
   effectivePermission: EffectiveUserPermission | null;
   isLoadingPermission: boolean;
   refreshEffectivePermission: (repo?: Repo) => Promise<void>;
@@ -209,6 +212,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
   const [projectMetaOptions, setProjectMetaOptions] =
     useState<ProjectMetadataOptions | null>(null);
   const [projectConfig, setProjectConfig] = useState<any>(null);
+  const [repoProgress, setRepoProgress] = useState<Record<string, { stage: string; percent: number; message?: string }>>({});
   const [dictionaryTerms, setDictionaryTerms] = useState<DictionaryTerm[]>([]);
   const dictionaryTermsRef = useRef<DictionaryTerm[]>([]);
   useEffect(() => {
@@ -1205,10 +1209,22 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
           });
 
         const selectRes = await API.selectRepo(repo);
-        const isReady = selectRes.data?.is_ready !== false;
+        if (selectRes.data?.active_repo) {
+          setActiveRepo(selectRes.data.active_repo);
+          activeRepoRef.current = selectRes.data.active_repo;
+          setRepos((prev) =>
+            prev.map((r) =>
+              r.name.toLowerCase() === repo.name.toLowerCase()
+                ? { ...r, is_cloned_locally: Boolean(selectRes.data?.active_repo?.is_cloned_locally) }
+                : r
+            )
+          );
+        }
+
+        const isCloned = Boolean(selectRes.data?.active_repo?.is_cloned_locally);
         const diagnosis = selectRes.data?.diagnosis;
 
-        if (!isReady) {
+        if (!isCloned) {
           setIsLoadingTree(false);
           return { success: true, is_ready: false, diagnosis };
         }
@@ -1530,6 +1546,56 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
     [flushPendingSave, loadTree, refreshPendingChanges, refreshGitStatus, loadFile],
   );
 
+  const cloneLocalRepo = useCallback(async (targetRepo?: Repo): Promise<{ success: boolean; error?: string }> => {
+    const r = targetRepo || activeRepoRef.current;
+    if (!r?.name) return { success: false, error: "Nenhum repositório selecionado para clonar" };
+    setIsLoadingTree(true);
+    try {
+      const owner = getRepoOwnerOrOrg(r);
+      const res = await API.cloneLocalRepo({ name: r.name, owner });
+      if (res.ok && res.data?.success) {
+        const updatedRepo: Repo = {
+          ...r,
+          is_cloned_locally: true,
+        };
+        setActiveRepo(updatedRepo);
+        activeRepoRef.current = updatedRepo;
+        await loadTree(r.name);
+        await Promise.allSettled([
+          refreshGitStatus(r.name),
+          refreshGitLog(15, r.name),
+          loadRepos(),
+        ]);
+        return { success: true };
+      }
+      return { success: false, error: res.data?.error || "Falha ao clonar repositório" };
+    } catch (err: any) {
+      return { success: false, error: err.message || "Erro ao clonar repositório" };
+    } finally {
+      setIsLoadingTree(false);
+    }
+  }, [getRepoOwnerOrOrg, loadTree, refreshGitStatus, refreshGitLog, loadRepos]);
+
+  const pullLocalRepo = useCallback(async (targetRepo?: Repo): Promise<{ success: boolean; message?: string; error?: string }> => {
+    const r = targetRepo || activeRepoRef.current;
+    if (!r?.name) return { success: false, error: "Nenhum repositório ativo" };
+    try {
+      const owner = getRepoOwnerOrOrg(r);
+      const res = await API.pullLocalRepo({ repo: r.name, owner });
+      if (res.ok && res.data?.success) {
+        await loadTree(r.name);
+        await Promise.allSettled([
+          refreshGitStatus(r.name),
+          refreshGitLog(15, r.name),
+        ]);
+        return { success: true, message: res.data.message };
+      }
+      return { success: false, error: res.data?.error || "Falha ao puxar alterações" };
+    } catch (err: any) {
+      return { success: false, error: err.message || "Erro ao puxar alterações" };
+    }
+  }, [getRepoOwnerOrOrg, loadTree, refreshGitStatus, refreshGitLog]);
+
   // Lifecycle: Flush de alterações pendentes ao fechar aba, recarregar ou ocultar janela
   useEffect(() => {
     const handleUnloadOrHide = () => {
@@ -1583,20 +1649,24 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
     loadRepos();
 
     let evtSource: EventSource | null = null;
+    let sseDebounceTimer: any = null;
+
     try {
       evtSource = new EventSource("/api/events");
       
-      const handleWorkspaceRefresh = () => {
-        refreshPendingChanges();
-        loadTree();
-        refreshGitStatus();
-        refreshWhatsNew();
-        if (activeFileRef.current) {
-          reloadActiveFile(true);
-        }
+      const debouncedRefresh = () => {
+        if (sseDebounceTimer) clearTimeout(sseDebounceTimer);
+        sseDebounceTimer = setTimeout(() => {
+          refreshPendingChanges();
+          loadTree();
+          refreshWhatsNew();
+          if (activeFileRef.current) {
+            reloadActiveFile(true);
+          }
+        }, 300);
       };
 
-      evtSource.addEventListener("refresh", handleWorkspaceRefresh);
+      evtSource.addEventListener("refresh", debouncedRefresh);
       evtSource.addEventListener("file_changed", (event: MessageEvent) => {
         try {
           const data = JSON.parse(event.data);
@@ -1606,14 +1676,39 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
             reloadActiveFile(true);
           }
         } catch {}
-        refreshPendingChanges();
-        loadTree();
+        debouncedRefresh();
+      });
+
+      evtSource.addEventListener("repo_progress", (event: MessageEvent) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data?.repo) {
+            setRepoProgress((prev) => ({
+              ...prev,
+              [data.repo]: {
+                stage: data.stage || "Sincronizando",
+                percent: typeof data.percent === "number" ? data.percent : 0,
+                message: data.message,
+              },
+            }));
+            if (data.percent >= 100) {
+              setTimeout(() => {
+                setRepoProgress((prev) => {
+                  const next = { ...prev };
+                  delete next[data.repo];
+                  return next;
+                });
+              }, 1200);
+            }
+          }
+        } catch {}
       });
     } catch (e) {
       console.warn("[WorkspaceContext] SSE não disponível:", e);
     }
 
     return () => {
+      if (sseDebounceTimer) clearTimeout(sseDebounceTimer);
       if (evtSource) evtSource.close();
     };
   }, [
@@ -1696,6 +1791,9 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
         createOrSwitchBranch,
         moveFileOrFolder,
         duplicateFile,
+        cloneLocalRepo,
+        pullLocalRepo,
+        repoProgress,
         effectivePermission,
         isLoadingPermission,
         refreshEffectivePermission,
