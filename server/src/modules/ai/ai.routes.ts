@@ -9,6 +9,22 @@ import { ragService } from '../rag/rag.service.js';
 import { ProviderId, ProviderStreamEvent } from './providers/provider.types.js';
 import { estimateTokens, calculateTokenCost } from './tokens.helper.js';
 
+/**
+ * Serializador JSON seguro contra referências circulares para eventos SSE e telemetria
+ */
+function safeJsonStringify(obj: any): string {
+  const seen = new WeakSet();
+  return JSON.stringify(obj, (_key, value) => {
+    if (typeof value === 'object' && value !== null) {
+      if (seen.has(value)) {
+        return '[Circular]';
+      }
+      seen.add(value);
+    }
+    return value;
+  });
+}
+
 export async function aiRoutes(fastify: FastifyInstance) {
   /**
    * Lista todos os provedores disponíveis e seus status (Direct API, Antigravity, etc.)
@@ -362,7 +378,11 @@ export async function aiRoutes(fastify: FastifyInstance) {
       if (event.type === 'stream_telemetry' && event.data?.usage) {
         reportedUsage = event.data.usage;
       }
-      reply.raw.write(`data: ${JSON.stringify(event)}\n\n`);
+      try {
+        reply.raw.write(`data: ${safeJsonStringify(event)}\n\n`);
+      } catch (writeErr) {
+        console.error('[AI Stream] Erro ao enviar evento SSE:', writeErr);
+      }
     };
 
     const provider = providerManager.getProvider(providerId);
@@ -447,7 +467,7 @@ export async function aiRoutes(fastify: FastifyInstance) {
         response: {
           reply: accumulatedReply,
           tool_calls: executedToolCalls.length > 0 ? executedToolCalls : (result?.toolCalls || []),
-          stream_events: recordedEvents,
+          stream_events: [...recordedEvents],
           finish_reason: 'stop',
           raw_response: result,
         },
@@ -462,21 +482,37 @@ export async function aiRoutes(fastify: FastifyInstance) {
         },
       };
 
+      // 1. Persiste a mensagem e o turno de telemetria no disco ANTES do encerramento
+      aiService.appendChatEvent(repoName, filePath, sessionId, 'model', accumulatedReply, { model: provider.name, author: 'Agent' }, telemetryTurn);
+
+      // 2. Envia telemetria para o frontend via SSE sem duplicar todo o array de eventos recebidos
+      const streamTelemetryTurn: RawTurnTelemetryRecord = {
+        ...telemetryTurn,
+        response: {
+          ...telemetryTurn.response,
+          stream_events: [],
+        },
+      };
+
       sendEvent({
         type: 'stream_telemetry',
         provider: provider.id,
         sessionId,
         data: {
-          telemetry: telemetryTurn,
+          telemetry: streamTelemetryTurn,
           metrics: telemetryTurn.metrics,
         },
         timestamp: Date.now(),
       });
-
-      aiService.appendChatEvent(repoName, filePath, sessionId, 'model', accumulatedReply, { model: provider.name, author: 'Agent' }, telemetryTurn);
     } catch (err: any) {
       const errorMsg = err?.message || String(err);
-      aiService.appendChatEvent(repoName, filePath, sessionId, 'model', `⚠️ ${errorMsg}`, { model: provider.name, author: 'Agent' });
+      console.error('[AI Stream] Erro durante streaming da sessão:', errorMsg);
+      // Se já acumulou resposta da IA, preserva a resposta do modelo e não a substitui por mensagem de erro
+      if (accumulatedReply.trim()) {
+        aiService.appendChatEvent(repoName, filePath, sessionId, 'model', accumulatedReply, { model: provider.name, author: 'Agent' });
+      } else {
+        aiService.appendChatEvent(repoName, filePath, sessionId, 'model', `⚠️ ${errorMsg}`, { model: provider.name, author: 'Agent' });
+      }
       sendEvent({
         type: 'error',
         provider: provider.id,

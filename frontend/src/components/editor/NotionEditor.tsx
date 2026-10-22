@@ -836,6 +836,7 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
     const currentMd = engineRef.current
       ? engineRef.current.getMarkdown()
       : docBodyRef.current;
+    docBodyRef.current = currentMd;
     const metaToUse = {
       ...(parsedRef.current?.metadata || {}),
       ...(fileMetadata || {}),
@@ -843,6 +844,10 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
     const fullContent = parsedRef.current?.hasFrontmatter
       ? serializeFrontmatter(metaToUse, currentMd)
       : currentMd;
+
+    if (onChangeRef.current) {
+      onChangeRef.current(fullContent);
+    }
 
     const res = await saveCurrentFile(metaToUse, fullContent);
     if (res?.success) {

@@ -370,10 +370,15 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
             }
           }
 
+          let msgContent = ev.text || '';
+          if (msgContent.includes('Converting circular structure to JSON')) {
+            msgContent = '⚠️ [Interrupção na persistência do histórico]: A resposta deste turno foi transmitida em tempo real via agente, mas a serialização de telemetria no servidor sofreu uma referência circular que foi corrigida.';
+          }
+
           return {
             id: `restored-${sessionId}-${idx}`,
             sender: isAssistant ? 'assistant' : 'user',
-            content: ev.text || '',
+            content: msgContent,
             timestamp: ev.timestamp ? new Date(ev.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : undefined,
             metrics: turnMetrics,
             raw_turn_id: rawTurnId,
@@ -665,7 +670,17 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
         const completionTokens = (receivedTelemetry as RawTurnTelemetry | null)?.metrics?.completion_tokens || estimateTokens(accumulatedReply);
         const costInfo = calculateTokenCost(activeModelName, promptTokens, completionTokens);
 
-        const turnTelemetry: RawTurnTelemetry = (receivedTelemetry as RawTurnTelemetry) || {
+        const turnTelemetry: RawTurnTelemetry = receivedTelemetry
+          ? {
+              ...(receivedTelemetry as RawTurnTelemetry),
+              response: {
+                ...(receivedTelemetry as RawTurnTelemetry).response,
+                stream_events: (receivedTelemetry as RawTurnTelemetry).response?.stream_events?.length
+                  ? (receivedTelemetry as RawTurnTelemetry).response.stream_events
+                  : streamEventsList,
+              },
+            }
+          : {
           turn_id: turnId,
           turn_index: turnIndex,
           session_id: currentSessionId,

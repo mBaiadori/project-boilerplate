@@ -76,6 +76,19 @@ export interface AIExecutionResult {
   raw_response?: any;
 }
 
+export function sanitizeSessionEvents(events: any[]): any[] {
+  if (!Array.isArray(events)) return [];
+  return events.map((ev) => {
+    if (typeof ev?.text === 'string' && ev.text.includes('Converting circular structure to JSON')) {
+      return {
+        ...ev,
+        text: '⚠️ [Registro recuperado]: A resposta deste turno foi transmitida em tempo real pelo agente. A serialização histórica do servidor sofreu um conflito circular que foi corrigido.',
+      };
+    }
+    return ev;
+  });
+}
+
 export class AIService {
   private getMemoryDir(repoName?: string): string {
     const cfg = loadConfig();
@@ -695,6 +708,9 @@ export class AIService {
       if (fs.existsSync(sessionFile)) {
         try {
           const session = JSON.parse(fs.readFileSync(sessionFile, 'utf-8'));
+          if (session && Array.isArray(session.events)) {
+            session.events = sanitizeSessionEvents(session.events);
+          }
           return { session, sessions: [session] };
         } catch {}
       }
@@ -718,6 +734,9 @@ export class AIService {
         const fullPath = path.join(sessionsDir, f);
         const stats = fs.statSync(fullPath);
         const data = JSON.parse(fs.readFileSync(fullPath, 'utf-8'));
+        if (Array.isArray(data.events)) {
+          data.events = sanitizeSessionEvents(data.events);
+        }
 
         const lastEvent = data.events && data.events.length > 0 ? data.events[data.events.length - 1] : null;
         const firstUserEvent = data.events ? data.events.find((e: any) => e.role === 'user') : null;

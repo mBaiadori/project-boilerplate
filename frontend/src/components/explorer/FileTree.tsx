@@ -334,7 +334,10 @@ export const FileTree: React.FC<FileTreeProps> = ({
 
     isSubmittingInlineRef.current = true;
     const { parentPath, isFolder } = inlineCreating;
-    const fileName = rawName;
+    let fileName = rawName;
+    if (!isFolder && selectedTemplate && !fileName.includes(".")) {
+      fileName = `${fileName}.md`;
+    }
 
     const isMarkdown =
       !isFolder &&

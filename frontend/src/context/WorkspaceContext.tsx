@@ -478,17 +478,38 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
       setIsSaving(true);
       setSaveStatus("Salvando...");
       try {
+        if (autoSaveTimerRef.current) {
+          clearTimeout(autoSaveTimerRef.current);
+          autoSaveTimerRef.current = null;
+        }
+
         const res = await API.saveWorkspaceFile({ path: file, content, meta, repo: repoName });
         if (res.ok) {
           if (file === activeFileRef.current && (!targetRepo || targetRepo === activeRepoRef.current?.name)) {
             setOriginalContent(content);
             originalContentRef.current = content;
+            setFileContentState(content);
+            fileContentRef.current = content;
             if (res.data?.meta) {
               setFileMetadataState(res.data.meta);
               fileMetadataRef.current = res.data.meta;
             }
           }
           DraftStore.clearDocDraft(repoName, file);
+          fileCacheRef.current.set(`${repoName}:${file}`, {
+            content,
+            originalContent: content,
+            meta: res.data?.meta || meta,
+          });
+
+          if (res.data?.tree) {
+            treesByRepoRef.current[repoName] = res.data.tree;
+            setTreesByRepo((prev) => ({ ...prev, [repoName]: res.data.tree }));
+            if (activeRepoRef.current?.name === repoName) {
+              setTree(res.data.tree);
+            }
+          }
+
           setSaveStatus("Salvo no disco");
           window.dispatchEvent(
             new CustomEvent("workspace:document-saved", {
@@ -696,8 +717,13 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
                   setFileMetadataState(data.meta);
                   fileMetadataRef.current = data.meta;
                 }
+                const hasActiveDraft = !!DraftStore.getDocDraft(currentRepoName, cleanPath);
+                if (!hasActiveDraft) {
+                  setFileContentState(freshOriginal);
+                  fileContentRef.current = freshOriginal;
+                }
                 fileCacheRef.current.set(cacheKey, {
-                  content: fileContentRef.current,
+                  content: hasActiveDraft ? fileContentRef.current : freshOriginal,
                   originalContent: freshOriginal,
                   meta: data.meta || meta,
                 });
@@ -773,6 +799,14 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
         DraftStore.saveDocDraft(currentRepo.name, currentFile, {
           body: content,
           rawContent: content,
+        });
+
+        const cacheKey = `${currentRepo.name}:${currentFile}`;
+        const existing = fileCacheRef.current.get(cacheKey);
+        fileCacheRef.current.set(cacheKey, {
+          content,
+          originalContent: existing?.originalContent ?? originalContentRef.current,
+          meta: existing?.meta ?? fileMetadataRef.current,
         });
 
         if (content !== originalContentRef.current) {

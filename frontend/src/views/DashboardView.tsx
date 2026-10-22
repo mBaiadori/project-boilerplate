@@ -330,7 +330,7 @@ export const DashboardView: React.FC<DashboardViewProps> = () => {
           )}
 
           {activeSubView === 'templates' && (
-            <TemplatesSubView onApplyTemplate={() => handleSelectView('editor')} />
+            <TemplatesSubView onApplyTemplate={(tplPath) => tplPath ? handleOpenFile(tplPath) : handleSelectView('editor')} />
           )}
 
           {(activeSubView === 'aicenter' || activeSubView === 'skills') && (
@@ -449,7 +449,13 @@ export const DashboardView: React.FC<DashboardViewProps> = () => {
       <ScaffoldModal
         isOpen={isScaffoldModalOpen}
         onClose={() => setIsScaffoldModalOpen(false)}
-        onCreated={() => handleSelectView('editor')}
+        onCreated={(createdPath) => {
+          if (createdPath) {
+            handleOpenFile(createdPath);
+          } else {
+            handleSelectView('editor');
+          }
+        }}
       />
 
       <OnboardingModal
