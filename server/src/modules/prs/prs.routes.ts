@@ -5,10 +5,24 @@ import { loadConfig } from '../../config/storage.js';
 
 export async function prsRoutes(fastify: FastifyInstance) {
   fastify.get('/api/prs', async (request, reply) => {
-    const query = request.query as { repo?: string; user?: string };
+    const query = request.query as {
+      repo?: string;
+      user?: string;
+      page?: string;
+      limit?: string;
+      status?: string;
+      search?: string;
+    };
     const cfg = loadConfig();
     const userLogin = query.user || cfg.user?.login;
-    const result = await prsService.getPRs(query.repo, userLogin);
+    const page = query.page ? parseInt(query.page, 10) : undefined;
+    const limit = query.limit ? parseInt(query.limit, 10) : undefined;
+    const result = await prsService.getPRs(query.repo, userLogin, {
+      page,
+      limit,
+      status: query.status,
+      search: query.search,
+    });
     return reply.send(result);
   });
 

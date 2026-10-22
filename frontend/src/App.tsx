@@ -8,6 +8,7 @@ import { AIProvider } from './context/AIContext';
 import { AuthView } from './views/AuthView';
 import { AdminAuthView } from './views/AdminAuthView';
 import { DashboardView } from './views/DashboardView';
+import { ErrorBoundary } from './components/common/ErrorBoundary';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, isLoading } = useAuth();
@@ -130,10 +131,11 @@ const RootRedirect: React.FC = () => {
     );
   }
 
-  const targetRepo = activeRepo || repos[0];
-  if (targetRepo) {
-    const owner = targetRepo.owner || (targetRepo.full_name?.includes('/') ? targetRepo.full_name.split('/')[0] : '');
-    const repoName = targetRepo.name || (targetRepo.full_name?.includes('/') ? targetRepo.full_name.split('/')[1] : targetRepo.full_name) || '';
+  // Redireciona apenas se houver repositório ativo explicitamente clonado localmente.
+  // NUNCA seleciona automaticamente repos[0] na inicialização, mantendo o estado neutro.
+  if (activeRepo && activeRepo.is_cloned_locally) {
+    const owner = activeRepo.owner || (activeRepo.full_name?.includes('/') ? activeRepo.full_name.split('/')[0] : '');
+    const repoName = activeRepo.name || (activeRepo.full_name?.includes('/') ? activeRepo.full_name.split('/')[1] : activeRepo.full_name) || '';
     if (owner && owner !== 'local' && owner !== 'personal') {
       return <Navigate to={`/org/${encodeURIComponent(owner)}/repo/${encodeURIComponent(repoName)}/editor`} replace />;
     }
@@ -151,60 +153,82 @@ export const App: React.FC = () => {
           <SecurityProvider>
             <AIProvider>
               <div style={{ width: '100%', height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                <Routes>
-                  {/* Rotas de Autenticação */}
-                  <Route path="/login" element={<CollaboratorAuthRoute />} />
-                  <Route path="/admin" element={<AdminAuthRoute />} />
-                  <Route path="/login/admin" element={<AdminAuthRoute />} />
-                  <Route path="/auth" element={<Navigate to="/login" replace />} />
+                <ErrorBoundary>
+                  <Routes>
+                    {/* Rotas de Autenticação */}
+                    <Route path="/login" element={<CollaboratorAuthRoute />} />
+                    <Route path="/admin" element={<AdminAuthRoute />} />
+                    <Route path="/login/admin" element={<AdminAuthRoute />} />
+                    <Route path="/auth" element={<Navigate to="/login" replace />} />
 
-                  {/* Rotas COM Organização: /org/:org/repo/:repoName */}
-                  <Route
-                    path="/org/:org/repo/:repoName"
-                    element={
-                      <ProtectedRoute>
-                        <OrgRepoRedirect />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/org/:org/repo/:repoName/:subview"
-                    element={
-                      <ProtectedRoute>
-                        <DashboardView />
-                      </ProtectedRoute>
-                    }
-                  />
+                    {/* Rotas COM Organização: /org/:org/repo/:repoName */}
+                    <Route
+                      path="/org/:org/repo/:repoName"
+                      element={
+                        <ProtectedRoute>
+                          <OrgRepoRedirect />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/org/:org/repo/:repoName/:subview"
+                      element={
+                        <ProtectedRoute>
+                          <DashboardView />
+                        </ProtectedRoute>
+                      }
+                    />
 
-                  {/* Rotas SEM Organização (ou repositórios locais/pessoais): /repo/:repoName */}
-                  <Route
-                    path="/repo/:repoName"
-                    element={
-                      <ProtectedRoute>
-                        <RepoRedirect />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/repo/:repoName/:subview"
-                    element={
-                      <ProtectedRoute>
-                        <DashboardView />
-                      </ProtectedRoute>
-                    }
-                  />
+                    {/* Rotas de Subview por Organização (sem repositório selecionado) */}
+                    <Route
+                      path="/org/:org/:subview"
+                      element={
+                        <ProtectedRoute>
+                          <DashboardView />
+                        </ProtectedRoute>
+                      }
+                    />
 
-                  {/* Rota raiz e Fallback */}
-                  <Route
-                    path="/"
-                    element={
-                      <ProtectedRoute>
-                        <RootRedirect />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route path="*" element={<Navigate to="/" replace />} />
-                </Routes>
+                    {/* Rotas SEM Organização (ou repositórios locais/pessoais): /repo/:repoName */}
+                    <Route
+                      path="/repo/:repoName"
+                      element={
+                        <ProtectedRoute>
+                          <RepoRedirect />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/repo/:repoName/:subview"
+                      element={
+                        <ProtectedRoute>
+                          <DashboardView />
+                        </ProtectedRoute>
+                      }
+                    />
+
+                    {/* Rotas de Subview Globais (sem organização ou repositório) */}
+                    <Route
+                      path="/:subview"
+                      element={
+                        <ProtectedRoute>
+                          <DashboardView />
+                        </ProtectedRoute>
+                      }
+                    />
+
+                    {/* Rota raiz e Fallback */}
+                    <Route
+                      path="/"
+                      element={
+                        <ProtectedRoute>
+                          <RootRedirect />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route path="*" element={<Navigate to="/" replace />} />
+                  </Routes>
+                </ErrorBoundary>
               </div>
             </AIProvider>
           </SecurityProvider>

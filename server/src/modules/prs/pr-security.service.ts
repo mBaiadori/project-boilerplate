@@ -13,6 +13,8 @@ export interface DocClearanceResult {
 }
 
 export class PRSecurityService {
+  private userProfileCache = new Map<string, any>();
+
   private getRepoDir(repoName?: string): string {
     const cfg = loadConfig();
     const activeRepoName = repoName || cfg.active_repo?.name || 'local';
@@ -48,24 +50,31 @@ export class PRSecurityService {
       return { allowed: true, restricted: false };
     }
 
-    // Read user clearance from project configuration
-    const repoDir = this.getRepoDir(repoName);
-    const cfgPath = path.join(repoDir, '.project.config.json');
-    let userProfile: any = {
-      login,
-      departments: ['*'],
-      status: 'active',
-    };
+    // Read user clearance from project configuration with cache
+    const cacheKey = `${repoName}:${login.toLowerCase()}`;
+    let userProfile = this.userProfileCache.get(cacheKey);
 
-    if (fs.existsSync(cfgPath)) {
-      try {
-        const pConfig = JSON.parse(fs.readFileSync(cfgPath, 'utf-8'));
-        const collabs = pConfig.governance_collaborators || {};
-        const matched = Object.entries(collabs).find(([k]) => k.toLowerCase() === login.toLowerCase());
-        if (matched) {
-          userProfile = matched[1];
-        }
-      } catch {}
+    if (!userProfile) {
+      const repoDir = this.getRepoDir(repoName);
+      const cfgPath = path.join(repoDir, '.project.config.json');
+      let profile: any = {
+        login,
+        departments: ['*'],
+        status: 'active',
+      };
+
+      if (fs.existsSync(cfgPath)) {
+        try {
+          const pConfig = JSON.parse(fs.readFileSync(cfgPath, 'utf-8'));
+          const collabs = pConfig.governance_collaborators || {};
+          const matched = Object.entries(collabs).find(([k]) => k.toLowerCase() === login.toLowerCase());
+          if (matched) {
+            profile = matched[1];
+          }
+        } catch {}
+      }
+      userProfile = profile;
+      this.userProfileCache.set(cacheKey, userProfile);
     }
 
     const folderParts = cleanPath.split('/');

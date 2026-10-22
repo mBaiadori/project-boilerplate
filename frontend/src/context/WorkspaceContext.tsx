@@ -25,18 +25,6 @@ import { DraftStore } from "../services/draft-store";
 import { useAuth } from "./AuthContext";
 import { isPathHidden, isSystemPath } from "../utils/hidden-files";
 
-function findFirstMdFile(nodes: TreeNode[]): string | null {
-  for (const node of nodes) {
-    if (node.type === "file" && node.path.endsWith(".md")) {
-      return node.path;
-    }
-    if (node.children && node.children.length > 0) {
-      const found = findFirstMdFile(node.children);
-      if (found) return found;
-    }
-  }
-  return null;
-}
 
 function fileExistsInTree(nodes: TreeNode[], targetPath: string): boolean {
   if (!targetPath) return false;
@@ -88,7 +76,7 @@ interface WorkspaceContextType {
   checkRemoteUpdates: (targetRepoName?: string) => Promise<boolean>;
   refreshWhatsNew: () => Promise<void>;
   markWhatsNewAsSeen: () => void;
-  loadRepos: () => Promise<void>;
+  loadRepos: (targetOrg?: string) => Promise<void>;
   selectRepo: (
     repo: Repo,
     initialFile?: string,
@@ -154,6 +142,8 @@ interface WorkspaceContextType {
   ) => Promise<{ success: boolean; newPath?: string; error?: string }>;
   cloneLocalRepo: (repo?: Repo) => Promise<{ success: boolean; error?: string }>;
   pullLocalRepo: (repo?: Repo) => Promise<{ success: boolean; message?: string; error?: string }>;
+  getRepoOwnerOrOrg: (targetRepo?: Repo | null) => string | undefined;
+  resetActiveRepo: () => void;
   repoProgress: Record<string, { stage: string; percent: number; message?: string }>;
   effectivePermission: EffectiveUserPermission | null;
   isLoadingPermission: boolean;
@@ -240,13 +230,15 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const statusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const getRepoOwnerOrOrg = useCallback((r?: Repo | null): string | undefined => {
-    if (!r) return undefined;
-    if (typeof r.owner === "string" && r.owner && r.owner !== "local") return r.owner;
-    if ((r.owner as any)?.login && (r.owner as any).login !== "local") return (r.owner as any).login;
-    if (r.full_name && r.full_name.includes("/")) {
-      const orgPart = r.full_name.split("/")[0];
-      if (orgPart && orgPart !== "local") return orgPart;
+  const getRepoOwnerOrOrg = useCallback((targetRepo?: Repo | null): string | undefined => {
+    const r = targetRepo !== undefined ? targetRepo : activeRepoRef.current;
+    if (r) {
+      if (typeof r.owner === "string" && r.owner && r.owner !== "local") return r.owner;
+      if ((r.owner as any)?.login && (r.owner as any).login !== "local") return (r.owner as any).login;
+      if (r.full_name && r.full_name.includes("/")) {
+        const orgPart = r.full_name.split("/")[0];
+        if (orgPart && orgPart !== "local") return orgPart;
+      }
     }
     const match = window.location.pathname.match(/\/org\/([^\/]+)/);
     if (match && match[1]) {
@@ -340,10 +332,14 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, []);
 
-  const loadRepos = useCallback(async () => {
+  const loadRepos = useCallback(async (targetOrg?: string) => {
     setIsLoading(true);
     try {
-      const res = await API.getRepos();
+      const orgToFetch = targetOrg !== undefined
+        ? targetOrg
+        : (activeOrg?.login || localStorage.getItem("spec_active_org_login") || "");
+
+      const res = await API.getRepos(orgToFetch);
       if (res.data?.auth_error) {
         setAuthError(res.data.auth_error);
       } else if (res.ok) {
@@ -358,7 +354,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [activeOrg?.login]);
 
   const selectOrg = useCallback(
     async (orgLogin: string) => {
@@ -370,7 +366,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
       try {
         localStorage.setItem("spec_active_org_login", orgToSet.login);
       } catch {}
-      await loadRepos();
+      await loadRepos(orgToSet.login);
     },
     [orgs, loadRepos],
   );
@@ -540,7 +536,9 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
     if (!repo) return;
     setIsLoadingTree(true);
     try {
-      const data = await API.getProjectTree(repo);
+      const targetObj = targetRepo ? repos.find((r) => r.name.toLowerCase() === targetRepo.toLowerCase()) : activeRepoRef.current;
+      const owner = getRepoOwnerOrOrg(targetObj);
+      const data = await API.getProjectTree(repo, owner);
       treesByRepoRef.current[repo] = data.tree || [];
       setTreesByRepo((prev) => ({ ...prev, [repo]: data.tree || [] }));
       if (activeRepoRef.current?.name === repo) {
@@ -551,7 +549,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
     } finally {
       setIsLoadingTree(false);
     }
-  }, []);
+  }, [repos, getRepoOwnerOrOrg]);
 
   const loadFile = useCallback(
     async (rawFilePath: string, targetRepo?: string) => {
@@ -1171,6 +1169,18 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
           }
         }
 
+        if (prevRepo && prevRepo.name.toLowerCase() !== repo.name.toLowerCase()) {
+          activeFileRef.current = "";
+          setActiveFile("");
+          setFileContentState("");
+          fileContentRef.current = "";
+          setOriginalContent("");
+          originalContentRef.current = "";
+          setFileMetadataState({});
+          fileMetadataRef.current = {};
+          fileCacheRef.current.clear();
+        }
+
         // Atualiza repositório ativo e árvore de forma fluida
         setActiveRepo(repo);
         activeRepoRef.current = repo;
@@ -1229,23 +1239,26 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
           return { success: true, is_ready: false, diagnosis };
         }
 
-        const data = await API.getProjectTree(repo.name);
+        const data = await API.getProjectTree(repo.name, ownerLogin);
         treesByRepoRef.current[repo.name] = data.tree || [];
         setTreesByRepo((prev) => ({ ...prev, [repo.name]: data.tree || [] }));
         if (activeRepoRef.current?.name === repo.name) {
           setTree(data.tree || []);
         }
-
         setIsLoadingTree(false);
+        setRepoProgress((prev) => {
+          if (!prev[repo.name]) return prev;
+          const next = { ...prev };
+          delete next[repo.name];
+          return next;
+        });
 
         const treeNodes = data.tree || [];
         let fileToOpen: string | null = null;
-        if (initialFile !== undefined) {
+        if (initialFile && fileExistsInTree(treeNodes, initialFile)) {
           fileToOpen = initialFile;
         } else if (activeFileRef.current && fileExistsInTree(treeNodes, activeFileRef.current)) {
           fileToOpen = activeFileRef.current;
-        } else {
-          fileToOpen = findFirstMdFile(treeNodes);
         }
 
         if (fileToOpen) {
@@ -1257,16 +1270,18 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
         }
 
         // Executa carregamentos secundários e verificação de commits remotos em segundo plano sem bloquear a árvore/editor
-        Promise.allSettled([
-          loadProjectMetadataOptions(),
-          loadProjectConfig(),
-          loadDictionaryTerms(),
-          refreshPendingChanges(repo.name),
-          refreshGitStatus(repo.name),
-          refreshGitLog(15, repo.name),
-          refreshWhatsNew(),
-          checkRemoteUpdates(repo.name),
-        ]).catch(() => {});
+        setTimeout(() => {
+          Promise.allSettled([
+            loadProjectMetadataOptions(),
+            loadProjectConfig(),
+            loadDictionaryTerms(),
+            refreshPendingChanges(repo.name),
+            refreshGitStatus(repo.name),
+            refreshGitLog(15, repo.name),
+            refreshWhatsNew(),
+            checkRemoteUpdates(repo.name),
+          ]).catch(() => {});
+        }, 50);
 
         return { success: true, is_ready: true, diagnosis };
       } finally {
@@ -1306,7 +1321,8 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
       let currentRepos = repos;
       if (currentRepos.length === 0) {
         try {
-          const res = await API.getRepos();
+          const detectedOrg = getRepoOwnerOrOrg();
+          const res = await API.getRepos(detectedOrg);
           if (res.ok && res.data.repos) {
             currentRepos = res.data.repos;
             setRepos(currentRepos);
@@ -1320,19 +1336,14 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
         (r) => r.name.toLowerCase() === repoName.toLowerCase(),
       );
       if (found) {
+        if (!found.is_cloned_locally) {
+          // Repositório remoto não clonado: não abre automaticamente pela URL
+          return false;
+        }
         await selectRepo(found, initialFile);
         return true;
       }
-      const detectedOrg = getRepoOwnerOrOrg();
-      const fallbackRepo: Repo = {
-        id: 0,
-        name: repoName,
-        owner: detectedOrg,
-        full_name: detectedOrg ? `${detectedOrg}/${repoName}` : repoName,
-        is_local: false,
-      };
-      await selectRepo(fallbackRepo, initialFile);
-      return true;
+      return false;
     },
     [repos, selectRepo, loadFile],
   );
@@ -1560,12 +1571,35 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
         };
         setActiveRepo(updatedRepo);
         activeRepoRef.current = updatedRepo;
-        await loadTree(r.name);
-        await Promise.allSettled([
+
+        // Atualiza imediatamente a lista de repositórios no frontend para is_cloned_locally: true
+        setRepos((prev) =>
+          prev.map((repoItem) =>
+            repoItem.name.toLowerCase() === r.name.toLowerCase()
+              ? { ...repoItem, is_cloned_locally: true }
+              : repoItem
+          )
+        );
+
+        // Busca a árvore imediatamente para este repositório e dono específicos
+        try {
+          const treeData = await API.getProjectTree(r.name, owner);
+          treesByRepoRef.current[r.name] = treeData.tree || [];
+          setTreesByRepo((prev) => ({ ...prev, [r.name]: treeData.tree || [] }));
+          if (activeRepoRef.current?.name.toLowerCase() === r.name.toLowerCase()) {
+            setTree(treeData.tree || []);
+          }
+        } catch (treeErr) {
+          console.error("[WorkspaceContext] Erro ao carregar árvore pós-clone:", treeErr);
+        }
+
+        // Carrega status secundários em background sem prender a UI
+        Promise.allSettled([
           refreshGitStatus(r.name),
           refreshGitLog(15, r.name),
           loadRepos(),
-        ]);
+        ]).catch(() => {});
+
         return { success: true };
       }
       return { success: false, error: res.data?.error || "Falha ao clonar repositório" };
@@ -1574,7 +1608,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
     } finally {
       setIsLoadingTree(false);
     }
-  }, [getRepoOwnerOrOrg, loadTree, refreshGitStatus, refreshGitLog, loadRepos]);
+  }, [getRepoOwnerOrOrg, refreshGitStatus, refreshGitLog, loadRepos]);
 
   const pullLocalRepo = useCallback(async (targetRepo?: Repo): Promise<{ success: boolean; message?: string; error?: string }> => {
     const r = targetRepo || activeRepoRef.current;
@@ -1595,6 +1629,21 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
       return { success: false, error: err.message || "Erro ao puxar alterações" };
     }
   }, [getRepoOwnerOrOrg, loadTree, refreshGitStatus, refreshGitLog]);
+
+  const resetActiveRepo = useCallback(() => {
+    setActiveRepo(null);
+    activeRepoRef.current = null;
+    activeFileRef.current = "";
+    setActiveFile("");
+    setFileContentState("");
+    fileContentRef.current = "";
+    setOriginalContent("");
+    originalContentRef.current = "";
+    setFileMetadataState({});
+    fileMetadataRef.current = {};
+    setTree([]);
+    fileCacheRef.current.clear();
+  }, []);
 
   // Lifecycle: Flush de alterações pendentes ao fechar aba, recarregar ou ocultar janela
   useEffect(() => {
@@ -1793,6 +1842,8 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
         duplicateFile,
         cloneLocalRepo,
         pullLocalRepo,
+        getRepoOwnerOrOrg,
+        resetActiveRepo,
         repoProgress,
         effectivePermission,
         isLoadingPermission,

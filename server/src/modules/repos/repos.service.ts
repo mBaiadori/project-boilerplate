@@ -18,6 +18,7 @@ import {
 } from "../../utils/git.js";
 import { parseRepoRef, resolveRepoDirPath, RepoRef } from "../../utils/repo-ref.js";
 import { workspaceService } from "../workspace/workspace.service.js";
+import { docsMetadataService } from "../workspace/docs-metadata.service.js";
 import { governanceService } from "../governance/governance.service.js";
 import { eventsService } from "../events/events.service.js";
 
@@ -81,11 +82,37 @@ export interface RepoInitializePayload {
   include_spec_memory?: boolean;
 }
 
+// Cache em memória para evitar consultas repetidas à API do GitHub
+const reposCache = new Map<string, { timestamp: number; data: any }>();
+const REPOS_CACHE_TTL_MS = 60_000;
+
+let orgsCache: { timestamp: number; data: any } | null = null;
+const ORGS_CACHE_TTL_MS = 5 * 60 * 1000;
+
+export function clearReposCache() {
+  reposCache.clear();
+  orgsCache = null;
+}
+
 export class ReposService {
-  async listRepos() {
+  async listRepos(targetOrg?: string) {
     const cfg = loadConfig();
     const localRepos: any[] = [];
     const userLogin = cfg.user?.login?.toLowerCase() || "";
+
+    const rawTarget = (targetOrg || "").trim();
+    const normalizedTarget = rawTarget.toLowerCase();
+    const isPersonalScope =
+      !normalizedTarget ||
+      normalizedTarget === "personal" ||
+      normalizedTarget === "local" ||
+      normalizedTarget === userLogin;
+
+    const cacheKey = `${userLogin}:${isPersonalScope ? "personal" : normalizedTarget}`;
+    const cachedEntry = reposCache.get(cacheKey);
+    if (cachedEntry && Date.now() - cachedEntry.timestamp < REPOS_CACHE_TTL_MS) {
+      return cachedEntry.data;
+    }
 
     const inspectRepoDir = (fullPath: string, repoName: string, parentOwner?: string) => {
       let detectedOwner = parentOwner || cfg.user?.login || "local";
@@ -130,6 +157,17 @@ export class ReposService {
       const isOwner = detectedOwner.toLowerCase() === userLogin;
       const isOrg = isDetectedOrg || (!isOwner && detectedOwner !== "local" && detectedOwner !== "");
 
+      // Filtra de acordo com o escopo solicitado (se específico de organização ou pessoal)
+      if (!isPersonalScope) {
+        if (detectedOwner.toLowerCase() !== normalizedTarget) {
+          return;
+        }
+      } else if (rawTarget === "personal" || rawTarget === "local") {
+        if (!isOwner && detectedOwner !== "local") {
+          return;
+        }
+      }
+
       localRepos.push({
         name: repoName,
         full_name: detectedFullName,
@@ -147,35 +185,39 @@ export class ReposService {
       });
     };
 
-    // Escaneia a pasta projects/ com suporte a escopo por organização: projects/{org}/{repo} e formato plano legado
+    // Escaneia a pasta projects/ com suporte a escopo sob demanda
     if (fs.existsSync(PROJECTS_DIR)) {
       try {
-        const items = fs.readdirSync(PROJECTS_DIR, { withFileTypes: true });
-        for (const item of items) {
-          if (!item.isDirectory() || item.name.startsWith(".") || item.name === "default" || item.name === "_default") {
-            continue;
-          }
-
-          const fullPath = path.join(PROJECTS_DIR, item.name);
-          const hasDirectRepoMarkers =
-            fs.existsSync(path.join(fullPath, ".project.config.json")) ||
-            fs.existsSync(path.join(fullPath, ".git")) ||
-            fs.existsSync(path.join(fullPath, ".docs.metadata.json")) ||
-            fs.existsSync(path.join(fullPath, "project"));
-
-          if (hasDirectRepoMarkers) {
-            inspectRepoDir(fullPath, item.name);
-          } else {
-            // Diretório de organização/owner (ex: projects/enursy/)
-            try {
-              const subItems = fs.readdirSync(fullPath, { withFileTypes: true });
-              for (const subItem of subItems) {
-                if (subItem.isDirectory() && !subItem.name.startsWith(".")) {
-                  const subFullPath = path.join(fullPath, subItem.name);
-                  inspectRepoDir(subFullPath, subItem.name, item.name);
-                }
+        if (!isPersonalScope) {
+          // Escopo específico de Organização: busca direto em projects/{targetOrg} se existir
+          const orgDirPath = path.join(PROJECTS_DIR, rawTarget);
+          if (fs.existsSync(orgDirPath) && fs.statSync(orgDirPath).isDirectory()) {
+            const subItems = fs.readdirSync(orgDirPath, { withFileTypes: true });
+            for (const subItem of subItems) {
+              if (subItem.isDirectory() && !subItem.name.startsWith(".")) {
+                const subFullPath = path.join(orgDirPath, subItem.name);
+                inspectRepoDir(subFullPath, subItem.name, rawTarget);
               }
-            } catch {}
+            }
+          }
+        } else {
+          // Escopo Pessoal / Raiz: escaneia diretórios do nível superior
+          const items = fs.readdirSync(PROJECTS_DIR, { withFileTypes: true });
+          for (const item of items) {
+            if (!item.isDirectory() || item.name.startsWith(".") || item.name === "default" || item.name === "_default") {
+              continue;
+            }
+
+            const fullPath = path.join(PROJECTS_DIR, item.name);
+            const hasDirectRepoMarkers =
+              fs.existsSync(path.join(fullPath, ".project.config.json")) ||
+              fs.existsSync(path.join(fullPath, ".git")) ||
+              fs.existsSync(path.join(fullPath, ".docs.metadata.json")) ||
+              fs.existsSync(path.join(fullPath, "project"));
+
+            if (hasDirectRepoMarkers) {
+              inspectRepoDir(fullPath, item.name);
+            }
           }
         }
       } catch (scanErr) {
@@ -184,73 +226,61 @@ export class ReposService {
     }
 
     if (!cfg.authenticated || !cfg.token) {
-      return {
+      const result = {
         authenticated: false,
         repos: localRepos,
         active_repo: cfg.active_repo,
       };
+      reposCache.set(cacheKey, { timestamp: Date.now(), data: result });
+      return result;
     }
 
-    // Git Provider repositories (GitHub)
+    // Git Provider repositories (GitHub) sob demanda (sem loops em cascata)
     const remoteReposMap = new Map<string, any>();
     let authError: string | null = null;
 
     try {
-      // 1. Repositórios do Usuário (pessoais, colaboradores e membros de org)
-      const { statusCode, data } = await callGitProviderAPI(
-        "/user/repos?per_page=100&sort=updated&affiliation=owner,collaborator,organization_member",
-        cfg.token,
-      );
-      if (statusCode === 401) {
-        authError = "Token do GitHub inválido ou expirado (401 Bad credentials). Por favor, desconecte e reconecte sua conta.";
-      } else if (statusCode === 200 && Array.isArray(data)) {
-        for (const r of data) {
-          if (r?.name && r?.owner?.login) {
-            const key = (r.full_name || `${r.owner.login}/${r.name}`).toLowerCase();
-            remoteReposMap.set(key, r);
+      if (!isPersonalScope) {
+        // Busca EXCLUSIVAMENTE os repositórios da organização solicitada (1 única requisição)
+        const { statusCode: orgStatus, data: orgData } = await callGitProviderAPI(
+          `/orgs/${encodeURIComponent(rawTarget)}/repos?per_page=100&sort=updated`,
+          cfg.token,
+          "GET",
+          null,
+          { timeoutMs: 8000 }
+        );
+        if (orgStatus === 401) {
+          authError = "Token do GitHub inválido ou expirado (401 Bad credentials). Por favor, desconecte e reconecte sua conta.";
+        } else if (orgStatus === 200 && Array.isArray(orgData)) {
+          for (const or of orgData) {
+            if (or?.name && or?.owner?.login) {
+              const key = (or.full_name || `${or.owner.login}/${or.name}`).toLowerCase();
+              remoteReposMap.set(key, or);
+            }
           }
         }
-      }
-
-      // 2. Busca lista atualizada de organizações do usuário se necessário
-      let currentOrgs = Array.isArray(cfg.orgs) ? cfg.orgs : [];
-      if (currentOrgs.length === 0 && !authError) {
-        try {
-          const orgRes = await this.listOrgs();
-          currentOrgs = orgRes.orgs || [];
-        } catch {}
-      }
-
-      // 3. Busca repositórios de cada organização registrada
-      if (!authError) {
-        for (const org of currentOrgs) {
-          if (org?.login && org.login.toLowerCase() !== userLogin && !org.is_personal) {
-            try {
-              const { statusCode: orgRepoStatus, data: orgRepoData } = await callGitProviderAPI(
-                `/orgs/${org.login}/repos?per_page=100&sort=updated`,
-                cfg.token,
-              );
-              if (orgRepoStatus === 401) {
-                authError = "Token do GitHub inválido ou expirado (401 Bad credentials). Por favor, desconecte e reconecte sua conta.";
-                break;
-              } else if (orgRepoStatus === 200 && Array.isArray(orgRepoData)) {
-                for (const or of orgRepoData) {
-                  if (or?.name && or?.owner?.login) {
-                    const key = (or.full_name || `${or.owner.login}/${or.name}`).toLowerCase();
-                    if (!remoteReposMap.has(key)) {
-                      remoteReposMap.set(key, or);
-                    }
-                  }
-                }
-              }
-            } catch (err) {
-              console.warn(`[ReposService] Erro ao buscar repos da org ${org.login}:`, err);
+      } else {
+        // Busca EXCLUSIVAMENTE os repositórios do usuário pessoal (1 única requisição)
+        const { statusCode, data } = await callGitProviderAPI(
+          "/user/repos?per_page=100&sort=updated&affiliation=owner,collaborator",
+          cfg.token,
+          "GET",
+          null,
+          { timeoutMs: 8000 }
+        );
+        if (statusCode === 401) {
+          authError = "Token do GitHub inválido ou expirado (401 Bad credentials). Por favor, desconecte e reconecte sua conta.";
+        } else if (statusCode === 200 && Array.isArray(data)) {
+          for (const r of data) {
+            if (r?.name && r?.owner?.login) {
+              const key = (r.full_name || `${r.owner.login}/${r.name}`).toLowerCase();
+              remoteReposMap.set(key, r);
             }
           }
         }
       }
     } catch (apiErr: any) {
-      console.warn("[ReposService] Erro ao consultar GitHub API para listar repos:", apiErr);
+      console.warn(`[ReposService] Erro ao consultar GitHub API para escopo [${rawTarget || "personal"}]:`, apiErr);
       if (apiErr?.message?.includes("401") || apiErr?.message?.includes("Bad credentials")) {
         authError = "Token do GitHub inválido ou expirado (401 Bad credentials). Por favor, desconecte e reconecte sua conta.";
       }
@@ -318,12 +348,19 @@ export class ReposService {
       a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }),
     );
 
-    return {
+    const result = {
       authenticated: !authError,
       auth_error: authError,
       repos: formattedRemote,
       active_repo: cfg.active_repo,
     };
+
+    // Cacheia resultado apenas se não houver erro de autenticação transitório
+    if (!authError) {
+      reposCache.set(cacheKey, { timestamp: Date.now(), data: result });
+    }
+
+    return result;
   }
 
   async diagnoseRepo(repoName: string, ownerOrOrg?: string, checkRemote: boolean = false): Promise<RepoDiagnosis> {
@@ -357,7 +394,7 @@ export class ReposService {
     let pConfigDetails = "Não encontrado";
     if (hasPConfig) {
       try {
-        const parsed = JSON.parse(fs.readFileSync(pConfigPath, "utf-8"));
+        const parsed = docsMetadataService.getProjectConfig(repoName);
         if (
           parsed &&
           typeof parsed === "object" &&
@@ -380,13 +417,9 @@ export class ReposService {
     let pMetaDetails = "Não encontrado";
     if (hasPMeta) {
       try {
-        const parsed = JSON.parse(fs.readFileSync(pMetaPath, "utf-8"));
-        if (Array.isArray(parsed)) {
-          validPMeta = true;
-          pMetaDetails = `${parsed.length} documento(s) catalogado(s)`;
-        } else {
-          pMetaDetails = "Formato inválido (esperado array de documentos)";
-        }
+        const metaList = docsMetadataService.loadDocsMetadata(repoName);
+        validPMeta = true;
+        pMetaDetails = `${metaList.length} documento(s) catalogado(s)`;
       } catch {
         pMetaDetails = "JSON inválido";
       }
@@ -539,40 +572,11 @@ export class ReposService {
       fullName = effectiveOwner && effectiveOwner !== "local" ? `${effectiveOwner}/${repo.name}` : repo.name;
     }
 
-    // 3. Determina a URL remota de clone/pull
+    // 3. Determina a URL remota de clone/pull de forma determinística
     let htmlUrl = repo.html_url || "";
-    if (!htmlUrl && fullName.includes("/") && cfg.authenticated && cfg.token) {
-      htmlUrl = `https://github.com/${fullName}.git`;
-    }
-
-    // Fallback: se ainda não temos html_url e não é local explícito, consulta o provedor
-    if (
-      !htmlUrl &&
-      !repo.is_local &&
-      cfg.authenticated &&
-      cfg.token &&
-      repo.name !== "default" &&
-      repo.name !== "_default" &&
-      repo.name !== "local"
-    ) {
-      try {
-        const { data: userRepos } = await callGitProviderAPI(
-          "/user/repos?per_page=100",
-          cfg.token,
-        );
-        if (Array.isArray(userRepos)) {
-          const match = userRepos.find(
-            (r: any) =>
-              r.name.toLowerCase() === repo.name.toLowerCase() ||
-              r.full_name?.toLowerCase() === fullName.toLowerCase(),
-          );
-          if (match && match.html_url) {
-            htmlUrl = match.html_url;
-            if (match.owner?.login) effectiveOwner = match.owner.login;
-            if (match.full_name) fullName = match.full_name;
-          }
-        }
-      } catch {}
+    if (!htmlUrl && (fullName.includes("/") || (effectiveOwner && effectiveOwner !== "local")) && cfg.token) {
+      const canonicalFull = fullName.includes("/") ? fullName : `${effectiveOwner}/${repo.name}`;
+      htmlUrl = `https://github.com/${canonicalFull}.git`;
     }
 
     const isLocal = repo.is_local !== undefined ? Boolean(repo.is_local) : (!htmlUrl && !cfg.token);
@@ -589,6 +593,13 @@ export class ReposService {
     if (!isClonedLocally && hasPullPermission && !isLocal && (htmlUrl || fullName.includes("/") || cfg.token)) {
       const cloneTargetUrl = htmlUrl || `https://github.com/${fullName}.git`;
       try {
+        eventsService.broadcast("repo_progress", {
+          repo: repo.name,
+          owner: effectiveOwner,
+          stage: "Sincronizando repositório...",
+          percent: 30,
+        });
+
         const cloneResult = await cloneGitRepo(
           repoDir,
           cloneTargetUrl,
@@ -602,8 +613,10 @@ export class ReposService {
             });
           },
         );
+
         if (cloneResult.success) {
           isClonedLocally = true;
+          reposCache.clear();
           eventsService.broadcast("repo_progress", {
             repo: repo.name,
             owner: effectiveOwner,
@@ -612,7 +625,13 @@ export class ReposService {
           });
         }
       } catch (cloneErr) {
-        console.warn(`[selectRepo] Não foi possível clonar automaticamente ${fullName}:`, cloneErr);
+        console.warn(`[selectRepo] Não foi possível clonar ${fullName}:`, cloneErr);
+        eventsService.broadcast("repo_progress", {
+          repo: repo.name,
+          owner: effectiveOwner,
+          stage: "Falha na sincronização",
+          percent: 0,
+        });
       }
     }
 
@@ -630,7 +649,6 @@ export class ReposService {
     };
 
     saveConfig(cfg);
-    workspaceService.invalidateTreeCache(repo.name);
 
     if (!isClonedLocally) {
       return {
@@ -677,6 +695,7 @@ export class ReposService {
       throw new Error(res.message);
     }
     workspaceService.invalidateTreeCache(ref.repo);
+    reposCache.clear();
     eventsService.broadcast("repo_progress", {
       repo: ref.repo,
       owner: ref.owner,
@@ -883,6 +902,7 @@ export class ReposService {
       });
     }
 
+    clearReposCache();
     const diagnosis = await this.diagnoseRepo(repoName, targetOwner);
     return {
       success: true,
@@ -1210,11 +1230,12 @@ export class ReposService {
     }
 
     // Reset active_repo if deleted
-    if (cfg.active_repo?.name === name) {
+    if (cfg.active_repo?.name && cfg.active_repo.name.toLowerCase() === name.toLowerCase()) {
       cfg.active_repo = null;
       saveConfig(cfg);
     }
 
+    clearReposCache();
     return {
       success: true,
       remoteDeleted,
@@ -1459,6 +1480,10 @@ export class ReposService {
   }
 
   async listOrgs() {
+    if (orgsCache && Date.now() - orgsCache.timestamp < ORGS_CACHE_TTL_MS) {
+      return orgsCache.data;
+    }
+
     const cfg = loadConfig();
     const orgsMap = new Map<string, any>();
 
@@ -1584,7 +1609,9 @@ export class ReposService {
       console.warn("[ReposService] Erro ao listar organizações:", e);
     }
 
-    return { orgs: Array.from(orgsMap.values()) };
+    const result = { orgs: Array.from(orgsMap.values()) };
+    orgsCache = { timestamp: Date.now(), data: result };
+    return result;
   }
 
   async createOrg(payload: {

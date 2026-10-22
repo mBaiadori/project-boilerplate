@@ -9,8 +9,10 @@ import {
   Check,
   Loader2,
   ArrowRight,
+  KeyRound,
 } from "lucide-react";
 import React, { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { LanguageSwitcher } from "../components/common/LanguageSwitcher";
 import {
@@ -41,6 +43,7 @@ interface DeviceCodeData {
 }
 
 export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
+  const navigate = useNavigate();
   const { t } = useTranslation(["auth", "common", "repos"]);
   const { accounts, switchAccount, removeAccount, refreshAuth } = useAuth();
 
@@ -560,6 +563,45 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
                     </div>
                   </div>
                 )}
+
+                {/* Atalho discreto para Login Administrativo / PAT */}
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "center",
+                    paddingTop: "4px",
+                  }}
+                >
+                  <button
+                    type="button"
+                    id="btn-goto-admin-login"
+                    onClick={() => navigate("/login/admin")}
+                    style={{
+                      background: "transparent",
+                      border: "none",
+                      padding: "6px 10px",
+                      fontSize: "12px",
+                      color: "var(--color-outline, #64748b)",
+                      cursor: "pointer",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      borderRadius: "6px",
+                      transition: "all 0.15s ease",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.color = "var(--color-primary, #3b82f6)";
+                      e.currentTarget.style.backgroundColor = "var(--color-surface-container, rgba(0,0,0,0.04))";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.color = "var(--color-outline, #64748b)";
+                      e.currentTarget.style.backgroundColor = "transparent";
+                    }}
+                  >
+                    <KeyRound size={13} />
+                    <span>Acessar via Personal Access Token (Admin)</span>
+                  </button>
+                </div>
               </div>
             )}
 

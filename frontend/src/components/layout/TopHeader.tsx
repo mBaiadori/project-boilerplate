@@ -1,4 +1,5 @@
 import React, { useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { useWorkspace } from "../../context/WorkspaceContext";
 import { useAuth } from "../../context/AuthContext";
 import { isPathHidden } from "../../utils/hidden-files";
@@ -9,6 +10,7 @@ import {
   User,
   Shield,
   CloudDownload,
+  LogOut,
 } from "lucide-react";
 import { OrgSelectorDropdown } from "./OrgSelectorDropdown";
 
@@ -30,13 +32,15 @@ export const TopHeader: React.FC<TopHeaderProps> = React.memo(
   }) => {
     const {
       activeRepo,
+      activeOrg,
       pendingChanges,
       effectivePermission,
       isLoadingPermission,
       hasRemoteUpdates,
       syncGit,
     } = useWorkspace();
-    const { user } = useAuth();
+    const { user, logout } = useAuth();
+    const navigate = useNavigate();
 
     const filteredPendingChanges = useMemo(() => {
       return (pendingChanges || []).filter(
@@ -189,7 +193,10 @@ export const TopHeader: React.FC<TopHeaderProps> = React.memo(
               textOverflow: "ellipsis",
             }}
           >
-            {activeRepo?.name || "Projeto"}
+            {activeRepo?.name ||
+              (activeOrg
+                ? activeOrg.full_name || activeOrg.login
+                : "Visão Geral")}
           </h1>
 
           {hasRemoteUpdates && (
@@ -278,6 +285,22 @@ export const TopHeader: React.FC<TopHeaderProps> = React.memo(
           >
             Copilot IA
           </Button>
+
+          <Button
+            id="btn-global-logout"
+            variant="ghost"
+            size="sm"
+            leftIcon={<LogOut size={15} />}
+            onClick={async () => {
+              await logout();
+              navigate("/login");
+            }}
+            title="Desconectar da plataforma"
+            style={{
+              color: "var(--md-sys-color-on-surface-variant, #64748b)",
+              fontWeight: 500,
+            }}
+          />
         </div>
       </header>
     );

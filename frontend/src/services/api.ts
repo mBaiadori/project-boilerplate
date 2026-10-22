@@ -104,8 +104,9 @@ export const API = {
     return safeParseJson(res, { success: true });
   },
 
-  async getRepos(): Promise<ApiResponse<{ repos: Repo[]; auth_error?: string; authenticated?: boolean; active_repo?: Repo }>> {
-    const res = await fetch('/api/repos');
+  async getRepos(org?: string): Promise<ApiResponse<{ repos: Repo[]; auth_error?: string; authenticated?: boolean; active_repo?: Repo }>> {
+    const url = org ? `/api/repos?org=${encodeURIComponent(org)}` : '/api/repos';
+    const res = await fetch(url);
     return { ok: res.ok, data: await safeParseJson(res, { repos: [] }) };
   },
 
@@ -333,8 +334,12 @@ export const API = {
     return { ok: res.ok, data: await res.json() };
   },
 
-  async getProjectTree(repo?: string): Promise<{ repo: Repo; tree: TreeNode[] }> {
-    const res = await fetch(`/api/project/tree${repo ? `?repo=${encodeURIComponent(repo)}` : ''}`);
+  async getProjectTree(repo?: string, org?: string): Promise<{ repo: Repo; tree: TreeNode[] }> {
+    const params = new URLSearchParams();
+    if (repo) params.set('repo', repo);
+    if (org) params.set('org', org);
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    const res = await fetch(`/api/project/tree${qs}`);
     return res.json();
   },
 
@@ -697,16 +702,30 @@ export const API = {
   },
 
   // PRs
-  async getPRs(repo?: string): Promise<{ 
+  async getPRs(
+    repo?: string,
+    params?: { page?: number; limit?: number; status?: string; search?: string }
+  ): Promise<{ 
     prs: PR[]; 
     repo?: Repo; 
     selected_repo?: string; 
     all_prs_count?: number; 
+    total?: number;
+    page?: number;
+    limit?: number;
+    total_pages?: number;
+    counts?: { all: number; open: number; merged: number; closed: number };
     available_repos?: Array<{ name: string; count: number }>;
     governance?: any; 
   }> {
-    const query = repo ? `?repo=${encodeURIComponent(repo)}` : '';
-    const res = await fetch(`/api/prs${query}`);
+    const q = new URLSearchParams();
+    if (repo) q.set('repo', repo);
+    if (params?.page) q.set('page', String(params.page));
+    if (params?.limit) q.set('limit', String(params.limit));
+    if (params?.status && params.status !== 'all') q.set('status', params.status);
+    if (params?.search) q.set('search', params.search);
+    const queryString = q.toString() ? `?${q.toString()}` : '';
+    const res = await fetch(`/api/prs${queryString}`);
     return res.json();
   },
 

@@ -166,7 +166,15 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
         })}
       </div>
 
-      <div className="dash-sidebar-footer">
+      <div
+        className="dash-sidebar-footer"
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: "6px",
+          alignItems: "center",
+        }}
+      >
         <span
           style={{
             fontSize: "10.5px",

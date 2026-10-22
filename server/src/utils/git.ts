@@ -54,6 +54,10 @@ export function executeGitCommandWithProgress(
     const child = spawn("git", finalArgs, {
       cwd,
       shell: false,
+      env: {
+        ...process.env,
+        GIT_TERMINAL_PROMPT: "0",
+      },
     });
 
     const handleData = (chunk: Buffer) => {
@@ -104,7 +108,7 @@ export function getActiveBearerToken(explicitToken?: string): string | null {
   if (explicitToken === "local_mode") {
     return null;
   }
-  if (explicitToken && typeof explicitToken === "string" && explicitToken.trim()) {
+  if (explicitToken && typeof explicitToken === "string" && explicitToken.trim() && explicitToken !== "local_mode") {
     return explicitToken.trim();
   }
   try {
@@ -117,6 +121,16 @@ export function getActiveBearerToken(explicitToken?: string): string | null {
     const cfg = loadConfig();
     if (cfg?.token && cfg.token.trim() && cfg.token !== "local_mode") {
       return cfg.token.trim();
+    }
+    if (Array.isArray(cfg?.accounts) && cfg.accounts.length > 0) {
+      const active = cfg.accounts.find((a: any) => a.isActive && a.token);
+      if (active?.token && active.token.trim() && active.token !== "local_mode") {
+        return active.token.trim();
+      }
+      const firstWithToken = cfg.accounts.find((a: any) => a.token && a.token.trim() && a.token !== "local_mode");
+      if (firstWithToken?.token) {
+        return firstWithToken.token.trim();
+      }
     }
   } catch {}
   return null;
@@ -144,6 +158,11 @@ export async function executeGitCommand(
     const { stdout, stderr } = await execAsync(finalCommand, {
       cwd,
       maxBuffer: 10 * 1024 * 1024,
+      timeout: 30000,
+      env: {
+        ...process.env,
+        GIT_TERMINAL_PROMPT: "0",
+      },
     });
 
     const safeStdout = token ? stdout.replaceAll(token, "[REDACTED_TOKEN]") : stdout;
@@ -168,7 +187,7 @@ export async function callGitHubAPI(
   token?: string,
   method: string = "GET",
   data: any = null,
-  requestOptions?: { silentStatuses?: number[] },
+  requestOptions?: { silentStatuses?: number[]; timeoutMs?: number },
 ): Promise<{ statusCode: number; data: any }> {
   const url = endpoint.startsWith("http://") || endpoint.startsWith("https://")
     ? endpoint
@@ -185,9 +204,14 @@ export async function callGitHubAPI(
     headers["Authorization"] = `Bearer ${activeToken}`;
   }
 
+  const timeoutMs = requestOptions?.timeoutMs ?? 10000;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
   const options: RequestInit = {
     method,
     headers,
+    signal: controller.signal,
   };
 
   if (data && (method === "POST" || method === "PUT" || method === "PATCH")) {
@@ -197,6 +221,7 @@ export async function callGitHubAPI(
 
   try {
     const res = await fetch(url, options);
+    clearTimeout(timer);
     let resData: any = {};
     const text = await res.text();
     try {
@@ -223,6 +248,15 @@ export async function callGitHubAPI(
       data: resData,
     };
   } catch (err: any) {
+    clearTimeout(timer);
+    const isTimeout = err.name === "AbortError" || err.message?.includes("aborted");
+    if (isTimeout) {
+      console.warn(`[GitHub API Timeout] ${method} ${url} excedeu ${timeoutMs}ms.`);
+      return {
+        statusCode: 504,
+        data: { message: `Tempo limite de conexão com o GitHub excedido (${timeoutMs}ms)` },
+      };
+    }
     return {
       statusCode: 500,
       data: { message: err.message || "Erro de conexão com o GitHub" },
@@ -395,27 +429,29 @@ export async function cloneGitRepo(
     }
   }
 
-  // Clona em pasta temporária com streaming de progresso e move de uma vez
   const parentDir = path.dirname(repoDir);
   fs.mkdirSync(parentDir, { recursive: true });
-  const tmpDir = path.join(parentDir, `.clone-tmp-${path.basename(repoDir)}-${Date.now()}`);
+
+  if (fs.existsSync(repoDir)) {
+    fs.rmSync(repoDir, { recursive: true, force: true });
+  }
 
   const cloneRes = await executeGitCommandWithProgress(
-    ["clone", "--progress", cleanRemoteUrl, tmpDir],
+    ["clone", "--depth", "1", "--progress", cleanRemoteUrl, repoDir],
     parentDir,
     token,
     onProgress,
   );
 
-  if (!cloneRes.success || !(await isGitRepo(tmpDir))) {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+  if (!cloneRes.success || !(await isGitRepo(repoDir))) {
+    if (fs.existsSync(repoDir)) {
+      fs.rmSync(repoDir, { recursive: true, force: true });
+    }
     return {
       success: false,
       message: cloneRes.stderr || "Falha ao clonar repositório do GitHub.",
     };
   }
-  fs.rmSync(repoDir, { recursive: true, force: true });
-  fs.renameSync(tmpDir, repoDir);
 
   const publicOrigin = cleanRemoteUrl;
   await executeGitCommand(`git remote set-url origin "${publicOrigin}"`, repoDir);

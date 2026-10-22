@@ -8,6 +8,7 @@ import {
   commitChanges,
   createAndCheckoutBranch,
   executeGitCommand,
+  getActiveBearerToken,
   getGitLog,
   getGitStatus,
   rollbackToCommit,
@@ -34,10 +35,17 @@ export interface PRApprovalAudit {
 }
 
 export class PRsService {
+  private lastGitHubSyncTime: Record<string, number> = {};
+  private commitFilesCache = new Map<string, any[]>();
+
   private getRepoDir(repoName?: string): string {
     const cfg = loadConfig();
     const activeRepoName = repoName || cfg.active_repo?.name || 'local';
-    const effectiveOwner = cfg.active_repo?.name === activeRepoName ? cfg.active_repo?.owner : undefined;
+    const matchedRepo = cfg.repos?.find((r: any) => r.name === activeRepoName);
+    const effectiveOwner =
+      cfg.active_repo?.name === activeRepoName
+        ? cfg.active_repo?.owner
+        : matchedRepo?.owner;
     return resolveRepoDir(activeRepoName, effectiveOwner);
   }
 
@@ -121,17 +129,41 @@ export class PRsService {
     }
   }
 
-  async getPRs(targetRepoQuery?: string, userLogin?: string) {
+  async getPRs(
+    targetRepoQuery?: string,
+    userLogin?: string,
+    paginationOptions?: {
+      page?: number;
+      limit?: number;
+      status?: string;
+      search?: string;
+    }
+  ) {
     const cfg = loadConfig();
     const activeRepo = cfg.active_repo;
     const repoName = targetRepoQuery || activeRepo?.name || 'local';
     const login = userLogin || cfg.user?.login || 'marcosbaiadori';
     let allPRs = this.loadRepoPRs(repoName);
 
-    // Auto-sync remote GitHub Pull Requests if authenticated and target matches active repo
-    if (cfg.authenticated && cfg.token && activeRepo?.full_name && !activeRepo?.is_local && activeRepo?.name === repoName) {
+    const matchedRepo = cfg.repos?.find((r: any) => r.name === repoName);
+    const targetRepoObj =
+      (activeRepo?.name === repoName ? activeRepo : matchedRepo) || activeRepo;
+
+    // Auto-sync remote GitHub Pull Requests if authenticated and target matches active or matched remote repo
+    const now = Date.now();
+    const lastSync = this.lastGitHubSyncTime[repoName] || 0;
+    const shouldSyncGitHub = now - lastSync > 30_000;
+
+    if (
+      shouldSyncGitHub &&
+      cfg.authenticated &&
+      cfg.token &&
+      targetRepoObj?.full_name &&
+      !targetRepoObj?.is_local
+    ) {
+      this.lastGitHubSyncTime[repoName] = now;
       try {
-        const ghRes = await callGitHubAPI(`/repos/${activeRepo.full_name}/pulls?state=all`, cfg.token);
+        const ghRes = await callGitHubAPI(`/repos/${targetRepoObj.full_name}/pulls?state=all&per_page=50`, cfg.token);
         if (ghRes.statusCode === 200 && Array.isArray(ghRes.data)) {
           let modified = false;
           for (const ghPR of ghRes.data) {
@@ -188,28 +220,32 @@ export class PRsService {
     const repoPRs = allPRs.filter((p: any) => p.repo_name === repoName || (!p.repo_name && repoName === 'local'));
     const repoDir = this.getRepoDir(repoName);
 
-    // 2. INVARIANCE CHECK: Verify if branch HEAD changed externally and invalidate approvals accordingly
-    for (const pr of repoPRs) {
-      if (pr.status === 'OPEN' && pr.branch) {
-        try {
-          const revRes = await executeGitCommand(`git rev-parse "${pr.branch}"`, repoDir);
-          if (revRes.success && revRes.stdout) {
-            const currentHead = revRes.stdout.trim();
-            if (!pr.head_sha) {
-              pr.head_sha = currentHead;
-            } else if (pr.head_sha !== currentHead) {
-              this.afterPRHeadChanged(repoName, pr, {
-                actor: 'Git (Sync / Push Externo)',
-                newHead: currentHead,
-              });
+    // 2. INVARIANCE CHECK: Verify if branch HEAD changed externally and invalidate approvals accordingly (in parallel)
+    const openPRsWithBranch = repoPRs.filter((pr: any) => pr.status === 'OPEN' && pr.branch);
+    if (openPRsWithBranch.length > 0) {
+      await Promise.all(
+        openPRsWithBranch.map(async (pr: any) => {
+          try {
+            const revRes = await executeGitCommand(`git rev-parse "${pr.branch}"`, repoDir);
+            if (revRes.success && revRes.stdout) {
+              const currentHead = revRes.stdout.trim();
+              if (!pr.head_sha) {
+                pr.head_sha = currentHead;
+              } else if (pr.head_sha !== currentHead) {
+                this.afterPRHeadChanged(repoName, pr, {
+                  actor: 'Git (Sync / Push Externo)',
+                  newHead: currentHead,
+                });
+              }
             }
-          }
-        } catch {}
-      }
+          } catch {}
+        })
+      );
     }
 
     // 3. Fetch Git Commits on main as Official Revisions
     const gitCommits = await getGitLog(repoDir, 50);
+    console.log('[DEBUG getPRs] 10. gitCommits count:', gitCommits.length);
     const existingHashes = new Set(repoPRs.map((p: any) => String(p.commit_hash || p.github_number || p.id)));
     const existingTitles = new Set(repoPRs.map((p: any) => (p.title || '').trim().toLowerCase()));
 
@@ -217,31 +253,6 @@ export class PRsService {
     for (const c of gitCommits) {
       if (existingHashes.has(c.hash) || existingHashes.has(c.shortHash) || existingTitles.has((c.message || '').trim().toLowerCase())) {
         continue;
-      }
-
-      let commitFiles: any[] = [];
-      try {
-        const numStatRes = await executeGitCommand(`git show --numstat --pretty="" ${c.hash}`, repoDir);
-        if (numStatRes.success && numStatRes.stdout) {
-          commitFiles = numStatRes.stdout.split('\n').filter(Boolean).map((line) => {
-            const parts = line.split('\t');
-            if (parts.length >= 3) {
-              const additions = parseInt(parts[0], 10) || 0;
-              const deletions = parseInt(parts[1], 10) || 0;
-              const filePath = parts[2];
-              return {
-                path: filePath,
-                type: additions > 0 && deletions === 0 ? 'ADDED' : deletions > 0 && additions === 0 ? 'DELETED' : 'MODIFIED',
-                additions,
-                deletions,
-                is_encrypted: false,
-              };
-            }
-            return null;
-          }).filter(Boolean);
-        }
-      } catch (err) {
-        console.warn(`[PRsService] Erro ao obter files do commit ${c.hash}:`, err);
       }
 
       commitRevisions.push({
@@ -271,17 +282,111 @@ export class PRsService {
         layer: 'Versão Oficial (main)',
         domain: '',
         is_direct_commit: true,
-        files: commitFiles,
+        files: [], // Preenchido sob demanda apenas para os itens da página atual
         html_url: activeRepo?.html_url ? `${activeRepo.html_url}/commit/${c.hash}` : '',
       });
     }
 
-    // 4. Combine and sanitize files based on user clearance (Mask restricted documents)
+    // 4. Combine all PRs and Commit Revisions, sorted descending by date
+    const combinedAll = [...repoPRs, ...commitRevisions];
+    combinedAll.sort((a: any, b: any) => {
+      const tA = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const tB = b.created_at ? new Date(b.created_at).getTime() : 0;
+      return tB - tA;
+    });
+
+    // 5. Global counts for filters (before search/status pagination)
+    const countAll = combinedAll.length;
+    const countOpen = combinedAll.filter((p: any) => {
+      const s = (p.status || '').toLowerCase();
+      return s === 'open' || s === 'in_review';
+    }).length;
+    const countMerged = combinedAll.filter((p: any) => (p.status || '').toLowerCase() === 'merged').length;
+    const countClosed = combinedAll.filter((p: any) => (p.status || '').toLowerCase() === 'closed').length;
+
+    // 6. Filter by Status & Search Query
+    const activeStatus = (paginationOptions?.status || 'all').toLowerCase();
+    const searchQuery = (paginationOptions?.search || '').toLowerCase().trim();
+
+    const filteredList = combinedAll.filter((pr: any) => {
+      const statusLower = (pr.status || '').toLowerCase();
+      const matchesStatus =
+        activeStatus === 'all' ||
+        (activeStatus === 'open' && (statusLower === 'open' || statusLower === 'in_review')) ||
+        (activeStatus === 'merged' && statusLower === 'merged') ||
+        (activeStatus === 'closed' && statusLower === 'closed');
+
+      const matchesSearch =
+        !searchQuery ||
+        (pr.title && pr.title.toLowerCase().includes(searchQuery)) ||
+        (pr.author && pr.author.toLowerCase().includes(searchQuery)) ||
+        (pr.description && pr.description.toLowerCase().includes(searchQuery)) ||
+        String(pr.id).includes(searchQuery);
+
+      return matchesStatus && matchesSearch;
+    });
+
+    // 7. Pagination slice
+    // 7. Pagination slice (Sempre paginado para máxima performance e proteção contra travamentos)
+    const page = Math.max(1, paginationOptions?.page || 1);
+    const limit = Math.max(1, paginationOptions?.limit || 15);
+    const total = filteredList.length;
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+    const startIndex = (page - 1) * limit;
+    const pageItems = filteredList.slice(startIndex, startIndex + limit);
+
+    // 8. Carrega arquivos de commit e sanitiza permissões APENAS para os itens da página atual
     const govRules = this.getGovernanceRules(repoName);
-    const combinedList = await Promise.all(
-      [...repoPRs, ...commitRevisions].map(async (p: any) => {
+    console.log('[DEBUG getPRs] 11. Sanitizing items count:', pageItems.length);
+    const sanitizedPageItems = await Promise.all(
+      pageItems.map(async (p: any) => {
+        let rawFiles = Array.isArray(p.files) ? p.files : [];
+
+        // Para commits oficiais diretos na main da página atual, obtém os arquivos sob demanda com cache
+        if (p.is_direct_commit && rawFiles.length === 0 && p.commit_hash) {
+          if (this.commitFilesCache.has(p.commit_hash)) {
+            rawFiles = this.commitFilesCache.get(p.commit_hash)!;
+          } else {
+            try {
+              const numStatRes = await executeGitCommand(`git show --numstat --pretty="" ${p.commit_hash}`, repoDir);
+              if (numStatRes.success && numStatRes.stdout) {
+                rawFiles = numStatRes.stdout
+                  .split('\n')
+                  .filter(Boolean)
+                  .map((line) => {
+                    const parts = line.split('\t');
+                    if (parts.length >= 3) {
+                      const additions = parseInt(parts[0], 10) || 0;
+                      const deletions = parseInt(parts[1], 10) || 0;
+                      const filePath = parts[2];
+                      return {
+                        path: filePath,
+                        type:
+                          additions > 0 && deletions === 0
+                            ? 'ADDED'
+                            : deletions > 0 && additions === 0
+                            ? 'DELETED'
+                            : 'MODIFIED',
+                        additions,
+                        deletions,
+                        is_encrypted: false,
+                      };
+                    }
+                    return null;
+                  })
+                  .filter(Boolean);
+                this.commitFilesCache.set(p.commit_hash, rawFiles);
+              }
+            } catch {}
+          }
+        }
+
+        const totalFilesCount = rawFiles.length;
+        // Limita a 50 arquivos na listagem resumida para evitar travar a CPU e a rede com commits gigantes (ex: commit inicial de 3.500 arquivos)
+        const filesToProcess = rawFiles.slice(0, 50);
+
         const sanitizedFiles = await Promise.all(
-          (Array.isArray(p.files) ? p.files : []).map(async (f: any) => {
+          filesToProcess.map(async (f: any) => {
             const rawPath = f.path || '';
             const branchOrCommit = p.head_sha || p.commit_hash || p.branch || 'HEAD';
             const clearance = await prSecurityService.resolveDocClearance(repoName, login, rawPath, branchOrCommit);
@@ -312,17 +417,30 @@ export class PRsService {
         return {
           ...p,
           files: sanitizedFiles,
+          total_files_count: totalFilesCount,
+          has_more_files: totalFilesCount > 50,
           min_approvals: p.min_approvals || govRules.min_approvals,
           is_solo_mode: govRules.is_solo,
         };
       })
     );
+    console.log('[DEBUG getPRs] 12. Complete! Sanitized:', sanitizedPageItems.length);
 
     return {
       repo: activeRepo,
       repo_name: repoName,
-      prs: combinedList,
-      count: combinedList.length,
+      prs: sanitizedPageItems,
+      count: sanitizedPageItems.length,
+      total,
+      page,
+      limit,
+      total_pages: totalPages,
+      counts: {
+        all: countAll,
+        open: countOpen,
+        merged: countMerged,
+        closed: countClosed,
+      },
       governance: {
         min_approvals: govRules.min_approvals,
         is_solo_mode: govRules.is_solo,
@@ -601,45 +719,55 @@ export class PRsService {
     const now = new Date().toISOString();
 
     // 1. Create and checkout new Git branch
-    await createAndCheckoutBranch(repoDir, branchName);
-
-    // 2. Commit changes to Git branch
-    const commitMsg = payload.title || `Atualização de Governança #${newId}`;
-    await commitChanges(repoDir, commitMsg);
-
-    const headHashRes = await executeGitCommand(`git rev-parse HEAD`, repoDir);
-    const headSha = headHashRes.success ? (headHashRes.stdout || '').trim() : '';
-
-    // 3. GitHub Remote PR (if authenticated and remote repo)
+    let headSha = '';
     let githubPRData: any = null;
     let prHtmlUrl = activeRepo?.html_url ? `${activeRepo.html_url}/pull/${newId}` : '';
 
-    if (cfg.authenticated && cfg.token && activeRepo?.full_name && !activeRepo?.is_local) {
-      try {
-        await executeGitCommand(`git push -u origin "${branchName}"`, repoDir);
-        const ghRes = await callGitHubAPI(
-          `/repos/${activeRepo.full_name}/pulls`,
-          cfg.token,
-          'POST',
-          {
-            title: payload.title,
-            body: payload.description || `Atualização de governança Context OS`,
-            head: branchName,
-            base: defaultBranch,
+    try {
+      await createAndCheckoutBranch(repoDir, branchName);
+
+      // 2. Commit changes to Git branch
+      const commitMsg = payload.title || `Atualização de Governança #${newId}`;
+      await commitChanges(repoDir, commitMsg);
+
+      const headHashRes = await executeGitCommand(`git rev-parse HEAD`, repoDir);
+      headSha = headHashRes.success ? (headHashRes.stdout || '').trim() : '';
+
+      // 3. GitHub Remote PR (if authenticated and remote repo)
+      const activeToken = getActiveBearerToken(cfg.token);
+      if (cfg.authenticated && activeToken && activeRepo?.full_name && !activeRepo?.is_local) {
+        try {
+          const pushRes = await executeGitCommand(`git push -u origin "${branchName}"`, repoDir, activeToken);
+          if (pushRes.success) {
+            const ghRes = await callGitHubAPI(
+              `/repos/${activeRepo.full_name}/pulls`,
+              activeToken,
+              'POST',
+              {
+                title: payload.title,
+                body: payload.description || `Atualização de governança Context OS`,
+                head: branchName,
+                base: defaultBranch,
+              }
+            );
+
+            if (ghRes.statusCode === 201 && ghRes.data) {
+              githubPRData = ghRes.data;
+              prHtmlUrl = ghRes.data.html_url || prHtmlUrl;
+            } else {
+              console.warn('[PRsService] GitHub PR retornou status:', ghRes.statusCode, ghRes.data);
+            }
+          } else {
+            console.warn('[PRsService] git push remoto não teve sucesso:', pushRes.stderr);
           }
-        );
-
-        if (ghRes.statusCode === 201 && ghRes.data) {
-          githubPRData = ghRes.data;
-          prHtmlUrl = ghRes.data.html_url || prHtmlUrl;
+        } catch (err) {
+          console.warn('[PRsService] Aviso ao abrir PR no Git remoto:', err);
         }
-      } catch (err) {
-        console.warn('[PRsService] Aviso ao abrir PR no Git remoto:', err);
       }
+    } finally {
+      // Switch back to default branch so local environment is clean even if an error occurs
+      await executeGitCommand(`git checkout "${defaultBranch}"`, repoDir).catch(() => {});
     }
-
-    // Switch back to default branch so local environment is clean
-    await executeGitCommand(`git checkout ${defaultBranch}`, repoDir);
 
     // Detailed changes: ONLY store metadata in JSON, NEVER plain content
     const detailedChanges = allChangedPaths.map((p) => {

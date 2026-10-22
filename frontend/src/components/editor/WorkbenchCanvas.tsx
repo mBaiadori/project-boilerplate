@@ -2,8 +2,6 @@ import React, { Suspense, lazy } from "react";
 import { useSearchParams } from "react-router-dom";
 import { NotionEditor } from "./NotionEditor";
 import { getFileCategory } from "../../utils/file-types";
-import { FilePlus } from "lucide-react";
-import { Button } from "../ui";
 
 // Lazy loaded viewers for optimum performance
 const CodeMirrorEditor = lazy(() => import("./viewers/CodeMirrorEditor"));
@@ -98,7 +96,7 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
 
         <p
           style={{
-            margin: "0 0 24px 0",
+            margin: "0",
             fontSize: "14px",
             lineHeight: 1.5,
             maxWidth: 440,
@@ -106,27 +104,9 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
           }}
         >
           {hasEmptyFileParam
-            ? "Não temos a referência de um arquivo válido para exibição no editor. Selecione um documento na árvore à esquerda ou crie um novo documento em branco."
-            : "Selecione um arquivo na árvore à esquerda para visualizar e editar, ou crie um novo documento em branco."}
+            ? "Não temos a referência de um arquivo válido para exibição no editor. Selecione um documento na árvore à esquerda para visualizar e editar."
+            : "Selecione um arquivo na árvore à esquerda para visualizar e editar."}
         </p>
-
-        {onOpenScaffoldWizard && (
-          <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-            <Button
-              variant="primary"
-              size="md"
-              onClick={onOpenScaffoldWizard}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 8,
-              }}
-            >
-              <FilePlus size={16} />
-              <span>Criar Documento</span>
-            </Button>
-          </div>
-        )}
       </div>
     );
   }

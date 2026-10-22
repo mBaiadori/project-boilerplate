@@ -216,17 +216,42 @@ export class DocsMetadataService {
     return hiddenPath;
   }
 
+  private projectConfigCache = new Map<
+    string,
+    { config: Record<string, any>; mtimeMs: number }
+  >();
+
   getProjectConfig(repoName: string): Record<string, any> {
-    const cfgPath = this.getProjectConfigPath(repoName);
-    if (fs.existsSync(cfgPath)) {
+    const cleanRepo = repoName || "local";
+    const cfgPath = this.getProjectConfigPath(cleanRepo);
+    let currentMtime = 0;
+    const exists = fs.existsSync(cfgPath);
+    if (exists) {
       try {
-        return JSON.parse(fs.readFileSync(cfgPath, "utf-8"));
-      } catch (err) {
-        console.error(
-          `[DocsMetadataService] Erro ao ler project.config.json:`,
-          err,
-        );
-      }
+        currentMtime = fs.statSync(cfgPath).mtimeMs;
+      } catch {}
+    } else {
+      this.projectConfigCache.delete(cleanRepo);
+      return {};
+    }
+
+    const cached = this.projectConfigCache.get(cleanRepo);
+    if (cached && cached.mtimeMs === currentMtime) {
+      return cached.config;
+    }
+
+    try {
+      const parsed = JSON.parse(fs.readFileSync(cfgPath, "utf-8"));
+      this.projectConfigCache.set(cleanRepo, {
+        config: parsed,
+        mtimeMs: currentMtime,
+      });
+      return parsed;
+    } catch (err) {
+      console.error(
+        `[DocsMetadataService] Erro ao ler project.config.json:`,
+        err,
+      );
     }
     return {};
   }
@@ -235,9 +260,10 @@ export class DocsMetadataService {
     repoName: string,
     configData: any,
   ): { success: boolean; config: any } {
-    const existing = this.getProjectConfig(repoName);
+    const cleanRepo = repoName || "local";
+    const existing = this.getProjectConfig(cleanRepo);
     const merged = { ...existing, ...configData };
-    const cfgPath = this.getProjectConfigPath(repoName);
+    const cfgPath = this.getProjectConfigPath(cleanRepo);
     const valRes = validateJsonSchema("project.config", merged);
     if (!valRes.valid) {
       console.warn(
@@ -247,6 +273,14 @@ export class DocsMetadataService {
     }
     fs.mkdirSync(path.dirname(cfgPath), { recursive: true });
     fs.writeFileSync(cfgPath, JSON.stringify(merged, null, 2), "utf-8");
+    let currentMtime = Date.now();
+    try {
+      currentMtime = fs.statSync(cfgPath).mtimeMs;
+    } catch {}
+    this.projectConfigCache.set(cleanRepo, {
+      config: merged,
+      mtimeMs: currentMtime,
+    });
     return { success: true, config: merged };
   }
 
@@ -271,6 +305,7 @@ export class DocsMetadataService {
   inferDepartmentFromPath(
     filePath: string,
     repoName?: string,
+    cachedDepartments?: DepartmentConfig[],
   ): { department?: string } {
     if (!filePath) return {};
     const clean = filePath.replace(/\\/g, "/").replace(/^\/+/, "");
@@ -279,13 +314,15 @@ export class DocsMetadataService {
       parts[0] === "docs" && parts.length > 1 ? parts[1] : parts[0]
     ).toLowerCase();
 
-    let departments: DepartmentConfig[] = DEFAULT_DEPARTMENTS;
-    try {
-      const config = this.getProjectConfig(repoName || "local");
-      if (Array.isArray(config.departments) && config.departments.length > 0) {
-        departments = config.departments;
-      }
-    } catch {}
+    let departments: DepartmentConfig[] = cachedDepartments || DEFAULT_DEPARTMENTS;
+    if (!cachedDepartments) {
+      try {
+        const config = this.getProjectConfig(repoName || "local");
+        if (Array.isArray(config.departments) && config.departments.length > 0) {
+          departments = config.departments;
+        }
+      } catch {}
+    }
 
     const matched = departments.find(
       (d) =>
@@ -303,15 +340,22 @@ export class DocsMetadataService {
 
   private metaCache = new Map<
     string,
-    { data: DocumentMetadataItem[]; timestamp: number }
+    {
+      data: DocumentMetadataItem[];
+      map: Map<string, DocumentMetadataItem>;
+      mtimeMs: number;
+      timestamp: number;
+    }
   >();
   private reconciliationInProgress = new Set<string>();
 
   clearCache(repoName?: string): void {
     if (repoName) {
       this.metaCache.delete(repoName);
+      this.projectConfigCache.delete(repoName);
     } else {
       this.metaCache.clear();
+      this.projectConfigCache.clear();
     }
   }
 
@@ -320,23 +364,40 @@ export class DocsMetadataService {
     forceDiskScan = false,
   ): DocumentMetadataItem[] {
     const cleanRepo = repoName || "local";
+    const metaPath = this.getDocsMetadataPath(cleanRepo);
+    const repoDir = this.getRepoDir(cleanRepo);
     const cached = this.metaCache.get(cleanRepo);
 
-    // Return cached metadata if available (valid for 30s or until invalidated)
-    if (cached && !forceDiskScan && Date.now() - cached.timestamp < 30000) {
+    let currentMtime = 0;
+    const exists = fs.existsSync(metaPath);
+    if (exists) {
+      try {
+        currentMtime = fs.statSync(metaPath).mtimeMs;
+      } catch {}
+    }
+
+    // Se o arquivo não mudou no disco e não foi forçado, retorna cache em O(1) imediatamente (0ms)
+    if (cached && !forceDiskScan && exists && cached.mtimeMs === currentMtime) {
       return cached.data;
     }
 
-    const metaPath = this.getDocsMetadataPath(cleanRepo);
-    const repoDir = this.getRepoDir(cleanRepo);
     let metaList: DocumentMetadataItem[] = [];
 
-    if (fs.existsSync(metaPath)) {
+    if (exists) {
       try {
         const raw = fs.readFileSync(metaPath, "utf-8");
         const parsed = JSON.parse(raw);
+
+        let cachedDepartments: DepartmentConfig[] = DEFAULT_DEPARTMENTS;
+        try {
+          const config = this.getProjectConfig(cleanRepo);
+          if (Array.isArray(config.departments) && config.departments.length > 0) {
+            cachedDepartments = config.departments;
+          }
+        } catch {}
+
         if (Array.isArray(parsed)) {
-          metaList = parsed.map((item) => this.sanitizeMetaItem(item));
+          metaList = parsed.map((item) => this.sanitizeMetaItem(item, cleanRepo, cachedDepartments));
         } else if (parsed && typeof parsed === "object" && parsed.documents) {
           // Migração de formato legado
           for (const [relPath, meta] of Object.entries(parsed.documents)) {
@@ -351,14 +412,14 @@ export class DocsMetadataService {
                 title: m.title || name,
                 ext,
                 path: relPath,
-                status: m.status || "-ð",
+                status: m.status || "",
                 categories: m.categories || m.category || "",
                 tags: Array.isArray(m.tags) ? m.tags : [],
                 updated_at: m.updated_at || new Date().toISOString(),
                 approvers: Array.isArray(m.approvers) ? m.approvers : [],
                 links: Array.isArray(m.links) ? m.links : [],
                 templateId: m.templateId || "",
-              }),
+              }, cleanRepo, cachedDepartments),
             );
           }
         }
@@ -368,13 +429,24 @@ export class DocsMetadataService {
           err,
         );
       }
+    } else if (fs.existsSync(repoDir)) {
+      // Se não existe .docs.metadata.json, inicializa arquivo vazio inicial para operações rápidas
+      try {
+        fs.writeFileSync(metaPath, "[]", "utf-8");
+        currentMtime = fs.statSync(metaPath).mtimeMs;
+      } catch {}
     }
 
-    // Save in cache immediately
-    this.metaCache.set(cleanRepo, { data: metaList, timestamp: Date.now() });
+    const map = new Map(metaList.map((item) => [item.path, item]));
+    this.metaCache.set(cleanRepo, {
+      data: metaList,
+      map,
+      mtimeMs: currentMtime,
+      timestamp: Date.now(),
+    });
 
-    // Schedule background reconciliation only when forced or when meta was missing on disk
-    if (fs.existsSync(repoDir) && (forceDiskScan || (!fs.existsSync(metaPath) && metaList.length === 0))) {
+    // Reconciliação massiva de disco só é acionada se explicitamente solicitada (forceDiskScan)
+    if (forceDiskScan && fs.existsSync(repoDir)) {
       this.scheduleBackgroundReconciliation(cleanRepo);
     }
 
@@ -382,7 +454,9 @@ export class DocsMetadataService {
   }
 
   /**
-   * Executa reconciliação de metadados em segundo plano de forma assíncrona e eficiente
+   * Executa reconciliação de metadados em segundo plano de forma 100% assíncrona,
+   * em lotes (chunks) com liberação do Event Loop, garantindo que o servidor Fastify
+   * permaneça responsivo mesmo em repositórios grandes.
    */
   scheduleBackgroundReconciliation(repoName: string): void {
     const cleanRepo = repoName || "local";
@@ -399,7 +473,13 @@ export class DocsMetadataService {
           try {
             const entries = fs.readdirSync(dir, { withFileTypes: true });
             for (const entry of entries) {
-              if (entry.name.startsWith(".") || entry.name === "node_modules" || entry.name === "dist" || entry.name === "build")
+              if (
+                entry.name.startsWith(".") ||
+                entry.name === "node_modules" ||
+                entry.name === "dist" ||
+                entry.name === "build" ||
+                entry.name === "coverage"
+              )
                 continue;
               const full = path.join(dir, entry.name);
               if (entry.isDirectory()) {
@@ -421,57 +501,70 @@ export class DocsMetadataService {
         const metaMap = new Map(currentCached.map((d) => [d.path, { ...d }]));
         let changed = false;
 
-        for (const relPath of diskFiles) {
-          const item = metaMap.get(relPath);
-          const full = path.join(repoDir, relPath);
-          let content = "";
-          try {
-            content = fs.readFileSync(full, "utf-8");
-          } catch {}
-          const extractedLinks = extractDocLinksFromMarkdown(content);
-          const extractedTitle = extractDocTitleFromMarkdown(content);
-          const frontmatterMeta = extractFrontmatterMeta(content);
+        // Processa em lotes de 20 arquivos assincronamente sem bloquear o event loop
+        const BATCH_SIZE = 20;
+        for (let i = 0; i < diskFiles.length; i += BATCH_SIZE) {
+          const batch = diskFiles.slice(i, i + BATCH_SIZE);
+          await Promise.all(
+            batch.map(async (relPath) => {
+              const item = metaMap.get(relPath);
+              const full = path.join(repoDir, relPath);
+              let content = "";
+              try {
+                content = await fs.promises.readFile(full, "utf-8");
+              } catch {
+                return;
+              }
 
-          if (item) {
-            let itemModified = false;
-            const currentLinksJson = JSON.stringify(
-              Array.isArray(item.links) ? item.links : [],
-            );
-            const extractedLinksJson = JSON.stringify(extractedLinks);
-            if (currentLinksJson !== extractedLinksJson) {
-              item.links = extractedLinks;
-              itemModified = true;
-            }
-            if (!item.title && extractedTitle) {
-              item.title = extractedTitle;
-              itemModified = true;
-            }
-            if (itemModified) {
-              metaMap.set(relPath, item);
-              changed = true;
-            }
-          } else {
-            const name = path.basename(relPath, path.extname(relPath));
-            const ext = path.extname(relPath).replace(/^\./, "") || "md";
-            metaMap.set(
-              relPath,
-              this.sanitizeMetaItem({
-                id: generateDocId(relPath),
-                name,
-                title: frontmatterMeta.title || extractedTitle || name,
-                ext,
-                path: relPath,
-                status: frontmatterMeta.status || "",
-                categories: frontmatterMeta.categories || "",
-                tags: frontmatterMeta.tags || [],
-                updated_at: new Date().toISOString(),
-                approvers: [],
-                links: extractedLinks,
-                templateId: "",
-              }),
-            );
-            changed = true;
-          }
+              const extractedLinks = extractDocLinksFromMarkdown(content);
+              const extractedTitle = extractDocTitleFromMarkdown(content);
+              const frontmatterMeta = extractFrontmatterMeta(content);
+
+              if (item) {
+                let itemModified = false;
+                const currentLinksJson = JSON.stringify(
+                  Array.isArray(item.links) ? item.links : [],
+                );
+                const extractedLinksJson = JSON.stringify(extractedLinks);
+                if (currentLinksJson !== extractedLinksJson) {
+                  item.links = extractedLinks;
+                  itemModified = true;
+                }
+                if (!item.title && extractedTitle) {
+                  item.title = extractedTitle;
+                  itemModified = true;
+                }
+                if (itemModified) {
+                  metaMap.set(relPath, item);
+                  changed = true;
+                }
+              } else {
+                const name = path.basename(relPath, path.extname(relPath));
+                const ext = path.extname(relPath).replace(/^\./, "") || "md";
+                metaMap.set(
+                  relPath,
+                  this.sanitizeMetaItem({
+                    id: generateDocId(relPath),
+                    name,
+                    title: frontmatterMeta.title || extractedTitle || name,
+                    ext,
+                    path: relPath,
+                    status: frontmatterMeta.status || "",
+                    categories: frontmatterMeta.categories || "",
+                    tags: frontmatterMeta.tags || [],
+                    updated_at: new Date().toISOString(),
+                    approvers: [],
+                    links: extractedLinks,
+                    templateId: "",
+                  }),
+                );
+                changed = true;
+              }
+            }),
+          );
+
+          // Libera o Event Loop para que requisições de outros clientes/rotas fluam instantaneamente
+          await new Promise((resolve) => setImmediate(resolve));
         }
 
         const diskSet = new Set(diskFiles);
@@ -500,46 +593,68 @@ export class DocsMetadataService {
   saveDocsMetadata(repoName: string, metaList: DocumentMetadataItem[]): void {
     const cleanRepo = repoName || "local";
     const metaPath = this.getDocsMetadataPath(cleanRepo);
-    const sanitizedList = metaList.map((item) => this.sanitizeMetaItem(item));
-    this.metaCache.set(cleanRepo, {
-      data: sanitizedList,
-      timestamp: Date.now(),
-    });
-
-    const valRes = validateJsonSchema("docs.metadata", sanitizedList);
-    if (!valRes.valid) {
-      console.warn(
-        `[DocsMetadataService] Aviso de validação docs.metadata.json:`,
-        valRes.errors,
-      );
-    }
-
+    const sanitizedList = metaList.map((item) => this.sanitizeMetaItem(item, cleanRepo));
+    const map = new Map(sanitizedList.map((item) => [item.path, item]));
+    
     fs.mkdirSync(path.dirname(metaPath), { recursive: true });
     fs.writeFileSync(metaPath, JSON.stringify(sanitizedList, null, 2), "utf-8");
+
+    let currentMtime = Date.now();
+    try {
+      currentMtime = fs.statSync(metaPath).mtimeMs;
+    } catch {}
+
+    this.metaCache.set(cleanRepo, {
+      data: sanitizedList,
+      map,
+      mtimeMs: currentMtime,
+      timestamp: Date.now(),
+    });
   }
 
   getDocMetadata(repoName: string, filePath: string): DocumentMetadataItem {
+    const cleanRepo = repoName || "local";
     const cleanPath = (filePath || "").trim().replace(/^\/+/, "");
-    const metaList = this.loadDocsMetadata(repoName);
-    const existing = metaList.find((d) => d.path === cleanPath);
+    this.loadDocsMetadata(cleanRepo);
+    const cached = this.metaCache.get(cleanRepo);
+    const existing = cached?.map.get(cleanPath);
     if (existing) return existing;
 
     const ext = path.extname(cleanPath).replace(/^\./, "") || "md";
     const name = path.basename(cleanPath, path.extname(cleanPath));
-    return this.sanitizeMetaItem({
+
+    let title = name;
+    let frontmatterMeta: any = {};
+    const fullPath = path.join(this.getRepoDir(cleanRepo), cleanPath);
+    if (fs.existsSync(fullPath) && (ext === "md" || ext === "markdown")) {
+      try {
+        const content = fs.readFileSync(fullPath, "utf-8");
+        frontmatterMeta = extractFrontmatterMeta(content);
+        title = frontmatterMeta.title || extractDocTitleFromMarkdown(content) || name;
+      } catch {}
+    }
+
+    const item = this.sanitizeMetaItem({
       id: generateDocId(cleanPath),
       name,
-      title: name,
+      title,
       ext,
       path: cleanPath,
-      status: "",
-      categories: "",
-      tags: [],
+      status: frontmatterMeta.status || "",
+      categories: frontmatterMeta.categories || frontmatterMeta.category || "",
+      tags: Array.isArray(frontmatterMeta.tags) ? frontmatterMeta.tags : [],
       updated_at: new Date().toISOString(),
       approvers: [],
       links: [],
       templateId: "",
-    });
+    }, cleanRepo);
+
+    if (cached) {
+      cached.map.set(cleanPath, item);
+      cached.data.push(item);
+    }
+
+    return item;
   }
 
   updateDocMetadataItem(
@@ -867,7 +982,7 @@ export class DocsMetadataService {
     };
   }
 
-  private sanitizeMetaItem(item: any, repoName?: string): DocumentMetadataItem {
+  private sanitizeMetaItem(item: any, repoName?: string, cachedDepartments?: DepartmentConfig[]): DocumentMetadataItem {
     const cleanItem = { ...item };
     // Remove layer e badge se existirem
     delete cleanItem.layer;
@@ -879,10 +994,11 @@ export class DocsMetadataService {
       delete cleanItem.category;
     }
 
-    const inferred = cleanItem.path
-      ? this.inferDepartmentFromPath(cleanItem.path, repoName)
-      : {};
-    const resolvedDept = cleanItem.department || inferred.department;
+    let resolvedDept = cleanItem.department;
+    if (!resolvedDept && cleanItem.path) {
+      const inferred = this.inferDepartmentFromPath(cleanItem.path, repoName, cachedDepartments);
+      resolvedDept = inferred.department;
+    }
 
     return {
       id: cleanItem.id || generateDocId(cleanItem.path || "doc"),

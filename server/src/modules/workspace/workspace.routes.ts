@@ -6,8 +6,8 @@ import { loadConfig } from "../../config/storage.js";
 export async function workspaceRoutes(fastify: FastifyInstance) {
   fastify.get("/api/project/tree", async (request, reply) => {
     try {
-      const query = request.query as { repo?: string };
-      return reply.send(await workspaceService.getTree(query.repo));
+      const query = request.query as { repo?: string; org?: string; owner?: string };
+      return reply.send(await workspaceService.getTree(query.repo, query.org || query.owner));
     } catch (err: any) {
       return reply.status(500).send({ error: err.message });
     }

@@ -347,29 +347,22 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
     }
   }, [saveStatus]);
 
-  // Load document metadata and blame when file changes or git mode is opened
+  // Sync document metadata and blame when file changes or git mode is opened
   useEffect(() => {
-    if (!filePath) return;
+    if (!filePath) {
+      setDocMetadata(null);
+      return;
+    }
 
-    // Load metadata
-    API.getProjectMetadata(activeRepo?.name)
-      .then((res) => {
-        if (res.ok && Array.isArray(res.data)) {
-          const found = res.data.find(
-            (d) =>
-              d.path === filePath ||
-              d.path.replace(/^\/+/, "") === filePath.replace(/^\/+/, ""),
-          );
-          if (found) setDocMetadata(found);
-        }
-      })
-      .catch(() => {});
+    if (fileMetadata) {
+      setDocMetadata(fileMetadata as DocumentMetadataItem);
+    }
 
     // Reset commit selection when switching file
     setSelectedCommit(null);
     setHistoricalContent("");
     setFragmentAlert(null);
-  }, [filePath, activeRepo]);
+  }, [filePath, fileMetadata]);
 
   const [isUpdatingFromMain, setIsUpdatingFromMain] = useState(false);
 

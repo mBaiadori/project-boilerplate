@@ -8847,6 +8847,21 @@ input[type="text"].icon-picker-search-input:focus {
   color: var(--primary, #2563eb);
 }
 
+.tree-repo-header.is-uncloned {
+  color: var(--md-sys-color-outline, #94a3b8);
+  opacity: 0.78;
+}
+
+.tree-repo-header.is-uncloned:hover {
+  opacity: 1;
+  background: rgba(148, 163, 184, 0.08);
+}
+
+.tree-repo-header.is-uncloned .tree-repo-name {
+  color: var(--md-sys-color-outline, #94a3b8);
+  font-weight: 500;
+}
+
 .tree-repo-header.drag-over {
   background: rgba(37, 99, 235, 0.14) !important;
   outline: 2px dashed var(--primary, #2563eb) !important;

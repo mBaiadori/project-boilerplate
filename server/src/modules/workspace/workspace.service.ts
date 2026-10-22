@@ -53,9 +53,9 @@ export class WorkspaceService {
     }
   }
 
-  private getRepoDir(repoName: string): string {
+  private getRepoDir(repoName: string, ownerOrOrg?: string): string {
     const cfg = loadConfig();
-    let effectiveOwner = cfg.active_repo?.name === repoName ? cfg.active_repo?.owner : undefined;
+    let effectiveOwner = ownerOrOrg || (cfg.active_repo?.name === repoName ? cfg.active_repo?.owner : undefined);
     if (!effectiveOwner && repoName && repoName.includes("/")) {
       effectiveOwner = repoName.split("/")[0];
     }
@@ -137,12 +137,26 @@ export class WorkspaceService {
     });
   }
 
-  async getTree(targetRepoName?: string, forceRefresh = false) {
+  async getTree(
+    targetRepoName?: string,
+    ownerOrOrgOrForce?: string | boolean,
+    forceRefresh = false,
+  ) {
+    const isBool = typeof ownerOrOrgOrForce === "boolean";
+    const actualOwner = isBool ? undefined : ownerOrOrgOrForce;
+    const actualForce = isBool ? ownerOrOrgOrForce : forceRefresh;
     const cfg = loadConfig();
     const repoName = targetRepoName || cfg.active_repo?.name || "local";
-    const repoDir = this.getRepoDir(repoName);
+    const repoDir = this.getRepoDir(repoName, actualOwner);
 
-    if (forceRefresh) {
+    if (!fs.existsSync(repoDir)) {
+      return {
+        repo: repoName,
+        tree: [],
+      };
+    }
+
+    if (actualForce) {
       this.invalidateTreeCache(repoName);
     } else {
       const cached = this.treeCache.get(repoName);
@@ -154,10 +168,7 @@ export class WorkspaceService {
       }
     }
 
-    const effectiveOwner =
-      cfg.active_repo?.name === repoName ? cfg.active_repo?.owner : (repoName.includes("/") ? repoName.split("/")[0] : undefined);
-
-    const docsMetadata = docsMetadataService.loadDocsMetadata(repoName);
+    const docsMetadata = docsMetadataService.loadDocsMetadata(repoName, false);
     const metaMap = new Map(docsMetadata.map((d) => [d.path, d]));
     const tree = this.buildTree(repoDir, repoDir, metaMap);
 

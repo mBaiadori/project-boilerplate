@@ -36,7 +36,7 @@ const VALID_SUBVIEWS: SubViewType[] = ['editor', 'edits', 'versions', 'dictionar
 
 export const DashboardView: React.FC<DashboardViewProps> = () => {
   const { org, repoName, subview } = useParams<{ org?: string; repoName: string; subview?: string }>();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
 
   const activeSubView: SubViewType = (subview && VALID_SUBVIEWS.includes(subview as SubViewType))
@@ -62,6 +62,19 @@ export const DashboardView: React.FC<DashboardViewProps> = () => {
     }
   }, [org, activeOrg?.login, selectOrg]);
 
+  // Clear file param from URL if file load failed (prevent loop / lingering error)
+  useEffect(() => {
+    const handleFileLoadError = () => {
+      if (searchParams.has('file')) {
+        const newParams = new URLSearchParams(searchParams);
+        newParams.delete('file');
+        setSearchParams(newParams, { replace: true });
+      }
+    };
+    window.addEventListener('workspace:file-load-error', handleFileLoadError);
+    return () => window.removeEventListener('workspace:file-load-error', handleFileLoadError);
+  }, [searchParams, setSearchParams]);
+
   // Sync Repo from URL parameter with double-invocation protection
   const lastSyncedRepoRef = useRef<string | null>(null);
 
@@ -79,15 +92,35 @@ export const DashboardView: React.FC<DashboardViewProps> = () => {
       return;
     }
 
+    const isRepoSwitch = lastSyncedRepoRef.current !== null && lastSyncedRepoRef.current !== target;
     lastSyncedRepoRef.current = target;
-    selectRepoByName(repoName, fileParam || undefined);
-  }, [repoName, activeRepo?.name, selectRepoByName, fileParam]);
+
+    // Se trocou de repositório, o fileParam da URL pertencia ao repositório anterior; limpa da URL
+    if (isRepoSwitch && fileParam) {
+      const newParams = new URLSearchParams(searchParams);
+      newParams.delete('file');
+      setSearchParams(newParams, { replace: true });
+    }
+
+    const effectiveInitialFile = isRepoSwitch ? undefined : (fileParam || undefined);
+    selectRepoByName(repoName, effectiveInitialFile).then((ok) => {
+      if (!ok) {
+        console.warn(`[DashboardView] Repositório "${repoName}" não encontrado ou não clonado.`);
+      }
+    });
+  }, [repoName, activeRepo?.name, selectRepoByName, fileParam, navigate, searchParams, setSearchParams]);
 
   // Sync File from search parameter ?file=...
   useEffect(() => {
-    if (fileParam && fileParam !== activeFile && activeRepo) {
+    if (
+      fileParam &&
+      fileParam !== activeFile &&
+      activeRepo &&
+      repoName &&
+      activeRepo.name.toLowerCase() === repoName.toLowerCase()
+    ) {
       const currentHash = window.location.hash || '';
-      loadFile(`${fileParam}${currentHash}`, repoName || activeRepo.name);
+      loadFile(`${fileParam}${currentHash}`, activeRepo.name);
     }
   }, [fileParam, activeFile, activeRepo?.name, repoName, loadFile]);
 
@@ -154,12 +187,19 @@ export const DashboardView: React.FC<DashboardViewProps> = () => {
   }, []);
 
   const buildRepoBaseUrl = useCallback((view: SubViewType) => {
-    const currentRepoName = repoName || activeRepo?.name || 'default';
+    const currentRepoName = repoName || activeRepo?.name;
     const effectiveOrg = org || (activeRepo?.owner && activeRepo.owner !== 'local' && !activeRepo.is_local ? activeRepo.owner : (activeOrg?.login && activeOrg.login !== 'local' && !activeRepo?.is_local ? activeOrg.login : null));
-    if (effectiveOrg) {
-      return `/org/${encodeURIComponent(effectiveOrg)}/repo/${encodeURIComponent(currentRepoName)}/${view}`;
+    if (currentRepoName) {
+      if (effectiveOrg) {
+        return `/org/${encodeURIComponent(effectiveOrg)}/repo/${encodeURIComponent(currentRepoName)}/${view}`;
+      }
+      return `/repo/${encodeURIComponent(currentRepoName)}/${view}`;
     }
-    return `/repo/${encodeURIComponent(currentRepoName)}/${view}`;
+
+    if (effectiveOrg) {
+      return `/org/${encodeURIComponent(effectiveOrg)}/${view}`;
+    }
+    return `/${view}`;
   }, [org, repoName, activeRepo, activeOrg?.login]);
 
   const handleSelectView = (view: SubViewType) => {

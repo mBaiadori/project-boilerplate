@@ -1,5 +1,6 @@
-import { KeyRound, ShieldCheck, Monitor, Zap } from "lucide-react";
+import { KeyRound, ShieldCheck, Monitor, Zap, ArrowLeft } from "lucide-react";
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { LanguageSwitcher } from "../components/common/LanguageSwitcher";
 import {
   AlertBanner,
@@ -19,6 +20,7 @@ interface AdminAuthViewProps {
 export const AdminAuthView: React.FC<AdminAuthViewProps> = ({
   onLoginSuccess,
 }) => {
+  const navigate = useNavigate();
   const { loginWithToken, loginLocal } = useAuth();
 
   const [manualToken, setManualToken] = useState("");
@@ -263,16 +265,29 @@ export const AdminAuthView: React.FC<AdminAuthViewProps> = ({
               </Button>
             </form>
 
-            {/* Rodapé Alternativo Modo Local */}
+            {/* Rodapé Alternativo: Voltar ao Login Comum e Modo Local */}
             <div
               style={{
                 display: "flex",
                 alignItems: "center",
-                justifyContent: "flex-end",
+                justifyContent: "space-between",
                 paddingTop: "10px",
                 borderTop: "1px solid var(--color-outline-variant, #e2e8f0)",
               }}
             >
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => navigate("/login")}
+                style={{
+                  fontSize: "11.5px",
+                  color: "var(--color-outline, #64748b)",
+                }}
+              >
+                <ArrowLeft size={13} />
+                <span>Voltar ao login comum</span>
+              </Button>
+
               <Button
                 variant="ghost"
                 size="sm"

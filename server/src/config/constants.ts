@@ -82,6 +82,34 @@ export function resolveRepoDir(repoName: string, ownerOrOrg?: string | { login?:
     ? rawOwner.trim()
     : undefined;
 
+  if (effectiveOwner) {
+    const candidate = path.resolve(PROJECTS_DIR, effectiveOwner, cleanRepo);
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  if (fs.existsSync(PROJECTS_DIR)) {
+    // 1. Tenta diretório local direto
+    const localPath = path.resolve(PROJECTS_DIR, "local", cleanRepo);
+    if (fs.existsSync(localPath)) {
+      return localPath;
+    }
+
+    // 2. Procura nas subpastas de PROJECTS_DIR (ex: mBaiadori, orgs) se o repo já estiver clonado
+    try {
+      const entries = fs.readdirSync(PROJECTS_DIR, { withFileTypes: true });
+      for (const entry of entries) {
+        if (entry.isDirectory() && entry.name !== "local" && !entry.name.startsWith(".")) {
+          const checkPath = path.resolve(PROJECTS_DIR, entry.name, cleanRepo);
+          if (fs.existsSync(checkPath)) {
+            return checkPath;
+          }
+        }
+      }
+    } catch {}
+  }
+
   return path.resolve(PROJECTS_DIR, effectiveOwner || "local", cleanRepo || "local");
 }
 

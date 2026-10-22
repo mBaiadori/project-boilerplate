@@ -35,6 +35,10 @@ interface EphemeralAIToken {
 
 const ephemeralTokens = new Map<string, EphemeralAIToken>();
 
+// Cache em memória para permissões calculadas do GitHub
+const effectivePermissionCache = new Map<string, { timestamp: number; data: EffectiveUserPermission }>();
+const PERM_CACHE_TTL_MS = 3 * 60 * 1000;
+
 export class GovernanceService {
   private getRepoDir(repoName?: string): string {
     const cfg = loadConfig();
@@ -1556,6 +1560,12 @@ export class GovernanceService {
     const targetRepoName = repoName || cfg.active_repo?.name || "local";
     const resolvedFullName = this.resolveRepoFullName(targetRepoName, orgLogin);
 
+    const cacheKey = `${activeUser.toLowerCase()}:${resolvedFullName.toLowerCase()}`;
+    const cachedEntry = effectivePermissionCache.get(cacheKey);
+    if (cachedEntry && Date.now() - cachedEntry.timestamp < PERM_CACHE_TTL_MS) {
+      return cachedEntry.data;
+    }
+
     // Fallback completo para repositório local / sem token remoto
     if (!cfg.token || resolvedFullName.startsWith("local/")) {
       return {
@@ -1598,11 +1608,30 @@ export class GovernanceService {
     const isPersonalRepo = repoOwner.toLowerCase() === activeUser.toLowerCase();
     const targetOrg = orgLogin || (!isPersonalRepo ? repoOwner : null);
 
-    // Se for o próprio repositório pessoal do usuário
+    // Se for o próprio repositório pessoal do usuário, ele é o proprietário com todas as permissões
     if (isPersonalRepo) {
-      isOrgOwner = true;
-      isOrgMember = true;
-      repoPermission = "admin";
+      const result: EffectiveUserPermission = {
+        login: activeUser,
+        isOrgOwner: true,
+        isOrgMember: true,
+        isOutsideCollaborator: false,
+        repoPermission: "admin",
+        roleName: "Owner",
+        allowedActions: {
+          canRead: true,
+          canWrite: true,
+          canTriage: true,
+          canMaintain: true,
+          canAdmin: true,
+          canManageGovernance: true,
+          canManageTeams: true,
+          canDeleteRepo: true,
+          canManageBranchProtection: true,
+        },
+        teamMemberships: [],
+      };
+      effectivePermissionCache.set(cacheKey, { timestamp: Date.now(), data: result });
+      return result;
     }
 
     // 2. Checar papel na organização via credenciais locais e endpoints do GitHub
@@ -1752,7 +1781,7 @@ export class GovernanceService {
       roleName = "Colaborador Externo";
     }
 
-    return {
+    const result: EffectiveUserPermission = {
       login: activeUser,
       isOrgOwner,
       isOrgMember,
@@ -1772,6 +1801,9 @@ export class GovernanceService {
       },
       teamMemberships,
     };
+
+    effectivePermissionCache.set(cacheKey, { timestamp: Date.now(), data: result });
+    return result;
   }
 
   /**

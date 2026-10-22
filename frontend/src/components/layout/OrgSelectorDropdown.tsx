@@ -6,7 +6,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useOrgUiStore } from "../../stores/orgUiStore";
 
 export const OrgSelectorDropdown: React.FC = () => {
-  const { activeOrg, orgs, selectOrg, repos } = useWorkspace();
+  const { activeOrg, orgs, selectOrg, resetActiveRepo } = useWorkspace();
   const { user } = useAuth();
   const { isOrgDropdownOpen, toggleOrgDropdown, closeOrgDropdown } = useOrgUiStore();
   const navigate = useNavigate();
@@ -173,15 +173,8 @@ export const OrgSelectorDropdown: React.FC = () => {
                 onClick={() => {
                   selectOrg(o.login);
                   closeOrgDropdown();
-                  const targetRepos = repos.filter((r) => {
-                    const owner = (r.owner || (r.full_name ? r.full_name.split("/")[0] : "")).toLowerCase();
-                    return owner === o.login.toLowerCase();
-                  });
-                  if (targetRepos.length > 0) {
-                    navigate(`/org/${encodeURIComponent(o.login)}/repo/${encodeURIComponent(targetRepos[0].name)}/editor`);
-                  } else if (o.login === "local") {
-                    navigate("/repo/local/editor");
-                  }
+                  resetActiveRepo();
+                  navigate("/");
                 }}
                 style={{
                   padding: "8px 10px",

@@ -2,9 +2,10 @@ import { FastifyInstance } from 'fastify';
 import { reposService } from './repos.service.js';
 
 export async function reposRoutes(fastify: FastifyInstance) {
-  fastify.get('/api/repos', async (_request, reply) => {
+  fastify.get('/api/repos', async (request, reply) => {
     try {
-      const result = await reposService.listRepos();
+      const { org } = (request.query as any) || {};
+      const result = await reposService.listRepos(org);
       return reply.send(result);
     } catch (err: any) {
       return reply.status(500).send({ error: err.message });

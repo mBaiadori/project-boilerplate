@@ -60,7 +60,7 @@ export const RepoSelectorDropdown: React.FC<RepoSelectorDropdownProps> = ({
 
   const sortedRepos = useMemo(() => {
     return [...(repos || [])].sort((a, b) =>
-      a.name.localeCompare(b.name, undefined, {
+      (a?.name || "").localeCompare(b?.name || "", undefined, {
         numeric: true,
         sensitivity: "base",
       }),
@@ -303,13 +303,14 @@ export const RepoSelectorDropdown: React.FC<RepoSelectorDropdownProps> = ({
           </div>
 
           <div style={{ maxHeight: "220px", overflowY: "auto" }}>
-            {sortedRepos.map((r: Repo) => {
-              const isSelected = !isAllSelected && (currentRepoName || "").toLowerCase() === r.name.toLowerCase();
-              const count = repoOpenCounts[r.name] || 0;
+            {sortedRepos.map((r: Repo, idx: number) => {
+              const repoName = r?.name || "";
+              const isSelected = !isAllSelected && (currentRepoName || "").toLowerCase() === repoName.toLowerCase();
+              const count = repoOpenCounts[repoName] || 0;
 
               return (
                 <div
-                  key={r.name}
+                  key={repoName || idx}
                   role="option"
                   aria-selected={isSelected}
                   onClick={() => handleSelectRepo(r)}
