@@ -849,10 +849,10 @@ export class NotionEditorEngine {
     while (i < lines.length) {
       const line = lines[i];
       // Se for To-Do, encerra o bloco de lista comum
-      if (line.match(/^(\s*)[-*+]\s+\[([ xX])\]\s+/)) {
+      if (line.match(/^(\s*)[-*+•–—]\s+\[([ xX])\]\s+/)) {
         break;
       }
-      const match = line.match(/^(\s*)([-*+]|\d+\.)\s+(.*)$/);
+      const match = line.match(/^(\s*)([-*+•–—]|\d+\.)\s+(.*)$/);
       if (!match) {
         break;
       }
@@ -1088,7 +1088,7 @@ export class NotionEditorEngine {
       }
 
       // 10. Listas com Bullets ou Numeradas (suporte a múltiplos níveis de aninhamento)
-      const listMatch = line.match(/^(\s*)([-*+]|\d+\.)\s+(.*)$/);
+      const listMatch = line.match(/^(\s*)([-*+•–—]|\d+\.)\s+(.*)$/);
       if (listMatch) {
         const { html, nextIndex } = this.parseListBlock(lines, i);
         if (html) {
@@ -1289,17 +1289,15 @@ export class NotionEditorEngine {
       const childLists: HTMLElement[] = [];
 
       for (const child of Array.from(li.childNodes)) {
-        if (child.nodeType === Node.TEXT_NODE) {
-          liText += child.textContent || '';
-        } else if (child.nodeType === Node.ELEMENT_NODE) {
+        if (child.nodeType === Node.ELEMENT_NODE) {
           const el = child as HTMLElement;
           const tag = el.tagName ? el.tagName.toLowerCase() : '';
           if (tag === 'ul' || tag === 'ol') {
             childLists.push(el);
-          } else {
-            liText += this.serializeInline(el);
+            continue;
           }
         }
+        liText += this.serializeNode(child);
       }
 
       const prefix = isOrdered ? `${indent}${idx}. ` : `${indent}- `;
@@ -1446,49 +1444,54 @@ export class NotionEditorEngine {
       });
   }
 
+  serializeNode(node: Node | null): string {
+    if (!node) return '';
+    if (node.nodeType === Node.TEXT_NODE) {
+      return node.textContent || '';
+    }
+    if (node.nodeType === Node.ELEMENT_NODE) {
+      const el = node as HTMLElement;
+      const tag = el.tagName ? el.tagName.toLowerCase() : '';
+
+      // Ignorar ícones (Material Symbols / SVG) para nunca serializar o nome do ícone como texto no Markdown
+      if (
+        el.classList.contains('material-symbols-outlined') || 
+        el.classList.contains('notion-icon') || 
+        el.classList.contains('icon-xs') ||
+        el.classList.contains('icon-sm') ||
+        tag === 'svg'
+      ) {
+        return '';
+      }
+
+      if (tag === 'strong' || tag === 'b') {
+        return `**${this.serializeInline(el)}**`;
+      } else if (tag === 'em' || tag === 'i') {
+        return `*${this.serializeInline(el)}*`;
+      } else if (tag === 's' || tag === 'strike') {
+        return `~~${this.serializeInline(el)}~~`;
+      } else if (tag === 'code') {
+        return `\`${el.textContent || ''}\``;
+      } else if (tag === 'a') {
+        const href = el.getAttribute('href') || '#';
+        let label = this.serializeInline(el);
+        label = label.replace(/^description(?=[a-zA-Z0-9_\sÀ-ÿ])/i, '').trim() || label;
+        return `[${label}](${href})`;
+      } else if (tag === 'br') {
+        return '\n';
+      } else {
+        return this.serializeInline(el);
+      }
+    }
+    return '';
+  }
+
   serializeInline(element: HTMLElement | null): string {
     if (!element) return '';
     let result = '';
-
     element.childNodes.forEach(child => {
-      if (child.nodeType === Node.TEXT_NODE) {
-        result += child.textContent;
-      } else if (child.nodeType === Node.ELEMENT_NODE) {
-        const el = child as HTMLElement;
-        const tag = el.tagName.toLowerCase();
-
-        // Ignorar ícones (Material Symbols / SVG) para nunca serializar o nome do ícone como texto no Markdown
-        if (
-          el.classList.contains('material-symbols-outlined') || 
-          el.classList.contains('notion-icon') || 
-          el.classList.contains('icon-xs') ||
-          el.classList.contains('icon-sm') ||
-          tag === 'svg'
-        ) {
-          return;
-        }
-
-        if (tag === 'strong' || tag === 'b') {
-          result += `**${this.serializeInline(el)}**`;
-        } else if (tag === 'em' || tag === 'i') {
-          result += `*${this.serializeInline(el)}*`;
-        } else if (tag === 's' || tag === 'strike') {
-          result += `~~${this.serializeInline(el)}~~`;
-        } else if (tag === 'code') {
-          result += `\`${el.textContent}\``;
-        } else if (tag === 'a') {
-          const href = el.getAttribute('href') || '#';
-          let label = this.serializeInline(el);
-          label = label.replace(/^description(?=[a-zA-Z0-9_\sÀ-ÿ])/i, '').trim() || label;
-          result += `[${label}](${href})`;
-        } else if (tag === 'br') {
-          result += '\n';
-        } else {
-          result += this.serializeInline(el);
-        }
-      }
+      result += this.serializeNode(child);
     });
-
     return result;
   }
 
@@ -1933,8 +1936,8 @@ export class NotionEditorEngine {
     } else if (text.startsWith('### ')) {
       node.textContent = text.substring(4);
       this.turnBlockInto(parent, 'h3');
-    } else if (text.startsWith('- ') || text.startsWith('* ') || text.startsWith('+ ')) {
-      node.textContent = text.replace(/^[-*+]\s/, '');
+    } else if (text.startsWith('- ') || text.startsWith('* ') || text.startsWith('+ ') || text.startsWith('• ')) {
+      node.textContent = text.replace(/^[-*+•–—]\s/, '');
       const prevEl = parent.previousElementSibling;
       const li = document.createElement('li');
       li.innerHTML = node.textContent || '<br>';
@@ -2511,21 +2514,135 @@ export class NotionEditorEngine {
     this.recordChange();
   }
 
+  convertHtmlToMarkdown(htmlString: string): string {
+    if (typeof DOMParser === 'undefined' || !htmlString) return '';
+    try {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(htmlString, 'text/html');
+      const body = doc.body;
+      if (!body) return '';
+
+      // Remover scripts, estilos e metadados
+      body.querySelectorAll('style, script, meta, link, noscript').forEach(el => el.remove());
+
+      // Desembrulhar nós de contêiner redundantes (div, section, article)
+      let root: HTMLElement = body;
+      while (
+        root.children.length === 1 &&
+        root.firstElementChild &&
+        ['div', 'section', 'article', 'main'].includes(root.firstElementChild.tagName.toLowerCase())
+      ) {
+        root = root.firstElementChild as HTMLElement;
+      }
+
+      const lines: string[] = [];
+      const children = Array.from(root.childNodes);
+
+      for (const node of children) {
+        if (node.nodeType === Node.TEXT_NODE) {
+          const t = node.textContent?.trim();
+          if (t) {
+            lines.push(t);
+            lines.push('');
+          }
+        } else if (node.nodeType === Node.ELEMENT_NODE) {
+          const el = node as HTMLElement;
+          const tag = el.tagName.toLowerCase();
+
+          if (/^h[1-6]$/.test(tag)) {
+            const level = parseInt(tag.charAt(1), 10);
+            lines.push(`${'#'.repeat(level)} ${this.serializeInline(el).trim()}`);
+            lines.push('');
+          } else if (tag === 'p') {
+            const t = this.serializeInline(el).trim();
+            if (t) {
+              lines.push(t);
+              lines.push('');
+            }
+          } else if (tag === 'ul' || tag === 'ol') {
+            const listLines = this.serializeList(el, 0);
+            lines.push(...listLines);
+            lines.push('');
+          } else if (tag === 'pre') {
+            const codeEl = el.querySelector('code') || el;
+            lines.push('```');
+            lines.push((codeEl as HTMLElement).innerText || codeEl.textContent || '');
+            lines.push('```');
+            lines.push('');
+          } else if (tag === 'blockquote') {
+            lines.push(this.serializeBlockquote(el));
+            lines.push('');
+          } else if (tag === 'hr') {
+            lines.push('---');
+            lines.push('');
+          } else if (tag === 'div') {
+            if (el.querySelector('p, ul, ol, h1, h2, h3, h4, h5, h6, pre, blockquote')) {
+              for (const sub of Array.from(el.childNodes)) {
+                if (sub.nodeType === Node.ELEMENT_NODE) {
+                  const subEl = sub as HTMLElement;
+                  const subTag = subEl.tagName.toLowerCase();
+                  if (subTag === 'ul' || subTag === 'ol') {
+                    lines.push(...this.serializeList(subEl, 0));
+                    lines.push('');
+                  } else {
+                    const t = this.serializeInline(subEl).trim();
+                    if (t) { lines.push(t); lines.push(''); }
+                  }
+                }
+              }
+            } else {
+              const t = this.serializeInline(el).trim();
+              if (t) {
+                lines.push(t);
+                lines.push('');
+              }
+            }
+          } else {
+            const t = this.serializeInline(el).trim();
+            if (t) {
+              lines.push(t);
+              lines.push('');
+            }
+          }
+        }
+      }
+
+      return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+    } catch (err) {
+      console.warn('[NotionEditorEngine] Erro ao converter HTML colado para Markdown:', err);
+      return '';
+    }
+  }
+
   handlePaste(e: ClipboardEvent) {
     e.preventDefault();
-    const text = (e.clipboardData || (window as any).clipboardData)?.getData('text/plain') || '';
+    const clipboardData = e.clipboardData || (window as any).clipboardData;
+    let text = clipboardData?.getData('text/plain') || '';
+    const htmlData = clipboardData?.getData('text/html') || '';
+
+    // Se temos HTML na área de transferência com elementos ricos (ex: <code>, <li>, <strong>, etc.)
+    // mas o texto plano perdeu formatações como crases de código (comum ao copiar de saídas renderizadas do ChatGPT ou web),
+    // convertemos o HTML preservando a sintaxe Markdown
+    if (htmlData && (htmlData.includes('<code') || htmlData.includes('<strong') || htmlData.includes('<b') || htmlData.includes('<li') || htmlData.includes('<h'))) {
+      const converted = this.convertHtmlToMarkdown(htmlData);
+      if (converted && converted.trim()) {
+        text = converted;
+      }
+    }
+
     if (!text) return;
 
     // Detect if text contains markdown constructs or multiple lines
     const hasMarkdownOrMultiline =
       text.includes('\n') ||
       /^#{1,6}\s/m.test(text) ||
-      /^[-*+]\s/m.test(text) ||
+      /^[-*+•–—]\s/m.test(text) ||
       /^\d+\.\s/m.test(text) ||
       /^>\s/m.test(text) ||
       /^```/m.test(text) ||
       /\|.*\|/.test(text) ||
       /\*\*.*?\*\*/.test(text) ||
+      /`.*?`/.test(text) ||
       /\[.*?\]\(.*?\)/.test(text);
 
     if (hasMarkdownOrMultiline) {
