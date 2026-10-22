@@ -3,6 +3,7 @@ import { eventsService } from './events.service.js';
 
 export async function eventsRoutes(fastify: FastifyInstance) {
   fastify.get('/api/events', async (request, reply) => {
+    reply.hijack();
     reply.raw.setHeader('Content-Type', 'text/event-stream');
     reply.raw.setHeader('Cache-Control', 'no-cache');
     reply.raw.setHeader('Connection', 'keep-alive');

@@ -62,11 +62,19 @@ export function useVersionsData(onOpenFile?: (path: string) => void) {
   };
 
   // Repository selection state
-  const [selectedRepoFilter, setSelectedRepoFilter] = useState<string>("all");
+  const [selectedRepoFilter, setSelectedRepoFilter] = useState<string>(
+    activeRepo?.name || "all"
+  );
   const [repoEditsCounts, setRepoEditsCounts] = useState<Record<string, number>>({});
   const [allReposDrafts, setAllReposDrafts] = useState<DraftItem[]>([]);
   const [allReposSystemDrafts, setAllReposSystemDrafts] = useState<DraftItem[]>([]);
   const [isLoadingChanges, setIsLoadingChanges] = useState(false);
+
+  useEffect(() => {
+    if (activeRepo?.name && selectedRepoFilter === "all") {
+      setSelectedRepoFilter(activeRepo.name);
+    }
+  }, [activeRepo?.name]);
 
   // Proposal modal state
   const [isProposalModalOpen, setIsProposalModalOpen] = useState(false);
@@ -109,7 +117,13 @@ export function useVersionsData(onOpenFile?: (path: string) => void) {
     setIsLoadingChanges(true);
 
     try {
-      const targetRepoList = repos && repos.length > 0 ? repos : [{ name: activeRepo?.name || "local" }];
+      const clonedRepos = repos.filter((r) => r.is_cloned_locally);
+      const targetRepoList = filter !== "all"
+        ? (repos.find((r) => r.name.toLowerCase() === filter.toLowerCase())
+            ? [repos.find((r) => r.name.toLowerCase() === filter.toLowerCase())!]
+            : [{ name: filter }])
+        : (clonedRepos.length > 0 ? clonedRepos : (activeRepo ? [activeRepo] : [{ name: "local" }]));
+
       const counts: Record<string, number> = {};
       const drafts: DraftItem[] = [];
       const systemDrafts: DraftItem[] = [];
@@ -124,7 +138,7 @@ export function useVersionsData(onOpenFile?: (path: string) => void) {
             const visibleChanges = rChanges.filter((c: any) => c?.path && !isPathHidden(c.path));
             counts[r.name] = visibleChanges.length;
 
-            if (filter === "all" || filter === r.name) {
+            if (filter === "all" || filter.toLowerCase() === r.name.toLowerCase()) {
               for (const c of visibleChanges) {
                 drafts.push({
                   path: c.path.replace(/^\/+/, ""),
@@ -157,7 +171,7 @@ export function useVersionsData(onOpenFile?: (path: string) => void) {
         })
       );
 
-      setRepoEditsCounts(counts);
+      setRepoEditsCounts((prev) => ({ ...prev, ...counts }));
       setAllReposDrafts(drafts);
       setAllReposSystemDrafts(systemDrafts);
     } catch (err) {
@@ -165,7 +179,7 @@ export function useVersionsData(onOpenFile?: (path: string) => void) {
     } finally {
       setIsLoadingChanges(false);
     }
-  }, [selectedRepoFilter, repos, activeRepo?.name]);
+  }, [selectedRepoFilter, repos, activeRepo]);
 
   useEffect(() => {
     loadAllEdits();

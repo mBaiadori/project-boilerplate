@@ -1,5 +1,11 @@
 import React from "react";
-import { Sparkles, FileEdit, Settings, RefreshCw, CloudUpload } from "lucide-react";
+import {
+  Sparkles,
+  FileEdit,
+  Settings,
+  RefreshCw,
+  CloudUpload,
+} from "lucide-react";
 import { PageHeader, Row, Button, Tabs } from "../../../../components/ui";
 import { RepoSelectorDropdown } from "../../../../components/layout/RepoSelectorDropdown";
 import type { TabType } from "../types";
@@ -47,7 +53,11 @@ export const VersionsHeader: React.FC<VersionsHeaderProps> = ({
     <PageHeader
       title="Central de Edições"
       subtitle={
-        <Row gap="sm" align="center" style={{ marginTop: "4px", flexWrap: "wrap" }}>
+        <Row
+          gap="sm"
+          align="center"
+          style={{ marginTop: "4px", flexWrap: "wrap" }}
+        >
           <RepoSelectorDropdown
             value={selectedRepoFilter}
             onChange={(val) => {
@@ -57,9 +67,6 @@ export const VersionsHeader: React.FC<VersionsHeaderProps> = ({
             repoOpenCounts={repoEditsCounts}
             allowAll={true}
           />
-          <span className="ui-text-muted" style={{ fontSize: "12.5px" }}>
-            Revise alterações locais em tempo real, descarte edições ou submeta propostas de evolução.
-          </span>
         </Row>
       }
       icon={
@@ -75,7 +82,10 @@ export const VersionsHeader: React.FC<VersionsHeaderProps> = ({
             color: "var(--md-sys-color-primary, #1a73e8)",
           }}
         >
-          <span className="material-symbols-outlined" style={{ fontSize: "24px" }}>
+          <span
+            className="material-symbols-outlined"
+            style={{ fontSize: "24px" }}
+          >
             history_edu
           </span>
         </div>
@@ -88,7 +98,10 @@ export const VersionsHeader: React.FC<VersionsHeaderProps> = ({
             variant="primary"
             size="sm"
             icon={
-              <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>
+              <span
+                className="material-symbols-outlined"
+                style={{ fontSize: "16px" }}
+              >
                 alt_route
               </span>
             }
@@ -123,7 +136,9 @@ export const VersionsHeader: React.FC<VersionsHeaderProps> = ({
             onClick={handleSync}
             isLoading={isSyncing}
           >
-            {isSyncing ? "Sincronizando..." : `Sincronizar com ${providerLabel}`}
+            {isSyncing
+              ? "Sincronizando..."
+              : `Sincronizar com ${providerLabel}`}
           </Button>
         </Row>
       }

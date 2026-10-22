@@ -229,6 +229,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
   const effectivePermissionsByRepoRef = useRef<Record<string, EffectiveUserPermission>>({});
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const statusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastRemoteCheckTimeRef = useRef<Record<string, number>>({});
 
   const getRepoOwnerOrOrg = useCallback((targetRepo?: Repo | null): string | undefined => {
     const r = targetRepo !== undefined ? targetRepo : activeRepoRef.current;
@@ -347,7 +348,15 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
       }
       if (res.ok && res.data?.repos) {
         const cleanRepos = res.data.repos.filter((r) => r.name !== 'default' && r.name !== '_default');
-        setRepos(cleanRepos);
+        setRepos((prev) => {
+          if (
+            prev.length === cleanRepos.length &&
+            prev.every((r, idx) => r.name === cleanRepos[idx]?.name && r.full_name === cleanRepos[idx]?.full_name)
+          ) {
+            return prev;
+          }
+          return cleanRepos;
+        });
       }
     } catch (err) {
       console.error("[WorkspaceContext] Erro ao carregar repositórios:", err);
@@ -536,7 +545,9 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
     if (!repo) return;
     setIsLoadingTree(true);
     try {
-      const targetObj = targetRepo ? repos.find((r) => r.name.toLowerCase() === targetRepo.toLowerCase()) : activeRepoRef.current;
+      const targetObj = targetRepo
+        ? (reposRef.current.find((r) => r.name.toLowerCase() === targetRepo.toLowerCase()) || null)
+        : activeRepoRef.current;
       const owner = getRepoOwnerOrOrg(targetObj);
       const data = await API.getProjectTree(repo, owner);
       treesByRepoRef.current[repo] = data.tree || [];
@@ -549,7 +560,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
     } finally {
       setIsLoadingTree(false);
     }
-  }, [repos, getRepoOwnerOrOrg]);
+  }, [getRepoOwnerOrOrg]);
 
   const loadFile = useCallback(
     async (rawFilePath: string, targetRepo?: string) => {
@@ -795,12 +806,21 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, []);
 
-  const loadProjectConfig = useCallback(async () => {
-    if (!activeRepoRef.current) return null;
+  const loadProjectConfig = useCallback(async (targetRepoName?: string) => {
+    const repoName = targetRepoName || activeRepoRef.current?.name;
+    if (!repoName) return null;
     try {
-      const res = await API.getProjectConfig(activeRepoRef.current.name);
+      const res = await API.getProjectConfig(repoName);
       if (res.ok && res.data) {
         setProjectConfig(res.data);
+        const cfg = res.data;
+        setProjectMetaOptions({
+          statuses: Array.isArray(cfg.statuses) ? cfg.statuses : [],
+          categories: Array.isArray(cfg.categories) ? cfg.categories : [],
+          tags: Array.isArray(cfg.tags) ? cfg.tags : [],
+          badges: Array.isArray(cfg.badges) ? cfg.badges : [],
+          departments: Array.isArray(cfg.departments) && cfg.departments.length > 0 ? cfg.departments : [],
+        });
         return res.data;
       }
     } catch (err) {
@@ -1079,6 +1099,14 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
         }
         return false;
       }
+
+      const now = Date.now();
+      const lastCheck = lastRemoteCheckTimeRef.current[repoName] || 0;
+      if (now - lastCheck < 60_000 && remoteUpdatesByRepoRef.current[repoName] !== undefined) {
+        return Boolean(remoteUpdatesByRepoRef.current[repoName]);
+      }
+      lastRemoteCheckTimeRef.current[repoName] = now;
+
       try {
         const res = await API.checkRemoteGitUpdates(repoName);
         if (res.ok && res.data) {
@@ -1271,16 +1299,17 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
 
         // Executa carregamentos secundários e verificação de commits remotos em segundo plano sem bloquear a árvore/editor
         setTimeout(() => {
-          Promise.allSettled([
-            loadProjectMetadataOptions(),
-            loadProjectConfig(),
-            loadDictionaryTerms(),
+          const tasks: Promise<any>[] = [
+            loadProjectConfig(repo.name),
             refreshPendingChanges(repo.name),
-            refreshGitStatus(repo.name),
             refreshGitLog(15, repo.name),
             refreshWhatsNew(),
             checkRemoteUpdates(repo.name),
-          ]).catch(() => {});
+          ];
+          if (dictionaryTermsRef.current.length === 0) {
+            tasks.push(loadDictionaryTerms());
+          }
+          Promise.allSettled(tasks).catch(() => {});
         }, 50);
 
         return { success: true, is_ready: true, diagnosis };
@@ -1691,11 +1720,31 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
     };
   }, []);
 
-  // Carrega status inicial e eventos SSE de Fast Refresh
+  // Carrega repositórios ao autenticar ou trocar de organização
   useEffect(() => {
     if (!isAuthenticated) return;
-
     loadRepos();
+    if (dictionaryTermsRef.current.length === 0) {
+      loadDictionaryTerms().catch(() => {});
+    }
+  }, [isAuthenticated, user?.login, activeOrg?.login, loadRepos, loadDictionaryTerms]);
+
+  // Refs para manter callbacks atualizados sem recriar a conexão SSE
+  const refreshPendingChangesRef = useRef(refreshPendingChanges);
+  refreshPendingChangesRef.current = refreshPendingChanges;
+
+  const loadTreeRef = useRef(loadTree);
+  loadTreeRef.current = loadTree;
+
+  const refreshWhatsNewRef = useRef(refreshWhatsNew);
+  refreshWhatsNewRef.current = refreshWhatsNew;
+
+  const reloadActiveFileRef = useRef(reloadActiveFile);
+  reloadActiveFileRef.current = reloadActiveFile;
+
+  // Conexão SSE de Fast Refresh (uma única conexão persistente por sessão autenticada)
+  useEffect(() => {
+    if (!isAuthenticated) return;
 
     let evtSource: EventSource | null = null;
     let sseDebounceTimer: any = null;
@@ -1706,11 +1755,11 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
       const debouncedRefresh = () => {
         if (sseDebounceTimer) clearTimeout(sseDebounceTimer);
         sseDebounceTimer = setTimeout(() => {
-          refreshPendingChanges();
-          loadTree();
-          refreshWhatsNew();
+          refreshPendingChangesRef.current?.();
+          loadTreeRef.current?.();
+          refreshWhatsNewRef.current?.();
           if (activeFileRef.current) {
-            reloadActiveFile(true);
+            reloadActiveFileRef.current?.(true);
           }
         }, 300);
       };
@@ -1722,7 +1771,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
           const changedPath = data?.file;
           const currentFile = activeFileRef.current;
           if (currentFile && changedPath && (changedPath.endsWith(currentFile) || currentFile.endsWith(changedPath))) {
-            reloadActiveFile(true);
+            reloadActiveFileRef.current?.(true);
           }
         } catch {}
         debouncedRefresh();
@@ -1760,16 +1809,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
       if (sseDebounceTimer) clearTimeout(sseDebounceTimer);
       if (evtSource) evtSource.close();
     };
-  }, [
-    isAuthenticated,
-    user?.login,
-    loadRepos,
-    refreshPendingChanges,
-    loadTree,
-    refreshGitStatus,
-    refreshWhatsNew,
-    reloadActiveFile,
-  ]);
+  }, [isAuthenticated, user?.login]);
 
   return (
     <WorkspaceContext.Provider
