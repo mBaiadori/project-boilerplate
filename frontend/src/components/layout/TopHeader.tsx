@@ -222,7 +222,7 @@ export const TopHeader: React.FC<TopHeaderProps> = React.memo(
               }}
             >
               <CloudDownload size={13} />
-              Atualização remota disponível
+              Atualização disponível
             </button>
           )}
         </div>

@@ -1,6 +1,7 @@
 import React from "react";
 import { Card, Button, Badge } from "../../../../components/ui";
 import { DiffViewer } from "../../../../components/common";
+import { VisualMarkdownDiff } from "../../../../components/editor/VisualMarkdownDiff";
 import { getSystemFileFriendlyName } from "../../../../utils/hidden-files";
 import type { DraftItem } from "../types";
 
@@ -219,10 +220,25 @@ export const SystemDraftsTab: React.FC<SystemDraftsTabProps> = ({
 
               {/* Diff Viewer Body */}
               {isExpanded && (
-                <DiffViewer
-                  diffText={diffText}
-                  isLoading={isLoading}
-                />
+                <div style={{ padding: "8px 12px 12px 12px", borderTop: "1px solid var(--color-border-subtle, #e2e8f0)" }}>
+                  {(f.old_content || f.new_content) ? (
+                    <div style={{ borderRadius: "6px", overflow: "hidden", border: "1px solid var(--color-border-subtle, #e2e8f0)" }}>
+                      <VisualMarkdownDiff
+                        oldContent={f.old_content || ""}
+                        newContent={f.new_content || ""}
+                        fileName={f.path}
+                        oldTitle="Versão Base"
+                        newTitle="Rascunho Atual"
+                        initialViewMode="split"
+                      />
+                    </div>
+                  ) : (
+                    <DiffViewer
+                      diffText={diffText}
+                      isLoading={isLoading}
+                    />
+                  )}
+                </div>
               )}
             </Card>
           );

@@ -1266,24 +1266,28 @@ export async function getGitDiff(
 
   // 1. Try git diff HEAD (covers both staged and unstaged modifications against last commit)
   let diffRes = await executeGitCommand(`git diff HEAD${pathArg}`, repoDir);
-  if (diffRes.success && diffRes.stdout) {
-    return { diff: diffRes.stdout };
+  let baseDiff = (diffRes.success && diffRes.stdout) ? diffRes.stdout : "";
+
+  if (!baseDiff) {
+    // 2. Try working tree diff
+    diffRes = await executeGitCommand(`git diff${pathArg}`, repoDir);
+    if (diffRes.success && diffRes.stdout) {
+      baseDiff = diffRes.stdout;
+    }
   }
 
-  // 2. Try working tree diff
-  diffRes = await executeGitCommand(`git diff${pathArg}`, repoDir);
-  if (diffRes.success && diffRes.stdout) {
-    return { diff: diffRes.stdout };
-  }
-
-  // 3. Try cached/staged diff
-  diffRes = await executeGitCommand(`git diff --cached${pathArg}`, repoDir);
-  if (diffRes.success && diffRes.stdout) {
-    return { diff: diffRes.stdout };
+  if (!baseDiff) {
+    // 3. Try cached/staged diff
+    diffRes = await executeGitCommand(`git diff --cached${pathArg}`, repoDir);
+    if (diffRes.success && diffRes.stdout) {
+      baseDiff = diffRes.stdout;
+    }
   }
 
   // 4. If filePath is untracked, read the file content and format as added lines
   if (cleanPath) {
+    if (baseDiff) return { diff: baseDiff };
+
     const fullPath = path.join(repoDir, cleanPath);
     if (fs.existsSync(fullPath) && !fs.statSync(fullPath).isDirectory()) {
       try {
@@ -1294,6 +1298,33 @@ export async function getGitDiff(
         return { diff: diffHeader + diffBody };
       } catch {}
     }
+  } else {
+    // When no specific file requested, append any untracked files to the overall diff
+    try {
+      const statusRes = await executeGitCommand("git status --porcelain=v1 -uall", repoDir);
+      if (statusRes.success && statusRes.stdout) {
+        const untracked = statusRes.stdout
+          .split("\n")
+          .filter((l) => l.startsWith("?? "))
+          .map((l) => l.substring(3).trim());
+
+        let extraDiff = "";
+        for (const uPath of untracked) {
+          const fullPath = path.join(repoDir, uPath);
+          if (fs.existsSync(fullPath) && !fs.statSync(fullPath).isDirectory()) {
+            try {
+              const content = fs.readFileSync(fullPath, "utf-8");
+              const lines = content.split("\n");
+              extraDiff += `--- /dev/null\n+++ b/${uPath}\n@@ -0,0 +1,${lines.length} @@\n` + lines.map((l) => `+${l}`).join("\n") + "\n";
+            } catch {}
+          }
+        }
+        if (extraDiff) {
+          return { diff: baseDiff ? `${baseDiff}\n${extraDiff}` : extraDiff };
+        }
+      }
+    } catch {}
+    if (baseDiff) return { diff: baseDiff };
   }
 
   return { diff: "" };

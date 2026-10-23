@@ -11,7 +11,7 @@ import {
   saveRepoWorkspaceChanges,
 } from "../../config/storage.js";
 import { computeDiff } from "../../utils/diff.js";
-import { isGitRepo, executeGitCommand } from "../../utils/git.js";
+import { isGitRepo, executeGitCommand, getGitStatus } from "../../utils/git.js";
 import {
   docsMetadataService,
   generateDocId,
@@ -817,16 +817,97 @@ export class WorkspaceService {
     };
   }
 
-  getWorkspaceChanges(targetRepoName?: string) {
+  async getWorkspaceChanges(targetRepoName?: string) {
     const cfg = loadConfig();
     const repoName = targetRepoName || cfg.active_repo?.name || "local";
     const activeRepo = cfg.repos?.find((r: any) => r.name === repoName) || (cfg.active_repo?.name === repoName ? cfg.active_repo : { name: repoName, full_name: repoName, is_local: true });
 
     const repoDir = this.getRepoDir(repoName);
     const hiddenList = loadHiddenFiles(repoDir);
-    const allRaw = cfg.workspace_changes?.[repoName] || loadRepoWorkspaceChanges(repoName);
+    const storedChanges = cfg.workspace_changes?.[repoName] || loadRepoWorkspaceChanges(repoName);
+
+    // Map existing stored changes by clean relative path
+    const mergedMap = new Map<string, any>();
+    for (const c of storedChanges) {
+      if (c?.path) {
+        mergedMap.set(c.path.trim().replace(/^\/+/, ""), { ...c });
+      }
+    }
+
+    // Se o diretório for um repositório git, reconcilia com alterações externas/do agente
+    if (await isGitRepo(repoDir)) {
+      try {
+        const gitStatus = await getGitStatus(repoDir);
+        const allGitFiles = [
+          ...(gitStatus.files || []),
+          ...(gitStatus.systemFiles || []),
+        ];
+
+        for (const gf of allGitFiles) {
+          const cleanPath = gf.path.trim().replace(/^\/+/, "");
+          if (!cleanPath || isPathHidden(cleanPath, hiddenList)) continue;
+
+          // Se já está no map de alterações da UI, mantém os dados originais preservados
+          if (mergedMap.has(cleanPath)) continue;
+
+          const fullPath = path.join(repoDir, cleanPath);
+          const isAdded = gf.status === "??" || gf.status === "A";
+          const isDeleted = gf.status === "D";
+
+          let oldContent = "";
+          let newContent = "";
+          const changeType: "ADDED" | "MODIFIED" | "DELETED" = isAdded
+            ? "ADDED"
+            : isDeleted
+              ? "DELETED"
+              : "MODIFIED";
+
+          if (isAdded) {
+            if (fs.existsSync(fullPath) && !fs.statSync(fullPath).isDirectory()) {
+              try {
+                newContent = fs.readFileSync(fullPath, "utf-8");
+              } catch {}
+            }
+          } else if (isDeleted) {
+            const showRes = await executeGitCommand(
+              `git show HEAD:"${cleanPath}"`,
+              repoDir,
+            );
+            if (showRes.success && showRes.stdout) {
+              oldContent = showRes.stdout;
+            }
+          } else {
+            // MODIFIED
+            const showRes = await executeGitCommand(
+              `git show HEAD:"${cleanPath}"`,
+              repoDir,
+            );
+            if (showRes.success && showRes.stdout) {
+              oldContent = showRes.stdout;
+            }
+            if (fs.existsSync(fullPath) && !fs.statSync(fullPath).isDirectory()) {
+              try {
+                newContent = fs.readFileSync(fullPath, "utf-8");
+              } catch {}
+            }
+          }
+
+          mergedMap.set(cleanPath, {
+            path: cleanPath,
+            type: changeType,
+            old_content: oldContent,
+            new_content: newContent,
+            timestamp: new Date().toISOString(),
+          });
+        }
+      } catch (err) {
+        console.warn("[WorkspaceService] Erro ao reconciliar status git com workspace_changes:", err);
+      }
+    }
+
+    const allRaw = Array.from(mergedMap.values());
     const rawDocChanges = allRaw.filter(
-      (c) => !isPathHidden(c.path, hiddenList),
+      (c) => !isPathHidden(c.path, hiddenList) && !isSystemPath(c.path),
     );
     const rawSystemChanges = allRaw.filter(
       (c) => isSystemPath(c.path),

@@ -9,6 +9,8 @@ export interface DraftItem {
   additions?: number;
   deletions?: number;
   diff_text?: string;
+  old_content?: string;
+  new_content?: string;
 }
 
 export interface VersionsSubViewProps {

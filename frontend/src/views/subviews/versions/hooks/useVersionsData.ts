@@ -148,6 +148,8 @@ export function useVersionsData(onOpenFile?: (path: string) => void) {
                   additions: c.additions,
                   deletions: c.deletions,
                   diff_text: c.diff_text || c.diff,
+                  old_content: c.old_content || "",
+                  new_content: c.new_content || "",
                 });
               }
 
@@ -161,6 +163,8 @@ export function useVersionsData(onOpenFile?: (path: string) => void) {
                     additions: s.additions,
                     deletions: s.deletions,
                     diff_text: s.diff_text || s.diff,
+                    old_content: s.old_content || "",
+                    new_content: s.new_content || "",
                   });
                 }
               }
@@ -513,7 +517,7 @@ export function useVersionsData(onOpenFile?: (path: string) => void) {
   };
 
   const getDraftDiffInfo = (filePath: string, targetRepo?: string) => {
-    if (!filePath) return { diffText: "", additions: 0, deletions: 0, type: undefined };
+    if (!filePath) return { diffText: "", additions: 0, deletions: 0, type: undefined, oldContent: "", newContent: "" };
     const cleanPath = filePath.replace(/^\/+/, "");
     const item = allDraftFiles.find(
       (c) => c.path === cleanPath && (!targetRepo || c.repoName === targetRepo)
@@ -533,7 +537,14 @@ export function useVersionsData(onOpenFile?: (path: string) => void) {
         dels = 0;
       }
     }
-    return { diffText, additions: adds, deletions: dels, type: item?.type };
+    return {
+      diffText,
+      additions: adds,
+      deletions: dels,
+      type: item?.type,
+      oldContent: item?.old_content || "",
+      newContent: item?.new_content || "",
+    };
   };
 
   const whatsNewFiles = useMemo(() => {

@@ -2,6 +2,7 @@ import React from "react";
 import { FolderGit2, Trash2, Send, CheckCircle, ChevronRight } from "lucide-react";
 import { Modal, Row, Button, Badge, FormField, Input, Textarea } from "../../../../components/ui";
 import { DiffViewer } from "../../../../components/common";
+import { VisualMarkdownDiff } from "../../../../components/editor/VisualMarkdownDiff";
 import type { DraftItem } from "../types";
 import type { Repo } from "../../../../types";
 
@@ -21,6 +22,8 @@ interface ProposalModalProps {
     additions: number;
     deletions: number;
     type?: string;
+    oldContent?: string;
+    newContent?: string;
   };
   toggleDraftFile: (path: string, repoName?: string) => void;
   handleDiscard: (path: string, repoName?: string) => void;
@@ -311,8 +314,21 @@ export const ProposalModal: React.FC<ProposalModalProps> = ({
                     </div>
 
                     {isExpanded && (
-                      <div style={{ borderTop: "1px solid var(--color-border-subtle, #e2e8f0)" }}>
-                        <DiffViewer diffText={diffText} isLoading={isLoading} />
+                      <div style={{ borderTop: "1px solid var(--color-border-subtle, #e2e8f0)", padding: "8px" }}>
+                        {(file.old_content || file.new_content) ? (
+                          <div style={{ borderRadius: "6px", overflow: "hidden", border: "1px solid var(--color-border-subtle, #e2e8f0)" }}>
+                            <VisualMarkdownDiff
+                              oldContent={file.old_content || ""}
+                              newContent={file.new_content || ""}
+                              fileName={file.path}
+                              oldTitle="Versão Base"
+                              newTitle="Nova Versão"
+                              initialViewMode="split"
+                            />
+                          </div>
+                        ) : (
+                          <DiffViewer diffText={diffText} isLoading={isLoading} />
+                        )}
                       </div>
                     )}
                   </div>

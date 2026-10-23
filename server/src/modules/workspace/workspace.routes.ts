@@ -335,7 +335,7 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
 
   fastify.get("/api/workspace/changes", async (request, reply) => {
     const query = request.query as { repo?: string };
-    return reply.send(workspaceService.getWorkspaceChanges(query.repo));
+    return reply.send(await workspaceService.getWorkspaceChanges(query.repo));
   });
 
   fastify.post("/api/workspace/discard", async (request, reply) => {
@@ -358,7 +358,7 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
   fastify.get("/api/project/status", async (request, reply) => {
     const query = request.query as { repo?: string };
     const treeData = await workspaceService.getTree(query.repo);
-    const changesData = workspaceService.getWorkspaceChanges(query.repo);
+    const changesData = await workspaceService.getWorkspaceChanges(query.repo);
     return reply.send({
       repo: treeData.repo,
       total_files: treeData.tree.length,

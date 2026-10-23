@@ -10,6 +10,7 @@ import {
   Textarea,
 } from "../../../../components/ui";
 import { DiffViewer } from "../../../../components/common";
+import { VisualMarkdownDiff } from "../../../../components/editor/VisualMarkdownDiff";
 import type { DraftItem } from "../types";
 
 interface DraftsTabProps {
@@ -27,6 +28,8 @@ interface DraftsTabProps {
     additions: number;
     deletions: number;
     type?: string;
+    oldContent?: string;
+    newContent?: string;
   };
   loadingDraftDiffs: Record<string, boolean>;
   handleOpenFileClick: (path: string) => void;
@@ -190,7 +193,7 @@ export const DraftsTab: React.FC<DraftsTabProps> = ({
               if (!file?.path) return null;
               const fileKey = `${file.repoName}:${file.path}`;
               const isExpanded = !!expandedDraftFiles[fileKey];
-              const { diffText, additions, deletions } = getDraftDiffInfo(
+              const { diffText, additions, deletions, oldContent, newContent } = getDraftDiffInfo(
                 file.path,
                 file.repoName,
               );
@@ -400,7 +403,45 @@ export const DraftsTab: React.FC<DraftsTabProps> = ({
 
                   {/* Accordion Diff View */}
                   {isExpanded && (
-                    <DiffViewer diffText={diffText} isLoading={isLoadingDiff} />
+                    <div
+                      style={{
+                        padding: "12px 16px 16px 16px",
+                        background: "var(--color-surface-container-lowest, #ffffff)",
+                        borderTop: "1px solid var(--color-border-subtle, #e2e8f0)",
+                      }}
+                    >
+                      {isLoadingDiff ? (
+                        <div
+                          style={{
+                            padding: "24px",
+                            textAlign: "center",
+                            color: "var(--color-text-muted)",
+                            fontSize: "13px",
+                          }}
+                        >
+                          Carregando diferenças da versão...
+                        </div>
+                      ) : (oldContent || newContent || file.old_content || file.new_content) ? (
+                        <div
+                          style={{
+                            borderRadius: "8px",
+                            overflow: "hidden",
+                            border: "1px solid var(--color-border-subtle, #e2e8f0)",
+                          }}
+                        >
+                          <VisualMarkdownDiff
+                            oldContent={oldContent || file.old_content || ""}
+                            newContent={newContent || file.new_content || ""}
+                            fileName={file.path}
+                            oldTitle="Versão Base"
+                            newTitle="Rascunho Atual"
+                            initialViewMode="split"
+                          />
+                        </div>
+                      ) : (
+                        <DiffViewer diffText={diffText} isLoading={isLoadingDiff} />
+                      )}
+                    </div>
                   )}
                 </div>
               );
