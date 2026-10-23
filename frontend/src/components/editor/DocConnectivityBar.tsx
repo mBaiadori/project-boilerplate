@@ -3,6 +3,7 @@ import { useSecurity } from "../../context/SecurityContext";
 import { useWorkspace } from "../../context/WorkspaceContext";
 import { API } from "../../services/api";
 import type { StatusItem, TaxonomyItem } from "../../types";
+import { useTemplateStore } from "../../stores/templateStore";
 
 interface DocConnectivityBarProps {
   filePath: string;
@@ -123,15 +124,24 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
 }) => {
   const { fileMetadata, updateFileMetadata, projectMetaOptions } =
     useWorkspace();
+  const { templates, fetchTemplates } = useTemplateStore();
   const [contextData, setContextData] = useState<any>(null);
   const [showConsumers, setShowConsumers] = useState(false);
   const [showDeps, setShowDeps] = useState(false);
   const [showStatusPicker, setShowStatusPicker] = useState(false);
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [showTagPicker, setShowTagPicker] = useState(false);
+  const [showTemplatePicker, setShowTemplatePicker] = useState(false);
+  const [templateSearchInput, setTemplateSearchInput] = useState("");
   const [newTagInput, setNewTagInput] = useState("");
   const [customCategoryInput, setCustomCategoryInput] = useState("");
   const barRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!templates || templates.length === 0) {
+      fetchTemplates();
+    }
+  }, [templates, fetchTemplates]);
 
   const loadContext = React.useCallback(async () => {
     if (!filePath) return;
@@ -179,6 +189,7 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
         setShowStatusPicker(false);
         setShowCategoryPicker(false);
         setShowTagPicker(false);
+        setShowTemplatePicker(false);
       }
     };
     document.addEventListener("mousedown", handleOutsideClick);
@@ -292,6 +303,35 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
     : null;
   const catColor = activeCatObj?.color || "#3b82f6";
 
+  const currentTemplateId = fileMetadata?.templateId || "";
+  const activeTemplate = useMemo(() => {
+    if (!currentTemplateId) return null;
+    return (
+      templates.find(
+        (t) =>
+          t.id === currentTemplateId || t.templateName === currentTemplateId,
+      ) || null
+    );
+  }, [templates, currentTemplateId]);
+
+  const filteredTemplates = useMemo(() => {
+    if (!templateSearchInput.trim()) return templates;
+    const q = templateSearchInput.toLowerCase();
+    return templates.filter(
+      (t) =>
+        t.title?.toLowerCase().includes(q) ||
+        t.id?.toLowerCase().includes(q) ||
+        t.category?.toLowerCase().includes(q) ||
+        t.description?.toLowerCase().includes(q),
+    );
+  }, [templates, templateSearchInput]);
+
+  const handleTemplateChange = (newTemplateId: string) => {
+    updateFileMetadata({ templateId: newTemplateId });
+    setShowTemplatePicker(false);
+    setTemplateSearchInput("");
+  };
+
   return (
     <div
       ref={barRef}
@@ -324,6 +364,7 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
             onClick={() => {
               setShowStatusPicker(!showStatusPicker);
               setShowCategoryPicker(false);
+              setShowTemplatePicker(false);
               setShowTagPicker(false);
               setShowConsumers(false);
               setShowDeps(false);
@@ -493,6 +534,7 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
             onClick={() => {
               setShowCategoryPicker(!showCategoryPicker);
               setShowStatusPicker(false);
+              setShowTemplatePicker(false);
               setShowTagPicker(false);
               setShowConsumers(false);
               setShowDeps(false);
@@ -712,6 +754,288 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
           )}
         </div>
 
+        {/* 2.5 Template Chip & Popover */}
+        <div style={{ position: "relative" }}>
+          <button
+            type="button"
+            onClick={() => {
+              setShowTemplatePicker(!showTemplatePicker);
+              setShowStatusPicker(false);
+              setShowCategoryPicker(false);
+              setShowTagPicker(false);
+              setShowConsumers(false);
+              setShowDeps(false);
+            }}
+            style={{
+              fontSize: "11px",
+              padding: "2.5px 8px",
+              borderRadius: "4px",
+              fontWeight: 500,
+              backgroundColor: currentTemplateId
+                ? "rgba(99, 102, 241, 0.08)"
+                : "transparent",
+              color: currentTemplateId
+                ? "#4f46e5"
+                : "var(--color-outline, #64748b)",
+              border: currentTemplateId
+                ? "1px solid rgba(99, 102, 241, 0.3)"
+                : "1px dashed var(--color-outline-variant, #cbd5e1)",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "4px",
+              cursor: "pointer",
+              transition: "all 0.15s ease",
+            }}
+            title={
+              currentTemplateId
+                ? `Template: ${activeTemplate?.title || currentTemplateId} (Clique para alterar ou desvincular)`
+                : "Clique para associar um template a este documento"
+            }
+          >
+            <span
+              className="material-symbols-outlined"
+              style={{ fontSize: "13px", opacity: 0.85 }}
+            >
+              {currentTemplateId ? "description" : "add"}
+            </span>
+            <span>
+              {currentTemplateId
+                ? (activeTemplate?.title || currentTemplateId)
+                : "Template"}
+            </span>
+            <span
+              className="material-symbols-outlined"
+              style={{ fontSize: "13px", opacity: 0.6 }}
+            >
+              expand_more
+            </span>
+          </button>
+
+          {showTemplatePicker && (
+            <div
+              style={{
+                position: "absolute",
+                top: "calc(100% + 5px)",
+                left: 0,
+                background: "var(--color-surface, #ffffff)",
+                border: "1px solid var(--color-outline-variant, #cbd5e1)",
+                borderRadius: "8px",
+                boxShadow:
+                  "0 10px 25px -5px rgba(0,0,0,0.14), 0 8px 10px -6px rgba(0,0,0,0.06)",
+                padding: "8px",
+                minWidth: "240px",
+                maxWidth: "300px",
+                zIndex: 120,
+                display: "flex",
+                flexDirection: "column",
+                gap: "6px",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: "10px",
+                  fontWeight: 700,
+                  color: "var(--color-outline, #64748b)",
+                  padding: "2px 4px",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.05em",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                }}
+              >
+                <span>Associar Template</span>
+                {currentTemplateId && (
+                  <span style={{ fontSize: "9px", color: "var(--color-primary, #4f46e5)" }}>
+                    Vinculado
+                  </span>
+                )}
+              </div>
+
+              {/* Input de busca rápida */}
+              <div style={{ position: "relative" }}>
+                <input
+                  type="text"
+                  placeholder="Buscar template..."
+                  value={templateSearchInput}
+                  onChange={(e) => setTemplateSearchInput(e.target.value)}
+                  style={{
+                    fontSize: "11px",
+                    padding: "4px 8px 4px 24px",
+                    borderRadius: "4px",
+                    border: "1px solid var(--color-outline-variant, #cbd5e1)",
+                    width: "100%",
+                    outline: "none",
+                    boxSizing: "border-box",
+                  }}
+                  autoFocus
+                />
+                <span
+                  className="material-symbols-outlined"
+                  style={{
+                    position: "absolute",
+                    left: "6px",
+                    top: "5px",
+                    fontSize: "13px",
+                    color: "var(--color-outline, #94a3b8)",
+                    pointerEvents: "none",
+                  }}
+                >
+                  search
+                </span>
+              </div>
+
+              {/* Opção Desvincular / Nenhum */}
+              <button
+                type="button"
+                onClick={() => handleTemplateChange("")}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  padding: "5px 8px",
+                  borderRadius: "5px",
+                  border: "none",
+                  background: !currentTemplateId
+                    ? "var(--color-surface-container, #f1f5f9)"
+                    : "transparent",
+                  color: "var(--color-outline, #64748b)",
+                  cursor: "pointer",
+                  fontSize: "11.5px",
+                  textAlign: "left",
+                  width: "100%",
+                }}
+                className="dropdown-item-hover"
+              >
+                <span
+                  style={{
+                    width: "8px",
+                    height: "8px",
+                    borderRadius: "50%",
+                    background: "#94a3b8",
+                  }}
+                />
+                <span>- (Nenhum template vinculado)</span>
+              </button>
+
+              <div
+                style={{
+                  maxHeight: "200px",
+                  overflowY: "auto",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "2px",
+                }}
+              >
+                {filteredTemplates.length === 0 ? (
+                  <div
+                    style={{
+                      fontSize: "11px",
+                      color: "var(--color-outline, #94a3b8)",
+                      padding: "8px 4px",
+                      textAlign: "center",
+                    }}
+                  >
+                    Nenhum template encontrado
+                  </div>
+                ) : (
+                  filteredTemplates.map((tpl) => {
+                    const isSelected =
+                      currentTemplateId === tpl.id ||
+                      currentTemplateId === tpl.templateName;
+                    return (
+                      <button
+                        key={tpl.id}
+                        type="button"
+                        onClick={() => handleTemplateChange(tpl.id)}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          padding: "5px 8px",
+                          borderRadius: "5px",
+                          border: "none",
+                          background: isSelected
+                            ? "rgba(99, 102, 241, 0.12)"
+                            : "transparent",
+                          cursor: "pointer",
+                          fontSize: "11.5px",
+                          textAlign: "left",
+                          width: "100%",
+                          gap: "6px",
+                        }}
+                        className="dropdown-item-hover"
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "6px",
+                            minWidth: 0,
+                            flex: 1,
+                          }}
+                        >
+                          <span
+                            className="material-symbols-outlined"
+                            style={{
+                              fontSize: "14px",
+                              color: isSelected
+                                ? "#4f46e5"
+                                : "var(--color-outline, #64748b)",
+                            }}
+                          >
+                            description
+                          </span>
+                          <span
+                            style={{
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                              fontWeight: isSelected ? 600 : 400,
+                              color: isSelected
+                                ? "#4f46e5"
+                                : "var(--color-text-primary, #0f172a)",
+                            }}
+                            title={tpl.title}
+                          >
+                            {tpl.title}
+                          </span>
+                        </div>
+                        {tpl.category && (
+                          <span
+                            style={{
+                              fontSize: "9.5px",
+                              padding: "1px 4px",
+                              borderRadius: "3px",
+                              background: "var(--color-surface-container-high, #f1f5f9)",
+                              color: "var(--color-outline, #64748b)",
+                              flexShrink: 0,
+                            }}
+                          >
+                            {tpl.category}
+                          </span>
+                        )}
+                        {isSelected && (
+                          <span
+                            className="material-symbols-outlined"
+                            style={{
+                              fontSize: "14px",
+                              color: "#4f46e5",
+                              flexShrink: 0,
+                            }}
+                          >
+                            check
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* 3. Tags Chips & Popover */}
         <div
           style={{
@@ -779,6 +1103,7 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
               setShowTagPicker(!showTagPicker);
               setShowStatusPicker(false);
               setShowCategoryPicker(false);
+              setShowTemplatePicker(false);
               setShowConsumers(false);
               setShowDeps(false);
             }}
@@ -1005,6 +1330,7 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
               setShowDeps(false);
               setShowStatusPicker(false);
               setShowCategoryPicker(false);
+              setShowTemplatePicker(false);
               setShowTagPicker(false);
             }}
             style={{
@@ -1185,6 +1511,7 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
               setShowConsumers(false);
               setShowStatusPicker(false);
               setShowCategoryPicker(false);
+              setShowTemplatePicker(false);
               setShowTagPicker(false);
             }}
             style={{

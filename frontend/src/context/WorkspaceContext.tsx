@@ -85,7 +85,7 @@ interface WorkspaceContextType {
     repoName: string,
     initialFile?: string,
   ) => Promise<boolean>;
-  loadTree: (targetRepo?: string) => Promise<void>;
+  loadTree: (targetRepo?: string, isSilent?: boolean) => Promise<void>;
   loadFile: (filePath: string, targetRepo?: string) => Promise<void>;
   reloadActiveFile: (forceDisk?: boolean) => Promise<void>;
   setFileContent: (content: string) => void;
@@ -561,10 +561,10 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, [performDiskSave]);
 
-  const loadTree = useCallback(async (targetRepo?: string) => {
+  const loadTree = useCallback(async (targetRepo?: string, isSilent = false) => {
     const repo = targetRepo || activeRepoRef.current?.name;
     if (!repo) return;
-    setIsLoadingTree(true);
+    if (!isSilent) setIsLoadingTree(true);
     try {
       const targetObj = targetRepo
         ? (reposRef.current.find((r) => r.name.toLowerCase() === targetRepo.toLowerCase()) || null)
@@ -579,7 +579,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
     } catch (err) {
       console.error("[WorkspaceContext] Erro ao buscar árvore:", err);
     } finally {
-      setIsLoadingTree(false);
+      if (!isSilent) setIsLoadingTree(false);
     }
   }, [getRepoOwnerOrOrg]);
 
@@ -1790,7 +1790,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
         if (sseDebounceTimer) clearTimeout(sseDebounceTimer);
         sseDebounceTimer = setTimeout(() => {
           refreshPendingChangesRef.current?.();
-          loadTreeRef.current?.();
+          loadTreeRef.current?.(undefined, true);
           refreshWhatsNewRef.current?.();
           if (activeFileRef.current) {
             reloadActiveFileRef.current?.(true);
