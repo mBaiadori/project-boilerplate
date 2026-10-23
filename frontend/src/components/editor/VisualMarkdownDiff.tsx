@@ -4,6 +4,7 @@ import {
   parseFrontmatter,
   type DocumentMetadata,
 } from "../../services/frontmatter";
+import { useTemplateStore } from "../../stores/templateStore";
 
 interface VisualMarkdownDiffProps {
   oldContent: string;
@@ -37,7 +38,8 @@ export const VisualMarkdownDiff: React.FC<VisualMarkdownDiffProps> = ({
   onRestoreOldVersion,
   onClose,
 }) => {
-  const [showMetadata, setShowMetadata] = useState(false);
+  const [showMetadata, setShowMetadata] = useState<boolean | null>(null);
+  const templates = useTemplateStore((s) => s.templates);
 
   // Parse frontmatter metadata and extract the pure document body for both versions
   const oldParsed = useMemo(
@@ -51,15 +53,24 @@ export const VisualMarkdownDiff: React.FC<VisualMarkdownDiffProps> = ({
 
   const hasMetadata = oldParsed.hasFrontmatter || newParsed.hasFrontmatter;
 
+  const oldBody = useMemo(
+    () => (oldParsed.hasFrontmatter ? oldParsed.body : oldContent || ""),
+    [oldParsed, oldContent],
+  );
+  const newBody = useMemo(
+    () => (newParsed.hasFrontmatter ? newParsed.body : newContent || ""),
+    [newParsed, newContent],
+  );
+
+  const hasBodyChanges = useMemo(() => {
+    return oldBody.trim() !== newBody.trim();
+  }, [oldBody, newBody]);
+
+  const isMetaExpanded = showMetadata !== null ? showMetadata : !hasBodyChanges;
+
   const sideBySideHtml = useMemo(() => {
-    const oldBody = oldParsed.hasFrontmatter
-      ? oldParsed.body
-      : oldContent || "";
-    const newBody = newParsed.hasFrontmatter
-      ? newParsed.body
-      : newContent || "";
     return generateSideBySideMarkdownHtml(oldBody, newBody);
-  }, [oldParsed, newParsed, oldContent, newContent]);
+  }, [oldBody, newBody]);
 
   // Render stylized metadata chips for frontmatter
   const renderMetadataPills = (
@@ -91,18 +102,37 @@ export const VisualMarkdownDiff: React.FC<VisualMarkdownDiffProps> = ({
     return keys.map((key) => {
       const curVal = (currentMeta as any)?.[key];
       const otherVal = (otherMeta as any)?.[key];
-      const curStr =
+      let curStr =
         curVal !== undefined && curVal !== null
           ? typeof curVal === "object"
             ? JSON.stringify(curVal)
             : String(curVal)
           : "";
-      const otherStr =
+      let otherStr =
         otherVal !== undefined && otherVal !== null
           ? typeof otherVal === "object"
             ? JSON.stringify(otherVal)
             : String(otherVal)
           : "";
+
+      let displayLabel = key;
+      if (key === "templateId") {
+        displayLabel = "template";
+        const tplCur = templates?.find(
+          (t: any) =>
+            t.id === curStr || t.templateName === curStr || t.title === curStr,
+        );
+        if (tplCur?.title) curStr = tplCur.title;
+
+        const tplOther = templates?.find(
+          (t: any) =>
+            t.id === otherStr ||
+            t.templateName === otherStr ||
+            t.title === otherStr,
+        );
+        if (tplOther?.title) otherStr = tplOther.title;
+      }
+
       const isDiff = curStr !== otherStr;
 
       const bg = isDiff
@@ -132,7 +162,7 @@ export const VisualMarkdownDiff: React.FC<VisualMarkdownDiffProps> = ({
             fontWeight: 500,
           }}
         >
-          <span style={{ opacity: 0.7, fontWeight: 600 }}>{key}:</span>
+          <span style={{ opacity: 0.7, fontWeight: 600 }}>{displayLabel}:</span>
           <span>{curStr || "<vazio>"}</span>
         </div>
       );
@@ -145,7 +175,7 @@ export const VisualMarkdownDiff: React.FC<VisualMarkdownDiffProps> = ({
       style={{
         display: "flex",
         flexDirection: "column",
-        height: "100%",
+        width: "100%",
         background: "var(--color-surface, #ffffff)",
         overflow: "hidden",
       }}
@@ -225,14 +255,16 @@ export const VisualMarkdownDiff: React.FC<VisualMarkdownDiffProps> = ({
       {hasMetadata && (
         <div
           style={{
-            padding: "6px 16px",
+            padding: "8px 16px",
             background: "var(--color-surface-container-lowest, #ffffff)",
-            borderBottom: "1px solid var(--color-border-subtle, #e2e8f0)",
+            borderBottom: hasBodyChanges
+              ? "1px solid var(--color-border-subtle, #e2e8f0)"
+              : "none",
           }}
         >
           <button
             type="button"
-            onClick={() => setShowMetadata((prev) => !prev)}
+            onClick={() => setShowMetadata(!isMetaExpanded)}
             style={{
               display: "flex",
               alignItems: "center",
@@ -250,7 +282,7 @@ export const VisualMarkdownDiff: React.FC<VisualMarkdownDiffProps> = ({
               className="material-symbols-outlined"
               style={{ fontSize: "16px" }}
             >
-              {showMetadata ? "expand_less" : "expand_more"}
+              {isMetaExpanded ? "expand_less" : "expand_more"}
             </span>
             <span
               className="material-symbols-outlined"
@@ -259,18 +291,18 @@ export const VisualMarkdownDiff: React.FC<VisualMarkdownDiffProps> = ({
               tune
             </span>
             <span>
-              {showMetadata ? "Ocultar Metadados" : "Mostrar Metadados"}
+              {isMetaExpanded ? "Ocultar Metadados" : "Mostrar Metadados"}
             </span>
           </button>
 
-          {showMetadata && (
+          {isMetaExpanded && (
             <div
               style={{
                 display: "grid",
                 gridTemplateColumns: "1fr 1fr",
                 gap: "16px",
                 marginTop: "8px",
-                paddingTop: "6px",
+                paddingTop: "8px",
                 borderTop: "1px dashed var(--color-border-subtle, #e2e8f0)",
               }}
             >
@@ -293,37 +325,28 @@ export const VisualMarkdownDiff: React.FC<VisualMarkdownDiffProps> = ({
         </div>
       )}
 
-      {/* Main Diff Render Canvas - Pure Side-by-Side Unified View */}
-      <div
-        style={{
-          flex: 1,
-          overflowY: "auto",
-          padding: "12px 16px",
-          minHeight: 0,
-        }}
-      >
+      {/* Main Diff Render Canvas - Flush Side-by-Side Unified Panes (Only if document body has changes) */}
+      {hasBodyChanges ? (
         <div
           style={{
             display: "grid",
             gridTemplateColumns: "1fr 1fr",
-            gap: "16px",
             minHeight: "320px",
+            width: "100%",
           }}
         >
           {/* Left Column: Old Version (Base) */}
           <div
             style={{
-              border: "1px solid var(--color-border-subtle, #e2e8f0)",
-              borderRadius: "8px",
-              overflow: "hidden",
-              background: "var(--color-surface, #ffffff)",
               display: "flex",
               flexDirection: "column",
+              borderRight: "1px solid var(--color-border-subtle, #e2e8f0)",
+              minWidth: 0,
             }}
           >
             <div
               style={{
-                padding: "6px 12px",
+                padding: "6px 16px",
                 background: "var(--color-surface-container-low, #f8fafc)",
                 borderBottom: "1px solid var(--color-border-subtle, #e2e8f0)",
                 color: "var(--color-on-surface-variant, #475569)",
@@ -355,13 +378,13 @@ export const VisualMarkdownDiff: React.FC<VisualMarkdownDiffProps> = ({
               </span>
             </div>
             <div
-              className="prose markdown-rendered"
+              className="notion-diff-canvas prose markdown-rendered"
               style={{
-                padding: "16px",
+                padding: "16px 20px",
                 overflowY: "auto",
                 flex: 1,
-                fontSize: "13.5px",
-                lineHeight: 1.6,
+                fontSize: "14.5px",
+                lineHeight: 1.7,
                 color: "var(--color-on-surface, #1e293b)",
               }}
               dangerouslySetInnerHTML={{
@@ -373,17 +396,14 @@ export const VisualMarkdownDiff: React.FC<VisualMarkdownDiffProps> = ({
           {/* Right Column: New Version (Draft) */}
           <div
             style={{
-              border: "1px solid var(--color-border-subtle, #e2e8f0)",
-              borderRadius: "8px",
-              overflow: "hidden",
-              background: "var(--color-surface, #ffffff)",
               display: "flex",
               flexDirection: "column",
+              minWidth: 0,
             }}
           >
             <div
               style={{
-                padding: "6px 12px",
+                padding: "6px 16px",
                 background: "var(--color-surface-container-low, #f8fafc)",
                 borderBottom: "1px solid var(--color-border-subtle, #e2e8f0)",
                 color: "var(--color-on-surface-variant, #475569)",
@@ -412,13 +432,13 @@ export const VisualMarkdownDiff: React.FC<VisualMarkdownDiffProps> = ({
               </span>
             </div>
             <div
-              className="prose markdown-rendered"
+              className="notion-diff-canvas prose markdown-rendered"
               style={{
-                padding: "16px",
+                padding: "16px 20px",
                 overflowY: "auto",
                 flex: 1,
-                fontSize: "13.5px",
-                lineHeight: 1.6,
+                fontSize: "14.5px",
+                lineHeight: 1.7,
                 color: "var(--color-on-surface, #1e293b)",
               }}
               dangerouslySetInnerHTML={{
@@ -427,94 +447,115 @@ export const VisualMarkdownDiff: React.FC<VisualMarkdownDiffProps> = ({
             />
           </div>
         </div>
+      ) : !hasMetadata ? (
+        <div
+          style={{
+            padding: "24px 16px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "8px",
+            color: "var(--color-outline, #64748b)",
+            fontSize: "12.5px",
+            background: "var(--color-surface-container-lowest, #ffffff)",
+          }}
+        >
+          <span
+            className="material-symbols-outlined"
+            style={{ fontSize: "18px", color: "#16a34a" }}
+          >
+            check_circle
+          </span>
+          <span>Nenhuma alteração detectada neste arquivo.</span>
+        </div>
+      ) : null}
 
-        {/* Authorship & Contributors Overlay (if enabled) */}
-        {showAuthorship && blameData && blameData.length > 0 && (
-          <div
+      {/* Authorship & Contributors Overlay (if enabled) */}
+      {showAuthorship && blameData && blameData.length > 0 && (
+        <div
+          style={{
+            marginTop: "16px",
+            borderTop: "1px solid var(--color-border-subtle, #e2e8f0)",
+            padding: "12px 16px",
+          }}
+        >
+          <h4
             style={{
-              marginTop: "24px",
-              borderTop: "1px solid var(--color-border-subtle, #e2e8f0)",
-              paddingTop: "12px",
+              margin: "0 0 8px 0",
+              fontSize: "12px",
+              fontWeight: 600,
+              color: "var(--color-on-surface)",
             }}
           >
-            <h4
-              style={{
-                margin: "0 0 8px 0",
-                fontSize: "12px",
-                fontWeight: 600,
-                color: "var(--color-on-surface)",
-              }}
-            >
-              Anotações de Autoria & Contribuidores
-            </h4>
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "4px",
-                maxHeight: "180px",
-                overflowY: "auto",
-                fontFamily: "var(--font-mono)",
-                fontSize: "11.5px",
-              }}
-            >
-              {blameData.map((b, idx) => (
-                <div
-                  key={idx}
+            Anotações de Autoria & Contribuidores
+          </h4>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "4px",
+              maxHeight: "180px",
+              overflowY: "auto",
+              fontFamily: "var(--font-mono)",
+              fontSize: "11.5px",
+            }}
+          >
+            {blameData.map((b, idx) => (
+              <div
+                key={idx}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "10px",
+                  padding: "3px 8px",
+                  borderRadius: "4px",
+                  background: "var(--color-surface-container-low, #f8fafc)",
+                }}
+              >
+                <span
+                  style={{ color: "var(--color-outline)", width: "32px" }}
+                >
+                  L{b.line}
+                </span>
+                <span
+                  className="badge badge-neutral"
+                  style={{ fontSize: "10.5px" }}
+                >
+                  #{b.commit.slice(0, 7)}
+                </span>
+                <strong
                   style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "10px",
-                    padding: "3px 8px",
-                    borderRadius: "4px",
-                    background: "var(--color-surface-container-low, #f8fafc)",
+                    color: "var(--color-on-surface)",
+                    minWidth: "110px",
                   }}
                 >
-                  <span
-                    style={{ color: "var(--color-outline)", width: "32px" }}
-                  >
-                    L{b.line}
-                  </span>
-                  <span
-                    className="badge badge-neutral"
-                    style={{ fontSize: "10.5px" }}
-                  >
-                    #{b.commit.slice(0, 7)}
-                  </span>
-                  <strong
-                    style={{
-                      color: "var(--color-on-surface)",
-                      minWidth: "110px",
-                    }}
-                  >
-                    {b.author}
-                  </strong>
-                  <span
-                    style={{
-                      color: "var(--color-outline)",
-                      fontSize: "11px",
-                      minWidth: "70px",
-                    }}
-                  >
-                    {b.date}
-                  </span>
-                  <span
-                    style={{
-                      color: "var(--color-on-surface-variant)",
-                      flex: 1,
-                      whiteSpace: "nowrap",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                    }}
-                  >
-                    {b.content}
-                  </span>
-                </div>
-              ))}
-            </div>
+                  {b.author}
+                </strong>
+                <span
+                  style={{
+                    color: "var(--color-outline)",
+                    fontSize: "11px",
+                    minWidth: "70px",
+                  }}
+                >
+                  {b.date}
+                </span>
+                <span
+                  style={{
+                    color: "var(--color-on-surface-variant)",
+                    flex: 1,
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}
+                >
+                  {b.content}
+                </span>
+              </div>
+            ))}
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 };

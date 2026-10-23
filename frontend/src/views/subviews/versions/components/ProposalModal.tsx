@@ -314,20 +314,20 @@ export const ProposalModal: React.FC<ProposalModalProps> = ({
                     </div>
 
                     {isExpanded && (
-                      <div style={{ borderTop: "1px solid var(--color-border-subtle, #e2e8f0)", padding: "8px" }}>
+                      <div style={{ borderTop: "1px solid var(--color-border-subtle, #e2e8f0)", background: "var(--color-surface, #ffffff)" }}>
                         {(file.old_content || file.new_content) ? (
-                          <div style={{ borderRadius: "6px", overflow: "hidden", border: "1px solid var(--color-border-subtle, #e2e8f0)" }}>
-                            <VisualMarkdownDiff
-                              oldContent={file.old_content || ""}
-                              newContent={file.new_content || ""}
-                              fileName={file.path}
-                              oldTitle="Versão Base"
-                              newTitle="Nova Versão"
-                              hideHeader={true}
-                            />
-                          </div>
+                          <VisualMarkdownDiff
+                            oldContent={file.old_content || ""}
+                            newContent={file.new_content || ""}
+                            fileName={file.path}
+                            oldTitle="Versão Base"
+                            newTitle="Nova Versão"
+                            hideHeader={true}
+                          />
                         ) : (
-                          <DiffViewer diffText={diffText} isLoading={isLoading} />
+                          <div style={{ padding: "8px" }}>
+                            <DiffViewer diffText={diffText} isLoading={isLoading} />
+                          </div>
                         )}
                       </div>
                     )}

@@ -43,8 +43,6 @@ interface DraftsTabProps {
   prDescription: string;
   setPrDescription: (val: string) => void;
   isCreatingPR: boolean;
-  feedback: { type: "success" | "error"; message: string } | null;
-  createdPRUrl: string | null;
 }
 
 export const DraftsTab: React.FC<DraftsTabProps> = ({
@@ -67,8 +65,6 @@ export const DraftsTab: React.FC<DraftsTabProps> = ({
   prDescription,
   setPrDescription,
   isCreatingPR,
-  feedback,
-  createdPRUrl,
 }) => {
   return (
     <div className="ui-stack ui-stack--lg">
@@ -405,8 +401,7 @@ export const DraftsTab: React.FC<DraftsTabProps> = ({
                   {isExpanded && (
                     <div
                       style={{
-                        padding: "12px 16px 16px 16px",
-                        background: "var(--color-surface-container-lowest, #ffffff)",
+                        background: "var(--color-surface, #ffffff)",
                         borderTop: "1px solid var(--color-border-subtle, #e2e8f0)",
                       }}
                     >
@@ -422,24 +417,18 @@ export const DraftsTab: React.FC<DraftsTabProps> = ({
                           Carregando diferenças da versão...
                         </div>
                       ) : (oldContent || newContent || file.old_content || file.new_content) ? (
-                        <div
-                          style={{
-                            borderRadius: "8px",
-                            overflow: "hidden",
-                            border: "1px solid var(--color-border-subtle, #e2e8f0)",
-                          }}
-                        >
-                          <VisualMarkdownDiff
-                            oldContent={oldContent || file.old_content || ""}
-                            newContent={newContent || file.new_content || ""}
-                            fileName={file.path}
-                            oldTitle="Versão Base"
-                            newTitle="Rascunho Atual"
-                            hideHeader={true}
-                          />
-                        </div>
+                        <VisualMarkdownDiff
+                          oldContent={oldContent || file.old_content || ""}
+                          newContent={newContent || file.new_content || ""}
+                          fileName={file.path}
+                          oldTitle="Versão Base"
+                          newTitle="Rascunho Atual"
+                          hideHeader={true}
+                        />
                       ) : (
-                        <DiffViewer diffText={diffText} isLoading={isLoadingDiff} />
+                        <div style={{ padding: "12px 16px" }}>
+                          <DiffViewer diffText={diffText} isLoading={isLoadingDiff} />
+                        </div>
                       )}
                     </div>
                   )}
@@ -572,74 +561,6 @@ export const DraftsTab: React.FC<DraftsTabProps> = ({
               disabled={isCreatingPR}
             />
           </FormField>
-
-          {feedback && (
-            <div
-              style={{
-                padding: "10px 14px",
-                borderRadius: "6px",
-                background:
-                  feedback.type === "success"
-                    ? "var(--color-success-subtle, #f0fdf4)"
-                    : "var(--color-danger-subtle, #fef2f2)",
-                border: `1px solid ${
-                  feedback.type === "success"
-                    ? "var(--color-border-subtle, #bbf7d0)"
-                    : "var(--color-border-danger, #fecaca)"
-                }`,
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-              }}
-            >
-              <span
-                className="material-symbols-outlined"
-                style={{
-                  fontSize: "18px",
-                  color:
-                    feedback.type === "success"
-                      ? "var(--color-success, #16a34a)"
-                      : "var(--color-danger, #dc2626)",
-                  flexShrink: 0,
-                }}
-              >
-                {feedback.type === "success" ? "check_circle" : "error"}
-              </span>
-              <div
-                style={{ display: "flex", flexDirection: "column", gap: "2px" }}
-              >
-                <span
-                  style={{
-                    fontSize: "13px",
-                    color:
-                      feedback.type === "success"
-                        ? "var(--color-success, #166534)"
-                        : "var(--color-danger, #991b1b)",
-                    fontWeight: 500,
-                  }}
-                >
-                  {feedback.message}
-                </span>
-                {feedback.type === "success" &&
-                  createdPRUrl &&
-                  createdPRUrl !== "#" && (
-                    <a
-                      href={createdPRUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      style={{
-                        fontSize: "12px",
-                        color: "var(--color-primary, #2563eb)",
-                        textDecoration: "underline",
-                        fontWeight: 600,
-                      }}
-                    >
-                      Abrir Pull Request no Provedor Git ↗
-                    </a>
-                  )}
-              </div>
-            </div>
-          )}
 
           <div
             style={{

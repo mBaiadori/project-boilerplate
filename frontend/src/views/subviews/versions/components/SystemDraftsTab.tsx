@@ -220,23 +220,23 @@ export const SystemDraftsTab: React.FC<SystemDraftsTabProps> = ({
 
               {/* Diff Viewer Body */}
               {isExpanded && (
-                <div style={{ padding: "8px 12px 12px 12px", borderTop: "1px solid var(--color-border-subtle, #e2e8f0)" }}>
+                <div style={{ borderTop: "1px solid var(--color-border-subtle, #e2e8f0)", background: "var(--color-surface, #ffffff)" }}>
                   {(f.old_content || f.new_content) ? (
-                    <div style={{ borderRadius: "6px", overflow: "hidden", border: "1px solid var(--color-border-subtle, #e2e8f0)" }}>
-                      <VisualMarkdownDiff
-                        oldContent={f.old_content || ""}
-                        newContent={f.new_content || ""}
-                        fileName={f.path}
-                        oldTitle="Versão Base"
-                        newTitle="Rascunho Atual"
-                        hideHeader={true}
+                    <VisualMarkdownDiff
+                      oldContent={f.old_content || ""}
+                      newContent={f.new_content || ""}
+                      fileName={f.path}
+                      oldTitle="Versão Base"
+                      newTitle="Rascunho Atual"
+                      hideHeader={true}
+                    />
+                  ) : (
+                    <div style={{ padding: "8px 12px" }}>
+                      <DiffViewer
+                        diffText={diffText}
+                        isLoading={isLoading}
                       />
                     </div>
-                  ) : (
-                    <DiffViewer
-                      diffText={diffText}
-                      isLoading={isLoading}
-                    />
                   )}
                 </div>
               )}

@@ -309,7 +309,9 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
     return (
       templates.find(
         (t) =>
-          t.id === currentTemplateId || t.templateName === currentTemplateId,
+          t.id === currentTemplateId ||
+          t.templateName === currentTemplateId ||
+          t.title === currentTemplateId,
       ) || null
     );
   }, [templates, currentTemplateId]);

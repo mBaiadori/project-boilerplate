@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { SelectOption } from "../../../../components/common/SelectDropdown";
 import { useAI } from "../../../../context/AIContext";
 import { useWorkspace } from "../../../../context/WorkspaceContext";
@@ -37,6 +37,7 @@ export function useTemplatesData() {
   const [saveError, setSaveError] = useState("");
   const [saveSuccessMsg, setSaveSuccessMsg] = useState("");
   const [showConfigDrawer, setShowConfigDrawer] = useState(false);
+  const isSlugManuallyEditedRef = useRef(false);
 
   const [tplId, setTplId] = useState("");
   const [tplTemplateName, setTplTemplateName] = useState("");
@@ -210,6 +211,7 @@ export function useTemplatesData() {
   }, [availableSkills, tplSkills]);
 
   const handleOpenCreate = () => {
+    isSlugManuallyEditedRef.current = false;
     setIsEditMode(false);
     setTplId("");
     setTplTemplateName("");
@@ -239,9 +241,10 @@ export function useTemplatesData() {
   };
 
   const handleOpenEdit = (tpl: TemplateItem) => {
+    isSlugManuallyEditedRef.current = true;
     setIsEditMode(true);
     setTplId(tpl.id);
-    setTplTemplateName(tpl.templateName || tpl.id);
+    setTplTemplateName(tpl.templateName || tpl.title || tpl.id);
     setTplTitle(tpl.title);
     setTplCategory(tpl.category || "");
     setTplBadge(tpl.badge || "");
@@ -320,7 +323,7 @@ export function useTemplatesData() {
 
     const templateData: Partial<TemplateItem> = {
       id: finalId,
-      templateName: finalId,
+      templateName: tplTemplateName.trim() || tplTitle.trim() || finalId,
       title: tplTitle.trim(),
       category: tplCategory.trim(),
       badge: tplBadge.trim() || undefined,
@@ -410,14 +413,17 @@ export function useTemplatesData() {
   const handleTitleChange = (newTitle: string) => {
     setTplTitle(newTitle);
     updateActiveEditingTemplate({ title: newTitle });
-    if (!isEditMode && !tplId) {
-      const generatedSlug = newTitle
-        .toLowerCase()
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .replace(/[^a-z0-9-_]+/g, "-")
-        .replace(/^-+|-+$/g, "");
-      setTplId(generatedSlug);
+    if (!isEditMode) {
+      if (!isSlugManuallyEditedRef.current) {
+        const generatedSlug = newTitle
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .replace(/[^a-z0-9-_]+/g, "-")
+          .replace(/^-+|-+$/g, "");
+        setTplId(generatedSlug);
+      }
+      setTplTemplateName(newTitle.trim());
     }
   };
 
@@ -452,7 +458,10 @@ export function useTemplatesData() {
     showConfigDrawer,
     setShowConfigDrawer,
     tplId,
-    setTplId,
+    setTplId: (val: string) => {
+      isSlugManuallyEditedRef.current = !!val.trim();
+      setTplId(val);
+    },
     tplTemplateName,
     tplTitle,
     tplCategory,

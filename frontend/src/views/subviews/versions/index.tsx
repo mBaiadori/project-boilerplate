@@ -107,8 +107,6 @@ export const VersionsSubView: React.FC<VersionsSubViewProps> = ({
               prDescription={versions.prDescription}
               setPrDescription={versions.setPrDescription}
               isCreatingPR={versions.isCreatingPR}
-              feedback={versions.feedback}
-              createdPRUrl={versions.createdPRUrl}
             />
           )}
 

@@ -1472,3 +1472,159 @@
   background: #fee2e2;
   color: #dc2626;
 }
+
+/* =============================================================================
+   NOTION-GRADE STYLING FOR VISUAL DIFF CANVASES
+   ============================================================================= */
+.notion-diff-canvas {
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  color: var(--color-on-surface, #1e293b);
+  font-size: 14.5px;
+  line-height: 1.7;
+  word-break: break-word;
+  max-width: 100% !important;
+  min-height: auto !important;
+  box-sizing: border-box;
+}
+
+.notion-diff-canvas h1,
+.notion-diff-canvas h2,
+.notion-diff-canvas h3,
+.notion-diff-canvas h4 {
+  font-family: "Outfit", "Inter", sans-serif;
+  font-weight: 700;
+  color: var(--color-on-surface, #0f172a);
+  line-height: 1.25;
+}
+
+.notion-diff-canvas h1 {
+  font-size: 1.85rem;
+  border-bottom: 1px solid var(--color-border-subtle, #e2e8f0);
+  padding-bottom: 0.3em;
+  margin-top: 1.2em;
+  margin-bottom: 0.5em;
+  letter-spacing: -0.025em;
+}
+
+.notion-diff-canvas h2 {
+  font-size: 1.45rem;
+  margin-top: 1.2em;
+  margin-bottom: 0.4em;
+  letter-spacing: -0.015em;
+}
+
+.notion-diff-canvas h3 {
+  font-size: 1.2rem;
+  margin-top: 1em;
+  margin-bottom: 0.3em;
+}
+
+.notion-diff-canvas h4 {
+  font-size: 1.05rem;
+  margin-top: 0.8em;
+  margin-bottom: 0.25em;
+}
+
+.notion-diff-canvas p {
+  margin: 0.5em 0;
+  min-height: 1.4em;
+}
+
+.notion-diff-canvas blockquote {
+  border-left: 3.5px solid var(--color-primary, #2563eb);
+  padding: 10px 18px;
+  margin: 14px 0;
+  background: var(--color-surface-container-low, #f8fafc);
+  color: var(--color-on-surface, #334155);
+  border-radius: 0 8px 8px 0;
+}
+
+.notion-diff-canvas blockquote p {
+  margin: 4px 0;
+}
+
+.notion-diff-canvas ul,
+.notion-diff-canvas ol {
+  padding-left: 24px;
+  margin: 8px 0;
+}
+
+.notion-diff-canvas li {
+  margin: 3px 0;
+}
+
+.notion-diff-canvas code {
+  font-family: var(--font-family-mono, monospace);
+  background: var(--color-surface-container-low, #f1f5f9);
+  color: var(--color-on-surface, #0f172a);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 12.5px;
+}
+
+.notion-diff-canvas pre {
+  background: #0d1117;
+  color: #f8fafc;
+  padding: 12px 16px;
+  border-radius: 6px;
+  overflow-x: auto;
+  font-size: 12.5px;
+  margin: 12px 0;
+  line-height: 1.5;
+}
+
+.notion-diff-canvas pre code {
+  background: transparent;
+  color: inherit;
+  padding: 0;
+}
+
+.notion-diff-canvas table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 14px 0;
+  font-size: 13px;
+}
+
+.notion-diff-canvas th,
+.notion-diff-canvas td {
+  border: 1px solid var(--color-border-subtle, #e2e8f0);
+  padding: 8px 12px;
+  text-align: left;
+}
+
+.notion-diff-canvas th {
+  background: var(--color-surface-container-low, #f8fafc);
+  font-weight: 600;
+  color: var(--color-on-surface, #0f172a);
+}
+
+.notion-diff-canvas hr {
+  border: 0;
+  height: 1px;
+  background: var(--color-border-subtle, #e2e8f0);
+  margin: 20px 0;
+}
+
+.notion-diff-canvas a {
+  color: var(--color-primary, #2563eb);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  font-weight: 500;
+}
+
+.notion-diff-canvas strong {
+  font-weight: 600;
+  color: var(--color-on-surface, #0f172a);
+}
+
+.notion-diff-canvas em {
+  font-style: italic;
+}
+
+.notion-diff-canvas img {
+  max-width: 100%;
+  border-radius: 8px;
+  margin: 12px 0;
+}
+
