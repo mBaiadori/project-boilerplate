@@ -229,7 +229,7 @@ export const SystemDraftsTab: React.FC<SystemDraftsTabProps> = ({
                         fileName={f.path}
                         oldTitle="Versão Base"
                         newTitle="Rascunho Atual"
-                        initialViewMode="split"
+                        hideHeader={true}
                       />
                     </div>
                   ) : (

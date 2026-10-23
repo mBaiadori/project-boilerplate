@@ -144,7 +144,7 @@ export const PRFileList: React.FC<PRFileListProps> = ({
           >
             {prFiles.map((f: any, fIdx: number) => {
               const fileKey = `${pr.id}-${f.path || fIdx}`;
-              const isFileCollapsed = !!collapsedFiles[fileKey];
+              const isFileCollapsed = collapsedFiles[fileKey] !== undefined ? collapsedFiles[fileKey] : true;
               const diffInfo = fileDiffsData[fileKey];
               const isRestricted =
                 !!f.restricted || !!diffInfo?.restricted;
@@ -352,6 +352,7 @@ export const PRFileList: React.FC<PRFileListProps> = ({
                             oldContent={oldContent}
                             newContent={newContent}
                             fileName={f.path}
+                            hideHeader={true}
                           />
                         </div>
                       ) : (

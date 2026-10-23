@@ -39,7 +39,8 @@ export const MergeConflictResolutionModal: React.FC<MergeConflictResolutionModal
       return;
     }
 
-    const regex = /<<<<<<< (.*?)\r?\n([\s\S]*?)\r?\n=======\r?\n([\s\S]*?)\r?\n>>>>>>> (.*?)(?:\r?\n|$)/g;
+    const regex =
+      /<<<<<<<[ \t]*(.*?)\r?\n([\s\S]*?)\r?\n?=======(?:[ \t].*)?\r?\n([\s\S]*?)\r?\n?>>>>>>>[ \t]*(.*?)(?:\r?\n|$)/g;
     const blocks: ConflictBlock[] = [];
     let match: RegExpExecArray | null;
     let idx = 0;
@@ -49,10 +50,10 @@ export const MergeConflictResolutionModal: React.FC<MergeConflictResolutionModal
         id: `conflict_${idx++}`,
         startIndex: match.index,
         endIndex: match.index + match[0].length,
-        oursLabel: match[1] || 'Sua Versão (Local)',
+        oursLabel: match[1]?.trim() || 'Sua Versão (Local)',
         oursContent: match[2] || '',
         theirsContent: match[3] || '',
-        theirsLabel: match[4] || 'Versão Remota (Git)',
+        theirsLabel: match[4]?.trim() || 'Versão Remota (Git)',
         resolution: 'ours', // Padrão: mantém nossa versão local
       });
     }

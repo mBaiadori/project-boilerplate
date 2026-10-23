@@ -435,7 +435,7 @@ export const DraftsTab: React.FC<DraftsTabProps> = ({
                             fileName={file.path}
                             oldTitle="Versão Base"
                             newTitle="Rascunho Atual"
-                            initialViewMode="split"
+                            hideHeader={true}
                           />
                         </div>
                       ) : (

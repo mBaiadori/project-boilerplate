@@ -140,6 +140,30 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
     }
   });
 
+  fastify.post("/api/project/metadata/sync-frontmatters", async (request, reply) => {
+    try {
+      const body = (request.body as { repo?: string }) || {};
+      const cfg = loadConfig();
+      const repoName = body.repo || cfg.active_repo?.name || "local";
+      const result = await docsMetadataService.syncMetadataToFrontmatters(repoName);
+      return reply.send({ success: true, ...result });
+    } catch (err: any) {
+      return reply.status(500).send({ error: err.message });
+    }
+  });
+
+  fastify.post("/api/project/metadata/reconcile", async (request, reply) => {
+    try {
+      const body = (request.body as { repo?: string }) || {};
+      const cfg = loadConfig();
+      const repoName = body.repo || cfg.active_repo?.name || "local";
+      docsMetadataService.scheduleBackgroundReconciliation(repoName);
+      return reply.send({ success: true, message: "Reconciliação iniciada em segundo plano." });
+    } catch (err: any) {
+      return reply.status(500).send({ error: err.message });
+    }
+  });
+
   fastify.post("/api/workspace/save", async (request, reply) => {
     const body = request.body as {
       path?: string;

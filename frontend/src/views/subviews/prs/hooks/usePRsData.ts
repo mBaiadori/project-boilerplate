@@ -442,10 +442,13 @@ export function usePRsData() {
   };
 
   const toggleFileCollapse = (fileKey: string) => {
-    setCollapsedFiles((prev) => ({
-      ...prev,
-      [fileKey]: !prev[fileKey],
-    }));
+    setCollapsedFiles((prev) => {
+      const isCurrentlyCollapsed = prev[fileKey] !== undefined ? prev[fileKey] : true;
+      return {
+        ...prev,
+        [fileKey]: !isCurrentlyCollapsed,
+      };
+    });
   };
 
   const handleExpandAllFiles = (prId: number | string, files: any[]) => {

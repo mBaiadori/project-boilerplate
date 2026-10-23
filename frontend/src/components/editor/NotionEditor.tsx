@@ -2301,14 +2301,20 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
               alert(err.message || "Erro ao resolver conflito no PR.");
             }
           } else {
+            const parsed = parseFrontmatter(resolvedContent);
+            const bodyOnly = parsed.hasFrontmatter ? parsed.body : resolvedContent;
+            docBodyRef.current = bodyOnly;
             onChange(resolvedContent);
             if (engineRef.current) {
-              engineRef.current.setMarkdown(resolvedContent);
+              engineRef.current.setMarkdown(bodyOnly);
               engineRef.current.applyDictionaryHighlights();
+            }
+            if (saveCurrentFile) {
+              await saveCurrentFile(parsed.metadata, resolvedContent);
             }
             setIsConflictModalOpen(false);
             setEditorToast({
-              text: "Conflito resolvido com sucesso!",
+              text: "Conflito resolvido e arquivo gravado com sucesso!",
               type: "success",
             });
             setTimeout(() => setEditorToast(null), 3000);

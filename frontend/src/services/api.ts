@@ -376,6 +376,24 @@ export const API = {
     return { ok: res.ok, data: await res.json() };
   },
 
+  async syncFrontmatters(repo?: string): Promise<ApiResponse<{ success: boolean; synced: number; total: number }>> {
+    const res = await fetch('/api/project/metadata/sync-frontmatters', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ repo })
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async reconcileMetadata(repo?: string): Promise<ApiResponse<{ success: boolean; message: string }>> {
+    const res = await fetch('/api/project/metadata/reconcile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ repo })
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
   async getDocumentContext(path: string, repo?: string): Promise<any> {
     const res = await fetch(`/api/project/document-context?path=${encodeURIComponent(path)}${repo ? `&repo=${encodeURIComponent(repo)}` : ''}`);
     return res.json();

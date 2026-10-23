@@ -108,7 +108,7 @@ export function useVersionsData(onOpenFile?: (path: string) => void) {
   const [loadingSystemDiffs, setLoadingSystemDiffs] = useState<Record<string, boolean>>({});
 
   // Collapsible cards state
-  const [isWhatsNewProposalsExpanded, setIsWhatsNewProposalsExpanded] = useState(true);
+  const [isWhatsNewProposalsExpanded, setIsWhatsNewProposalsExpanded] = useState(false);
   const [isWhatsNewCommitsExpanded, setIsWhatsNewCommitsExpanded] = useState(false);
 
   // Load changes for all repos or active repos

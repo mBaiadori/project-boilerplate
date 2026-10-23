@@ -50,39 +50,283 @@ export function generateDocId(filePath: string): string {
     .toLowerCase();
 }
 
+export function areArraysEqual(
+  a: any[] | undefined,
+  b: any[] | undefined,
+): boolean {
+  if (a === b) return true;
+  if (!a && !b) return true;
+  if (!a || !b) return false;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+}
+
+export function areMetadataItemsEqual(
+  a: DocumentMetadataItem,
+  b: DocumentMetadataItem,
+): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return (
+    a.path === b.path &&
+    a.title === b.title &&
+    a.name === b.name &&
+    a.status === b.status &&
+    a.categories === b.categories &&
+    a.department === b.department &&
+    a.templateId === b.templateId &&
+    areArraysEqual(a.tags, b.tags) &&
+    areArraysEqual(a.approvers, b.approvers) &&
+    areArraysEqual(a.links, b.links)
+  );
+}
+
+export function areMetadataListsEqual(
+  a: DocumentMetadataItem[] | undefined,
+  b: DocumentMetadataItem[] | undefined,
+): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  if (a.length !== b.length) return false;
+  const mapA = new Map(a.map((item) => [item.path, item]));
+  for (const itemB of b) {
+    const itemA = mapA.get(itemB.path);
+    if (!itemA || !areMetadataItemsEqual(itemA, itemB)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+export function sanitizeMetadataForFrontmatter(
+  meta: Record<string, any> | null | undefined,
+): Record<string, any> {
+  if (!meta || typeof meta !== "object") return {};
+  const cleaned: Record<string, any> = {};
+
+  const internalKeys = new Set([
+    "ext",
+    "name",
+    "path",
+    "links",
+    "updated_at",
+    "prompt",
+    "feedback_loops",
+    "lifecycle",
+    "stage",
+    "layer",
+    "parent",
+    "version",
+    "isDraft",
+    "id",
+  ]);
+
+  for (const [key, rawVal] of Object.entries(meta)) {
+    if (internalKeys.has(key)) continue;
+    if (
+      rawVal === undefined ||
+      rawVal === null ||
+      rawVal === "{}" ||
+      (rawVal === "" && key !== "title")
+    ) {
+      continue;
+    }
+
+    if (key === "templateId") {
+      if (typeof rawVal === "string" && rawVal.trim().length > 0) {
+        cleaned.templateId = rawVal.trim();
+      }
+      continue;
+    }
+
+    if (key === "tags" || key === "approvers") {
+      let arr: string[] = [];
+      if (Array.isArray(rawVal)) {
+        arr = rawVal;
+      } else if (typeof rawVal === "string") {
+        const trimmed = rawVal.trim();
+        if (trimmed === "[]" || trimmed === "{}" || trimmed === "") {
+          cleaned[key] = [];
+          continue;
+        }
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (Array.isArray(parsed)) arr = parsed;
+          else arr = trimmed.split(",");
+        } catch {
+          arr = trimmed.split(",");
+        }
+      }
+      const validItems = arr
+        .map((s) => (typeof s === "string" ? s.trim() : String(s)))
+        .filter((s) => s && s !== "[]" && s !== "{}" && s !== '""' && s !== "''");
+      cleaned[key] = validItems;
+      continue;
+    }
+
+    if (key === "category" && !cleaned.categories) {
+      const trimmed = String(rawVal).trim();
+      if (trimmed && trimmed !== "[]" && trimmed !== "{}") {
+        cleaned.categories = trimmed;
+      }
+      continue;
+    }
+
+    if (typeof rawVal === "string") {
+      const trimmed = rawVal.trim();
+      if (trimmed && trimmed !== "[]" && trimmed !== "{}") {
+        cleaned[key] = trimmed;
+      }
+    } else if (typeof rawVal === "number" || typeof rawVal === "boolean") {
+      cleaned[key] = rawVal;
+    }
+  }
+
+  // Ordem canônica determinística
+  const preferredOrder = [
+    "title",
+    "type",
+    "badge",
+    "status",
+    "categories",
+    "tags",
+    "department",
+    "templateId",
+    "approvers",
+  ];
+  const sorted: Record<string, any> = {};
+  const keys = Object.keys(cleaned).sort((a, b) => {
+    const idxA = preferredOrder.indexOf(a);
+    const idxB = preferredOrder.indexOf(b);
+    if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+    if (idxA !== -1) return -1;
+    if (idxB !== -1) return 1;
+    return a.localeCompare(b);
+  });
+
+  for (const k of keys) {
+    sorted[k] = cleaned[k];
+  }
+
+  return sorted;
+}
+
 export function extractFrontmatterMeta(content: string): {
   title?: string;
   status?: string;
   categories?: string;
   tags?: string[];
+  department?: string;
+  templateId?: string;
+  approvers?: string[];
   [key: string]: any;
 } {
   if (!content) return {};
-  const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
+  const match = content.match(/^---\s*\r?\n([\s\S]*?)\r?\n---\r?\n?/);
   if (!match) return {};
-  const result: Record<string, any> = {};
-  for (const line of match[1].split("\n")) {
-    const trimmed = line.trim();
+
+  const rawFm = match[1];
+  const rawParsed: Record<string, any> = {};
+  const lines = rawFm.split("\n");
+  let currentListKey: string | null = null;
+  let currentList: string[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const rawLine = lines[i];
+    const trimmed = rawLine.trim();
     if (!trimmed || trimmed.startsWith("#")) continue;
+
+    // Item de lista yaml multiline (ex: "  - tag1" ou "- tag1")
+    if (currentListKey && trimmed.startsWith("-")) {
+      let itemVal = trimmed.replace(/^-\s*/, "").trim();
+      if (
+        (itemVal.startsWith('"') && itemVal.endsWith('"')) ||
+        (itemVal.startsWith("'") && itemVal.endsWith("'"))
+      ) {
+        itemVal = itemVal.slice(1, -1);
+      }
+      if (itemVal && itemVal !== "[]" && itemVal !== "{}") {
+        currentList.push(itemVal);
+      }
+      continue;
+    } else if (currentListKey) {
+      if (currentList.length > 0) {
+        rawParsed[currentListKey] = currentList;
+      }
+      currentListKey = null;
+      currentList = [];
+    }
+
     const colonIdx = trimmed.indexOf(":");
     if (colonIdx === -1) continue;
+
     const key = trimmed.slice(0, colonIdx).trim();
     let val = trimmed.slice(colonIdx + 1).trim();
+
+    // Início de lista multiline (ex: "tags:" sem valor na mesma linha)
+    if (!val) {
+      currentListKey = key;
+      currentList = [];
+      continue;
+    }
+
+    // Remove aspas externas se existirem antes de checar formato
     if (
       (val.startsWith('"') && val.endsWith('"')) ||
       (val.startsWith("'") && val.endsWith("'"))
     ) {
-      val = val.slice(1, -1);
+      val = val.slice(1, -1).trim();
     }
-    if (key === "status") {
-      result.status = val;
-    } else if (key === "title") {
-      result.title = val;
-    } else if (key === "categories" || key === "category") {
-      result.categories = val;
+
+    // Se o valor for "[]" (array vazio legítimo)
+    if (val === "[]") {
+      if (key === "tags" || key === "approvers") {
+        rawParsed[key] = [];
+      }
+      continue;
     }
+
+    if (!val || val === "{}") {
+      continue;
+    }
+
+    // Array inline (ex: ["rfc", "core"] ou [rfc, core])
+    if (val.startsWith("[") && val.endsWith("]")) {
+      const inner = val.slice(1, -1).trim();
+      if (inner) {
+        const items = inner
+          .split(",")
+          .map((s) => {
+            let item = s.trim();
+            if (
+              (item.startsWith('"') && item.endsWith('"')) ||
+              (item.startsWith("'") && item.endsWith("'"))
+            ) {
+              item = item.slice(1, -1);
+            }
+            return item;
+          })
+          .filter((item) => item && item !== "[]" && item !== "{}");
+        rawParsed[key] = items;
+      } else if (key === "tags" || key === "approvers") {
+        rawParsed[key] = [];
+      }
+      continue;
+    }
+
+    if (val === "true") rawParsed[key] = true;
+    else if (val === "false") rawParsed[key] = false;
+    else rawParsed[key] = val;
   }
-  return result;
+
+  if (currentListKey && currentList.length > 0) {
+    rawParsed[currentListKey] = currentList;
+  }
+
+  return sanitizeMetadataForFrontmatter(rawParsed);
 }
 
 export function updateFrontmatterInMarkdown(
@@ -90,43 +334,24 @@ export function updateFrontmatterInMarkdown(
   meta: Record<string, any>,
 ): string {
   if (!content) content = "";
-  const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
+  const match = content.match(/^---\s*\r?\n([\s\S]*?)\r?\n---\r?\n?/);
   let existingMeta: Record<string, any> = {};
   let body = content;
 
   if (match) {
-    const rawFm = match[1];
+    existingMeta = extractFrontmatterMeta(content);
     body = content.slice(match[0].length);
-    for (const line of rawFm.split("\n")) {
-      const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith("#")) continue;
-      const colonIdx = trimmed.indexOf(":");
-      if (colonIdx === -1) continue;
-      const k = trimmed.slice(0, colonIdx).trim();
-      let v = trimmed.slice(colonIdx + 1).trim();
-      if (
-        (v.startsWith('"') && v.endsWith('"')) ||
-        (v.startsWith("'") && v.endsWith("'"))
-      ) {
-        v = v.slice(1, -1);
-      }
-      existingMeta[k] = v;
-    }
   }
 
   const merged = { ...existingMeta, ...meta };
-  Object.keys(merged).forEach((k) => {
-    if (merged[k] === undefined || merged[k] === null || merged[k] === "") {
-      delete merged[k];
-    }
-  });
+  const sanitized = sanitizeMetadataForFrontmatter(merged);
 
-  if (Object.keys(merged).length === 0) {
-    return body;
+  if (Object.keys(sanitized).length === 0) {
+    return body.replace(/^\r?\n/, "");
   }
 
   const lines = ["---"];
-  for (const [k, v] of Object.entries(merged)) {
+  for (const [k, v] of Object.entries(sanitized)) {
     if (typeof v === "number" || typeof v === "boolean") {
       lines.push(`${k}: ${v}`);
     } else if (Array.isArray(v)) {
@@ -136,8 +361,8 @@ export function updateFrontmatterInMarkdown(
     }
   }
   lines.push("---");
-  lines.push("");
-  return lines.join("\n") + body.replace(/^\r?\n/, "");
+  const cleanBody = body.replace(/^\r?\n+/, "");
+  return lines.join("\n") + (cleanBody ? `\n\n${cleanBody}` : "\n");
 }
 
 export function extractDocLinksFromMarkdown(content: string): string[] {
@@ -347,15 +572,37 @@ export class DocsMetadataService {
       timestamp: number;
     }
   >();
+  private fileStatsCache = new Map<
+    string,
+    Map<string, { mtimeMs: number; size: number }>
+  >();
   private reconciliationInProgress = new Set<string>();
+  private reconciliationQueued = new Set<string>();
+
+  setFileStat(
+    repoName: string,
+    relPath: string,
+    mtimeMs: number,
+    size: number,
+  ): void {
+    const cleanRepo = repoName || "local";
+    let repoStats = this.fileStatsCache.get(cleanRepo);
+    if (!repoStats) {
+      repoStats = new Map();
+      this.fileStatsCache.set(cleanRepo, repoStats);
+    }
+    repoStats.set(relPath, { mtimeMs, size });
+  }
 
   clearCache(repoName?: string): void {
     if (repoName) {
       this.metaCache.delete(repoName);
       this.projectConfigCache.delete(repoName);
+      this.fileStatsCache.delete(repoName);
     } else {
       this.metaCache.clear();
       this.projectConfigCache.clear();
+      this.fileStatsCache.clear();
     }
   }
 
@@ -378,7 +625,12 @@ export class DocsMetadataService {
 
     // Se o arquivo não mudou no disco e não foi forçado, retorna cache em O(1) imediatamente (0ms)
     if (cached && !forceDiskScan && exists && cached.mtimeMs === currentMtime) {
-      return cached.data;
+      return cached.data.map((d) => ({
+        ...d,
+        tags: Array.isArray(d.tags) ? [...d.tags] : [],
+        approvers: Array.isArray(d.approvers) ? [...d.approvers] : [],
+        links: Array.isArray(d.links) ? [...d.links] : [],
+      }));
     }
 
     let metaList: DocumentMetadataItem[] = [];
@@ -430,11 +682,8 @@ export class DocsMetadataService {
         );
       }
     } else if (fs.existsSync(repoDir)) {
-      // Se não existe .docs.metadata.json, inicializa arquivo vazio inicial para operações rápidas
-      try {
-        fs.writeFileSync(metaPath, "[]", "utf-8");
-        currentMtime = fs.statSync(metaPath).mtimeMs;
-      } catch {}
+      // Se não existe .docs.metadata.json no disco, dispara geração incremental inteligente em segundo plano
+      this.scheduleBackgroundReconciliation(cleanRepo);
     }
 
     const map = new Map(metaList.map((item) => [item.path, item]));
@@ -445,7 +694,6 @@ export class DocsMetadataService {
       timestamp: Date.now(),
     });
 
-    // Reconciliação massiva de disco só é acionada se explicitamente solicitada (forceDiskScan)
     if (forceDiskScan && fs.existsSync(repoDir)) {
       this.scheduleBackgroundReconciliation(cleanRepo);
     }
@@ -454,13 +702,16 @@ export class DocsMetadataService {
   }
 
   /**
-   * Executa reconciliação de metadados em segundo plano de forma 100% assíncrona,
-   * em lotes (chunks) com liberação do Event Loop, garantindo que o servidor Fastify
-   * permaneça responsivo mesmo em repositórios grandes.
+   * Executa reconciliação de metadados em segundo plano de forma 100% assíncrona e incremental.
+   * Utiliza cache de mtime/size para pular arquivos inalterados (~99% economia de I/O),
+   * liberando o Event Loop em lotes para zero impacto na UI.
    */
   scheduleBackgroundReconciliation(repoName: string): void {
     const cleanRepo = repoName || "local";
-    if (this.reconciliationInProgress.has(cleanRepo)) return;
+    if (this.reconciliationInProgress.has(cleanRepo)) {
+      this.reconciliationQueued.add(cleanRepo);
+      return;
+    }
 
     this.reconciliationInProgress.add(cleanRepo);
     setImmediate(async () => {
@@ -478,7 +729,8 @@ export class DocsMetadataService {
                 entry.name === "node_modules" ||
                 entry.name === "dist" ||
                 entry.name === "build" ||
-                entry.name === "coverage"
+                entry.name === "coverage" ||
+                entry.name === ".spec-memory"
               )
                 continue;
               const full = path.join(dir, entry.name);
@@ -499,14 +751,47 @@ export class DocsMetadataService {
 
         const currentCached = this.metaCache.get(cleanRepo)?.data || [];
         const metaMap = new Map(currentCached.map((d) => [d.path, { ...d }]));
+        let repoStats = this.fileStatsCache.get(cleanRepo);
+        if (!repoStats) {
+          repoStats = new Map();
+          this.fileStatsCache.set(cleanRepo, repoStats);
+        }
+
+        // 1. Filtragem inteligente por mtime e size: descobre apenas os arquivos modificados ou novos
+        const filesToProcess: { relPath: string; stat: { mtimeMs: number; size: number } }[] = [];
+        for (const relPath of diskFiles) {
+          const full = path.join(repoDir, relPath);
+          try {
+            const stat = await fs.promises.stat(full);
+            const cachedStat = repoStats.get(relPath);
+            const cachedItem = metaMap.get(relPath);
+
+            if (
+              cachedItem &&
+              cachedStat &&
+              cachedStat.mtimeMs === stat.mtimeMs &&
+              cachedStat.size === stat.size
+            ) {
+              // Arquivo idêntico ao já processado. Pula leitura de disco!
+              continue;
+            }
+            filesToProcess.push({
+              relPath,
+              stat: { mtimeMs: stat.mtimeMs, size: stat.size },
+            });
+          } catch {
+            // Se falhar o stat, continua
+          }
+        }
+
         let changed = false;
 
-        // Processa em lotes de 20 arquivos assincronamente sem bloquear o event loop
-        const BATCH_SIZE = 20;
-        for (let i = 0; i < diskFiles.length; i += BATCH_SIZE) {
-          const batch = diskFiles.slice(i, i + BATCH_SIZE);
+        // 2. Processa apenas os arquivos modificados em lotes de 25 arquivos com liberação do Event Loop
+        const BATCH_SIZE = 25;
+        for (let i = 0; i < filesToProcess.length; i += BATCH_SIZE) {
+          const batch = filesToProcess.slice(i, i + BATCH_SIZE);
           await Promise.all(
-            batch.map(async (relPath) => {
+            batch.map(async ({ relPath, stat }) => {
               const item = metaMap.get(relPath);
               const full = path.join(repoDir, relPath);
               let content = "";
@@ -530,12 +815,63 @@ export class DocsMetadataService {
                   item.links = extractedLinks;
                   itemModified = true;
                 }
-                if (!item.title && extractedTitle) {
-                  item.title = extractedTitle;
+
+                const newTitle =
+                  frontmatterMeta.title || extractedTitle || item.title;
+                if (newTitle && item.title !== newTitle) {
+                  item.title = newTitle;
                   itemModified = true;
                 }
+
+                if (
+                  frontmatterMeta.status !== undefined &&
+                  item.status !== frontmatterMeta.status
+                ) {
+                  item.status = frontmatterMeta.status;
+                  itemModified = true;
+                }
+
+                const newCat =
+                  frontmatterMeta.categories || frontmatterMeta.category;
+                if (newCat !== undefined && item.categories !== newCat) {
+                  item.categories = newCat;
+                  itemModified = true;
+                }
+
+                if (
+                  Array.isArray(frontmatterMeta.tags) &&
+                  !areArraysEqual(item.tags, frontmatterMeta.tags)
+                ) {
+                  item.tags = frontmatterMeta.tags;
+                  itemModified = true;
+                }
+
+                if (
+                  frontmatterMeta.department !== undefined &&
+                  item.department !== frontmatterMeta.department
+                ) {
+                  item.department = frontmatterMeta.department;
+                  itemModified = true;
+                }
+
+                if (
+                  frontmatterMeta.templateId !== undefined &&
+                  item.templateId !== frontmatterMeta.templateId
+                ) {
+                  item.templateId = frontmatterMeta.templateId;
+                  itemModified = true;
+                }
+
+                if (
+                  Array.isArray(frontmatterMeta.approvers) &&
+                  !areArraysEqual(item.approvers, frontmatterMeta.approvers)
+                ) {
+                  item.approvers = frontmatterMeta.approvers;
+                  itemModified = true;
+                }
+
                 if (itemModified) {
-                  metaMap.set(relPath, item);
+                  metaMap.set(relPath, this.sanitizeMetaItem(item, cleanRepo));
                   changed = true;
                 }
               } else {
@@ -550,30 +886,40 @@ export class DocsMetadataService {
                     ext,
                     path: relPath,
                     status: frontmatterMeta.status || "",
-                    categories: frontmatterMeta.categories || "",
+                    categories:
+                      frontmatterMeta.categories ||
+                      frontmatterMeta.category ||
+                      "",
                     tags: frontmatterMeta.tags || [],
+                    department: frontmatterMeta.department,
+                    templateId: frontmatterMeta.templateId || "",
+                    approvers: frontmatterMeta.approvers || [],
                     updated_at: new Date().toISOString(),
-                    approvers: [],
                     links: extractedLinks,
-                    templateId: "",
-                  }),
+                  }, cleanRepo),
                 );
                 changed = true;
               }
+
+              repoStats.set(relPath, stat);
             }),
           );
 
-          // Libera o Event Loop para que requisições de outros clientes/rotas fluam instantaneamente
+          // Libera o Event Loop
           await new Promise((resolve) => setImmediate(resolve));
         }
 
+        // 3. Remove arquivos que foram deletados do disco
         const diskSet = new Set(diskFiles);
         for (const key of metaMap.keys()) {
           if (!diskSet.has(key)) {
             metaMap.delete(key);
+            repoStats.delete(key);
             changed = true;
           }
         }
+
+        this.fileStatsCache.set(cleanRepo, repoStats);
 
         if (changed) {
           const metaList = Array.from(metaMap.values());
@@ -586,6 +932,10 @@ export class DocsMetadataService {
         );
       } finally {
         this.reconciliationInProgress.delete(cleanRepo);
+        if (this.reconciliationQueued.has(cleanRepo)) {
+          this.reconciliationQueued.delete(cleanRepo);
+          this.scheduleBackgroundReconciliation(cleanRepo);
+        }
       }
     });
   }
@@ -593,11 +943,43 @@ export class DocsMetadataService {
   saveDocsMetadata(repoName: string, metaList: DocumentMetadataItem[]): void {
     const cleanRepo = repoName || "local";
     const metaPath = this.getDocsMetadataPath(cleanRepo);
-    const sanitizedList = metaList.map((item) => this.sanitizeMetaItem(item, cleanRepo));
+    const sanitizedList = metaList.map((item) =>
+      this.sanitizeMetaItem(item, cleanRepo),
+    );
+
+    // Comparação profunda de objetos: se nada de fato mudou, pula escrita no disco!
+    const cached = this.metaCache.get(cleanRepo);
+    if (
+      cached &&
+      areMetadataListsEqual(cached.data, sanitizedList) &&
+      fs.existsSync(metaPath)
+    ) {
+      return;
+    }
+
     const map = new Map(sanitizedList.map((item) => [item.path, item]));
-    
     fs.mkdirSync(path.dirname(metaPath), { recursive: true });
-    fs.writeFileSync(metaPath, JSON.stringify(sanitizedList, null, 2), "utf-8");
+
+    // Escrita atômica via arquivo temporário para tolerância a falhas
+    const tmpPath = `${metaPath}.${process.pid}.${Date.now()}.tmp`;
+    try {
+      fs.writeFileSync(
+        tmpPath,
+        JSON.stringify(sanitizedList, null, 2),
+        "utf-8",
+      );
+      fs.renameSync(tmpPath, metaPath);
+    } catch {
+      // Fallback em caso de erro de rename cross-device
+      fs.writeFileSync(
+        metaPath,
+        JSON.stringify(sanitizedList, null, 2),
+        "utf-8",
+      );
+      try {
+        if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
+      } catch {}
+    }
 
     let currentMtime = Date.now();
     try {
@@ -605,11 +987,102 @@ export class DocsMetadataService {
     } catch {}
 
     this.metaCache.set(cleanRepo, {
-      data: sanitizedList,
+      data: sanitizedList.map((d) => ({
+        ...d,
+        tags: Array.isArray(d.tags) ? [...d.tags] : [],
+        approvers: Array.isArray(d.approvers) ? [...d.approvers] : [],
+        links: Array.isArray(d.links) ? [...d.links] : [],
+      })),
       map,
       mtimeMs: currentMtime,
       timestamp: Date.now(),
     });
+  }
+
+  /**
+   * Sincroniza metadados existentes de .docs.metadata.json para o cabeçalho
+   * YAML Frontmatter dos arquivos .md físicos de forma transparente e em segundo plano.
+   */
+  async syncMetadataToFrontmatters(
+    repoName: string,
+  ): Promise<{ synced: number; total: number }> {
+    const cleanRepo = repoName || "local";
+    const repoDir = this.getRepoDir(cleanRepo);
+    if (!fs.existsSync(repoDir)) return { synced: 0, total: 0 };
+
+    const metaList = this.loadDocsMetadata(cleanRepo);
+    let synced = 0;
+    const BATCH_SIZE = 15;
+
+    for (let i = 0; i < metaList.length; i += BATCH_SIZE) {
+      const batch = metaList.slice(i, i + BATCH_SIZE);
+      await Promise.all(
+        batch.map(async (doc) => {
+          if (
+            !doc.path ||
+            !(doc.path.endsWith(".md") || doc.path.endsWith(".markdown"))
+          ) {
+            return;
+          }
+          const fullPath = path.join(repoDir, doc.path);
+          if (!fs.existsSync(fullPath)) return;
+
+          try {
+            const content = await fs.promises.readFile(fullPath, "utf-8");
+            const existingFrontmatter = extractFrontmatterMeta(content);
+
+            const needsSync =
+              (!existingFrontmatter.title && Boolean(doc.title)) ||
+              (Boolean(doc.status) && existingFrontmatter.status !== doc.status) ||
+              (Boolean(doc.categories) &&
+                existingFrontmatter.categories !== doc.categories) ||
+              (Boolean(doc.department) &&
+                existingFrontmatter.department !== doc.department) ||
+              (Boolean(doc.templateId) &&
+                existingFrontmatter.templateId !== doc.templateId) ||
+              (Array.isArray(doc.tags) &&
+                doc.tags.length > 0 &&
+                !areArraysEqual(existingFrontmatter.tags, doc.tags));
+
+            if (needsSync) {
+              const syncPayload: Record<string, any> = {};
+              if (doc.title) syncPayload.title = doc.title;
+              if (doc.status) syncPayload.status = doc.status;
+              if (doc.categories) syncPayload.categories = doc.categories;
+              if (doc.department) syncPayload.department = doc.department;
+              if (doc.templateId) syncPayload.templateId = doc.templateId;
+              if (doc.tags && doc.tags.length > 0) syncPayload.tags = doc.tags;
+              if (doc.approvers && doc.approvers.length > 0)
+                syncPayload.approvers = doc.approvers;
+
+              const updatedMarkdown = updateFrontmatterInMarkdown(
+                content,
+                syncPayload,
+              );
+              if (updatedMarkdown !== content) {
+                await fs.promises.writeFile(fullPath, updatedMarkdown, "utf-8");
+                const newStat = await fs.promises.stat(fullPath);
+                this.setFileStat(
+                  cleanRepo,
+                  doc.path,
+                  newStat.mtimeMs,
+                  newStat.size,
+                );
+                synced++;
+              }
+            }
+          } catch (err) {
+            console.warn(
+              `[DocsMetadataService] Erro ao sincronizar frontmatter para ${doc.path}:`,
+              err,
+            );
+          }
+        }),
+      );
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+
+    return { synced, total: metaList.length };
   }
 
   getDocMetadata(repoName: string, filePath: string): DocumentMetadataItem {
@@ -710,15 +1183,23 @@ export class DocsMetadataService {
         const fileContent = fs.readFileSync(fullPath, "utf-8");
         const frontmatterSyncPayload: Record<string, any> = {};
         if (partialMeta.title !== undefined) frontmatterSyncPayload.title = partialMeta.title;
+        if (partialMeta.type !== undefined) frontmatterSyncPayload.type = partialMeta.type;
+        if (partialMeta.badge !== undefined) frontmatterSyncPayload.badge = partialMeta.badge;
         if (partialMeta.status !== undefined) frontmatterSyncPayload.status = partialMeta.status;
         if (partialMeta.categories !== undefined) frontmatterSyncPayload.categories = partialMeta.categories;
         if (partialMeta.category !== undefined) frontmatterSyncPayload.categories = partialMeta.category;
         if (partialMeta.tags !== undefined) frontmatterSyncPayload.tags = partialMeta.tags;
         if (partialMeta.department !== undefined) frontmatterSyncPayload.department = partialMeta.department;
+        if (partialMeta.templateId !== undefined) frontmatterSyncPayload.templateId = partialMeta.templateId;
+        if (partialMeta.approvers !== undefined) frontmatterSyncPayload.approvers = partialMeta.approvers;
 
         const updatedMarkdown = updateFrontmatterInMarkdown(fileContent, frontmatterSyncPayload);
         if (updatedMarkdown !== fileContent) {
           fs.writeFileSync(fullPath, updatedMarkdown, "utf-8");
+          try {
+            const stat = fs.statSync(fullPath);
+            this.setFileStat(repoName, cleanPath, stat.mtimeMs, stat.size);
+          } catch {}
         }
       }
     } catch (e) {

@@ -346,11 +346,11 @@ export function ensureGitIgnore(repoDir: string): void {
     "node_modules/",
     "*.log",
     ".env",
+    ".docs.metadata.json",
   ];
 
   const systemPatternsToUnignore = [
     ".hidden_files.json",
-    ".docs.metadata.json",
     ".dictionary.json",
     ".templates.json",
     ".templates.metadata.json",
@@ -462,6 +462,8 @@ export async function cloneGitRepo(
     await executeGitCommand(`git config user.name "${authorName}"`, repoDir);
     await executeGitCommand(`git config user.email "${authorEmail}"`, repoDir);
   }
+
+  ensureGitIgnore(repoDir);
 
   return {
     success: true,
@@ -687,8 +689,20 @@ export async function commitChanges(
   if (!isRepo)
     return { success: false, message: "Diretório não é um repositório Git." };
 
+  ensureGitIgnore(repoDir);
+  try {
+    const checkRes = await executeGitCommand(
+      "git ls-files --error-unmatch .docs.metadata.json",
+      repoDir,
+    );
+    if (checkRes.success && checkRes.stdout.includes(".docs.metadata.json")) {
+      await executeGitCommand("git rm --cached .docs.metadata.json", repoDir);
+    }
+  } catch {}
+
   if (files && files.length > 0) {
     for (const file of files) {
+      if (file.includes(".docs.metadata.json")) continue;
       await executeGitCommand(`git add "${file}"`, repoDir);
     }
   } else {

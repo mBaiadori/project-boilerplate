@@ -26,21 +26,124 @@ export interface ParsedDocument {
 
 export function createDefaultMetadata(): DocumentMetadata {
   return {
-    id: "",
     title: "",
-    type: "spec",
-    version: "1.0.0",
     status: "",
-    layer: "",
-    path: "",
-    parent: "",
-    lifecycle: {
-      stage: "docs",
-      previous_stage: "",
-      next_stage: "",
-      feedback_loops: {},
-    },
+    categories: "",
+    tags: [],
   };
+}
+
+export function sanitizeMetadataForFrontmatter(
+  meta: Record<string, any> | null | undefined,
+): Record<string, any> {
+  if (!meta || typeof meta !== "object") return {};
+  const cleaned: Record<string, any> = {};
+
+  const internalKeys = new Set([
+    "ext",
+    "name",
+    "path",
+    "links",
+    "updated_at",
+    "prompt",
+    "feedback_loops",
+    "lifecycle",
+    "stage",
+    "layer",
+    "parent",
+    "version",
+    "isDraft",
+    "id",
+  ]);
+
+  for (const [key, rawVal] of Object.entries(meta)) {
+    if (internalKeys.has(key)) continue;
+    if (
+      rawVal === undefined ||
+      rawVal === null ||
+      rawVal === "{}" ||
+      (rawVal === "" && key !== "title")
+    ) {
+      continue;
+    }
+
+    if (key === "templateId") {
+      if (typeof rawVal === "string" && rawVal.trim().length > 0) {
+        cleaned.templateId = rawVal.trim();
+      }
+      continue;
+    }
+
+    if (key === "tags" || key === "approvers") {
+      let arr: string[] = [];
+      if (Array.isArray(rawVal)) {
+        arr = rawVal;
+      } else if (typeof rawVal === "string") {
+        const trimmed = rawVal.trim();
+        if (trimmed === "[]" || trimmed === "{}" || trimmed === "") {
+          cleaned[key] = [];
+          continue;
+        }
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (Array.isArray(parsed)) arr = parsed;
+          else arr = trimmed.split(",");
+        } catch {
+          arr = trimmed.split(",");
+        }
+      }
+      const validItems = arr
+        .map((s) => (typeof s === "string" ? s.trim() : String(s)))
+        .filter((s) => s && s !== "[]" && s !== "{}" && s !== '""' && s !== "''");
+      cleaned[key] = validItems;
+      continue;
+    }
+
+    if (key === "category" && !cleaned.categories) {
+      const trimmed = String(rawVal).trim();
+      if (trimmed && trimmed !== "[]" && trimmed !== "{}") {
+        cleaned.categories = trimmed;
+      }
+      continue;
+    }
+
+    if (typeof rawVal === "string") {
+      const trimmed = rawVal.trim();
+      if (trimmed && trimmed !== "[]" && trimmed !== "{}") {
+        cleaned[key] = trimmed;
+      }
+    } else if (typeof rawVal === "number" || typeof rawVal === "boolean") {
+      cleaned[key] = rawVal;
+    }
+  }
+
+  // Ordem canônica determinística
+  const preferredOrder = [
+    "title",
+    "type",
+    "badge",
+    "status",
+    "categories",
+    "tags",
+    "department",
+    "templateId",
+    "approvers",
+  ];
+  const sorted: Record<string, any> = {};
+  const keys = Object.keys(cleaned).sort((a, b) => {
+    const idxA = preferredOrder.indexOf(a);
+    const idxB = preferredOrder.indexOf(b);
+    if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+    if (idxA !== -1) return -1;
+    if (idxB !== -1) return 1;
+    return a.localeCompare(b);
+  });
+
+  for (const k of keys) {
+    sorted[k] = cleaned[k];
+  }
+
+  return sorted;
 }
 
 export function parseFrontmatter(rawContent = ""): ParsedDocument {
@@ -71,11 +174,12 @@ export function parseFrontmatter(rawContent = ""): ParsedDocument {
 
   try {
     const parsed = yaml.load(yamlBlock) as DocumentMetadata;
+    const sanitized = sanitizeMetadataForFrontmatter(parsed || {});
     return {
       hasFrontmatter: true,
       metadata: {
         ...createDefaultMetadata(),
-        ...(parsed && typeof parsed === "object" ? parsed : {}),
+        ...sanitized,
       },
       body,
     };
@@ -94,10 +198,14 @@ export function serializeFrontmatter(
   body = "",
 ): string {
   if (!metadata) return body;
+  const cleanMeta = sanitizeMetadataForFrontmatter(metadata);
+  if (Object.keys(cleanMeta).length === 0) {
+    return body.trimStart();
+  }
 
   try {
     const yamlString = yaml
-      .dump(metadata, { lineWidth: -1, forceQuotes: false })
+      .dump(cleanMeta, { lineWidth: -1, forceQuotes: false })
       .trim();
     return `---\n${yamlString}\n---\n\n${body.trimStart()}`;
   } catch (e) {

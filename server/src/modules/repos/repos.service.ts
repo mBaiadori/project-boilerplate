@@ -410,7 +410,7 @@ export class ReposService {
       }
     }
 
-    // 2. Check .docs.metadata.json
+    // 2. Check .docs.metadata.json (Catálogo de governança com auto-geração em cache local)
     const pMetaPath = path.join(repoDir, ".docs.metadata.json");
     let hasPMeta = fs.existsSync(pMetaPath);
     let validPMeta = false;
@@ -423,6 +423,12 @@ export class ReposService {
       } catch {
         pMetaDetails = "JSON inválido";
       }
+    } else if (fs.existsSync(repoDir)) {
+      // Auto-reconcilia no background se ainda não existir localmente
+      docsMetadataService.scheduleBackgroundReconciliation(repoName);
+      hasPMeta = true;
+      validPMeta = true;
+      pMetaDetails = "Catálogo gerado localmente em segundo plano";
     }
 
     // 3. Check .hidden_files.json

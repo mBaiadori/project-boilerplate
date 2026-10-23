@@ -1339,6 +1339,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
             refreshGitLog(15, repo.name),
             refreshWhatsNew(),
             checkRemoteUpdates(repo.name),
+            API.syncFrontmatters(repo.name),
           ];
           if (dictionaryTermsRef.current.length === 0) {
             tasks.push(loadDictionaryTerms());

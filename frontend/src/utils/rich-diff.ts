@@ -187,3 +187,64 @@ export function generateVisualMarkdownDiffHtml(oldMarkdown: string = '', newMark
 
   return resultChunks.join('\n');
 }
+
+export interface SideBySideDiffHtmlResult {
+  oldHtml: string;
+  newHtml: string;
+}
+
+/**
+ * Generates super clean side-by-side HTML for markdown documents.
+ * Highlighting is applied strictly with soft background colors (no borders),
+ * without repeating banners, labels, or extra text blocks.
+ */
+export function generateSideBySideMarkdownHtml(
+  oldMarkdown: string = '',
+  newMarkdown: string = ''
+): SideBySideDiffHtmlResult {
+  const cleanOld = (oldMarkdown || '').trim();
+  const cleanNew = (newMarkdown || '').trim();
+
+  if (!cleanOld && !cleanNew) {
+    return {
+      oldHtml: '<p style="color:var(--color-outline, #64748b);font-style:italic">Documento vazio.</p>',
+      newHtml: '<p style="color:var(--color-outline, #64748b);font-style:italic">Documento vazio.</p>',
+    };
+  }
+
+  if (cleanOld === cleanNew) {
+    const rendered = marked.parse(cleanNew) as string;
+    return { oldHtml: rendered, newHtml: rendered };
+  }
+
+  const lineDiff = diffLines(cleanOld, cleanNew);
+  const oldChunks: string[] = [];
+  const newChunks: string[] = [];
+
+  for (const part of lineDiff) {
+    if (part.removed) {
+      // Left side: soft red background only, no borders
+      const parsed = marked.parse(part.value) as string;
+      oldChunks.push(
+        `<div class="diff-highlight-removed" style="background: rgba(239, 68, 68, 0.15); border-radius: 4px; padding: 2px 4px; margin: 2px 0;">${parsed}</div>`
+      );
+    } else if (part.added) {
+      // Right side: soft green background only, no borders
+      const parsed = marked.parse(part.value) as string;
+      newChunks.push(
+        `<div class="diff-highlight-added" style="background: rgba(34, 197, 94, 0.15); border-radius: 4px; padding: 2px 4px; margin: 2px 0;">${parsed}</div>`
+      );
+    } else {
+      // Unchanged content in both sides
+      const parsed = marked.parse(part.value) as string;
+      oldChunks.push(`<div class="diff-block-unchanged" style="margin: 2px 0;">${parsed}</div>`);
+      newChunks.push(`<div class="diff-block-unchanged" style="margin: 2px 0;">${parsed}</div>`);
+    }
+  }
+
+  return {
+    oldHtml: oldChunks.join('\n') || '<p style="color:var(--color-outline, #64748b);font-style:italic">Documento vazio na versão oficial.</p>',
+    newHtml: newChunks.join('\n') || '<p style="color:var(--color-outline, #64748b);font-style:italic">Documento vazio no rascunho.</p>',
+  };
+}
+

@@ -323,7 +323,7 @@ export const ProposalModal: React.FC<ProposalModalProps> = ({
                               fileName={file.path}
                               oldTitle="Versão Base"
                               newTitle="Nova Versão"
-                              initialViewMode="split"
+                              hideHeader={true}
                             />
                           </div>
                         ) : (
