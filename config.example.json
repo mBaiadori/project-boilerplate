@@ -3,7 +3,7 @@
   "token": "",
   "ai_settings": {
     "provider": "gemini",
-    "model": "gemini-3.5-flash",
+    "model": "gemini-2.5-flash",
     "api_key": "",
     "custom_endpoint": "http://localhost:11434/v1"
   },

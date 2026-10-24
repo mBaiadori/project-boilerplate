@@ -1,4 +1,5 @@
 import { marked } from "marked";
+import { sanitizeHtml } from "../../../../utils/sanitize";
 
 export const formatPRDate = (dateStr?: string) => {
   if (!dateStr) return "";
@@ -19,11 +20,11 @@ export const formatPRDate = (dateStr?: string) => {
 
 export const renderMarkdownDescription = (text: string) => {
   try {
-    const html = marked.parse(text, { breaks: true, gfm: true }) as string;
+    const rawHtml = marked.parse(text, { breaks: true, gfm: true }) as string;
     return (
       <div
         className="ui-markdown-rendered-desc"
-        dangerouslySetInnerHTML={{ __html: html }}
+        dangerouslySetInnerHTML={{ __html: sanitizeHtml(rawHtml) }}
       />
     );
   } catch {

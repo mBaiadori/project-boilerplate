@@ -238,9 +238,13 @@ export async function skillsRoutes(fastify: FastifyInstance) {
     const cfg = loadConfig();
     const repoName = query.repo || cfg.active_repo?.name || 'local';
     const { customToolsService } = await import('./custom-tools.service.js');
+    const tools = customToolsService.getProjectTools(repoName).map((tool) => ({
+      ...tool,
+      approval: customToolsService.isToolApproved(repoName, tool),
+    }));
     return reply.send({
       repo: repoName,
-      tools: customToolsService.getProjectTools(repoName),
+      tools,
     });
   });
 
@@ -254,7 +258,55 @@ export async function skillsRoutes(fastify: FastifyInstance) {
     if (!tool) {
       return reply.status(404).send({ error: `Ferramenta customizada '${params.id}' não encontrada.` });
     }
-    return reply.send({ tool });
+    return reply.send({
+      tool: {
+        ...tool,
+        approval: customToolsService.isToolApproved(repoName, tool),
+      },
+    });
+  });
+
+  fastify.post('/api/aicenter/custom-tools/:id/approve', async (request, reply) => {
+    const params = request.params as { id: string };
+    const body = (request.body as { expected_hash?: string; repo?: string }) || {};
+    const cfg = loadConfig();
+    const repoName = body.repo || cfg.active_repo?.name || 'local';
+    const { customToolsService, computeToolHash } = await import('./custom-tools.service.js');
+
+    const tool = customToolsService.getProjectTool(repoName, params.id);
+    if (!tool) {
+      return reply.status(404).send({ error: `Ferramenta customizada '${params.id}' não encontrada.` });
+    }
+
+    const currentHash = computeToolHash(tool);
+    if (body.expected_hash && body.expected_hash !== currentHash) {
+      return reply.status(400).send({
+        error: `Hash fornecido (${body.expected_hash.slice(0, 8)}) não corresponde ao hash atual da ferramenta (${currentHash.slice(0, 8)}).`,
+      });
+    }
+
+    const userLogin = cfg.user?.login || 'user';
+    customToolsService.approveTool(repoName, tool.id, currentHash, userLogin);
+
+    return reply.send({
+      success: true,
+      message: `Ferramenta '${tool.name}' aprovada com sucesso.`,
+      hash: currentHash,
+    });
+  });
+
+  fastify.post('/api/aicenter/custom-tools/:id/revoke', async (request, reply) => {
+    const params = request.params as { id: string };
+    const body = (request.body as { repo?: string }) || {};
+    const cfg = loadConfig();
+    const repoName = body.repo || cfg.active_repo?.name || 'local';
+    const { customToolsService } = await import('./custom-tools.service.js');
+
+    customToolsService.revokeToolApproval(repoName, params.id);
+    return reply.send({
+      success: true,
+      message: `Aprovação da ferramenta '${params.id}' revogada com sucesso.`,
+    });
   });
 
   fastify.post('/api/aicenter/custom-tools', async (request, reply) => {

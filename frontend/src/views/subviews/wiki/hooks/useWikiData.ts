@@ -5,6 +5,7 @@ import { useAI } from "../../../../context/AIContext";
 import { useWorkspace } from "../../../../context/WorkspaceContext";
 import { API } from "../../../../services/api";
 import { decorateHtmlWithTerms, findDictionaryTerm } from "../../../../utils/dictionary-matcher";
+import { sanitizeHtml } from "../../../../utils/sanitize";
 import { STARTER_TEMPLATES, type WikiEntry } from "../types";
 
 export function useWikiData() {
@@ -28,7 +29,8 @@ export function useWikiData() {
   const renderedHtml = useMemo(() => {
     if (!activeEntry?.content) return "";
     const rawHtml = marked.parse(activeEntry.content) as string;
-    return decorateHtmlWithTerms(rawHtml, dictionaryTerms || []);
+    const decorated = decorateHtmlWithTerms(rawHtml, dictionaryTerms || []);
+    return sanitizeHtml(decorated);
   }, [activeEntry?.content, dictionaryTerms]);
 
   const handleArticleMouseMove = (e: React.MouseEvent) => {

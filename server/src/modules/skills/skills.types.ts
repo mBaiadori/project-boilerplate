@@ -101,6 +101,8 @@ export interface CustomToolDefinition {
     method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
     headers?: Record<string, string>;
     command?: string;
+    executable?: string;
+    args?: string[];
   };
   is_active?: boolean;
   source?: 'project' | 'global';

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import * as XLSX from 'xlsx';
+import { parseSpreadsheet } from '../../../utils/spreadsheet';
 import { FileSpreadsheet, Download, Search, RefreshCw, AlertCircle, Laptop, FolderGit2 } from 'lucide-react';
 import { useWorkspace } from '../../../context/WorkspaceContext';
 import { API } from '../../../services/api';
@@ -10,7 +10,7 @@ interface ExcelViewerProps {
 
 export const ExcelViewer: React.FC<ExcelViewerProps> = ({ filePath }) => {
   const { activeRepo } = useWorkspace();
-  const [workbook, setWorkbook] = useState<XLSX.WorkBook | null>(null);
+  const [fileBuffer, setFileBuffer] = useState<ArrayBuffer | null>(null);
   const [sheetNames, setSheetNames] = useState<string[]>([]);
   const [activeSheet, setActiveSheet] = useState<string>('');
   const [sheetData, setSheetData] = useState<any[][]>([]);
@@ -42,16 +42,11 @@ export const ExcelViewer: React.FC<ExcelViewerProps> = ({ filePath }) => {
         throw new Error(`Falha ao carregar arquivo Excel (${response.statusText})`);
       }
       const arrayBuffer = await response.arrayBuffer();
-      const wb = XLSX.read(arrayBuffer, { type: 'array' });
-      setWorkbook(wb);
-      setSheetNames(wb.SheetNames || []);
-      if (wb.SheetNames && wb.SheetNames.length > 0) {
-        const firstSheet = wb.SheetNames[0];
-        setActiveSheet(firstSheet);
-        const ws = wb.Sheets[firstSheet];
-        const rawJson: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
-        setSheetData(rawJson);
-      }
+      setFileBuffer(arrayBuffer);
+      const parsed = await parseSpreadsheet(arrayBuffer);
+      setSheetNames(parsed.sheetNames);
+      setActiveSheet(parsed.activeSheet);
+      setSheetData(parsed.rows);
     } catch (err: any) {
       console.error('[ExcelViewer] Erro:', err);
       setError(err.message || 'Erro ao processar planilha Excel.');
@@ -64,12 +59,18 @@ export const ExcelViewer: React.FC<ExcelViewerProps> = ({ filePath }) => {
     loadExcelFile();
   }, [filePath]);
 
-  const handleSelectSheet = (name: string) => {
-    if (!workbook) return;
-    setActiveSheet(name);
-    const ws = workbook.Sheets[name];
-    const rawJson: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
-    setSheetData(rawJson);
+  const handleSelectSheet = async (name: string) => {
+    if (!fileBuffer) return;
+    try {
+      setIsLoading(true);
+      const parsed = await parseSpreadsheet(fileBuffer, name);
+      setActiveSheet(parsed.activeSheet);
+      setSheetData(parsed.rows);
+    } catch (err: any) {
+      setError(err.message || 'Erro ao alternar de aba.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleDownload = () => {

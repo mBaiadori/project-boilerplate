@@ -1,0 +1,43 @@
+import { test, describe, beforeEach, afterEach } from 'node:test';
+import assert from 'node:assert';
+import fs from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
+import { executeGit, isGitRepo } from '../../utils/git.js';
+import { getDefaultBranch } from '../../utils/git.js';
+import { gitService } from '../git/git.service.js';
+import { loadConfig, saveConfig } from '../../config/storage.js';
+
+describe('C3: default_branch preservation and origin/HEAD resolution', () => {
+  let tmpDir: string;
+
+  beforeEach(async () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'git-defbranch-test-'));
+    await executeGit(['init', '-b', 'main'], tmpDir);
+    await executeGit(['config', 'user.name', 'Tester'], tmpDir);
+    await executeGit(['config', 'user.email', 'test@example.com'], tmpDir);
+    fs.writeFileSync(path.join(tmpDir, 'README.md'), '# Test');
+    await executeGit(['add', 'README.md'], tmpDir);
+    await executeGit(['commit', '-m', 'initial commit'], tmpDir);
+  });
+
+  afterEach(() => {
+    try {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    } catch {}
+  });
+
+  test('getDefaultBranch deve detectar branch padrão main em repositório local', async () => {
+    const defBranch = await getDefaultBranch(tmpDir);
+    assert.strictEqual(defBranch, 'main');
+  });
+
+  test('Criar ou alternar para branch de feature NÃO deve sobrescrever default_branch', async () => {
+    // Cria branch de feature
+    await executeGit(['checkout', '-b', 'gov/feature-nova'], tmpDir);
+
+    // getDefaultBranch ainda deve retornar main (baseada em main/master), não a branch de feature atual
+    const defBranch = await getDefaultBranch(tmpDir);
+    assert.strictEqual(defBranch, 'main');
+  });
+});

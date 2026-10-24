@@ -15,6 +15,7 @@ import {
   getFileGitLog,
   getFileContentAtCommit,
   getGitDiff,
+  rollbackToCommit,
   executeGitCommand,
 } from "./git.js";
 
@@ -179,6 +180,19 @@ test("Git Utilities Suite - Cobertura de Funções Core de Versionamento", async
       fs.writeFileSync(path.join(repoDir, "novo.md"), "Conteúdo do novo arquivo\n", "utf-8");
       const diffNew = await getGitDiff(repoDir, "novo.md");
       assert.ok(diffNew.diff.includes("+Conteúdo do novo arquivo"));
+    });
+
+    // 12. rollbackToCommit com proteção contra perda de dados não salvos (C5)
+    await t.test("rollbackToCommit deve abortar se houver alterações não commitadas a menos que force seja true", async () => {
+      assert.ok(firstCommitHash);
+      // Há alterações não commitadas (novo.md e artigo.md modificado do teste anterior)
+      const abortRes = await rollbackToCommit(repoDir, firstCommitHash);
+      assert.strictEqual(abortRes.success, false);
+      assert.ok(abortRes.message.includes("alterações não commitadas"));
+
+      // Com force: true deve realizar o rollback com sucesso
+      const forceRes = await rollbackToCommit(repoDir, firstCommitHash, "Rollback forçado", { force: true });
+      assert.strictEqual(forceRes.success, true);
     });
   } finally {
     try {

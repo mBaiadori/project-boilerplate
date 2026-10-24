@@ -13,10 +13,12 @@ import {
   DEFAULT_GLOBAL_SYSTEM_PROMPT,
   DEFAULT_TEMPLATE_CREATOR_PROMPT,
   DEFAULT_PROJECT_ABOUT_PROMPT,
+  DEFAULT_AI_SETTINGS,
 } from "./constants.js";
 import { validateJsonSchema } from "../utils/schema.validator.js";
 import { isPathHidden, loadHiddenFiles, DEFAULT_HIDDEN_FILES } from "../utils/hidden-files.js";
 import { vaultService, VAULT_KEYS } from "../modules/vault/vault.service.js";
+import { writeJsonAtomic, writeTextAtomic } from "../utils/atomic-write.js";
 
 export interface WorkspaceChange {
   path: string;
@@ -39,6 +41,7 @@ export interface SavedAccount {
 export interface AppConfig {
   authenticated: boolean;
   token: string;
+  mode?: 'local' | 'remote';
   user: any;
   orgs: any[];
   repos?: any[];
@@ -121,8 +124,7 @@ export function loadProjectsMasterConfig(): Record<string, any> {
 }
 
 export function saveProjectsMasterConfig(cfg: any): void {
-  fs.mkdirSync(PROJECTS_DIR, { recursive: true });
-  fs.writeFileSync(PROJECTS_CONFIG_PATH, JSON.stringify(cfg, null, 2), "utf-8");
+  writeJsonAtomic(PROJECTS_CONFIG_PATH, cfg);
 }
 
 export function loadConfig(): AppConfig {
@@ -144,12 +146,7 @@ export function loadConfig(): AppConfig {
     cfg = {
       authenticated: false,
       token: "",
-      ai_settings: {
-        provider: "gemini",
-        model: "gemini-3.5-flash",
-        api_key: process.env.GEMINI_API_KEY || "",
-        custom_endpoint: "http://localhost:11434/v1",
-      },
+      ai_settings: { ...DEFAULT_AI_SETTINGS },
       settings: {
         auto_pr_on_save: false,
         template_creator_prompt: DEFAULT_TEMPLATE_CREATOR_PROMPT,
@@ -180,11 +177,15 @@ export function loadConfig(): AppConfig {
     cfg.workflows = master.workflows || [];
   }
 
+  const isExplicitLocal = cfg.token === 'local_mode' || cfg.mode === 'local';
+
   // Carrega credenciais confidenciais a partir do cofre nativo do SO
-  const vaultGitHubToken = vaultService.getSecret(VAULT_KEYS.GITHUB_TOKEN);
-  if (vaultGitHubToken) {
-    cfg.token = vaultGitHubToken;
-    cfg.authenticated = true;
+  if (!isExplicitLocal) {
+    const vaultGitHubToken = vaultService.getSecret(VAULT_KEYS.GITHUB_TOKEN);
+    if (vaultGitHubToken) {
+      cfg.token = vaultGitHubToken;
+      cfg.authenticated = true;
+    }
   }
 
   if (Array.isArray(cfg.accounts)) {
@@ -204,7 +205,7 @@ export function loadConfig(): AppConfig {
   }
 
   // Fallback: se cfg.token não estiver preenchido, recupera da conta ativa ou primeira conta disponível
-  if (!cfg.token && Array.isArray(cfg.accounts) && cfg.accounts.length > 0) {
+  if (!isExplicitLocal && !cfg.token && Array.isArray(cfg.accounts) && cfg.accounts.length > 0) {
     const activeAcc = cfg.user?.login
       ? cfg.accounts.find((a: any) => a.user?.login?.toLowerCase() === cfg.user?.login?.toLowerCase() && a.token)
       : cfg.accounts.find((a: any) => a.token);
@@ -245,6 +246,14 @@ export function loadConfig(): AppConfig {
   }
   if (cfg.active_repo?.name) {
     cfg.workspace_changes[cfg.active_repo.name] = loadRepoWorkspaceChanges(cfg.active_repo.name);
+  }
+
+  // Migração C8: substitui o sentinela 'local_mode' por campo explícito mode: 'local' | 'remote'
+  if (cfg.token === 'local_mode') {
+    cfg.token = '';
+    cfg.mode = 'local';
+  } else if (!cfg.mode) {
+    cfg.mode = (cfg.token && cfg.token.trim()) ? 'remote' : 'local';
   }
 
   return cfg as AppConfig;
@@ -311,10 +320,7 @@ export function saveConfig(cfg: AppConfig): void {
       workflows: cfg.workflows || [],
     };
 
-    // Escrita atômica em disco para evitar corrupção em caso de queda de energia ou desligamento repentino
-    const tmpFile = `${CONFIG_PATH}.${Date.now()}.tmp`;
-    fs.writeFileSync(tmpFile, JSON.stringify(sanitizedToDisk, null, 2), "utf-8");
-    fs.renameSync(tmpFile, CONFIG_PATH);
+    writeJsonAtomic(CONFIG_PATH, sanitizedToDisk);
   } catch (e) {
     console.error(`Erro ao salvar ${CONFIG_PATH}:`, e);
   }
@@ -345,8 +351,7 @@ export function loadRepoWorkspaceChanges(repoName: string, ownerOrOrg?: string):
 export function saveRepoWorkspaceChanges(repoName: string, changes: WorkspaceChange[], ownerOrOrg?: string): void {
   const filePath = getRepoWorkspaceChangesPath(repoName, ownerOrOrg);
   try {
-    fs.mkdirSync(path.dirname(filePath), { recursive: true });
-    fs.writeFileSync(filePath, JSON.stringify(changes, null, 2), "utf-8");
+    writeJsonAtomic(filePath, changes);
   } catch (e) {
     console.error(`Erro ao salvar workspace_changes para ${repoName}:`, e);
   }

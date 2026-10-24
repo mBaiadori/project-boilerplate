@@ -1,6 +1,7 @@
 import React from "react";
 import { Check, Copy, Edit3, Trash2 } from "lucide-react";
 import { Badge, Button, IconButton } from "../../../../components/ui";
+import { sanitizeHtml } from "../../../../utils/sanitize";
 import { CATEGORY_META, type WikiEntry } from "../types";
 
 interface WikiReaderPaneProps {
@@ -86,7 +87,7 @@ export const WikiReaderPane: React.FC<WikiReaderPaneProps> = ({
         className="markdown-body"
         onMouseMove={onArticleMouseMove}
         dangerouslySetInnerHTML={{
-          __html: renderedHtml,
+          __html: sanitizeHtml(renderedHtml),
         }}
         style={{ fontSize: "14.5px", lineHeight: 1.7 }}
       />

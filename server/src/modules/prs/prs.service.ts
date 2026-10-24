@@ -7,13 +7,14 @@ import {
   ensureGitRepo,
   commitChanges,
   createAndCheckoutBranch,
-  executeGitCommand,
+  executeGit,
   getActiveBearerToken,
   getGitDiff,
   getGitLog,
   getGitStatus,
   rollbackToCommit,
 } from '../../utils/git.js';
+import { assertBranchName, assertCommitish, assertGitPath } from '../../utils/git-validate.js';
 import { computeDiff } from '../../utils/diff.js';
 import { isPathHidden, loadHiddenFiles, isSystemPath } from '../../utils/hidden-files.js';
 import { aiService } from '../ai/ai.service.js';
@@ -228,7 +229,7 @@ export class PRsService {
       await Promise.all(
         openPRsWithBranch.map(async (pr: any) => {
           try {
-            const revRes = await executeGitCommand(`git rev-parse "${pr.branch}"`, repoDir);
+            const revRes = await executeGit(['rev-parse', assertBranchName(pr.branch)], repoDir);
             if (revRes.success && revRes.stdout) {
               const currentHead = revRes.stdout.trim();
               if (!pr.head_sha) {
@@ -350,7 +351,7 @@ export class PRsService {
             rawFiles = this.commitFilesCache.get(p.commit_hash)!;
           } else {
             try {
-              const numStatRes = await executeGitCommand(`git show --numstat --pretty="" ${p.commit_hash}`, repoDir);
+              const numStatRes = await executeGit(['show', '--numstat', '--pretty=', assertCommitish(p.commit_hash)], repoDir);
               if (numStatRes.success && numStatRes.stdout) {
                 rawFiles = numStatRes.stdout
                   .split('\n')
@@ -960,7 +961,7 @@ DIRETRIZES OBRIGATÓRIAS:
     }
 
     const defaultBranch = activeRepo?.default_branch || 'main';
-    const baseHashRes = await executeGitCommand(`git rev-parse "${defaultBranch}"`, repoDir);
+    const baseHashRes = await executeGit(['rev-parse', assertBranchName(defaultBranch)], repoDir);
     const baseSha = baseHashRes.success ? (baseHashRes.stdout || '').trim() : '';
 
     const repoPRs = this.loadRepoPRs(repoName);
@@ -982,13 +983,13 @@ DIRETRIZES OBRIGATÓRIAS:
       const commitMsg = payload.title || `Atualização de Governança #${newId}`;
       await commitChanges(repoDir, commitMsg, allChangedPaths);
 
-      const headHashRes = await executeGitCommand(`git rev-parse HEAD`, repoDir);
+      const headHashRes = await executeGit(['rev-parse', 'HEAD'], repoDir);
       headSha = headHashRes.success ? (headHashRes.stdout || '').trim() : '';
 
       // 3. GitHub Remote PR (if authenticated and remote repo)
       if (cfg.authenticated && activeToken && activeRepo?.full_name && !activeRepo?.is_local) {
         try {
-          const pushRes = await executeGitCommand(`git push -u origin "${branchName}"`, repoDir, activeToken);
+          const pushRes = await executeGit(['push', '-u', 'origin', assertBranchName(branchName)], repoDir, activeToken);
           if (pushRes.success) {
             const ghRes = await callGitHubAPI(
               `/repos/${activeRepo.full_name}/pulls`,
@@ -1017,7 +1018,7 @@ DIRETRIZES OBRIGATÓRIAS:
       }
     } finally {
       // Switch back to default branch so local environment is clean even if an error occurs
-      await executeGitCommand(`git checkout "${defaultBranch}"`, repoDir).catch(() => {});
+      await executeGit(['checkout', assertBranchName(defaultBranch)], repoDir).catch(() => {});
     }
 
     // Detailed changes: ONLY store metadata in JSON, NEVER plain content
@@ -1205,7 +1206,7 @@ DIRETRIZES OBRIGATÓRIAS:
     let currentCommitHash = target.head_sha || '';
     if (target.branch) {
       try {
-        const revRes = await executeGitCommand(`git rev-parse "${target.branch}"`, repoDir);
+        const revRes = await executeGit(['rev-parse', assertBranchName(target.branch)], repoDir);
         if (revRes.success && revRes.stdout) {
           currentCommitHash = revRes.stdout.trim();
           target.head_sha = currentCommitHash;
@@ -1331,7 +1332,7 @@ DIRETRIZES OBRIGATÓRIAS:
     // 2. Ensure isolated PR worktree without touching user active workspace
     const wtDir = await prWorktreeService.ensurePRWorktree(repoName, target);
     const repoDir = this.getRepoDir(repoName);
-    const headRes = await executeGitCommand(`git -C "${wtDir}" rev-parse HEAD`, repoDir);
+    const headRes = await executeGit(['-C', wtDir, 'rev-parse', 'HEAD'], repoDir);
     const currentHeadSha = (headRes.stdout || '').trim();
 
     // 3. Optimistic concurrency & 3-way merge check
@@ -1572,7 +1573,7 @@ DIRETRIZES OBRIGATÓRIAS:
 
     if (cfg.authenticated && cfg.token && activeRepo?.full_name && !activeRepo?.is_local && activeRepo?.name === repoName) {
       try {
-        await executeGitCommand(`git push origin main`, repoDir);
+        await executeGit(['push', 'origin', 'main'], repoDir);
       } catch (pushErr) {
         console.warn('[PRsService] Aviso ao sincronizar rollback com o GitHub remoto:', pushErr);
       }
@@ -1592,7 +1593,7 @@ DIRETRIZES OBRIGATÓRIAS:
     const activeRepo = cfg.active_repo;
     const repoName = repoNameParam || targetPR.repo_name || activeRepo?.name || 'local';
     const repoDir = this.getRepoDir(repoName);
-    const targetBranch = targetPR.target_branch || 'main';
+    const targetBranch = assertBranchName(targetPR.target_branch || 'main');
 
     const approvalsList = Array.isArray(targetPR.approvals) ? targetPR.approvals : [];
     const auditLines = approvalsList
@@ -1619,9 +1620,9 @@ DIRETRIZES OBRIGATÓRIAS:
     // 2. Se houver arquivos modificados ou untracked na working tree (ex: .docs.metadata.json ou .gitignore), guarda em stash temporário
     let didStash = false;
     try {
-      const statusRes = await executeGitCommand('git status --porcelain', repoDir);
+      const statusRes = await executeGit(['status', '--porcelain'], repoDir);
       if (statusRes.success && statusRes.stdout.trim().length > 0) {
-        const stashRes = await executeGitCommand('git stash push --include-untracked -m "context-os-pre-merge-stash"', repoDir);
+        const stashRes = await executeGit(['stash', 'push', '--include-untracked', '-m', 'context-os-pre-merge-stash'], repoDir);
         if (stashRes.success && !stashRes.stdout.includes('No local changes to save')) {
           didStash = true;
         }
@@ -1630,30 +1631,31 @@ DIRETRIZES OBRIGATÓRIAS:
 
     try {
       // 3. Local Git Checkout
-      const checkoutRes = await executeGitCommand(`git checkout ${targetBranch}`, repoDir);
+      const checkoutRes = await executeGit(['checkout', targetBranch], repoDir);
       if (!checkoutRes.success) {
         throw new Error(`Falha ao alternar para branch ${targetBranch}: ${checkoutRes.stderr || checkoutRes.stdout}`);
       }
 
       // 4. Local Git Merge
       if (targetPR.branch) {
+        const prBranch = assertBranchName(targetPR.branch);
         // Se o repo for shallow, busca histórico completo para encontrar base comum de merge
         try {
-          const isShallowRes = await executeGitCommand('git rev-parse --is-shallow-repository', repoDir);
+          const isShallowRes = await executeGit(['rev-parse', '--is-shallow-repository'], repoDir);
           if (isShallowRes.success && isShallowRes.stdout.trim() === 'true') {
             const activeToken = getActiveBearerToken(cfg.token);
-            await executeGitCommand('git fetch --unshallow origin', repoDir, activeToken || undefined).catch(() => {});
+            await executeGit(['fetch', '--unshallow', 'origin'], repoDir, activeToken || undefined).catch(() => {});
           }
         } catch {}
 
-        let mergeRes = await executeGitCommand(
-          `git merge "${targetPR.branch}" --no-ff -m "${commitMsg.replace(/"/g, '\\"')}"`,
+        let mergeRes = await executeGit(
+          ['merge', prBranch, '--no-ff', '-m', commitMsg],
           repoDir
         );
 
         // Se o merge falhou, checa se os conflitos são exclusivamente em arquivos internos de metadados
         if (!mergeRes.success) {
-          const unmergedRes = await executeGitCommand('git diff --name-only --diff-filter=U', repoDir);
+          const unmergedRes = await executeGit(['diff', '--name-only', '--diff-filter=U'], repoDir);
           if (unmergedRes.success && unmergedRes.stdout.trim().length > 0) {
             const conflictingFiles = unmergedRes.stdout.trim().split('\n').map(f => f.trim()).filter(Boolean);
             const onlyInternalConflicts = conflictingFiles.every(f => 
@@ -1662,17 +1664,18 @@ DIRETRIZES OBRIGATÓRIAS:
 
             if (onlyInternalConflicts) {
               // Remove arquivos transitórios que não devem ser versionados
-              await executeGitCommand('git rm -f --ignore-unmatch .spec-memory/workspace_changes.json', repoDir).catch(() => {});
+              await executeGit(['rm', '-f', '--ignore-unmatch', '.spec-memory/workspace_changes.json'], repoDir).catch(() => {});
               // Para arquivos de metadados internos, adota a versão do branch de destino (ours)
               for (const f of conflictingFiles) {
                 if (f !== '.spec-memory/workspace_changes.json') {
-                  await executeGitCommand(`git checkout --ours -- "${f}"`, repoDir).catch(() => {});
-                  await executeGitCommand(`git add "${f}"`, repoDir).catch(() => {});
+                  const safeF = assertGitPath(f);
+                  await executeGit(['checkout', '--ours', '--', safeF], repoDir).catch(() => {});
+                  await executeGit(['add', '--', safeF], repoDir).catch(() => {});
                 }
               }
               // Conclui o commit de merge
-              mergeRes = await executeGitCommand(
-                `git commit -m "${commitMsg.replace(/"/g, '\\"')}"`,
+              mergeRes = await executeGit(
+                ['commit', '-m', commitMsg],
                 repoDir
               );
             }
@@ -1680,7 +1683,7 @@ DIRETRIZES OBRIGATÓRIAS:
         }
 
         if (!mergeRes.success) {
-          await executeGitCommand('git merge --abort', repoDir);
+          await executeGit(['merge', '--abort'], repoDir);
           throw new Error(`Falha no merge do Git: ${mergeRes.stderr || mergeRes.stdout}`);
         }
       }
@@ -1698,7 +1701,7 @@ DIRETRIZES OBRIGATÓRIAS:
               merge_method: 'merge',
             }
           );
-          await executeGitCommand(`git push origin ${targetBranch}`, repoDir);
+          await executeGit(['push', 'origin', targetBranch], repoDir);
         } catch (ghMergeErr) {
           console.warn(`[PRsService] Aviso ao executar merge no GitHub remoto:`, ghMergeErr);
         }
@@ -1709,7 +1712,7 @@ DIRETRIZES OBRIGATÓRIAS:
     } finally {
       if (didStash) {
         try {
-          await executeGitCommand('git stash pop', repoDir);
+          await executeGit(['stash', 'pop'], repoDir);
         } catch {}
       }
     }

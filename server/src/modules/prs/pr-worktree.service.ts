@@ -1,8 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { PROJECTS_DIR, resolveRepoDir } from '../../config/constants.js';
+import { resolveRepoDir } from '../../config/constants.js';
 import { loadConfig } from '../../config/storage.js';
-import { executeGitCommand } from '../../utils/git.js';
+import { executeGit } from '../../utils/git.js';
+import { assertBranchName } from '../../utils/git-validate.js';
 
 export class PRWorktreeService {
   private getRepoDir(repoName?: string): string {
@@ -22,16 +23,13 @@ export class PRWorktreeService {
     pr: { id: number | string; branch: string }
   ): Promise<string> {
     const repoDir = this.getRepoDir(repoName);
-    const branch = pr.branch;
-    if (!branch) {
-      throw new Error(`PR #${pr.id} não possui uma branch associada.`);
-    }
+    const branch = assertBranchName(pr.branch, `Branch do PR #${pr.id}`);
 
     // Try to fetch latest branch from origin remote if available
     const cfg = loadConfig();
     if (cfg.authenticated && cfg.token && cfg.active_repo?.full_name && !cfg.active_repo?.is_local) {
       try {
-        await executeGitCommand(`git fetch origin "${branch}:refs/remotes/origin/${branch}"`, repoDir);
+        await executeGit(['fetch', 'origin', `${branch}:refs/remotes/origin/${branch}`], repoDir);
       } catch {}
     }
 
@@ -41,14 +39,14 @@ export class PRWorktreeService {
 
     if (!fs.existsSync(wtDir)) {
       // First ensure the branch exists locally or create from remote
-      const branchCheck = await executeGitCommand(`git rev-parse --verify "${branch}"`, repoDir);
+      const branchCheck = await executeGit(['rev-parse', '--verify', branch], repoDir);
       if (!branchCheck.success) {
         // Try creating local branch tracking origin
-        await executeGitCommand(`git branch "${branch}" "origin/${branch}"`, repoDir).catch(() => {});
+        await executeGit(['branch', branch, `origin/${branch}`], repoDir).catch(() => {});
       }
 
-      const addRes = await executeGitCommand(
-        `git worktree add --force "${wtDir}" "${branch}"`,
+      const addRes = await executeGit(
+        ['worktree', 'add', '--force', wtDir, branch],
         repoDir
       );
       if (!addRes.success && !fs.existsSync(wtDir)) {
@@ -56,8 +54,8 @@ export class PRWorktreeService {
       }
     } else {
       // If worktree directory exists, checkout the branch and fast-forward if remote exists
-      await executeGitCommand(`git -C "${wtDir}" checkout "${branch}"`, repoDir).catch(() => {});
-      await executeGitCommand(`git -C "${wtDir}" merge --ff-only "origin/${branch}"`, repoDir).catch(() => {});
+      await executeGit(['-C', wtDir, 'checkout', branch], repoDir).catch(() => {});
+      await executeGit(['-C', wtDir, 'merge', '--ff-only', `origin/${branch}`], repoDir).catch(() => {});
     }
 
     return wtDir;
@@ -68,14 +66,14 @@ export class PRWorktreeService {
     const wtDir = this.getWorktreeDir(repoName, prId);
     if (fs.existsSync(wtDir)) {
       try {
-        await executeGitCommand(`git worktree remove --force "${wtDir}"`, repoDir);
+        await executeGit(['worktree', 'remove', '--force', wtDir], repoDir);
       } catch {
         try {
           fs.rmSync(wtDir, { recursive: true, force: true });
         } catch {}
       }
     }
-    await executeGitCommand(`git worktree prune`, repoDir).catch(() => {});
+    await executeGit(['worktree', 'prune'], repoDir).catch(() => {});
   }
 
   async writePlainAtWorktree(
@@ -92,18 +90,19 @@ export class PRWorktreeService {
 
   async commitAndPushWorktree(
     wtDir: string,
-    branch: string,
+    branchName: string,
     commitMsg: string,
     authorLogin: string,
     repoName: string
   ): Promise<{ commitHash: string }> {
     const repoDir = this.getRepoDir(repoName);
+    const branch = assertBranchName(branchName);
     const cleanAuthor = authorLogin.startsWith('@') ? authorLogin.slice(1) : authorLogin;
     const authorParam = `${cleanAuthor} <${cleanAuthor}@context-os.local>`;
 
-    await executeGitCommand(`git -C "${wtDir}" add -A`, repoDir);
-    const commitRes = await executeGitCommand(
-      `git -C "${wtDir}" commit -m "${commitMsg.replace(/"/g, '\\"')}" --author="${authorParam}"`,
+    await executeGit(['-C', wtDir, 'add', '-A'], repoDir);
+    const commitRes = await executeGit(
+      ['-C', wtDir, 'commit', '-m', commitMsg, `--author=${authorParam}`],
       repoDir
     );
 
@@ -111,14 +110,14 @@ export class PRWorktreeService {
       throw new Error(`Falha ao registrar commit no PR: ${commitRes.stderr || commitRes.stdout}`);
     }
 
-    const hashRes = await executeGitCommand(`git -C "${wtDir}" rev-parse HEAD`, repoDir);
+    const hashRes = await executeGit(['-C', wtDir, 'rev-parse', 'HEAD'], repoDir);
     const commitHash = (hashRes.stdout || '').trim();
 
     // Push to origin if authenticated remote
     const cfg = loadConfig();
     if (cfg.authenticated && cfg.token && cfg.active_repo?.full_name && !cfg.active_repo?.is_local) {
       try {
-        await executeGitCommand(`git -C "${wtDir}" push origin "${branch}"`, repoDir);
+        await executeGit(['-C', wtDir, 'push', 'origin', branch], repoDir);
       } catch (pushErr) {
         console.warn(`[PRWorktree] Aviso ao sincronizar branch '${branch}' com o GitHub remoto:`, pushErr);
       }

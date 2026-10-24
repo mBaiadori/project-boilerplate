@@ -1,12 +1,18 @@
 import fs from "node:fs";
 import path from "node:path";
-import { exec, spawn } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import { isPathHidden, loadHiddenFiles, isSystemPath } from "./hidden-files.js";
 import { vaultService, VAULT_KEYS } from "../modules/vault/vault.service.js";
 import { loadConfig } from "../config/storage.js";
+import {
+  assertCommitish,
+  assertRemoteName,
+  assertBranchName,
+  assertGitPath,
+} from "./git-validate.js";
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 export interface GitProgressEvent {
   stage: string;
@@ -34,6 +40,42 @@ export function parseGitProgress(line: string): GitProgressEvent | null {
   return null;
 }
 
+export function buildGitEnv(token?: string): {
+  env: NodeJS.ProcessEnv;
+  activeToken: string | null;
+  base64Token: string;
+} {
+  const activeToken = getActiveBearerToken(token);
+  const gitEnv: NodeJS.ProcessEnv = {
+    ...process.env,
+    GIT_TERMINAL_PROMPT: "0",
+  };
+
+  let base64Token = "";
+  if (activeToken) {
+    base64Token = Buffer.from(`x-access-token:${activeToken}`).toString("base64");
+    gitEnv.GIT_CONFIG_COUNT = "1";
+    gitEnv.GIT_CONFIG_KEY_0 = "http.extraHeader";
+    gitEnv.GIT_CONFIG_VALUE_0 = `AUTHORIZATION: basic ${base64Token}`;
+  }
+  return { env: gitEnv, activeToken, base64Token };
+}
+
+export function redactTokens(
+  text: string,
+  activeToken: string | null,
+  base64Token: string,
+): string {
+  let safe = text;
+  if (activeToken) {
+    safe = safe.replaceAll(activeToken, "[REDACTED_TOKEN]");
+  }
+  if (base64Token) {
+    safe = safe.replaceAll(base64Token, "[REDACTED_TOKEN]");
+  }
+  return safe;
+}
+
 export function executeGitCommandWithProgress(
   args: string[],
   cwd: string,
@@ -42,19 +84,7 @@ export function executeGitCommandWithProgress(
 ): Promise<{ stdout: string; stderr: string; success: boolean }> {
   return new Promise((resolve) => {
     const finalArgs = [...args];
-    const activeToken = getActiveBearerToken(token);
-    const gitEnv: NodeJS.ProcessEnv = {
-      ...process.env,
-      GIT_TERMINAL_PROMPT: "0",
-    };
-
-    let base64Token = "";
-    if (activeToken) {
-      base64Token = Buffer.from(`x-access-token:${activeToken}`).toString("base64");
-      gitEnv.GIT_CONFIG_COUNT = "1";
-      gitEnv.GIT_CONFIG_KEY_0 = "http.extraHeader";
-      gitEnv.GIT_CONFIG_VALUE_0 = `AUTHORIZATION: basic ${base64Token}`;
-    }
+    const { env, activeToken, base64Token } = buildGitEnv(token);
 
     let stdout = "";
     let stderr = "";
@@ -62,7 +92,7 @@ export function executeGitCommandWithProgress(
     const child = spawn("git", finalArgs, {
       cwd,
       shell: false,
-      env: gitEnv,
+      env,
     });
 
     const handleData = (chunk: Buffer) => {
@@ -149,61 +179,111 @@ export function getActiveBearerToken(explicitToken?: string): string | null {
   return null;
 }
 
+/**
+ * Divide uma string de comando em array de argumentos de forma segura,
+ * respeitando aspas simples e duplas sem invocar nenhum shell (/bin/sh).
+ */
+export function splitCommandToArgs(command: string): string[] {
+  const trimmed = command.trim();
+  const cmdStr = trimmed.startsWith("git ") ? trimmed.slice(4).trim() : trimmed;
+  const args: string[] = [];
+  let current = "";
+  let inQuotes: string | null = null;
+  let escapeNext = false;
+
+  for (let i = 0; i < cmdStr.length; i++) {
+    const char = cmdStr[i];
+
+    if (escapeNext) {
+      current += char;
+      escapeNext = false;
+      continue;
+    }
+
+    if (char === "\\") {
+      escapeNext = true;
+      continue;
+    }
+
+    if (inQuotes) {
+      if (char === inQuotes) {
+        inQuotes = null;
+      } else {
+        current += char;
+      }
+    } else {
+      if (char === '"' || char === "'") {
+        inQuotes = char;
+      } else if (/\s/.test(char)) {
+        if (current.length > 0) {
+          args.push(current);
+          current = "";
+        }
+      } else {
+        current += char;
+      }
+    }
+  }
+
+  if (current.length > 0) {
+    args.push(current);
+  }
+
+  return args;
+}
+
+/**
+ * Executa comandos git diretamente via execFile sem invocação de shell (/bin/sh),
+ * imune a injeção de comandos, expansão de crases, $(...) e caracteres especiais.
+ */
+export async function executeGit(
+  args: string[],
+  cwd: string,
+  explicitToken?: string,
+  options: { timeout?: number; maxBuffer?: number } = {},
+): Promise<{ stdout: string; stderr: string; success: boolean }> {
+  const { env, activeToken, base64Token } = buildGitEnv(explicitToken);
+
+  try {
+    const { stdout, stderr } = await execFileAsync("git", args, {
+      cwd,
+      shell: false,
+      maxBuffer: options.maxBuffer || 10 * 1024 * 1024,
+      timeout: options.timeout || 30000,
+      env,
+    });
+
+    return {
+      stdout: redactTokens(stdout, activeToken, base64Token).trim(),
+      stderr: redactTokens(stderr, activeToken, base64Token).trim(),
+      success: true,
+    };
+  } catch (error: any) {
+    const stdout = error.stdout
+      ? redactTokens(String(error.stdout), activeToken, base64Token).trim()
+      : "";
+    const stderr = error.stderr
+      ? redactTokens(String(error.stderr), activeToken, base64Token).trim()
+      : redactTokens(error.message || String(error), activeToken, base64Token).trim();
+    return {
+      stdout,
+      stderr,
+      success: false,
+    };
+  }
+}
+
+/**
+ * Interface legada que converte comandos em string para array de argumentos seguro
+ * e despacha para executeGit com shell: false.
+ */
 export async function executeGitCommand(
   command: string,
   cwd: string,
   explicitToken?: string,
 ): Promise<{ stdout: string; stderr: string; success: boolean }> {
-  const token = getActiveBearerToken(explicitToken);
-  const gitEnv: NodeJS.ProcessEnv = {
-    ...process.env,
-    GIT_TERMINAL_PROMPT: "0",
-  };
-
-  let base64Token = "";
-  // Injeção automática de credencial nos cabeçalhos HTTP para comandos de rede Git
-  const isNetworkCmd = /\bgit\s+(clone|fetch|pull|push|ls-remote)\b/.test(command);
-  if (isNetworkCmd && token && !command.includes("http.extraHeader") && !command.includes("http.extraheader") && !command.includes("x-access-token")) {
-    base64Token = Buffer.from(`x-access-token:${token}`).toString("base64");
-    gitEnv.GIT_CONFIG_COUNT = "1";
-    gitEnv.GIT_CONFIG_KEY_0 = "http.extraHeader";
-    gitEnv.GIT_CONFIG_VALUE_0 = `AUTHORIZATION: basic ${base64Token}`;
-  }
-
-  try {
-    const { stdout, stderr } = await execAsync(command, {
-      cwd,
-      maxBuffer: 10 * 1024 * 1024,
-      timeout: 30000,
-      env: gitEnv,
-    });
-
-    let safeStdout = stdout;
-    let safeStderr = stderr;
-    if (token) {
-      safeStdout = safeStdout.replaceAll(token, "[REDACTED_TOKEN]");
-      safeStderr = safeStderr.replaceAll(token, "[REDACTED_TOKEN]");
-    }
-    if (base64Token) {
-      safeStdout = safeStdout.replaceAll(base64Token, "[REDACTED_TOKEN]");
-      safeStderr = safeStderr.replaceAll(base64Token, "[REDACTED_TOKEN]");
-    }
-
-    return { stdout: safeStdout.trim(), stderr: safeStderr.trim(), success: true };
-  } catch (error: any) {
-    let errMessage = error.message || String(error);
-    if (token) {
-      errMessage = errMessage.replaceAll(token, "[REDACTED_TOKEN]");
-    }
-    if (base64Token) {
-      errMessage = errMessage.replaceAll(base64Token, "[REDACTED_TOKEN]");
-    }
-    return {
-      stdout: "",
-      stderr: errMessage,
-      success: false,
-    };
-  }
+  const args = splitCommandToArgs(command);
+  return executeGit(args, cwd, explicitToken);
 }
 
 export async function callGitHubAPI(
@@ -480,13 +560,13 @@ export async function cloneGitRepo(
   }
 
   const publicOrigin = cleanRemoteUrl;
-  await executeGitCommand(`git remote set-url origin "${publicOrigin}"`, repoDir);
+  await executeGit(["remote", "set-url", "origin", publicOrigin], repoDir);
 
   if (user?.name || user?.login) {
-    const authorName = user.name || user.login;
-    const authorEmail = user.email || `${user.login}@users.noreply.github.com`;
-    await executeGitCommand(`git config user.name "${authorName}"`, repoDir);
-    await executeGitCommand(`git config user.email "${authorEmail}"`, repoDir);
+    const authorName = (user.name || user.login || "Context OS") as string;
+    const authorEmail = (user.email || `${user.login || "context-os"}@users.noreply.github.com`) as string;
+    await executeGit(["config", "user.name", authorName], repoDir);
+    await executeGit(["config", "user.email", authorEmail], repoDir);
   }
 
   ensureGitIgnore(repoDir);
@@ -507,7 +587,7 @@ export async function pullGitRepo(
     return { success: false, message: "Repositório não está clonado localmente." };
   }
 
-  const branchRes = await executeGitCommand("git rev-parse --abbrev-ref HEAD", repoDir);
+  const branchRes = await executeGit(["rev-parse", "--abbrev-ref", "HEAD"], repoDir);
   const activeBranch = branch || branchRes.stdout?.trim() || "main";
 
   const fetchRes = await executeGitCommandWithProgress(
@@ -570,24 +650,18 @@ export async function getGitStatus(repoDir: string): Promise<GitStatusResult> {
   }
 
   // Current branch
-  const branchRes = await executeGitCommand(
-    "git rev-parse --abbrev-ref HEAD",
-    repoDir,
-  );
+  const branchRes = await executeGit(["rev-parse", "--abbrev-ref", "HEAD"], repoDir);
   const branch = branchRes.stdout || "main";
 
   // Remote URL
-  const remoteRes = await executeGitCommand(
-    "git remote get-url origin",
-    repoDir,
-  );
+  const remoteRes = await executeGit(["remote", "get-url", "origin"], repoDir);
   const remoteUrl = remoteRes.success
     ? remoteRes.stdout.replace(/x-access-token:[^@]+@/, "")
     : undefined;
 
   // Status porcelain with all untracked files expanded individually
-  const statusRes = await executeGitCommand(
-    "git status --porcelain=v1 -b -uall",
+  const statusRes = await executeGit(
+    ["status", "--porcelain=v1", "-b", "-uall"],
     repoDir,
   );
   const lines = statusRes.stdout.split("\n").filter(Boolean);
@@ -663,8 +737,8 @@ export async function getGitLog(
   if (!isRepo) return [];
 
   const format = "%H|%h|%an|%ad|%s";
-  const logRes = await executeGitCommand(
-    `git log -n ${limit} --date=short --pretty=format:"${format}"`,
+  const logRes = await executeGit(
+    ["log", `-n${Number(limit) || 20}`, "--date=short", `--pretty=format:${format}`],
     repoDir,
   );
 
@@ -689,7 +763,7 @@ export async function getGitBranches(
   const isRepo = await isGitRepo(repoDir);
   if (!isRepo) return { current: "main", branches: ["main"] };
 
-  const res = await executeGitCommand("git branch --list", repoDir);
+  const res = await executeGit(["branch", "--list"], repoDir);
   if (!res.success) return { current: "main", branches: ["main"] };
 
   const lines = res.stdout.split("\n").filter(Boolean);
@@ -718,6 +792,7 @@ export async function commitChanges(
   ensureGitIgnore(repoDir);
 
   if (files && files.length > 0) {
+    const validFiles: string[] = [];
     for (const file of files) {
       if (
         file.includes(".docs.metadata.json") ||
@@ -726,25 +801,32 @@ export async function commitChanges(
       ) {
         continue;
       }
-      await executeGitCommand(`git add "${file}"`, repoDir);
+      validFiles.push(assertGitPath(file));
+    }
+    if (validFiles.length > 0) {
+      await executeGit(["add", "--", ...validFiles], repoDir);
     }
   } else {
-    await executeGitCommand("git add .", repoDir);
+    await executeGit(["add", "."], repoDir);
   }
 
   // Garantia pós-staging: desindexa imediatamente arquivos transitórios do sistema caso tenham entrado no index
   try {
-    await executeGitCommand(
-      "git rm --cached -r --ignore-unmatch .spec-memory/workspace_changes.json .spec-memory/sessions .docs.metadata.json",
+    await executeGit(
+      [
+        "rm",
+        "--cached",
+        "-r",
+        "--ignore-unmatch",
+        ".spec-memory/workspace_changes.json",
+        ".spec-memory/sessions",
+        ".docs.metadata.json",
+      ],
       repoDir,
     );
   } catch {}
 
-  const safeMsg = message.replace(/"/g, '\\"');
-  const commitRes = await executeGitCommand(
-    `git commit -m "${safeMsg}"`,
-    repoDir,
-  );
+  const commitRes = await executeGit(["commit", "-m", message], repoDir);
 
   if (!commitRes.success && !commitRes.stderr.includes("nothing to commit")) {
     return {
@@ -753,10 +835,7 @@ export async function commitChanges(
     };
   }
 
-  const hashRes = await executeGitCommand(
-    "git rev-parse --short HEAD",
-    repoDir,
-  );
+  const hashRes = await executeGit(["rev-parse", "--short", "HEAD"], repoDir);
   return {
     success: true,
     message: commitRes.stdout || "Commit realizado com sucesso.",
@@ -772,24 +851,19 @@ export async function createAndCheckoutBranch(
   if (!isRepo)
     return { success: false, message: "Diretório não é um repositório Git." };
 
-  const cleanName = branchName.trim().replace(/\s+/g, "-");
+  const safeName = assertBranchName(branchName.trim().replace(/\s+/g, "-"));
+
   // Check if branch exists
-  const checkRes = await executeGitCommand(
-    `git checkout "${cleanName}"`,
-    repoDir,
-  );
+  const checkRes = await executeGit(["checkout", safeName], repoDir);
   if (checkRes.success) {
-    return { success: true, message: `Trocou para a branch '${cleanName}'.` };
+    return { success: true, message: `Trocou para a branch '${safeName}'.` };
   }
 
-  const createRes = await executeGitCommand(
-    `git checkout -b "${cleanName}"`,
-    repoDir,
-  );
+  const createRes = await executeGit(["checkout", "-b", safeName], repoDir);
   if (createRes.success) {
     return {
       success: true,
-      message: `Branch '${cleanName}' criada com sucesso.`,
+      message: `Branch '${safeName}' criada com sucesso.`,
     };
   }
 
@@ -797,6 +871,32 @@ export async function createAndCheckoutBranch(
     success: false,
     message: createRes.stderr || "Erro ao criar branch.",
   };
+}
+
+export async function getDefaultBranch(repoDir: string): Promise<string> {
+  const isRepo = await isGitRepo(repoDir);
+  if (!isRepo) return "main";
+
+  // 1. Tenta ler refs/remotes/origin/HEAD
+  try {
+    const headRes = await executeGit(["symbolic-ref", "refs/remotes/origin/HEAD"], repoDir);
+    if (headRes.success && headRes.stdout.trim()) {
+      const ref = headRes.stdout.trim();
+      const parts = ref.split("/");
+      const branch = parts[parts.length - 1];
+      if (branch) return branch;
+    }
+  } catch {}
+
+  // 2. Tenta checar se branch main ou master existe
+  try {
+    const { branches } = await getGitBranches(repoDir);
+    if (branches.includes("main")) return "main";
+    if (branches.includes("master")) return "master";
+    if (branches.length > 0) return branches[0];
+  } catch {}
+
+  return "main";
 }
 
 export async function syncGit(
@@ -814,41 +914,44 @@ export async function syncGit(
   if (!isRepo)
     return { success: false, message: "Diretório não é um repositório Git." };
 
-  const prevHeadRes = await executeGitCommand("git rev-parse HEAD", repoDir);
+  const safeRemote = assertRemoteName(remote);
+  const safeBranch = assertBranchName(branch);
+
+  const prevHeadRes = await executeGit(["rev-parse", "HEAD"], repoDir);
   const previousHead = prevHeadRes.success
     ? prevHeadRes.stdout.trim()
     : undefined;
 
   // 1. Fetch remote
-  await executeGitCommand(`git fetch ${remote}`, repoDir);
+  await executeGit(["fetch", safeRemote], repoDir);
 
   // 2. Pull
-  let pullRes = await executeGitCommand(
-    `git pull ${remote} ${branch} --allow-unrelated-histories --no-edit`,
+  let pullRes = await executeGit(
+    ["pull", safeRemote, safeBranch, "--allow-unrelated-histories", "--no-edit"],
     repoDir,
   );
   if (!pullRes.success) {
-    pullRes = await executeGitCommand(
-      `git pull ${remote} ${branch} --rebase`,
+    pullRes = await executeGit(
+      ["pull", safeRemote, safeBranch, "--rebase"],
       repoDir,
     );
   }
 
   // 3. Push
-  const pushRes = await executeGitCommand(
-    `git push -u ${remote} ${branch}`,
+  const pushRes = await executeGit(
+    ["push", "-u", safeRemote, safeBranch],
     repoDir,
   );
 
-  const currHeadRes = await executeGitCommand("git rev-parse HEAD", repoDir);
+  const currHeadRes = await executeGit(["rev-parse", "HEAD"], repoDir);
   const currentHead = currHeadRes.success
     ? currHeadRes.stdout.trim()
     : undefined;
 
   let newCommitsCount = 0;
   if (previousHead && currentHead && previousHead !== currentHead) {
-    const countRes = await executeGitCommand(
-      `git rev-list --count ${previousHead}..${currentHead}`,
+    const countRes = await executeGit(
+      ["rev-list", "--count", `${previousHead}..${currentHead}`],
       repoDir,
     );
     if (countRes.success) {
@@ -882,6 +985,7 @@ export async function rollbackToCommit(
   repoDir: string,
   targetCommitHash: string,
   commitTitle?: string,
+  options?: { force?: boolean },
 ): Promise<{ success: boolean; message: string; newCommitHash?: string }> {
   const isRepo = await isGitRepo(repoDir);
   if (!isRepo) {
@@ -889,26 +993,37 @@ export async function rollbackToCommit(
   }
 
   // 1. Verify target commit
-  const checkRes = await executeGitCommand(
-    `git cat-file -t ${targetCommitHash}`,
-    repoDir,
-  );
+  const safeHash = assertCommitish(targetCommitHash, "Target commit hash");
+  const checkRes = await executeGit(["cat-file", "-t", safeHash], repoDir);
   if (!checkRes.success || checkRes.stdout !== "commit") {
     return {
       success: false,
-      message: `Revisão ${targetCommitHash} inválida ou não encontrada.`,
+      message: `Revisão ${safeHash} inválida ou não encontrada.`,
     };
   }
 
-  // 2. Checkout main
-  await executeGitCommand("git checkout main", repoDir);
+  // 2. Prevenir perda acidental de alterações não commitadas (C5)
+  if (!options?.force) {
+    const status = await getGitStatus(repoDir);
+    if (!status.isClean) {
+      return {
+        success: false,
+        message: "Existem alterações não commitadas no repositório. Faça commit ou use force para sobrescrever.",
+      };
+    }
+  }
+
+  // 3. Checkout current branch (detect active default or main)
+  let activeBranch = "main";
+  const branchRes = await executeGit(["branch", "--show-current"], repoDir);
+  if (branchRes.success && branchRes.stdout.trim()) {
+    activeBranch = branchRes.stdout.trim();
+  }
+  await executeGit(["checkout", activeBranch], repoDir).catch(() => {});
 
   // 3. Check if target commit is already HEAD
-  const headRes = await executeGitCommand("git rev-parse HEAD", repoDir);
-  const targetFullRes = await executeGitCommand(
-    `git rev-parse ${targetCommitHash}`,
-    repoDir,
-  );
+  const headRes = await executeGit(["rev-parse", "HEAD"], repoDir);
+  const targetFullRes = await executeGit(["rev-parse", safeHash], repoDir);
   if (
     headRes.success &&
     targetFullRes.success &&
@@ -921,51 +1036,40 @@ export async function rollbackToCommit(
   }
 
   // 4. Discard any unstaged changes in repo
-  await executeGitCommand("git reset --hard HEAD", repoDir);
+  await executeGit(["reset", "--hard", "HEAD"], repoDir);
 
   // 5. Restore tree of targetCommitHash (safe rollback preserving history)
-  const treeRes = await executeGitCommand(
-    `git read-tree -u --reset ${targetCommitHash}`,
+  const treeRes = await executeGit(
+    ["read-tree", "-u", "--reset", safeHash],
     repoDir,
   );
   if (!treeRes.success) {
-    await executeGitCommand(`git checkout ${targetCommitHash} -- .`, repoDir);
+    await executeGit(["checkout", safeHash, "--", "."], repoDir);
   }
 
   // 6. Get short hash of target
-  const shortTargetRes = await executeGitCommand(
-    `git rev-parse --short ${targetCommitHash}`,
+  const shortTargetRes = await executeGit(
+    ["rev-parse", "--short", safeHash],
     repoDir,
   );
-  const shortTarget = shortTargetRes.stdout || targetCommitHash.slice(0, 7);
+  const shortTarget = shortTargetRes.stdout || safeHash.slice(0, 7);
 
   const cleanTitle = commitTitle ? `: ${commitTitle.slice(0, 60)}` : "";
   const commitMsg = `Reversão segura: restaurar versão para ${shortTarget}${cleanTitle}`;
-  const safeMsg = commitMsg.replace(/"/g, '\\"');
 
-  const commitRes = await executeGitCommand(
-    `git commit -m "${safeMsg}"`,
-    repoDir,
-  );
+  const commitRes = await executeGit(["commit", "-m", commitMsg], repoDir);
   if (!commitRes.success && !commitRes.stderr.includes("nothing to commit")) {
     return {
       success: false,
-      message:
-        commitRes.stderr ||
-        "Não foi possível criar a nova versão de reversão.",
+      message: commitRes.stderr || "Falha ao executar commit de reversão.",
     };
   }
 
-  const newHashRes = await executeGitCommand(
-    "git rev-parse --short HEAD",
-    repoDir,
-  );
-  const newHash = newHashRes.stdout || "";
-
+  const newHashRes = await executeGit(["rev-parse", "--short", "HEAD"], repoDir);
   return {
     success: true,
-    message: `Versão restaurada com sucesso! Uma nova versão (#${newHash}) foi promovida com o estado de #${shortTarget}, preservando todo o histórico anterior.`,
-    newCommitHash: newHash,
+    message: `Revertido com sucesso para a revisão ${shortTarget}.`,
+    newCommitHash: newHashRes.stdout || shortTarget,
   };
 }
 
@@ -1022,7 +1126,7 @@ export async function getWhatsNewSummary(
   const isRepo = await isGitRepo(repoDir);
   if (!isRepo) return emptyResult;
 
-  const headRes = await executeGitCommand("git rev-parse HEAD", repoDir);
+  const headRes = await executeGit(["rev-parse", "HEAD"], repoDir);
   if (!headRes.success || !headRes.stdout.trim()) {
     return emptyResult;
   }
@@ -1039,8 +1143,8 @@ export async function getWhatsNewSummary(
   }
 
   // Check if repo has at least 1 commit
-  const totalCommitsRes = await executeGitCommand(
-    "git rev-list --count HEAD",
+  const totalCommitsRes = await executeGit(
+    ["rev-list", "--count", "HEAD"],
     repoDir,
   );
   const totalCount = totalCommitsRes.success
@@ -1049,17 +1153,22 @@ export async function getWhatsNewSummary(
   if (totalCount === 0) return emptyResult;
 
   // Determine git log / diff revision range
-  let range = "";
+  let cleanLastSeen = "";
   let isValidLastSeen = false;
 
   if (lastSeenHash && lastSeenHash.trim().length >= 6) {
-    const checkHash = await executeGitCommand(
-      `git cat-file -e "${lastSeenHash.trim()}^{commit}"`,
-      repoDir,
-    );
-    if (checkHash.success) {
-      isValidLastSeen = true;
-      range = `"${lastSeenHash.trim()}"..HEAD`;
+    try {
+      assertCommitish(lastSeenHash.trim());
+      cleanLastSeen = lastSeenHash.trim();
+      const checkHash = await executeGit(
+        ["cat-file", "-e", `${cleanLastSeen}^{commit}`],
+        repoDir,
+      );
+      if (checkHash.success) {
+        isValidLastSeen = true;
+      }
+    } catch {
+      isValidLastSeen = false;
     }
   }
 
@@ -1081,8 +1190,10 @@ export async function getWhatsNewSummary(
 
   // 1. Get Commits in Range (only what was pulled/merged after lastSeenHash)
   const format = "%H|%h|%an|%ad|%s";
-  const logCmd = `git log -n 50 --date=short --pretty=format:"${format}" ${range}`;
-  const logRes = await executeGitCommand(logCmd, repoDir);
+  const logRes = await executeGit(
+    ["log", "-n", "50", "--date=short", `--pretty=format:${format}`, `${cleanLastSeen}..HEAD`],
+    repoDir,
+  );
   const commits: WhatsNewItem[] = [];
   const proposals: WhatsNewProposal[] = [];
   const seenProposals = new Set<string>();
@@ -1122,19 +1233,14 @@ export async function getWhatsNewSummary(
   // 2. Get Changed Files in Range
   const filesMap = new Map<string, WhatsNewFile>();
 
-  // Numstat for additions/deletions
-  let numstatCmd = "";
-  let nameStatusCmd = "";
+  const numstatArgs = isValidLastSeen
+    ? ["diff", "--numstat", `${cleanLastSeen}..HEAD`]
+    : ["log", "-n", "15", "--numstat", '--pretty=', "HEAD"];
+  const nameStatusArgs = isValidLastSeen
+    ? ["diff", "--name-status", `${cleanLastSeen}..HEAD`]
+    : ["log", "-n", "15", "--name-status", '--pretty=', "HEAD"];
 
-  if (isValidLastSeen && range) {
-    numstatCmd = `git diff --numstat ${range}`;
-    nameStatusCmd = `git diff --name-status ${range}`;
-  } else {
-    numstatCmd = `git log -n 15 --numstat --pretty="" HEAD`;
-    nameStatusCmd = `git log -n 15 --name-status --pretty="" HEAD`;
-  }
-
-  const numstatRes = await executeGitCommand(numstatCmd, repoDir);
+  const numstatRes = await executeGit(numstatArgs, repoDir);
 
   if (numstatRes.success && numstatRes.stdout) {
     const lines = numstatRes.stdout.split("\n").filter(Boolean);
@@ -1174,7 +1280,7 @@ export async function getWhatsNewSummary(
     }
   }
 
-  const nameStatusRes = await executeGitCommand(nameStatusCmd, repoDir);
+  const nameStatusRes = await executeGit(nameStatusArgs, repoDir);
 
   if (nameStatusRes.success && nameStatusRes.stdout) {
     const lines = nameStatusRes.stdout.split("\n").filter(Boolean);
@@ -1241,22 +1347,29 @@ export async function getWhatsNewFileDiff(
   if (!isRepo) return { diff: "" };
 
   const cleanPath = filePath.trim().replace(/^\/+/, "");
-  const pathArg = ` -- "${cleanPath}"`;
+  assertGitPath(cleanPath);
 
-  let range = "";
+  let cleanLastSeen = "";
+  let isValidLastSeen = false;
   if (lastSeenHash && lastSeenHash.trim().length >= 6) {
-    const checkHash = await executeGitCommand(
-      `git cat-file -e "${lastSeenHash.trim()}^{commit}"`,
-      repoDir,
-    );
-    if (checkHash.success) {
-      range = `"${lastSeenHash.trim()}"..HEAD`;
+    try {
+      assertCommitish(lastSeenHash.trim());
+      cleanLastSeen = lastSeenHash.trim();
+      const checkHash = await executeGit(
+        ["cat-file", "-e", `${cleanLastSeen}^{commit}`],
+        repoDir,
+      );
+      if (checkHash.success) {
+        isValidLastSeen = true;
+      }
+    } catch {
+      isValidLastSeen = false;
     }
   }
 
-  if (range) {
-    const diffRes = await executeGitCommand(
-      `git diff ${range}${pathArg}`,
+  if (isValidLastSeen && cleanLastSeen) {
+    const diffRes = await executeGit(
+      ["diff", `${cleanLastSeen}..HEAD`, "--", cleanPath],
       repoDir,
     );
     if (diffRes.success && diffRes.stdout) {
@@ -1265,8 +1378,8 @@ export async function getWhatsNewFileDiff(
   }
 
   // Fallback: show the patch from the latest commit that modified this file
-  const logShow = await executeGitCommand(
-    `git log -n 1 -p HEAD${pathArg}`,
+  const logShow = await executeGit(
+    ["log", "-n", "1", "-p", "HEAD", "--", cleanPath],
     repoDir,
   );
   if (logShow.success && logShow.stdout) {
@@ -1284,8 +1397,9 @@ export async function getGitBlame(
   if (!isRepo) return { success: false, blame: [] };
 
   const cleanPath = filePath.trim().replace(/^\/+/, "");
-  const blameRes = await executeGitCommand(
-    `git blame --line-porcelain "${cleanPath}"`,
+  assertGitPath(cleanPath);
+  const blameRes = await executeGit(
+    ["blame", "--line-porcelain", "--", cleanPath],
     repoDir,
   );
 
@@ -1307,15 +1421,18 @@ export async function getGitDiff(
   if (!isRepo) return { diff: "" };
 
   const cleanPath = filePath ? filePath.trim().replace(/^\/+/, "") : "";
-  const pathArg = cleanPath ? ` -- "${cleanPath}"` : "";
+  if (cleanPath) {
+    assertGitPath(cleanPath);
+  }
+  const pathArgs = cleanPath ? ["--", cleanPath] : [];
 
   // 1. Try git diff HEAD (covers both staged and unstaged modifications against last commit)
-  let diffRes = await executeGitCommand(`git diff HEAD${pathArg}`, repoDir);
+  let diffRes = await executeGit(["diff", "HEAD", ...pathArgs], repoDir);
   let baseDiff = (diffRes.success && diffRes.stdout) ? diffRes.stdout : "";
 
   if (!baseDiff) {
     // 2. Try working tree diff
-    diffRes = await executeGitCommand(`git diff${pathArg}`, repoDir);
+    diffRes = await executeGit(["diff", ...pathArgs], repoDir);
     if (diffRes.success && diffRes.stdout) {
       baseDiff = diffRes.stdout;
     }
@@ -1323,7 +1440,7 @@ export async function getGitDiff(
 
   if (!baseDiff) {
     // 3. Try cached/staged diff
-    diffRes = await executeGitCommand(`git diff --cached${pathArg}`, repoDir);
+    diffRes = await executeGit(["diff", "--cached", ...pathArgs], repoDir);
     if (diffRes.success && diffRes.stdout) {
       baseDiff = diffRes.stdout;
     }
@@ -1346,7 +1463,7 @@ export async function getGitDiff(
   } else {
     // When no specific file requested, append any untracked files to the overall diff
     try {
-      const statusRes = await executeGitCommand("git status --porcelain=v1 -uall", repoDir);
+      const statusRes = await executeGit(["status", "--porcelain=v1", "-uall"], repoDir);
       if (statusRes.success && statusRes.stdout) {
         const untracked = statusRes.stdout
           .split("\n")
@@ -1384,9 +1501,10 @@ export async function getFileGitLog(
   if (!isRepo) return [];
 
   const cleanPath = filePath.trim().replace(/^\/+/, "");
+  assertGitPath(cleanPath);
   const format = "%H|%h|%an|%ad|%s";
-  const logRes = await executeGitCommand(
-    `git log -n ${limit} --follow --date=short --pretty=format:"${format}" -- "${cleanPath}"`,
+  const logRes = await executeGit(
+    ["log", `-n${Number(limit) || 30}`, "--follow", "--date=short", `--pretty=format:${format}`, "--", cleanPath],
     repoDir,
   );
 
@@ -1416,9 +1534,11 @@ export async function getFileContentAtCommit(
 
   const cleanPath = filePath.trim().replace(/^\/+/, "");
   const cleanHash = commitHash.trim();
+  assertCommitish(cleanHash);
+  assertGitPath(cleanPath);
 
-  const showRes = await executeGitCommand(
-    `git show ${cleanHash}:"${cleanPath}"`,
+  const showRes = await executeGit(
+    ["show", `${cleanHash}:${cleanPath}`],
     repoDir,
   );
 
@@ -1450,8 +1570,9 @@ export async function getFileBlameDetails(
   if (!isRepo) return { success: false, blame: [] };
 
   const cleanPath = filePath.trim().replace(/^\/+/, "");
-  const blameRes = await executeGitCommand(
-    `git blame --date=short -e -l "${cleanPath}"`,
+  assertGitPath(cleanPath);
+  const blameRes = await executeGit(
+    ["blame", "--date=short", "-e", "-l", "--", cleanPath],
     repoDir,
   );
 
@@ -1516,14 +1637,14 @@ export async function checkRemoteGitUpdates(
   }
 
   // 1. Get current local HEAD commit hash
-  const headRes = await executeGitCommand("git rev-parse HEAD", repoDir);
+  const headRes = await executeGit(["rev-parse", "HEAD"], repoDir);
   const localHash = headRes.stdout.trim();
   if (!localHash) {
     return { hasUpdates: false, localHash: "" };
   }
 
   // 2. Check if repo has remote configured
-  const remoteRes = await executeGitCommand("git remote get-url origin", repoDir);
+  const remoteRes = await executeGit(["remote", "get-url", "origin"], repoDir);
   if (!remoteRes.success || !remoteRes.stdout.trim()) {
     return { hasUpdates: false, localHash };
   }
@@ -1531,16 +1652,17 @@ export async function checkRemoteGitUpdates(
   // Determine branch to compare
   let branch = remoteBranch;
   if (!branch) {
-    const branchRes = await executeGitCommand(
-      "git rev-parse --abbrev-ref HEAD",
+    const branchRes = await executeGit(
+      ["rev-parse", "--abbrev-ref", "HEAD"],
       repoDir,
     );
     branch = branchRes.stdout?.trim() || "main";
   }
+  assertBranchName(branch);
 
   // 3. Query remote HEAD commit hash via ls-remote (fast, 0 disk operations, no working tree changes)
-  const lsRes = await executeGitCommand(
-    `git ls-remote origin refs/heads/${branch}`,
+  const lsRes = await executeGit(
+    ["ls-remote", "origin", `refs/heads/${branch}`],
     repoDir,
   );
   if (!lsRes.success || !lsRes.stdout.trim()) {

@@ -1,4 +1,5 @@
 import { loadConfig, saveConfig } from "../../config/storage.js";
+import { validateUrlForSSRF } from "../../utils/ssrf-guard.js";
 
 export class SettingsService {
   getSettings() {
@@ -108,6 +109,11 @@ export class SettingsService {
       params?.custom_endpoint ||
       cfg.ai_settings?.custom_endpoint ||
       "http://localhost:11434/v1";
+
+    if (params?.custom_endpoint) {
+      const isLocal = activeProvider === "ollama" || activeProvider === "local";
+      await validateUrlForSSRF(params.custom_endpoint, { allowLocalhost: isLocal });
+    }
 
     // Static curated fallback models
     const fallbackMap: Record<

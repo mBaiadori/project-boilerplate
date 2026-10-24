@@ -13,10 +13,11 @@ import {
   ensureGitRepo,
   cloneGitRepo,
   pullGitRepo,
-  executeGitCommand,
+  executeGit,
   isGitRepo,
 } from "../../utils/git.js";
 import { parseRepoRef, resolveRepoDirPath, RepoRef } from "../../utils/repo-ref.js";
+import { assertBranchName } from "../../utils/git-validate.js";
 import { workspaceService } from "../workspace/workspace.service.js";
 import { docsMetadataService } from "../workspace/docs-metadata.service.js";
 import { governanceService } from "../governance/governance.service.js";
@@ -1130,15 +1131,15 @@ export class ReposService {
     const isGit = await isGitRepo(repoDir);
     if (isGit) {
       try {
-        await executeGitCommand("git add -A", repoDir);
-        await executeGitCommand(
-          'git commit -m "chore(context-os): inicializar governanca do framework"',
+        await executeGit(["add", "-A"], repoDir);
+        await executeGit(
+          ["commit", "-m", "chore(context-os): inicializar governanca do framework"],
           repoDir,
         );
 
         if (cfg.token && cfg.active_repo?.html_url) {
-          const defaultBranch = cfg.active_repo?.default_branch || "main";
-          await executeGitCommand(`git push origin ${defaultBranch}`, repoDir);
+          const defaultBranch = assertBranchName(cfg.active_repo?.default_branch || "main");
+          await executeGit(["push", "origin", defaultBranch], repoDir);
         }
       } catch (gitErr: any) {
         console.warn(
@@ -1466,13 +1467,13 @@ export class ReposService {
     const clonedRepo =
       (createResult as any).repo || (createResult as any).active_repo;
     if (fs.existsSync(path.join(targetDir, ".git"))) {
-      await executeGitCommand("git add -A", targetDir);
-      await executeGitCommand(
-        `git commit -m "feat: initial cloned structure from ${source_name}" || true`,
+      await executeGit(["add", "-A"], targetDir);
+      await executeGit(
+        ["commit", "-m", `feat: initial cloned structure from ${source_name}`],
         targetDir,
-      );
+      ).catch(() => {});
       if (cfg.authenticated && cfg.token && !clonedRepo?.is_local) {
-        await executeGitCommand("git push -u origin main || true", targetDir);
+        await executeGit(["push", "-u", "origin", "main"], targetDir).catch(() => {});
       }
     }
 

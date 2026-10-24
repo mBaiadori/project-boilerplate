@@ -1,0 +1,88 @@
+import { test, describe, beforeEach, afterEach } from 'node:test';
+import assert from 'node:assert';
+import fs from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
+import { executeGitCommand, commitChanges, rollbackToCommit, syncGit } from './git.js';
+
+describe('Security: Git Command Injection Prevention (RED Tests)', () => {
+  let tmpDir: string;
+  let repoDir: string;
+  let pwnedFile: string;
+
+  beforeEach(async () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'git-sec-test-'));
+    repoDir = path.join(tmpDir, 'repo');
+    fs.mkdirSync(repoDir, { recursive: true });
+    pwnedFile = path.join(tmpDir, 'PWNED');
+
+    // Inicializa repo git básico
+    await executeGitCommand('git init -b main', repoDir);
+    await executeGitCommand('git config user.name "SecurityTester"', repoDir);
+    await executeGitCommand('git config user.email "sec@example.com"', repoDir);
+
+    fs.writeFileSync(path.join(repoDir, 'init.txt'), 'hello world');
+    await executeGitCommand('git add .', repoDir);
+    await executeGitCommand('git commit -m "initial commit"', repoDir);
+  });
+
+  afterEach(() => {
+    try {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    } catch {}
+  });
+
+  test('commitChanges: mensagem com $(touch PWNED) não deve executar subshell', async () => {
+    const maliciousMsg = `Feat: nova versão $(touch "${pwnedFile}")`;
+    fs.writeFileSync(path.join(repoDir, 'change.txt'), 'content 1');
+
+    await commitChanges(repoDir, maliciousMsg);
+
+    const exists = fs.existsSync(pwnedFile);
+    assert.strictEqual(exists, false, 'VULNERABILIDADE: Comando executado via interpolação de mensagem de commit!');
+  });
+
+  test('commitChanges: mensagem com crases `touch PWNED` não deve executar subshell', async () => {
+    const maliciousMsg = `Feat: update \`touch "${pwnedFile}"\``;
+    fs.writeFileSync(path.join(repoDir, 'change2.txt'), 'content 2');
+
+    await commitChanges(repoDir, maliciousMsg);
+
+    const exists = fs.existsSync(pwnedFile);
+    assert.strictEqual(exists, false, 'VULNERABILIDADE: Comando executado via crases na mensagem de commit!');
+  });
+
+  test('commitChanges: argumento de arquivo com quebra de aspas e comando não deve executar subshell', async () => {
+    fs.writeFileSync(path.join(repoDir, 'normal.txt'), 'payload');
+
+    // Injeção via array de arquivos interpolado em git add "${file}"
+    const maliciousFileArg = `normal.txt" ; touch "${pwnedFile}" ; git status -- "`;
+
+    await commitChanges(repoDir, 'Commit com arg de arquivo hostil', [maliciousFileArg]);
+
+    const exists = fs.existsSync(pwnedFile);
+    assert.strictEqual(exists, false, 'VULNERABILIDADE: Comando executado via interpolação de arquivo no git add!');
+  });
+
+  test('rollbackToCommit: commit hash hostil com ponto-e-vírgula não deve executar subshell', async () => {
+    const maliciousHash = `HEAD; touch "${pwnedFile}"`;
+
+    try {
+      await rollbackToCommit(repoDir, maliciousHash);
+    } catch {}
+
+    const exists = fs.existsSync(pwnedFile);
+    assert.strictEqual(exists, false, 'VULNERABILIDADE: Injeção de shell no rollbackToCommit!');
+  });
+
+  test('syncGit: remote hostil não deve executar comandos de shell', async () => {
+    const maliciousRemote = `origin; touch "${pwnedFile}"`;
+
+    try {
+      await syncGit(repoDir, maliciousRemote, 'main');
+    } catch {}
+
+    const exists = fs.existsSync(pwnedFile);
+    assert.strictEqual(exists, false, 'VULNERABILIDADE: Injeção de shell no syncGit!');
+  });
+});

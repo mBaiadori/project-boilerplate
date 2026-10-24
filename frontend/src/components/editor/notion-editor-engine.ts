@@ -21,12 +21,13 @@ import type { DictionaryTerm } from '../../types';
 import type { DictionaryPopoverData } from '../dictionary/DictionaryPopover';
 
 import mermaid from 'mermaid';
+import { isSafeUrl, sanitizeSvg } from '../../utils/sanitize';
 
 try {
   mermaid.initialize({
     startOnLoad: false,
     theme: 'default',
-    securityLevel: 'loose',
+    securityLevel: 'strict',
     fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif',
   });
 } catch (e) {
@@ -1439,8 +1440,10 @@ export class NotionEditorEngine {
       .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_match, label, href) => {
         // Remover prefixo residual 'description' decorrente da ligature do ícone
         const cleanLabel = (label || '').replace(/^description(?=[a-zA-Z0-9_\sÀ-ÿ])/i, '').trim() || label;
-        const isDoc = href.endsWith('.md') || href.includes('.md#') || href.includes(':~:text=') || href.startsWith('#');
-        return `<a href="${href}" class="${isDoc ? 'notion-doc-link' : ''}" target="${isDoc ? '_self' : '_blank'}">${cleanLabel}</a>`;
+        const trimmedHref = (href || '').trim();
+        const safeTargetHref = isSafeUrl(trimmedHref) ? escapeHtml(trimmedHref) : '#';
+        const isDoc = trimmedHref.endsWith('.md') || trimmedHref.includes('.md#') || trimmedHref.includes(':~:text=') || trimmedHref.startsWith('#');
+        return `<a href="${safeTargetHref}" class="${isDoc ? 'notion-doc-link' : ''}" target="${isDoc ? '_self' : '_blank'}">${cleanLabel}</a>`;
       });
   }
 
@@ -1690,7 +1693,7 @@ export class NotionEditorEngine {
     const renderId = `mermaid-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
     try {
       const { svg } = await mermaid.render(renderId, code);
-      renderArea.innerHTML = svg;
+      renderArea.innerHTML = sanitizeSvg(svg);
     } catch (e: any) {
       // Remove any stray error elements mermaid might append to body
       const strayErr = document.getElementById(`d${renderId}`);

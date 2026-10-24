@@ -3,6 +3,12 @@ import { eventsService } from './events.service.js';
 
 export async function eventsRoutes(fastify: FastifyInstance) {
   fastify.get('/api/events', async (request, reply) => {
+    if (eventsService.getClientCount() >= eventsService.getMaxClients()) {
+      return reply.status(429).send({
+        error: 'Limite máximo de conexões simultâneas de eventos atingido.',
+      });
+    }
+
     reply.hijack();
     reply.raw.setHeader('Content-Type', 'text/event-stream');
     reply.raw.setHeader('Cache-Control', 'no-cache');

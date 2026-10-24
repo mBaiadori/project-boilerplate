@@ -19,7 +19,7 @@ import {
   getFileGitLog,
   getFileContentAtCommit,
   getFileBlameDetails,
-  executeGitCommand,
+  executeGit,
   getWhatsNewSummary,
   getWhatsNewFileDiff,
   checkRemoteGitUpdates,
@@ -275,7 +275,7 @@ export class GitService {
   }
 
   async getGitVersion() {
-    const res = await executeGitCommand('git --version', process.cwd());
+    const res = await executeGit(['--version'], process.cwd());
     return {
       version: res.stdout || 'Git não encontrado',
       installed: res.success,

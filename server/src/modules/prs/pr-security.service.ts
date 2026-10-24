@@ -3,7 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { PROJECTS_DIR, resolveRepoDir } from '../../config/constants.js';
 import { loadConfig } from '../../config/storage.js';
-import { executeGitCommand } from '../../utils/git.js';
+import { executeGit } from '../../utils/git.js';
+import { assertCommitish, assertGitPath } from '../../utils/git-validate.js';
 import { canAccessDocument } from '../../utils/crypto.js';
 
 export interface DocClearanceResult {
@@ -109,7 +110,9 @@ export class PRSecurityService {
     }
 
     // Read plaintext at git ref
-    const plainRes = await executeGitCommand(`git show "${ref}:${cleanPath}"`, repoDir);
+    const safeRef = assertCommitish(ref);
+    const safePath = assertGitPath(cleanPath);
+    const plainRes = await executeGit(['show', `${safeRef}:${safePath}`], repoDir);
     if (plainRes.success && plainRes.stdout !== undefined) {
       return plainRes.stdout;
     }

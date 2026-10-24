@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { PROJECTS_DIR, resolveRepoDir } from '../../config/constants.js';
 import { loadConfig, saveConfig, ensureDefaultRepoFiles } from '../../config/storage.js';
-import { executeGitCommand } from '../../utils/git.js';
+import { executeGit } from '../../utils/git.js';
 import { providerManager } from '../ai/providers/ProviderManager.js';
 
 export interface SystemDiagnostics {
@@ -50,7 +50,7 @@ class SystemService {
     let gitVersion = 'Não localizado';
 
     try {
-      const gitCheck = await executeGitCommand('git --version', process.cwd());
+      const gitCheck = await executeGit(['--version'], process.cwd());
       if (gitCheck.success) {
         gitInstalled = true;
         gitVersion = gitCheck.stdout.trim();

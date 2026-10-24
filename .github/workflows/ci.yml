@@ -1,0 +1,67 @@
+name: CI & Security Gates
+
+on:
+  push:
+    branches: [main, master, "gov/*", "feat/*", "fix/*"]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  server:
+    name: Server Checks (tsc + tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "npm"
+          cache-dependency-path: server/package-lock.json
+      - name: Install server dependencies
+        run: cd server && npm ci
+      - name: Server Typecheck (tsc)
+        run: cd server && npx tsc --noEmit
+      - name: Server Unit Tests
+        run: cd server && npm test
+
+  frontend:
+    name: Frontend Checks (tsc + build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies
+        run: cd frontend && npm ci
+      - name: Frontend Typecheck (tsc)
+        run: cd frontend && npx tsc -p tsconfig.app.json --noEmit
+      - name: Frontend Production Build
+        run: cd frontend && npm run build
+
+  guards:
+    name: Static Security & Quality Guards
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Run Guards Baseline Verification
+        run: node scripts/guards.mjs
+
+  audit:
+    name: Dependency Audit (Informative in Phase 0)
+    runs-on: ubuntu-latest
+    continue-on-error: true # Bloqueante a partir da Fase 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Audit Server Dependencies
+        run: cd server && npm audit --omit=dev --audit-level=high
+      - name: Audit Frontend Dependencies
+        run: cd frontend && npm audit --omit=dev --audit-level=high

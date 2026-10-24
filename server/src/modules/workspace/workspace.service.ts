@@ -12,7 +12,8 @@ import {
   saveRepoWorkspaceChanges,
 } from "../../config/storage.js";
 import { computeDiff } from "../../utils/diff.js";
-import { isGitRepo, executeGitCommand, getGitStatus } from "../../utils/git.js";
+import { isGitRepo, executeGit, getGitStatus } from "../../utils/git.js";
+import { assertGitPath } from "../../utils/git-validate.js";
 import {
   docsMetadataService,
   generateDocId,
@@ -740,14 +741,15 @@ export class WorkspaceService {
     let existedInGit = false;
     const isGit = await isGitRepo(repoDir);
     if (isGit) {
-      const headCheck = await executeGitCommand(
-        `git cat-file -e HEAD:"${cleanPath}"`,
+      const safeClean = assertGitPath(cleanPath);
+      const headCheck = await executeGit(
+        ["cat-file", "-e", `HEAD:${safeClean}`],
         repoDir,
       );
       existedInGit = headCheck.success;
       if (!existedInGit) {
-        const indexCheck = await executeGitCommand(
-          `git ls-files --error-unmatch "${cleanPath}"`,
+        const indexCheck = await executeGit(
+          ["ls-files", "--error-unmatch", safeClean],
           repoDir,
         );
         existedInGit = indexCheck.success;
@@ -766,7 +768,7 @@ export class WorkspaceService {
     if (isGit && !existedInGit) {
       // O arquivo nunca existiu no repositório Git (era apenas um rascunho/arquivo não rastreado local).
       // Se porventura tiver sido indexado com git add, limpa do index do Git
-      await executeGitCommand(`git rm -f --cached -- "${cleanPath}"`, repoDir).catch(() => {});
+      await executeGit(["rm", "-f", "--cached", "--", assertGitPath(cleanPath)], repoDir).catch(() => {});
       removeWorkspaceChange(repoName, cleanPath);
     } else {
       recordChange(repoName, cleanPath, "DELETED", oldContent, "");
@@ -890,8 +892,8 @@ export class WorkspaceService {
           const fileExistsOnDisk = fs.existsSync(fullPath);
 
           if (item.type === "DELETED") {
-            const headCheck = await executeGitCommand(
-              `git cat-file -e HEAD:"${key}"`,
+            const headCheck = await executeGit(
+              ["cat-file", "-e", `HEAD:${assertGitPath(key)}`],
               repoDir,
             );
             if (!headCheck.success && !gitFilesMap.has(key)) {
@@ -904,8 +906,8 @@ export class WorkspaceService {
             removeWorkspaceChange(repoName, key);
             continue;
           } else if (item.type === "MODIFIED" && !fileExistsOnDisk) {
-            const headCheck = await executeGitCommand(
-              `git cat-file -e HEAD:"${key}"`,
+            const headCheck = await executeGit(
+              ["cat-file", "-e", `HEAD:${assertGitPath(key)}`],
               repoDir,
             );
             if (!headCheck.success && !gitFilesMap.has(key)) {
@@ -942,8 +944,8 @@ export class WorkspaceService {
               } catch {}
             }
           } else if (isDeleted) {
-            const showRes = await executeGitCommand(
-              `git show HEAD:"${cleanPath}"`,
+            const showRes = await executeGit(
+              ["show", `HEAD:${assertGitPath(cleanPath)}`],
               repoDir,
             );
             if (showRes.success && showRes.stdout) {
@@ -951,8 +953,8 @@ export class WorkspaceService {
             }
           } else {
             // MODIFIED
-            const showRes = await executeGitCommand(
-              `git show HEAD:"${cleanPath}"`,
+            const showRes = await executeGit(
+              ["show", `HEAD:${assertGitPath(cleanPath)}`],
               repoDir,
             );
             if (showRes.success && showRes.stdout) {
@@ -1093,14 +1095,15 @@ export class WorkspaceService {
       try {
         if (cleanPaths && cleanPaths.length > 0) {
           for (const p of cleanPaths) {
-            await executeGitCommand(`git restore --staged --worktree -- "${p}"`, repoDir);
-            await executeGitCommand(`git checkout HEAD -- "${p}"`, repoDir);
-            await executeGitCommand(`git clean -fd "${p}"`, repoDir);
+            const safeP = assertGitPath(p);
+            await executeGit(["restore", "--staged", "--worktree", "--", safeP], repoDir);
+            await executeGit(["checkout", "HEAD", "--", safeP], repoDir);
+            await executeGit(["clean", "-fd", safeP], repoDir);
           }
         } else {
-          await executeGitCommand("git restore --staged --worktree .", repoDir);
-          await executeGitCommand("git checkout HEAD -- .", repoDir);
-          await executeGitCommand("git clean -fd", repoDir);
+          await executeGit(["restore", "--staged", "--worktree", "."], repoDir);
+          await executeGit(["checkout", "HEAD", "--", "."], repoDir);
+          await executeGit(["clean", "-fd"], repoDir);
         }
       } catch (e) {
         console.warn(

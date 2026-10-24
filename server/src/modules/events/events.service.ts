@@ -8,6 +8,7 @@ type Client = {
 
 class EventsService {
   private clients: Set<Client> = new Set();
+  private maxClients = 30;
   private nativeWatcher: fs.FSWatcher | null = null;
   private debounceTimers = new Map<string, NodeJS.Timeout>();
 
@@ -15,7 +16,18 @@ class EventsService {
     this.initWatcher();
   }
 
+  public getMaxClients(): number {
+    return this.maxClients;
+  }
+
+  public getClientCount(): number {
+    return this.clients.size;
+  }
+
   public addClient(reply: FastifyReply): Client {
+    if (this.clients.size >= this.maxClients) {
+      throw new Error('Limite máximo de conexões de eventos simultâneas atingido (30).');
+    }
     const client: Client = { reply };
     this.clients.add(client);
     return client;

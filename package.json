@@ -16,6 +16,7 @@
     "desktop:package:mac": "npm run build && npm --prefix desktop run build:ts && npm --prefix desktop run compile:bytecode && npm --prefix desktop run package:mac",
     "desktop:package:win": "npm run build && npm --prefix desktop run build:ts && npm --prefix desktop run compile:bytecode && npm --prefix desktop run package:win",
     "desktop:package:linux": "npm run build && npm --prefix desktop run build:ts && npm --prefix desktop run compile:bytecode && npm --prefix desktop run package:linux",
-    "desktop:package:all": "npm run build && npm --prefix desktop run build:ts && npm --prefix desktop run compile:bytecode && npm --prefix desktop run package:all"
+    "desktop:package:all": "npm run build && npm --prefix desktop run build:ts && npm --prefix desktop run compile:bytecode && npm --prefix desktop run package:all",
+    "verify": "bash scripts/verify.sh"
   }
 }

@@ -23,6 +23,13 @@ import { tutorialsRoutes } from "./modules/tutorials/tutorials.routes.js";
 import { wikiRoutes } from "./modules/wiki/wiki.routes.js";
 import { workspaceRoutes } from "./modules/workspace/workspace.routes.js";
 
+import {
+  getSessionToken,
+  isValidSessionToken,
+  isValidHostHeader,
+  parseCookies,
+} from "./security/session.js";
+
 export async function buildApp(): Promise<FastifyInstance> {
   const isDev = process.env.NODE_ENV === "development";
   const app = fastify({
@@ -67,7 +74,93 @@ export async function buildApp(): Promise<FastifyInstance> {
       return cb(new Error("Acesso de origem cruzada não autorizado."), false);
     },
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-ContextOS-Token"],
+  });
+
+  // 2. Proteção Anti-DNS Rebinding e Autenticação de Sessão Local (N3)
+  app.addHook("onRequest", async (request, reply) => {
+    // 2.1 Validação de Host Header
+    if (!isValidHostHeader(request.headers.host)) {
+      return reply.status(403).send({
+        error: "Host não autorizado (proteção anti-DNS-rebinding).",
+      });
+    }
+
+    const url = request.raw.url || "";
+    const pathname = url.split("?")[0];
+
+    // Permite assets estáticos, páginas e requisições OPTIONS pré-voo
+    if (request.method === "OPTIONS" || !pathname.startsWith("/api/")) {
+      return;
+    }
+
+    // Allowlist explícita de endpoints públicos
+    if (
+      pathname === "/api/session/bootstrap" ||
+      pathname === "/api/health" ||
+      pathname === "/health"
+    ) {
+      return;
+    }
+
+    // Extração do token de sessão (Header X-ContextOS-Token, Cookie ctxos_session ou Authorization)
+    const headerToken = request.headers["x-contextos-token"] as string | undefined;
+    const cookies = parseCookies(request.headers.cookie);
+    const cookieToken = cookies["ctxos_session"];
+    let bearerToken: string | undefined;
+    const authHeader = request.headers.authorization;
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      bearerToken = authHeader.substring(7).trim();
+    }
+
+    const candidateToken = headerToken || cookieToken || bearerToken;
+
+    if (!isValidSessionToken(candidateToken)) {
+      return reply.status(401).send({
+        error: "Não autorizado: Sessão inválida ou expirada.",
+      });
+    }
+  });
+
+  // Global Error Handler defensivo: Sanitiza paths de sistema e inclui correlation ID
+  app.setErrorHandler((error: Error & { statusCode?: number; code?: string }, request, reply) => {
+    const requestId = (request.id as string) || `req-${Date.now()}`;
+    if (request.log?.error) {
+      request.log.error({ err: error, requestId }, 'Unhandled Server Error');
+    }
+
+    const statusCode =
+      typeof error.statusCode === 'number' && error.statusCode >= 400 && error.statusCode < 600
+        ? error.statusCode
+        : 500;
+
+    let safeMessage = error.message || 'Erro interno do servidor';
+    if (statusCode === 500) {
+      if (/(\/Users\/|\/home\/|[a-zA-Z]:\\|node_modules)/i.test(safeMessage)) {
+        safeMessage = 'Ocorreu um erro interno inesperado no servidor.';
+      }
+    }
+
+    return reply.status(statusCode).send({
+      error: safeMessage,
+      code: error.code || 'INTERNAL_ERROR',
+      requestId,
+    });
+  });
+
+  // Rota de teste controlada para validação de error handler em ambiente de teste
+  app.get('/api/test-leak-error', async () => {
+    throw new Error('Falha catastrófica em /Users/MarcosBaiadori/secrets/key.pem');
+  });
+
+  // 3. Rota de Bootstrap de Sessão Local (emite cookie HttpOnly e retorna token para SPA/Electron)
+  app.get("/api/session/bootstrap", async (_request, reply) => {
+    const token = getSessionToken();
+    reply.header(
+      "Set-Cookie",
+      `ctxos_session=${token}; Path=/; HttpOnly; SameSite=Strict`,
+    );
+    return reply.send({ token, authenticated: true });
   });
 
   // 2. Register Modular API Routes

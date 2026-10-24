@@ -1,16 +1,20 @@
 import path from 'node:path';
-import { PROJECTS_DIR, resolveRepoDir } from '../../config/constants.js';
+import { resolveRepoDir } from '../../config/constants.js';
 import { loadConfig } from '../../config/storage.js';
-import { executeGitCommand } from '../../utils/git.js';
-import { mergePlaintext3Way } from '../../utils/crypto.js';
-import { prSecurityService } from './pr-security.service.js';
+import { executeGit } from '../../utils/git.js';
+import { assertBranchName } from '../../utils/git-validate.js';
 import { prWorktreeService } from './pr-worktree.service.js';
+import { prSecurityService } from './pr-security.service.js';
+import { mergePlaintext3Way } from '../../utils/crypto.js';
 
-export interface MergeabilityResult {
+export interface PRConflictStatus {
   mergeable: boolean;
   behind_by: number;
   ahead_by: number;
-  conflicts: Array<{ path: string; is_encrypted: boolean }>;
+  conflicts: Array<{
+    path: string;
+    is_encrypted: boolean;
+  }>;
 }
 
 export class PRConflictsService {
@@ -21,13 +25,13 @@ export class PRConflictsService {
     return resolveRepoDir(activeRepoName, effectiveOwner);
   }
 
-  async getMergeability(
+  async checkConflicts(
     repoName: string,
     pr: { id: number | string; branch: string; target_branch?: string }
-  ): Promise<MergeabilityResult> {
+  ): Promise<PRConflictStatus> {
     const repoDir = this.getRepoDir(repoName);
-    const branch = pr.branch;
-    const targetBranch = pr.target_branch || 'main';
+    const branch = pr.branch ? assertBranchName(pr.branch) : '';
+    const targetBranch = pr.target_branch ? assertBranchName(pr.target_branch) : 'main';
 
     if (!branch) {
       return { mergeable: true, behind_by: 0, ahead_by: 0, conflicts: [] };
@@ -36,16 +40,16 @@ export class PRConflictsService {
     // Check commits behind / ahead
     let behind_by = 0;
     let ahead_by = 0;
-    const countBehind = await executeGitCommand(
-      `git rev-list --count "${branch}..${targetBranch}"`,
+    const countBehind = await executeGit(
+      ['rev-list', '--count', `${branch}..${targetBranch}`],
       repoDir
     );
     if (countBehind.success && countBehind.stdout) {
       behind_by = parseInt(countBehind.stdout.trim(), 10) || 0;
     }
 
-    const countAhead = await executeGitCommand(
-      `git rev-list --count "${targetBranch}..${branch}"`,
+    const countAhead = await executeGit(
+      ['rev-list', '--count', `${targetBranch}..${branch}`],
       repoDir
     );
     if (countAhead.success && countAhead.stdout) {
@@ -54,8 +58,8 @@ export class PRConflictsService {
 
     // Run merge-tree to test if clean merge is possible
     const conflicts: Array<{ path: string; is_encrypted: boolean }> = [];
-    const mergeTreeRes = await executeGitCommand(
-      `git merge-tree --write-tree --name-only "${targetBranch}" "${branch}"`,
+    const mergeTreeRes = await executeGit(
+      ['merge-tree', '--write-tree', '--name-only', targetBranch, branch],
       repoDir
     );
 
@@ -96,8 +100,8 @@ export class PRConflictsService {
     const cfg = loadConfig();
     const login = userLogin || cfg.user?.login || 'marcosbaiadori';
     const repoDir = this.getRepoDir(repoName);
-    const branch = pr.branch;
-    const targetBranch = pr.target_branch || 'main';
+    const branch = assertBranchName(pr.branch);
+    const targetBranch = pr.target_branch ? assertBranchName(pr.target_branch) : 'main';
 
     // Verify clearance
     const clearance = await prSecurityService.resolveDocClearance(repoName, login, filePath, branch);
@@ -106,8 +110,8 @@ export class PRConflictsService {
     }
 
     // Find common merge-base ancestor
-    const baseRes = await executeGitCommand(
-      `git merge-base "${targetBranch}" "${branch}"`,
+    const baseRes = await executeGit(
+      ['merge-base', targetBranch, branch],
       repoDir
     );
     const mergeBaseHash = baseRes.success ? (baseRes.stdout || '').trim() : targetBranch;
@@ -124,49 +128,47 @@ export class PRConflictsService {
 
     return {
       filePath,
-      base: baseText,
-      ours: oursText,
-      theirs: theirsText,
-      merged: mergeResult.mergedContent,
-      hasConflicts: mergeResult.hasConflicts,
-      conflictCount: mergeResult.conflictCount,
+      hasConflict: mergeResult.hasConflicts,
+      mergedContent: mergeResult.mergedContent,
+      oursContent: oursText,
+      theirsContent: theirsText,
+      baseContent: baseText,
+      conflictMarkersCount: mergeResult.conflictCount,
     };
   }
 
-  async resolveConflict(
+  async resolveFileConflict(
     repoName: string,
-    pr: { id: number | string; branch: string; target_branch?: string },
+    pr: { id: number | string; branch: string },
     filePath: string,
     resolvedContent: string,
     userLogin?: string
-  ): Promise<{ commitHash: string }> {
+  ): Promise<{ success: boolean; commitHash: string }> {
     const cfg = loadConfig();
     const login = userLogin || cfg.user?.login || 'marcosbaiadori';
 
-    // Verify clearance
+    // Clearance check
     const clearance = await prSecurityService.resolveDocClearance(repoName, login, filePath, pr.branch);
     if (!clearance.allowed) {
-      throw new Error(`Acesso negado para resolver conflito no documento restrito '${filePath}'.`);
+      throw new Error(`Acesso negado: Você não possui autorização para resolver conflitos no documento restrito '${filePath}'.`);
     }
 
     const wtDir = await prWorktreeService.ensurePRWorktree(repoName, pr);
 
-    // Write resolved plaintext directly
+    // Save plaintext file in worktree
     await prWorktreeService.writePlainAtWorktree(wtDir, filePath, resolvedContent);
 
-    const commitMsg = `fix(conflict): resolução de conflito em ${filePath} por ${login}`;
-    const { commitHash } = await prWorktreeService.commitAndPushWorktree(
-      wtDir,
-      pr.branch,
-      commitMsg,
-      login,
-      repoName
-    );
+    // Commit and push
+    const commitMsg = `fix(conflict): resolver conflito no arquivo ${filePath} no PR #${pr.id}`;
+    const result = await prWorktreeService.commitAndPushWorktree(wtDir, pr.branch, commitMsg, login, repoName);
 
-    return { commitHash };
+    return {
+      success: true,
+      commitHash: result.commitHash,
+    };
   }
 
-  async updateFromBase(
+  async syncWithTargetBranch(
     repoName: string,
     pr: { id: number | string; branch: string; target_branch?: string },
     userLogin?: string
@@ -174,32 +176,33 @@ export class PRConflictsService {
     const cfg = loadConfig();
     const login = userLogin || cfg.user?.login || 'marcosbaiadori';
     const repoDir = this.getRepoDir(repoName);
-    const targetBranch = pr.target_branch || 'main';
+    const branch = assertBranchName(pr.branch);
+    const targetBranch = pr.target_branch ? assertBranchName(pr.target_branch) : 'main';
 
     const wtDir = await prWorktreeService.ensurePRWorktree(repoName, pr);
 
     // Fetch target branch
     if (cfg.authenticated && cfg.token && cfg.active_repo?.full_name && !cfg.active_repo?.is_local) {
-      await executeGitCommand(`git fetch origin "${targetBranch}:refs/remotes/origin/${targetBranch}"`, repoDir).catch(() => {});
+      await executeGit(['fetch', 'origin', `${targetBranch}:refs/remotes/origin/${targetBranch}`], repoDir).catch(() => {});
     }
 
-    const mergeRes = await executeGitCommand(
-      `git -C "${wtDir}" merge "${targetBranch}" -m "chore(sync): atualizar branch do PR #${pr.id} com a versão oficial (${targetBranch})"`,
+    const mergeRes = await executeGit(
+      ['-C', wtDir, 'merge', targetBranch, '-m', `chore(sync): atualizar branch do PR #${pr.id} com a versão oficial (${targetBranch})`],
       repoDir
     );
 
     if (!mergeRes.success && (mergeRes.stderr.includes('CONFLICT') || mergeRes.stdout.includes('CONFLICT'))) {
       // Abort merge in worktree
-      await executeGitCommand(`git -C "${wtDir}" merge --abort`, repoDir).catch(() => {});
+      await executeGit(['-C', wtDir, 'merge', '--abort'], repoDir).catch(() => {});
       throw new Error(`Existem conflitos entre a branch do PR e a branch '${targetBranch}'. Utilize a resolução de conflitos.`);
     }
 
-    const hashRes = await executeGitCommand(`git -C "${wtDir}" rev-parse HEAD`, repoDir);
+    const hashRes = await executeGit(['-C', wtDir, 'rev-parse', 'HEAD'], repoDir);
     const newCommitHash = (hashRes.stdout || '').trim();
 
     // Push updated branch
     if (cfg.authenticated && cfg.token && cfg.active_repo?.full_name && !cfg.active_repo?.is_local) {
-      await executeGitCommand(`git -C "${wtDir}" push origin "${pr.branch}"`, repoDir).catch(() => {});
+      await executeGit(['-C', wtDir, 'push', 'origin', branch], repoDir).catch(() => {});
     }
 
     return {
@@ -207,6 +210,31 @@ export class PRConflictsService {
       message: `Branch do PR #${pr.id} sincronizada com sucesso a partir de '${targetBranch}'.`,
       newCommitHash,
     };
+  }
+
+  async getMergeability(
+    repoName: string,
+    pr: { id: number | string; branch: string; target_branch?: string }
+  ): Promise<PRConflictStatus> {
+    return this.checkConflicts(repoName, pr);
+  }
+
+  async resolveConflict(
+    repoName: string,
+    pr: { id: number | string; branch: string },
+    filePath: string,
+    resolvedContent: string,
+    userLogin?: string
+  ) {
+    return this.resolveFileConflict(repoName, pr, filePath, resolvedContent, userLogin);
+  }
+
+  async updateFromBase(
+    repoName: string,
+    pr: { id: number | string; branch: string; target_branch?: string },
+    userLogin?: string
+  ) {
+    return this.syncWithTargetBranch(repoName, pr, userLogin);
   }
 }
 

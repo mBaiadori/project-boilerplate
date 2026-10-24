@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import path from 'node:path';
 import { PROJECTS_DIR } from '../config/constants.js';
 import { loadConfig } from '../config/storage.js';
@@ -162,15 +163,56 @@ export function resolveRepoDirPath(refOrRepo: RepoRef | string, ownerOrOrg?: str
 }
 
 /**
+ * Resolve o caminho real no sistema de arquivos, seguindo symlinks.
+ * Se o caminho ou parte dele não existir ainda, resolve o realpath do ancestral
+ * existente mais próximo e anexa os segmentos restantes normalizados.
+ */
+export function resolveRealPath(targetPath: string): string {
+  const resolved = path.resolve(targetPath);
+
+  // Se o caminho completo já existe no disco, realpathSync resolve diretamente
+  if (fs.existsSync(resolved)) {
+    try {
+      return fs.realpathSync(resolved);
+    } catch {
+      return resolved;
+    }
+  }
+
+  // Se o caminho não existe (ex: arquivo ou pasta nova sendo criada),
+  // encontramos o ancestral existente mais próximo para resolver quaisquer symlinks intermediários
+  let current = resolved;
+  const segments: string[] = [];
+
+  while (current && current !== path.dirname(current)) {
+    const parent = path.dirname(current);
+    segments.unshift(path.basename(current));
+
+    if (fs.existsSync(parent)) {
+      try {
+        const realParent = fs.realpathSync(parent);
+        return path.resolve(realParent, ...segments);
+      } catch {
+        return resolved;
+      }
+    }
+    current = parent;
+  }
+
+  return resolved;
+}
+
+/**
  * Verifica se um caminho está estritamente contido dentro de um diretório base permitido,
- * prevenindo ataques de path traversal como ../ ou nomes de pasta irmãos.
+ * resolvendo symlinks reais tanto da base quanto do alvo para impedir symlink escape e path traversal.
  */
 export function isPathInside(parentDir: string, targetPath: string): boolean {
-  const resolvedParent = path.resolve(parentDir);
-  const resolvedTarget = path.resolve(targetPath);
+  const realParent = resolveRealPath(parentDir);
+  const realTarget = resolveRealPath(targetPath);
+
   return (
-    resolvedTarget === resolvedParent ||
-    resolvedTarget.startsWith(resolvedParent + path.sep)
+    realTarget === realParent ||
+    realTarget.startsWith(realParent + path.sep)
   );
 }
 
@@ -178,5 +220,5 @@ export function assertPathInside(parentDir: string, targetPath: string, label = 
   if (!isPathInside(parentDir, targetPath)) {
     throw new Error(`${label} fora do diretório permitido: ${targetPath}`);
   }
-  return path.resolve(targetPath);
+  return resolveRealPath(targetPath);
 }

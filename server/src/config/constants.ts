@@ -5,9 +5,40 @@ import { fileURLToPath } from "node:url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+import { writeJsonAtomic } from "../utils/atomic-write.js";
+
 // Root path of the project (2 levels up from server/src/config or desktop app resources)
 export const USER_DATA_DIR = process.env.CONTEXT_OS_USER_DATA || '';
 export const RESOURCES_DIR = process.env.CONTEXT_OS_RESOURCES || (process as any).resourcesPath || '';
+
+export interface AISettings {
+  provider: string;
+  model: string;
+  api_key: string;
+  custom_endpoint: string;
+  allowed_tools?: string[];
+}
+
+export const DEFAULT_AI_SETTINGS: AISettings = {
+  provider: 'gemini',
+  model: 'gemini-2.5-flash',
+  api_key: process.env.GEMINI_API_KEY || '',
+  custom_endpoint: 'http://localhost:11434/v1',
+  allowed_tools: [
+    'fs_read_file',
+    'fs_list_dir',
+    'fs_write_file',
+    'git_status',
+    'git_diff',
+    'git_log',
+    'git_commit',
+    'dictionary_list',
+    'dictionary_lookup',
+    'templates_list',
+    'prs_list',
+    'governance_audit',
+  ],
+};
 
 // Localiza a raiz do projeto de forma dinâmica e resiliente
 function findProjectRoot(): string {
@@ -250,11 +281,10 @@ export function saveProjectTemplates(
 ): void {
   const repoDir = resolveRepoDir(repoName, ownerOrOrg);
   const filePath = path.join(repoDir, ".templates.json");
-  fs.mkdirSync(path.dirname(filePath), { recursive: true });
   const sanitized = items.map((t) =>
     sanitizeTemplateItem(t, (t.source as any) || "local"),
   );
-  fs.writeFileSync(filePath, JSON.stringify(sanitized, null, 2), "utf-8");
+  writeJsonAtomic(filePath, sanitized);
 }
 
 export function loadCommunityTemplates(): ProjectTemplate[] {
@@ -280,9 +310,8 @@ export function loadCommunityTemplates(): ProjectTemplate[] {
 
 export function saveCommunityTemplates(items: ProjectTemplate[]): void {
   const filePath = getCommunityTemplatesPath();
-  fs.mkdirSync(path.dirname(filePath), { recursive: true });
   const sanitized = items.map((t) => sanitizeTemplateItem(t, "community"));
-  fs.writeFileSync(filePath, JSON.stringify(sanitized, null, 2), "utf-8");
+  writeJsonAtomic(filePath, sanitized);
 }
 
 export function loadProjectTemplatesMetadata(

@@ -197,11 +197,11 @@ export const aiApi = {
     message?: string;
     error?: string;
   }>> {
-    const query = new URLSearchParams();
-    if (params.provider) query.set('provider', params.provider);
-    if (params.api_key) query.set('api_key', params.api_key);
-    if (params.custom_endpoint) query.set('custom_endpoint', params.custom_endpoint);
-    const res = await fetch(`/api/ai/models?${query.toString()}`);
+    const res = await fetch('/api/ai/models', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+    });
     return { ok: res.ok, data: await res.json() };
   },
 
