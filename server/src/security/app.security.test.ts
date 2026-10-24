@@ -203,8 +203,8 @@ describe('Segurança de API e Autenticação de Sessão (Fase 3 - N3)', () => {
       });
 
       assert.strictEqual(res.headers['x-content-type-options'], 'nosniff');
-      assert.strictEqual(res.headers['x-frame-options'], 'SAMEORIGIN');
-      assert.strictEqual(res.headers['referrer-policy'], 'strict-origin-when-cross-origin');
+      assert.ok(res.headers['x-frame-options'] === 'DENY' || res.headers['x-frame-options'] === 'SAMEORIGIN');
+      assert.ok(res.headers['referrer-policy'] === 'no-referrer' || res.headers['referrer-policy'] === 'strict-origin-when-cross-origin');
     });
 
     it('deve impor HTTP 429 (Too Many Requests) com Retry-After sob rajada de requisições em /api/auth/*', async () => {

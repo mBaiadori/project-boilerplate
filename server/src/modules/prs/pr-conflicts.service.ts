@@ -120,7 +120,7 @@ export class PRConflictsService {
     const oursText = await prSecurityService.readPlainAtRef(repoName, branch, filePath, login);
     const theirsText = await prSecurityService.readPlainAtRef(repoName, targetBranch, filePath, login);
 
-    const mergeResult = mergePlaintext3Way(baseText, oursText, theirsText, {
+    const mergeResult = await mergePlaintext3Way(baseText, oursText, theirsText, {
       ours: `Esta Proposta (${pr.branch})`,
       base: `Versão Base (${mergeBaseHash.slice(0, 7)})`,
       theirs: `Versão Oficial (${targetBranch})`,

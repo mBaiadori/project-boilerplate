@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import os from 'node:os';
 import fs from 'node:fs';
 import path from 'node:path';
-import { execFileSync } from 'node:child_process';
+import { executeGit } from './git.js';
 import type { SecretScanResult, SecretScanViolation } from '../modules/governance/governance.types.js';
 
 export interface MergePlaintextResult {
@@ -185,14 +185,14 @@ export function scanContentForSecrets(content: string, filePath: string): Secret
  * Utiliza o algoritmo nativo `git merge-file` para garantir fusão perfeita linha a linha.
  * Se houver conflitos reais de linha, embute os marcadores legíveis em texto plano.
  */
-export function mergePlaintext3Way(
+export async function mergePlaintext3Way(
   baseText: string,
   oursText: string,
   theirsText: string,
   labels: { ours?: string; base?: string; theirs?: string } = {}
-): MergePlaintextResult {
+): Promise<MergePlaintextResult> {
   const secureTmpDir = path.join(os.tmpdir(), `ctx_merge_${crypto.randomBytes(12).toString('hex')}`);
-  fs.mkdirSync(secureTmpDir, { recursive: true, mode: 0o700 });
+  await fs.promises.mkdir(secureTmpDir, { recursive: true, mode: 0o700 });
 
   const fBase = path.join(secureTmpDir, 'base.tmp');
   const fOurs = path.join(secureTmpDir, 'ours.tmp');
@@ -203,25 +203,27 @@ export function mergePlaintext3Way(
   const lblTheirs = labels.theirs || 'Versão Remota (Git)';
 
   try {
-    fs.writeFileSync(fBase, baseText, { encoding: 'utf-8', mode: 0o600 });
-    fs.writeFileSync(fOurs, oursText, { encoding: 'utf-8', mode: 0o600 });
-    fs.writeFileSync(fTheirs, theirsText, { encoding: 'utf-8', mode: 0o600 });
+    await fs.promises.writeFile(fBase, baseText, { encoding: 'utf-8', mode: 0o600 });
+    await fs.promises.writeFile(fOurs, oursText, { encoding: 'utf-8', mode: 0o600 });
+    await fs.promises.writeFile(fTheirs, theirsText, { encoding: 'utf-8', mode: 0o600 });
 
-    // Executa git merge-file diretamente sem passar por shell
-    try {
-      const mergedStdout = execFileSync(
-        'git',
-        ['merge-file', '-p', '-L', lblOurs, '-L', lblBase, '-L', lblTheirs, fOurs, fBase, fTheirs],
-        { encoding: 'utf-8', maxBuffer: 10 * 1024 * 1024 }
-      );
+    // Executa git merge-file diretamente sem passar por shell via executeGit
+    const mergeRes = await executeGit(
+      ['merge-file', '-p', '-L', lblOurs, '-L', lblBase, '-L', lblTheirs, fOurs, fBase, fTheirs],
+      secureTmpDir,
+      undefined,
+      { maxBuffer: 10 * 1024 * 1024 }
+    );
+
+    if (mergeRes.success) {
       return {
         hasConflicts: false,
-        mergedContent: mergedStdout,
+        mergedContent: mergeRes.stdout,
         conflictCount: 0,
       };
-    } catch (mergeErr: any) {
+    } else {
       // Se houver conflito, o git merge-file sai com código > 0 e o stdout contém os marcadores!
-      const outputWithMarkers = mergeErr.stdout ? String(mergeErr.stdout) : '';
+      const outputWithMarkers = mergeRes.stdout ? String(mergeRes.stdout) : '';
       const escapedLbl = lblOurs.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
       const conflictMarkers = (outputWithMarkers.match(new RegExp(`<<<<<<< ${escapedLbl}`, 'g')) || []).length;
 
@@ -240,7 +242,7 @@ export function mergePlaintext3Way(
     };
   } finally {
     try {
-      fs.rmSync(secureTmpDir, { recursive: true, force: true });
+      await fs.promises.rm(secureTmpDir, { recursive: true, force: true });
     } catch {}
   }
 }
