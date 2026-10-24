@@ -190,5 +190,42 @@ describe('Segurança de API e Autenticação de Sessão (Fase 3 - N3)', () => {
       }
     });
   });
+
+  describe('3.4 Security Headers e Rate Limiting (Fase 4 - S6)', () => {
+    it('deve incluir cabeçalhos estritos de segurança nas respostas HTTP', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/repos',
+        headers: {
+          host: '127.0.0.1:4100',
+          'x-contextos-token': getSessionToken(),
+        },
+      });
+
+      assert.strictEqual(res.headers['x-content-type-options'], 'nosniff');
+      assert.strictEqual(res.headers['x-frame-options'], 'SAMEORIGIN');
+      assert.strictEqual(res.headers['referrer-policy'], 'strict-origin-when-cross-origin');
+    });
+
+    it('deve impor HTTP 429 (Too Many Requests) com Retry-After sob rajada de requisições em /api/auth/*', async () => {
+      let triggered429 = false;
+      for (let i = 0; i < 35; i++) {
+        const res = await app.inject({
+          method: 'GET',
+          url: '/api/auth/status',
+          headers: {
+            host: '127.0.0.1:4100',
+            'x-contextos-token': getSessionToken(),
+          },
+        });
+        if (res.statusCode === 429) {
+          triggered429 = true;
+          assert.ok(res.headers['retry-after']);
+          break;
+        }
+      }
+      assert.strictEqual(triggered429, true, 'Deve disparar 429 após exceder 30 requisições/min em auth');
+    });
+  });
 });
 
