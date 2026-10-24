@@ -3,7 +3,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 
+const SESSION_TTL_MS = 12 * 60 * 60 * 1000; // 12 horas
+
 let activeSessionToken: string | null = null;
+let sessionExpiresAt: number = 0;
 
 function getTokenStoragePath(): string {
   const home = process.env.CONTEXT_OS_USER_DATA || process.env.HOME || os.homedir();
@@ -15,49 +18,92 @@ function getTokenStoragePath(): string {
 }
 
 /**
- * Retorna o token de sessão local ativo (ou gera e persiste um novo com permissão 0600).
+ * Retorna o token de sessão local ativo com TTL de 12 horas.
  */
 export function getSessionToken(): string {
-  if (activeSessionToken) {
+  const now = Date.now();
+  if (activeSessionToken && now < sessionExpiresAt) {
     return activeSessionToken;
   }
 
-  const tokenPath = getTokenStoragePath();
-  if (fs.existsSync(tokenPath)) {
-    try {
-      const stored = fs.readFileSync(tokenPath, 'utf-8').trim();
-      if (stored.length === 64) {
-        activeSessionToken = stored;
-        return activeSessionToken;
-      }
-    } catch {}
-  }
-
+  // Gera token efêmero em memória
   const newToken = crypto.randomBytes(32).toString('hex');
   activeSessionToken = newToken;
+  sessionExpiresAt = now + SESSION_TTL_MS;
+
+  // Persiste em disco com 0600 para integração com CLI/Desktop se necessário
   try {
+    const tokenPath = getTokenStoragePath();
     fs.writeFileSync(tokenPath, newToken, { mode: 0o600, encoding: 'utf-8' });
   } catch (e) {
-    console.warn('[SessionSecurity] Não foi possível persistir token no disco:', e);
+    // Não bloqueia caso o sistema de arquivos esteja protegido
   }
 
   return activeSessionToken;
 }
 
-/**
- * Validação de token em tempo constante usando timingSafeEqual para mitigar ataques de temporização.
- */
-export function isValidSessionToken(candidate?: string | null): boolean {
-  if (!candidate || typeof candidate !== 'string') return false;
-  const current = getSessionToken();
-  const candBuf = Buffer.from(candidate);
-  const curBuf = Buffer.from(current);
+export type TokenValidationResult = {
+  valid: boolean;
+  reason?: 'missing' | 'invalid' | 'expired';
+};
 
-  if (candBuf.length !== curBuf.length) {
-    return false;
+/**
+ * Validação de token com retorno de motivo (missing | invalid | expired)
+ * e renovação deslizante (sliding window).
+ */
+export function validateSessionToken(candidate?: string | null): TokenValidationResult {
+  if (!candidate || typeof candidate !== 'string') {
+    return { valid: false, reason: 'missing' };
   }
 
-  return crypto.timingSafeEqual(candBuf, curBuf);
+  // Garante que a sessão inicial foi inicializada
+  if (!activeSessionToken) {
+    getSessionToken();
+  }
+
+  if (!activeSessionToken) {
+    return { valid: false, reason: 'invalid' };
+  }
+
+  const candBuf = Buffer.from(candidate);
+  const curBuf = Buffer.from(activeSessionToken);
+
+  if (candBuf.length !== curBuf.length) {
+    return { valid: false, reason: 'invalid' };
+  }
+
+  const isMatch = crypto.timingSafeEqual(candBuf, curBuf);
+  if (!isMatch) {
+    return { valid: false, reason: 'invalid' };
+  }
+
+  const now = Date.now();
+  if (now > sessionExpiresAt) {
+    return { valid: false, reason: 'expired' };
+  }
+
+  // Renovação deslizante
+  sessionExpiresAt = now + SESSION_TTL_MS;
+  return { valid: true };
+}
+
+/**
+ * Validação simplificada em tempo constante para compatibilidade backward.
+ */
+export function isValidSessionToken(candidate?: string | null): boolean {
+  return validateSessionToken(candidate).valid;
+}
+
+/**
+ * Funções auxiliares para simulação em testes.
+ */
+export function _setSessionExpiryForTesting(timestamp: number): void {
+  sessionExpiresAt = timestamp;
+}
+
+export function _resetSessionForTesting(): void {
+  activeSessionToken = null;
+  sessionExpiresAt = 0;
 }
 
 /**
@@ -88,7 +134,7 @@ export function isValidHostHeader(hostHeader?: string): boolean {
 }
 
 /**
- * Parser leve e nativo de cookies do HTTP request.
+ * Parser leve e nativo de cookies do HTTP request que preserva caracteres '=' nos valores.
  */
 export function parseCookies(cookieHeader?: string): Record<string, string> {
   if (!cookieHeader) return {};
@@ -96,15 +142,20 @@ export function parseCookies(cookieHeader?: string): Record<string, string> {
   const parts = cookieHeader.split(';');
 
   for (const part of parts) {
-    const [rawKey, rawVal] = part.trim().split('=');
-    if (rawKey && rawVal !== undefined) {
+    const trimmed = part.trim();
+    const idx = trimmed.indexOf('=');
+    if (idx <= 0) continue;
+    const rawKey = trimmed.substring(0, idx).trim();
+    const rawVal = trimmed.substring(idx + 1).trim();
+    if (rawKey) {
       try {
-        cookies[rawKey.trim()] = decodeURIComponent(rawVal.trim());
+        cookies[rawKey] = decodeURIComponent(rawVal);
       } catch {
-        cookies[rawKey.trim()] = rawVal.trim();
+        cookies[rawKey] = rawVal;
       }
     }
   }
 
   return cookies;
 }
+

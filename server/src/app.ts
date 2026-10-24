@@ -26,6 +26,7 @@ import { workspaceRoutes } from "./modules/workspace/workspace.routes.js";
 import {
   getSessionToken,
   isValidSessionToken,
+  validateSessionToken,
   isValidHostHeader,
   parseCookies,
 } from "./security/session.js";
@@ -72,7 +73,7 @@ export async function buildApp(): Promise<FastifyInstance> {
       } catch {
         // Falha no parsing de URL
       }
-      return cb(new Error("Acesso de origem cruzada não autorizado."), false);
+      return cb(null, false);
     },
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "X-ContextOS-Token"],
@@ -85,6 +86,27 @@ export async function buildApp(): Promise<FastifyInstance> {
       return reply.status(403).send({
         error: "Host não autorizado (proteção anti-DNS-rebinding).",
       });
+    }
+
+    // 2.2 Validação de Origin (CORS 403 em vez de 500)
+    const origin = request.headers.origin;
+    if (origin) {
+      let isOriginAllowed = false;
+      try {
+        const parsed = new URL(origin);
+        isOriginAllowed =
+          parsed.hostname === "localhost" ||
+          parsed.hostname === "127.0.0.1" ||
+          parsed.hostname === "::1" ||
+          parsed.protocol === "file:" ||
+          parsed.protocol === "vscode-webview:" ||
+          parsed.protocol === "app:";
+      } catch {}
+      if (!isOriginAllowed) {
+        return reply.status(403).send({
+          error: "Acesso de origem não permitida (CORS).",
+        });
+      }
     }
 
     const url = request.raw.url || "";
@@ -116,8 +138,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     // Allowlist explícita de endpoints públicos
     if (
       pathname === "/api/session/bootstrap" ||
-      pathname === "/api/health" ||
-      pathname === "/health"
+      pathname === "/api/health"
     ) {
       return;
     }
@@ -133,10 +154,15 @@ export async function buildApp(): Promise<FastifyInstance> {
     }
 
     const candidateToken = headerToken || cookieToken || bearerToken;
+    const validation = validateSessionToken(candidateToken);
 
-    if (!isValidSessionToken(candidateToken)) {
+    if (!validation.valid) {
+      const isExpired = validation.reason === 'expired';
       return reply.status(401).send({
-        error: "Não autorizado: Sessão inválida ou não informada.",
+        error: isExpired
+          ? "Sessão expirada. Faça login novamente."
+          : "Não autorizado: Sessão inválida ou não informada.",
+        reason: validation.reason,
       });
     }
   });
@@ -183,6 +209,12 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   // 3. Rota de Bootstrap de Sessão Local (emite cookie HttpOnly e retorna token para SPA/Electron)
   app.get("/api/session/bootstrap", async (request, reply) => {
+    if (process.env.CONTEXT_OS_DESKTOP === "1") {
+      return reply.status(403).send({
+        error: "Bootstrap de sessão desativado em modo desktop.",
+      });
+    }
+
     const origin = request.headers.origin;
     if (origin) {
       try {
@@ -211,9 +243,18 @@ export async function buildApp(): Promise<FastifyInstance> {
     const token = getSessionToken();
     reply.header(
       "Set-Cookie",
-      `ctxos_session=${token}; Path=/; HttpOnly; SameSite=Strict`,
+      `ctxos_session=${token}; Path=/api; HttpOnly; SameSite=Strict; Max-Age=28800`,
     );
     return reply.send({ token, authenticated: true });
+  });
+
+  // 4. Rota Canônica de Health Check (unifica /api/health e redireciona /health)
+  app.get("/api/health", async () => {
+    return { status: "ok", timestamp: new Date().toISOString() };
+  });
+
+  app.get("/health", async (_request, reply) => {
+    return reply.redirect("/api/health", 301);
   });
 
   // 2. Register Modular API Routes
