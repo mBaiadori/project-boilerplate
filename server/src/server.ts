@@ -17,10 +17,10 @@ async function start() {
       if (isShuttingDown) return;
       isShuttingDown = true;
 
-      // Garante encerramento imediato em no máximo 250ms caso conexões fiquem presas
+      // Garante encerramento seguro permitindo que flush e fechamento de conexões ocorram (3s)
       const forceExitTimer = setTimeout(() => {
         process.exit(0);
-      }, 250);
+      }, 3000);
       forceExitTimer.unref();
 
       try {

@@ -29,6 +29,7 @@ import {
   isValidHostHeader,
   parseCookies,
 } from "./security/session.js";
+import { authRateLimiter, toolExecRateLimiter } from "./security/rate-limit.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const isDev = process.env.NODE_ENV === "development";
@@ -94,6 +95,24 @@ export async function buildApp(): Promise<FastifyInstance> {
       return;
     }
 
+    // Rate Limiting para rotas sensíveis
+    const clientIp = request.ip || '127.0.0.1';
+    if (pathname.startsWith('/api/auth/')) {
+      const rateCheck = authRateLimiter.consume(clientIp);
+      if (!rateCheck.allowed) {
+        return reply.status(429).header('Retry-After', String(rateCheck.retryAfterSec || 1)).send({
+          error: 'Muitas requisições para a rota de autenticação. Tente novamente em instantes.',
+        });
+      }
+    } else if (pathname.startsWith('/api/skills/custom/execute')) {
+      const rateCheck = toolExecRateLimiter.consume(clientIp);
+      if (!rateCheck.allowed) {
+        return reply.status(429).header('Retry-After', String(rateCheck.retryAfterSec || 1)).send({
+          error: 'Muitas execuções de ferramentas customizadas solicitadas.',
+        });
+      }
+    }
+
     // Allowlist explícita de endpoints públicos
     if (
       pathname === "/api/session/bootstrap" ||
@@ -120,6 +139,13 @@ export async function buildApp(): Promise<FastifyInstance> {
         error: "Não autorizado: Sessão inválida ou não informada.",
       });
     }
+  });
+
+  // Cabeçalhos de Segurança Estritos (Anti-MIME-sniffing, Anti-Clickjacking, Referrer-Policy)
+  app.addHook("onSend", async (_request, reply) => {
+    reply.header("X-Content-Type-Options", "nosniff");
+    reply.header("X-Frame-Options", "SAMEORIGIN");
+    reply.header("Referrer-Policy", "strict-origin-when-cross-origin");
   });
 
   // Global Error Handler defensivo: Sanitiza paths de sistema e inclui correlation ID

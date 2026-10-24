@@ -191,20 +191,21 @@ export function mergePlaintext3Way(
   theirsText: string,
   labels: { ours?: string; base?: string; theirs?: string } = {}
 ): MergePlaintextResult {
-  const tmpDir = os.tmpdir();
-  const rand = crypto.randomBytes(6).toString('hex');
-  const fBase = path.join(tmpDir, `ctx_base_${rand}.tmp`);
-  const fOurs = path.join(tmpDir, `ctx_ours_${rand}.tmp`);
-  const fTheirs = path.join(tmpDir, `ctx_theirs_${rand}.tmp`);
+  const secureTmpDir = path.join(os.tmpdir(), `ctx_merge_${crypto.randomBytes(12).toString('hex')}`);
+  fs.mkdirSync(secureTmpDir, { recursive: true, mode: 0o700 });
+
+  const fBase = path.join(secureTmpDir, 'base.tmp');
+  const fOurs = path.join(secureTmpDir, 'ours.tmp');
+  const fTheirs = path.join(secureTmpDir, 'theirs.tmp');
 
   const lblOurs = labels.ours || 'Sua Versão (Local)';
   const lblBase = labels.base || 'Versão Original (Base)';
   const lblTheirs = labels.theirs || 'Versão Remota (Git)';
 
   try {
-    fs.writeFileSync(fBase, baseText, 'utf-8');
-    fs.writeFileSync(fOurs, oursText, 'utf-8');
-    fs.writeFileSync(fTheirs, theirsText, 'utf-8');
+    fs.writeFileSync(fBase, baseText, { encoding: 'utf-8', mode: 0o600 });
+    fs.writeFileSync(fOurs, oursText, { encoding: 'utf-8', mode: 0o600 });
+    fs.writeFileSync(fTheirs, theirsText, { encoding: 'utf-8', mode: 0o600 });
 
     // Executa git merge-file diretamente sem passar por shell
     try {
@@ -238,8 +239,8 @@ export function mergePlaintext3Way(
       conflictCount: 1,
     };
   } finally {
-    try { if (fs.existsSync(fBase)) fs.unlinkSync(fBase); } catch {}
-    try { if (fs.existsSync(fOurs)) fs.unlinkSync(fOurs); } catch {}
-    try { if (fs.existsSync(fTheirs)) fs.unlinkSync(fTheirs); } catch {}
+    try {
+      fs.rmSync(secureTmpDir, { recursive: true, force: true });
+    } catch {}
   }
 }
