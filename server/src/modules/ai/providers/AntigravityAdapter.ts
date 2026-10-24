@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import { IAgentProvider, ProviderCapabilities, ProviderId, ProviderMessage, ProviderMode, ProviderSessionConfig, ProviderStatus, ProviderStreamEvent } from './provider.types.js';
 import { PROJECTS_DIR, resolveRepoDir } from '../../../config/constants.js';
 import { loadConfig } from '../../../config/storage.js';
+import { validateCliExecutable } from '../../../utils/cli-validate.js';
 
 interface ActiveProcessSession {
   config: ProviderSessionConfig;
@@ -37,11 +38,11 @@ export class AntigravityAdapter implements IAgentProvider {
     const cfg = loadConfig();
     const customPath = cfg.settings?.antigravity_cli_path || process.env.ANTIGRAVITY_CLI_PATH;
 
-    if (customPath && fs.existsSync(customPath)) {
-      try {
-        fs.accessSync(customPath, fs.constants.X_OK);
-        return { command: customPath, argsPrefix: [], available: true };
-      } catch {}
+    if (customPath) {
+      const val = validateCliExecutable(customPath, ['agy', 'antigravity']);
+      if (val.valid && val.realPath) {
+        return { command: val.realPath, argsPrefix: [], available: true };
+      }
     }
 
     // Possíveis locais conhecidos do binário agy
@@ -54,11 +55,9 @@ export class AntigravityAdapter implements IAgentProvider {
     ];
 
     for (const p of possiblePaths) {
-      if (fs.existsSync(p)) {
-        try {
-          fs.accessSync(p, fs.constants.X_OK);
-          return { command: p, argsPrefix: ['--dangerously-skip-permissions', '-p'], available: true };
-        } catch {}
+      const val = validateCliExecutable(p, ['agy', 'antigravity']);
+      if (val.valid && val.realPath) {
+        return { command: val.realPath, argsPrefix: ['--dangerously-skip-permissions', '-p'], available: true };
       }
     }
 
