@@ -40,12 +40,12 @@ describe('Utilitários de Segurança e 3-Way Merge', () => {
     assert.strictEqual(cleanScan.hasSecrets, false);
   });
 
-  it('Deve executar 3-Way Merge sem conflitos quando alterações forem em linhas diferentes', () => {
+  it('Deve executar 3-Way Merge sem conflitos quando alterações forem em linhas diferentes', async () => {
     const base = 'Linha 1\nLinha 2\nLinha 3\n';
     const ours = 'Linha 1 modificada\nLinha 2\nLinha 3\n';
     const theirs = 'Linha 1\nLinha 2\nLinha 3 modificada\n';
 
-    const result = mergePlaintext3Way(base, ours, theirs);
+    const result = await mergePlaintext3Way(base, ours, theirs);
 
     assert.strictEqual(result.hasConflicts, false);
     assert.strictEqual(result.conflictCount, 0);
@@ -53,12 +53,12 @@ describe('Utilitários de Segurança e 3-Way Merge', () => {
     assert.ok(result.mergedContent.includes('Linha 3 modificada'));
   });
 
-  it('Deve inserir marcadores de conflito legíveis em português quando houver colisão na mesma linha', () => {
+  it('Deve inserir marcadores de conflito legíveis em português quando houver colisão na mesma linha', async () => {
     const base = 'Linha 1\nLinha original\nLinha 3\n';
     const ours = 'Linha 1\nAlteração da Alice\nLinha 3\n';
     const theirs = 'Linha 1\nAlteração do Bob\nLinha 3\n';
 
-    const result = mergePlaintext3Way(base, ours, theirs, {
+    const result = await mergePlaintext3Way(base, ours, theirs, {
       ours: 'Versão da Alice',
       base: 'Original',
       theirs: 'Versão do Bob',

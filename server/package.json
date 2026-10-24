@@ -12,6 +12,8 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.36.3",
     "@fastify/cors": "^10.0.2",
+    "@fastify/helmet": "^13.2.0",
+    "@fastify/rate-limit": "^11.2.1",
     "@fastify/sensible": "^6.0.3",
     "@fastify/static": "^10.1.7",
     "@google/generative-ai": "^0.22.0",

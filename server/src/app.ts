@@ -1,9 +1,11 @@
 import cors from "@fastify/cors";
+import helmet from "@fastify/helmet";
 import fastifyStatic from "@fastify/static";
 import fastify, { FastifyInstance } from "fastify";
 import fs from "node:fs";
 import path from "node:path";
 import { resolveUiDistDir } from "./config/constants.js";
+import { AppError, redactPaths } from "./utils/errors.js";
 import { aiRoutes } from "./modules/ai/ai.routes.js";
 import { authRoutes } from "./modules/auth/auth.routes.js";
 import { dictionaryRoutes } from "./modules/dictionary/dictionary.routes.js";
@@ -22,7 +24,6 @@ import { translationsRoutes } from "./modules/translations/translations.routes.j
 import { tutorialsRoutes } from "./modules/tutorials/tutorials.routes.js";
 import { wikiRoutes } from "./modules/wiki/wiki.routes.js";
 import { workspaceRoutes } from "./modules/workspace/workspace.routes.js";
-
 import {
   getSessionToken,
   isValidSessionToken,
@@ -49,6 +50,29 @@ export async function buildApp(): Promise<FastifyInstance> {
           },
         }
       : true,
+  });
+
+  // 1. Helmet: Cabeçalhos estritos de segurança HTTP (CSP, nosniff, no-referrer, DENY)
+  await app.register(helmet, {
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", "data:", "blob:"],
+        connectSrc: isDev
+          ? ["'self'", "ws:", "http://localhost:*", "http://127.0.0.1:*"]
+          : ["'self'"],
+        fontSrc: ["'self'", "data:"],
+        objectSrc: ["'none'"],
+        baseUri: ["'self'"],
+        formAction: ["'self'"],
+        frameAncestors: ["'none'"],
+      },
+    },
+    referrerPolicy: { policy: "no-referrer" },
+    frameguard: { action: "deny" },
+    noSniff: true,
   });
 
   // 1. CORS: Permitir clientes locais e Electron/Webviews, bloqueando websites externos da internet
@@ -167,15 +191,8 @@ export async function buildApp(): Promise<FastifyInstance> {
     }
   });
 
-  // Cabeçalhos de Segurança Estritos (Anti-MIME-sniffing, Anti-Clickjacking, Referrer-Policy)
-  app.addHook("onSend", async (_request, reply) => {
-    reply.header("X-Content-Type-Options", "nosniff");
-    reply.header("X-Frame-Options", "SAMEORIGIN");
-    reply.header("Referrer-Policy", "strict-origin-when-cross-origin");
-  });
-
   // Global Error Handler defensivo: Sanitiza paths de sistema e inclui correlation ID
-  app.setErrorHandler((error: Error & { statusCode?: number; code?: string }, request, reply) => {
+  app.setErrorHandler((error: Error & { statusCode?: number; code?: string; isOperational?: boolean }, request, reply) => {
     const requestId = (request.id as string) || `req-${Date.now()}`;
     if (request.log?.error) {
       request.log.error({ err: error, requestId }, 'Unhandled Server Error');
@@ -186,16 +203,18 @@ export async function buildApp(): Promise<FastifyInstance> {
         ? error.statusCode
         : 500;
 
-    let safeMessage = error.message || 'Erro interno do servidor';
-    if (statusCode === 500) {
-      if (/(\/Users\/|\/home\/|[a-zA-Z]:\\|node_modules)/i.test(safeMessage)) {
-        safeMessage = 'Ocorreu um erro interno inesperado no servidor.';
-      }
+    let safeMessage: string;
+    if (error instanceof AppError || error.isOperational) {
+      safeMessage = redactPaths(error.message);
+    } else if (statusCode >= 400 && statusCode < 500) {
+      safeMessage = redactPaths(error.message || 'Requisição inválida');
+    } else {
+      safeMessage = 'Ocorreu um erro interno inesperado no servidor.';
     }
 
     return reply.status(statusCode).send({
       error: safeMessage,
-      code: error.code || 'INTERNAL_ERROR',
+      code: error.code || (statusCode >= 500 ? 'INTERNAL_ERROR' : 'BAD_REQUEST'),
       requestId,
     });
   });

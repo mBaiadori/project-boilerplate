@@ -1341,7 +1341,7 @@ DIRETRIZES OBRIGATÓRIAS:
       const baseText = await prSecurityService.readPlainAtRef(repoName, payload.base_sha, payload.filePath, login).catch(() => '');
       const theirsText = await prSecurityService.readPlainAtRef(repoName, currentHeadSha, payload.filePath, login).catch(() => '');
 
-      const mergeResult = mergePlaintext3Way(baseText, payload.content, theirsText, {
+      const mergeResult = await mergePlaintext3Way(baseText, payload.content, theirsText, {
         ours: 'Sua Edição',
         theirs: `HEAD Atual (${currentHeadSha.slice(0, 7)})`,
       });
