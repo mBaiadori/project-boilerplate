@@ -1012,75 +1012,6 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
     [saveDictionaryTerms],
   );
 
-  const updateFileMetadata = useCallback(
-    async (partialMeta: Partial<DocumentMetadataItem>) => {
-      const currentFile = activeFileRef.current;
-      const repoName = activeDocRepoRef.current || activeRepoRef.current?.name;
-      if (!currentFile || !repoName) return;
-
-      const merged = {
-        ...fileMetadataRef.current,
-        ...partialMeta,
-      };
-      setFileMetadataState(merged);
-      fileMetadataRef.current = merged;
-
-      // Optimistic tree node update for instant visual feedback
-      const updateNodeInTree = (nodes: TreeNode[]): TreeNode[] => {
-        const cleanCurrent = currentFile.replace(/^\/+/, "");
-        return nodes.map((n) => {
-          const cleanN = n.path.replace(/^\/+/, "");
-          if (cleanN === cleanCurrent) {
-            return {
-              ...n,
-              title: partialMeta.title !== undefined ? partialMeta.title : n.title,
-              status: partialMeta.status !== undefined ? partialMeta.status : n.status,
-              department: partialMeta.department !== undefined ? partialMeta.department : (n as any).department,
-            };
-          }
-          if (n.children && n.children.length > 0) {
-            return {
-              ...n,
-              children: updateNodeInTree(n.children),
-            };
-          }
-          return n;
-        });
-      };
-      setTree((prev) => updateNodeInTree(prev));
-
-      try {
-        const res = await API.updateDocumentMetadataItem({
-          path: currentFile,
-          meta: partialMeta,
-          repo: repoName,
-        });
-        if (res.ok && res.data?.meta) {
-          setFileMetadataState(res.data.meta);
-          fileMetadataRef.current = res.data.meta;
-          if (res.data.tree) {
-            setTree(res.data.tree);
-          }
-          window.dispatchEvent(
-            new CustomEvent("workspace:document-saved", {
-              detail: { filePath: currentFile, meta: res.data.meta },
-            }),
-          );
-        }
-      } catch (err) {
-        console.error("[WorkspaceContext] Erro ao atualizar metadados:", err);
-      }
-    },
-    [],
-  );
-
-  const updateDocumentTitle = useCallback(
-    async (newTitle: string) => {
-      await updateFileMetadata({ title: newTitle });
-    },
-    [updateFileMetadata],
-  );
-
   const refreshWhatsNew = useCallback(async () => {
     const repoName = activeRepoRef.current?.name || "default";
     const lastSeenKey = `spec_whats_new_seen_${repoName}`;
@@ -1121,6 +1052,89 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
     setHasUnreadWhatsNew(false);
     refreshWhatsNew();
   }, [whatsNewSummary, refreshWhatsNew]);
+
+  const updateFileMetadata = useCallback(
+    async (partialMeta: Partial<DocumentMetadataItem>) => {
+      const currentFile = activeFileRef.current;
+      const repoName = activeDocRepoRef.current || activeRepoRef.current?.name;
+      if (!currentFile || !repoName) return;
+
+      const merged = {
+        ...fileMetadataRef.current,
+        ...partialMeta,
+      };
+      setFileMetadataState(merged);
+      fileMetadataRef.current = merged;
+
+      // Optimistic tree node update for instant visual feedback
+      const updateNodeInTree = (nodes: TreeNode[]): TreeNode[] => {
+        const cleanCurrent = currentFile.replace(/^\/+/, "");
+        return nodes.map((n) => {
+          const cleanN = n.path.replace(/^\/+/, "");
+          if (cleanN === cleanCurrent) {
+            return {
+              ...n,
+              title: partialMeta.title !== undefined ? partialMeta.title : n.title,
+              status: partialMeta.status !== undefined ? partialMeta.status : n.status,
+              department: partialMeta.department !== undefined ? partialMeta.department : (n as any).department,
+            };
+          }
+          if (n.children && n.children.length > 0) {
+            return {
+              ...n,
+              children: updateNodeInTree(n.children),
+            };
+          }
+          return n;
+        });
+      };
+      setTree((prev) => updateNodeInTree(prev));
+
+      setSaveStatus("Salvando...");
+      try {
+        const res = await API.updateDocumentMetadataItem({
+          path: currentFile,
+          meta: partialMeta,
+          repo: repoName,
+        });
+        if (res.ok && res.data?.meta) {
+          setFileMetadataState(res.data.meta);
+          fileMetadataRef.current = res.data.meta;
+          if (res.data.tree) {
+            setTree(res.data.tree);
+          }
+          setSaveStatus("Salvo no disco");
+          if (statusTimerRef.current) clearTimeout(statusTimerRef.current);
+          statusTimerRef.current = setTimeout(() => {
+            setSaveStatus("Pronto");
+          }, 3000);
+
+          refreshPendingChanges(repoName);
+          refreshGitStatus(repoName);
+          refreshWhatsNew();
+
+          window.dispatchEvent(
+            new CustomEvent("workspace:document-saved", {
+              detail: { filePath: currentFile, meta: res.data.meta },
+            }),
+          );
+        } else {
+          setSaveStatus("Erro");
+        }
+      } catch (err) {
+        setSaveStatus("Erro");
+        console.error("[WorkspaceContext] Erro ao atualizar metadados:", err);
+      }
+    },
+    [refreshPendingChanges, refreshGitStatus, refreshWhatsNew],
+  );
+
+  const updateDocumentTitle = useCallback(
+    async (newTitle: string) => {
+      await updateFileMetadata({ title: newTitle });
+    },
+    [updateFileMetadata],
+  );
 
   const checkRemoteUpdates = useCallback(
     async (targetRepoName?: string): Promise<boolean> => {

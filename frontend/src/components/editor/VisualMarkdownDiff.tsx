@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from "react";
+import { marked } from "marked";
 import { generateSideBySideMarkdownHtml } from "../../utils/rich-diff";
 import {
   parseFrontmatter,
@@ -62,6 +63,22 @@ export const VisualMarkdownDiff: React.FC<VisualMarkdownDiffProps> = ({
     [newParsed, newContent],
   );
 
+  const isNewDocument = useMemo(() => {
+    return (
+      !oldBody.trim() &&
+      !oldParsed.hasFrontmatter &&
+      (Boolean(newBody.trim()) || newParsed.hasFrontmatter)
+    );
+  }, [oldBody, newBody, oldParsed, newParsed]);
+
+  const isDeletedDocument = useMemo(() => {
+    return (
+      (Boolean(oldBody.trim()) || oldParsed.hasFrontmatter) &&
+      !newBody.trim() &&
+      !newParsed.hasFrontmatter
+    );
+  }, [oldBody, newBody, oldParsed, newParsed]);
+
   const hasBodyChanges = useMemo(() => {
     return oldBody.trim() !== newBody.trim();
   }, [oldBody, newBody]);
@@ -69,8 +86,21 @@ export const VisualMarkdownDiff: React.FC<VisualMarkdownDiffProps> = ({
   const isMetaExpanded = showMetadata !== null ? showMetadata : !hasBodyChanges;
 
   const sideBySideHtml = useMemo(() => {
+    if (isNewDocument || isDeletedDocument) {
+      return { oldHtml: "", newHtml: "" };
+    }
     return generateSideBySideMarkdownHtml(oldBody, newBody);
-  }, [oldBody, newBody]);
+  }, [oldBody, newBody, isNewDocument, isDeletedDocument]);
+
+  const renderedNewHtml = useMemo(() => {
+    if (!newBody.trim()) return "";
+    return marked.parse(newBody) as string;
+  }, [newBody]);
+
+  const renderedOldHtml = useMemo(() => {
+    if (!oldBody.trim()) return "";
+    return marked.parse(oldBody) as string;
+  }, [oldBody]);
 
   // Render stylized metadata chips for frontmatter
   const renderMetadataPills = (
@@ -296,37 +326,217 @@ export const VisualMarkdownDiff: React.FC<VisualMarkdownDiffProps> = ({
           </button>
 
           {isMetaExpanded && (
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: "16px",
-                marginTop: "8px",
-                paddingTop: "8px",
-                borderTop: "1px dashed var(--color-border-subtle, #e2e8f0)",
-              }}
-            >
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
-                {renderMetadataPills(
-                  oldParsed.metadata,
-                  newParsed.metadata,
-                  "old",
-                )}
+            isNewDocument ? (
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: "6px",
+                  marginTop: "8px",
+                  paddingTop: "8px",
+                  borderTop: "1px dashed var(--color-border-subtle, #e2e8f0)",
+                }}
+              >
+                {renderMetadataPills(newParsed.metadata, {}, "new")}
               </div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
-                {renderMetadataPills(
-                  newParsed.metadata,
-                  oldParsed.metadata,
-                  "new",
-                )}
+            ) : isDeletedDocument ? (
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: "6px",
+                  marginTop: "8px",
+                  paddingTop: "8px",
+                  borderTop: "1px dashed var(--color-border-subtle, #e2e8f0)",
+                }}
+              >
+                {renderMetadataPills(oldParsed.metadata, {}, "old")}
               </div>
-            </div>
+            ) : (
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: "16px",
+                  marginTop: "8px",
+                  paddingTop: "8px",
+                  borderTop: "1px dashed var(--color-border-subtle, #e2e8f0)",
+                }}
+              >
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                  {renderMetadataPills(
+                    oldParsed.metadata,
+                    newParsed.metadata,
+                    "old",
+                  )}
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                  {renderMetadataPills(
+                    newParsed.metadata,
+                    oldParsed.metadata,
+                    "new",
+                  )}
+                </div>
+              </div>
+            )
           )}
         </div>
       )}
 
-      {/* Main Diff Render Canvas - Flush Side-by-Side Unified Panes (Only if document body has changes) */}
-      {hasBodyChanges ? (
+      {/* Main Diff Render Canvas */}
+      {isNewDocument ? (
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            minHeight: "320px",
+            width: "100%",
+          }}
+        >
+          {/* Header Centralizado para Documento Novo */}
+          <div
+            style={{
+              padding: "6px 20px",
+              background: "var(--color-surface-container-low, #f8fafc)",
+              borderBottom: "1px solid var(--color-border-subtle, #e2e8f0)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <span
+                className="material-symbols-outlined"
+                style={{ fontSize: "16px", color: "#16a34a" }}
+              >
+                note_add
+              </span>
+              <span
+                style={{
+                  fontWeight: 600,
+                  fontSize: "12px",
+                  color: "var(--color-on-surface, #1e293b)",
+                }}
+              >
+                {newTitle || "Documento Novo"}
+              </span>
+            </div>
+            <span
+              style={{
+                fontSize: "11px",
+                color: "#166534",
+                fontWeight: 600,
+                background: "rgba(34, 197, 94, 0.12)",
+                padding: "2px 8px",
+                borderRadius: "12px",
+                border: "1px solid rgba(34, 197, 94, 0.3)",
+              }}
+            >
+              Documento Novo
+            </span>
+          </div>
+
+          {/* Conteúdo Centralizado */}
+          <div
+            style={{
+              padding: "24px 32px",
+              overflowY: "auto",
+              flex: 1,
+              background: "var(--color-surface, #ffffff)",
+            }}
+          >
+            <div
+              className="notion-diff-canvas prose markdown-rendered"
+              style={{
+                maxWidth: "860px",
+                margin: "0 auto",
+                fontSize: "14.5px",
+                lineHeight: 1.7,
+                color: "var(--color-on-surface, #1e293b)",
+              }}
+              dangerouslySetInnerHTML={{
+                __html: renderedNewHtml,
+              }}
+            />
+          </div>
+        </div>
+      ) : isDeletedDocument ? (
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            minHeight: "320px",
+            width: "100%",
+          }}
+        >
+          {/* Header Centralizado para Documento Removido */}
+          <div
+            style={{
+              padding: "6px 20px",
+              background: "var(--color-surface-container-low, #f8fafc)",
+              borderBottom: "1px solid var(--color-border-subtle, #e2e8f0)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <span
+                className="material-symbols-outlined"
+                style={{ fontSize: "16px", color: "#dc2626" }}
+              >
+                delete
+              </span>
+              <span
+                style={{
+                  fontWeight: 600,
+                  fontSize: "12px",
+                  color: "var(--color-on-surface, #1e293b)",
+                }}
+              >
+                {oldTitle || "Documento Removido"}
+              </span>
+            </div>
+            <span
+              style={{
+                fontSize: "11px",
+                color: "#991b1b",
+                fontWeight: 600,
+                background: "rgba(239, 68, 68, 0.12)",
+                padding: "2px 8px",
+                borderRadius: "12px",
+                border: "1px solid rgba(239, 68, 68, 0.3)",
+              }}
+            >
+              Documento Removido
+            </span>
+          </div>
+
+          <div
+            style={{
+              padding: "24px 32px",
+              overflowY: "auto",
+              flex: 1,
+              background: "var(--color-surface, #ffffff)",
+            }}
+          >
+            <div
+              className="notion-diff-canvas prose markdown-rendered"
+              style={{
+                maxWidth: "860px",
+                margin: "0 auto",
+                fontSize: "14.5px",
+                lineHeight: 1.7,
+                color: "var(--color-on-surface, #1e293b)",
+                opacity: 0.85,
+              }}
+              dangerouslySetInnerHTML={{
+                __html: renderedOldHtml,
+              }}
+            />
+          </div>
+        </div>
+      ) : hasBodyChanges ? (
         <div
           style={{
             display: "grid",

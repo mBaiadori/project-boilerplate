@@ -32,6 +32,16 @@ export class SlashMenuEngine {
   dictionaryTerms: DictionaryTerm[] = [];
 
   commands: SlashCommand[] = [
+    // 0. Texto Básico
+    {
+      id: 'paragraph',
+      category: 'Estrutura & Texto',
+      title: 'Parágrafo (Texto Normal)',
+      desc: 'Comece a digitar texto comum sem formatação especial',
+      icon: '<span class="material-symbols-outlined icon-sm">notes</span>',
+      keywords: ['p', 'paragrafo', 'texto', 'normal', 'paragraph', 'body']
+    },
+
     // 1. Títulos & Cabeçalhos
     {
       id: 'h1',

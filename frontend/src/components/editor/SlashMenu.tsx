@@ -10,6 +10,7 @@ export interface SlashCommandItem {
 }
 
 export const SLASH_COMMANDS: SlashCommandItem[] = [
+  { id: 'paragraph', title: 'Parágrafo', desc: 'Texto comum sem formatação especial', icon: 'notes', category: 'Estrutura', template: '\n\n' },
   { id: 'h1', title: 'Título 1', desc: 'Seção principal do documento', icon: 'format_h1', category: 'Estrutura', template: '\n# ' },
   { id: 'h2', title: 'Título 2', desc: 'Subseção intermediária', icon: 'format_h2', category: 'Estrutura', template: '\n## ' },
   { id: 'h3', title: 'Título 3', desc: 'Subtítulo detalhado', icon: 'format_h3', category: 'Estrutura', template: '\n### ' },

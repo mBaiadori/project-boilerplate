@@ -56,8 +56,6 @@ export const RepoSelectorDropdown: React.FC<RepoSelectorDropdownProps> = ({
     };
   }, [isOpen]);
 
-  if (!repos || repos.length === 0) return null;
-
   const sortedRepos = useMemo(() => {
     return [...(repos || [])].sort((a, b) =>
       (a?.name || "").localeCompare(b?.name || "", undefined, {
@@ -66,6 +64,8 @@ export const RepoSelectorDropdown: React.FC<RepoSelectorDropdownProps> = ({
       }),
     );
   }, [repos]);
+
+  if (!repos || repos.length === 0) return null;
 
   const isAllSelected = value === "all";
   const currentRepoName = isAllSelected ? "Todos os Repositórios" : (value || activeRepo?.name || "local");

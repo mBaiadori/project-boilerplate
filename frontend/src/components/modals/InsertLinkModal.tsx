@@ -24,6 +24,7 @@ interface InsertLinkModalProps {
   initialUrl?: string;
   onClose: () => void;
   onConfirm: (url: string, text: string) => void;
+  title?: string;
 }
 
 export const InsertLinkModal: React.FC<InsertLinkModalProps> = ({
@@ -32,6 +33,7 @@ export const InsertLinkModal: React.FC<InsertLinkModalProps> = ({
   initialUrl = '',
   onClose,
   onConfirm,
+  title,
 }) => {
   const { tree, activeFile } = useWorkspace();
   const [activeTab, setActiveTab] = useState<'doc' | 'snippet' | 'url'>('doc');
@@ -313,7 +315,7 @@ export const InsertLinkModal: React.FC<InsertLinkModalProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={initialUrl ? 'Editar Link / Referência' : 'Inserir Link / Referência'}
+      title={title || (initialUrl ? 'Editar Link / Referência' : 'Inserir Link / Referência')}
       icon={initialUrl ? <Edit3 size={18} /> : <LinkIcon size={18} />}
       size="md"
       footer={

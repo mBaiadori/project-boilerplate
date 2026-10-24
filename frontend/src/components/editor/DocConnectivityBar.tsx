@@ -4,6 +4,7 @@ import { useWorkspace } from "../../context/WorkspaceContext";
 import { API } from "../../services/api";
 import type { StatusItem, TaxonomyItem } from "../../types";
 import { useTemplateStore } from "../../stores/templateStore";
+import { InsertLinkModal } from "../modals/InsertLinkModal";
 
 interface DocConnectivityBarProps {
   filePath: string;
@@ -15,9 +16,10 @@ interface DocConnectivityBarProps {
   onToggleGitMode?: () => void;
   isHistoryDrawerOpen?: boolean;
   onToggleHistoryDrawer?: () => void;
-  onSave?: () => void;
+  onSave?: (metaOverride?: Record<string, any>) => void;
   saveStatus?: string;
   isDirty?: boolean;
+  onAddLink?: (url: string, text: string, type: "dependency" | "consumer") => Promise<void>;
 }
 
 const TAG_PALETTES: Record<
@@ -121,6 +123,7 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
   onSave,
   saveStatus,
   isDirty = false,
+  onAddLink,
 }) => {
   const { fileMetadata, updateFileMetadata, projectMetaOptions } =
     useWorkspace();
@@ -135,7 +138,16 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
   const [templateSearchInput, setTemplateSearchInput] = useState("");
   const [newTagInput, setNewTagInput] = useState("");
   const [customCategoryInput, setCustomCategoryInput] = useState("");
+  const [isAddLinkModalOpen, setIsAddLinkModalOpen] = useState(false);
+  const [addLinkType, setAddLinkType] = useState<"dependency" | "consumer">("dependency");
   const barRef = useRef<HTMLDivElement>(null);
+
+  const openAddLinkModal = (type: "dependency" | "consumer") => {
+    setAddLinkType(type);
+    setIsAddLinkModalOpen(true);
+    setShowConsumers(false);
+    setShowDeps(false);
+  };
 
   useEffect(() => {
     if (!templates || templates.length === 0) {
@@ -158,6 +170,14 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
       loadContext();
     }
   }, [filePath, loadContext]);
+
+  const handleConfirmAddLink = async (url: string, text: string) => {
+    if (onAddLink) {
+      await onAddLink(url, text, addLinkType);
+    }
+    await loadContext();
+    setIsAddLinkModalOpen(false);
+  };
 
   // Atualização em tempo real das dependências e consumidores ao salvar documento ou metadados
   useEffect(() => {
@@ -247,24 +267,28 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
     );
   }, [projectMetaOptions?.tags]);
 
-  const handleStatusChange = (newStatus: string) => {
-    updateFileMetadata({ status: newStatus });
+  const handleStatusChange = async (newStatus: string) => {
+    await updateFileMetadata({ status: newStatus });
+    onSave?.({ status: newStatus });
   };
 
-  const handleCategoryChange = (newCat: string) => {
-    updateFileMetadata({ categories: newCat });
+  const handleCategoryChange = async (newCat: string) => {
+    await updateFileMetadata({ categories: newCat });
+    onSave?.({ categories: newCat });
   };
 
-  const handleAddTag = (tagToAdd: string) => {
+  const handleAddTag = async (tagToAdd: string) => {
     const trimmed = tagToAdd.trim().toLowerCase();
     if (!trimmed || currentTags.includes(trimmed)) return;
     const updated = [...currentTags, trimmed];
-    updateFileMetadata({ tags: updated });
+    await updateFileMetadata({ tags: updated });
+    onSave?.({ tags: updated });
   };
 
-  const handleRemoveTag = (tagToRemove: string) => {
+  const handleRemoveTag = async (tagToRemove: string) => {
     const updated = currentTags.filter((t) => t !== tagToRemove);
-    updateFileMetadata({ tags: updated });
+    await updateFileMetadata({ tags: updated });
+    onSave?.({ tags: updated });
   };
 
   const { departments } = useSecurity();
@@ -328,10 +352,11 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
     );
   }, [templates, templateSearchInput]);
 
-  const handleTemplateChange = (newTemplateId: string) => {
-    updateFileMetadata({ templateId: newTemplateId });
+  const handleTemplateChange = async (newTemplateId: string) => {
+    await updateFileMetadata({ templateId: newTemplateId });
     setShowTemplatePicker(false);
     setTemplateSearchInput("");
+    onSave?.({ templateId: newTemplateId });
   };
 
   return (
@@ -1322,27 +1347,11 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
           }}
         />
         {/* Consumers (Backlinks) */}
-        <div style={{ position: "relative" }}>
-          <button
-            id="btn-doc-consumers"
-            type="button"
-            className={`btn-icon-action ${showConsumers ? "active" : ""}`}
-            onClick={() => {
-              setShowConsumers(!showConsumers);
-              setShowDeps(false);
-              setShowStatusPicker(false);
-              setShowCategoryPicker(false);
-              setShowTemplatePicker(false);
-              setShowTagPicker(false);
-            }}
+        <div style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
+          <div
             style={{
-              height: "28px",
-              width: "auto",
-              padding: "0 6px",
               display: "inline-flex",
               alignItems: "center",
-              justifyContent: "center",
-              gap: "4px",
               borderRadius: "6px",
               border: "1px solid",
               borderColor: showConsumers
@@ -1351,31 +1360,86 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
               background: showConsumers
                 ? "var(--color-primary-container, #eff6ff)"
                 : "transparent",
-              cursor: "pointer",
-              color: showConsumers
-                ? "var(--primary, #2563eb)"
-                : "var(--color-outline, #64748b)",
+              overflow: "hidden",
               transition: "all 0.15s ease",
             }}
-            title="Documentos que referenciam este (Dependentes / Backlinks)"
           >
-            <span
-              className="material-symbols-outlined icon-xs"
-              style={{ fontSize: "16px", color: "blue" }}
-            >
-              call_received
-            </span>
-            <span
-              style={{
-                fontWeight: 600,
-                fontSize: "11px",
-                lineHeight: 1,
-                color: "blue",
+            <button
+              id="btn-doc-consumers"
+              type="button"
+              className={`btn-icon-action ${showConsumers ? "active" : ""}`}
+              onClick={() => {
+                setShowConsumers(!showConsumers);
+                setShowDeps(false);
+                setShowStatusPicker(false);
+                setShowCategoryPicker(false);
+                setShowTemplatePicker(false);
+                setShowTagPicker(false);
               }}
+              style={{
+                height: "28px",
+                width: "auto",
+                padding: "0 6px",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "4px",
+                border: "none",
+                background: "transparent",
+                cursor: "pointer",
+                color: showConsumers
+                  ? "var(--primary, #2563eb)"
+                  : "var(--color-outline, #64748b)",
+              }}
+              title="Documentos que referenciam este (Dependentes / Backlinks)"
             >
-              {consumers.length}
-            </span>
-          </button>
+              <span
+                className="material-symbols-outlined icon-xs"
+                style={{ fontSize: "16px", color: "blue" }}
+              >
+                call_received
+              </span>
+              <span
+                style={{
+                  fontWeight: 600,
+                  fontSize: "11px",
+                  lineHeight: 1,
+                  color: "blue",
+                }}
+              >
+                {consumers.length}
+              </span>
+            </button>
+            <button
+              id="btn-add-consumer"
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                openAddLinkModal("consumer");
+              }}
+              style={{
+                height: "28px",
+                padding: "0 5px",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                border: "none",
+                borderLeft: "1px solid var(--color-outline-variant, #e2e8f0)",
+                background: "transparent",
+                cursor: "pointer",
+                color: "blue",
+                transition: "background 0.15s ease",
+              }}
+              title="Adicionar documento dependente (+)"
+            >
+              <span
+                className="material-symbols-outlined"
+                style={{ fontSize: "15px" }}
+              >
+                add
+              </span>
+            </button>
+          </div>
 
           {showConsumers && (
             <div
@@ -1411,9 +1475,37 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
                 >
                   Dependentes:
                 </strong>
-                <span style={{ fontSize: "10px", color: "#94a3b8" }}>
-                  {consumers.length}
-                </span>
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <span style={{ fontSize: "10px", color: "#94a3b8" }}>
+                    {consumers.length}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowConsumers(false);
+                      openAddLinkModal("consumer");
+                    }}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "2px",
+                      border: "none",
+                      background: "var(--color-primary-container, #eff6ff)",
+                      color: "var(--primary, #2563eb)",
+                      borderRadius: "4px",
+                      padding: "2px 6px",
+                      fontSize: "10px",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                    title="Adicionar documento dependente"
+                  >
+                    <span className="material-symbols-outlined" style={{ fontSize: "12px" }}>
+                      add
+                    </span>
+                    Adicionar
+                  </button>
+                </div>
               </div>
               {consumers.length === 0 ? (
                 <div
@@ -1503,27 +1595,11 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
         </div>
 
         {/* Dependencies */}
-        <div style={{ position: "relative" }}>
-          <button
-            id="btn-doc-dependencies"
-            type="button"
-            className={`btn-icon-action ${showDeps ? "active" : ""}`}
-            onClick={() => {
-              setShowDeps(!showDeps);
-              setShowConsumers(false);
-              setShowStatusPicker(false);
-              setShowCategoryPicker(false);
-              setShowTemplatePicker(false);
-              setShowTagPicker(false);
-            }}
+        <div style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
+          <div
             style={{
-              height: "28px",
-              width: "auto",
-              padding: "0 6px",
               display: "inline-flex",
               alignItems: "center",
-              justifyContent: "center",
-              gap: "4px",
               borderRadius: "6px",
               border: "1px solid",
               borderColor: showDeps
@@ -1532,31 +1608,86 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
               background: showDeps
                 ? "var(--color-primary-container, #eff6ff)"
                 : "transparent",
-              cursor: "pointer",
-              color: showDeps
-                ? "var(--primary, #2563eb)"
-                : "var(--color-outline, #64748b)",
+              overflow: "hidden",
               transition: "all 0.15s ease",
             }}
-            title="Links e documentos referenciados por este arquivo"
           >
-            <span
-              className="material-symbols-outlined icon-xs"
-              style={{ fontSize: "16px", color: "green" }}
-            >
-              call_made
-            </span>
-            <span
-              style={{
-                fontWeight: 600,
-                fontSize: "11px",
-                lineHeight: 1,
-                color: "green",
+            <button
+              id="btn-doc-dependencies"
+              type="button"
+              className={`btn-icon-action ${showDeps ? "active" : ""}`}
+              onClick={() => {
+                setShowDeps(!showDeps);
+                setShowConsumers(false);
+                setShowStatusPicker(false);
+                setShowCategoryPicker(false);
+                setShowTemplatePicker(false);
+                setShowTagPicker(false);
               }}
+              style={{
+                height: "28px",
+                width: "auto",
+                padding: "0 6px",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "4px",
+                border: "none",
+                background: "transparent",
+                cursor: "pointer",
+                color: showDeps
+                  ? "var(--primary, #2563eb)"
+                  : "var(--color-outline, #64748b)",
+              }}
+              title="Links e documentos referenciados por este arquivo"
             >
-              {dependencies.length}
-            </span>
-          </button>
+              <span
+                className="material-symbols-outlined icon-xs"
+                style={{ fontSize: "16px", color: "green" }}
+              >
+                call_made
+              </span>
+              <span
+                style={{
+                  fontWeight: 600,
+                  fontSize: "11px",
+                  lineHeight: 1,
+                  color: "green",
+                }}
+              >
+                {dependencies.length}
+              </span>
+            </button>
+            <button
+              id="btn-add-dependency"
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                openAddLinkModal("dependency");
+              }}
+              style={{
+                height: "28px",
+                padding: "0 5px",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                border: "none",
+                borderLeft: "1px solid var(--color-outline-variant, #e2e8f0)",
+                background: "transparent",
+                cursor: "pointer",
+                color: "green",
+                transition: "background 0.15s ease",
+              }}
+              title="Adicionar documento referenciado (+)"
+            >
+              <span
+                className="material-symbols-outlined"
+                style={{ fontSize: "15px" }}
+              >
+                add
+              </span>
+            </button>
+          </div>
 
           {showDeps && (
             <div
@@ -1592,9 +1723,37 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
                 >
                   Referenciados:
                 </strong>
-                <span style={{ fontSize: "10px", color: "#94a3b8" }}>
-                  {dependencies.length}
-                </span>
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <span style={{ fontSize: "10px", color: "#94a3b8" }}>
+                    {dependencies.length}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowDeps(false);
+                      openAddLinkModal("dependency");
+                    }}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "2px",
+                      border: "none",
+                      background: "rgba(16, 185, 129, 0.12)",
+                      color: "#059669",
+                      borderRadius: "4px",
+                      padding: "2px 6px",
+                      fontSize: "10px",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                    title="Adicionar documento referenciado"
+                  >
+                    <span className="material-symbols-outlined" style={{ fontSize: "12px" }}>
+                      add
+                    </span>
+                    Adicionar
+                  </button>
+                </div>
               </div>
               {dependencies.length === 0 ? (
                 <div
@@ -1981,6 +2140,17 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
           </button>
         )}
       </div>
+
+      <InsertLinkModal
+        isOpen={isAddLinkModalOpen}
+        title={
+          addLinkType === "consumer"
+            ? "Adicionar Documento Dependente"
+            : "Adicionar Documento Referenciado (Link)"
+        }
+        onClose={() => setIsAddLinkModalOpen(false)}
+        onConfirm={handleConfirmAddLink}
+      />
     </div>
   );
 };

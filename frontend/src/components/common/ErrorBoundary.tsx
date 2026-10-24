@@ -57,8 +57,8 @@ export class ErrorBoundary extends Component<Props, State> {
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            backgroundColor: "var(--md-sys-color-surface, var(--color-surface, #0f172a))",
-            color: "var(--md-sys-color-on-surface, var(--color-text-primary, #f8fafc))",
+            backgroundColor: "var(--md-sys-color-surface-container-low, var(--color-surface, #f8f9fa))",
+            color: "var(--md-sys-color-on-surface, var(--color-text-primary, #202124))",
             padding: "24px",
             boxSizing: "border-box",
             fontFamily: "var(--font-sans, system-ui, -apple-system, sans-serif)",
@@ -66,12 +66,12 @@ export class ErrorBoundary extends Component<Props, State> {
         >
           <div
             style={{
-              maxWidth: "560px",
+              maxWidth: "580px",
               width: "100%",
-              backgroundColor: "var(--md-sys-color-surface-container, var(--color-surface-container, #1e293b))",
+              backgroundColor: "var(--md-sys-color-surface, #ffffff)",
               borderRadius: "16px",
-              border: "1px solid var(--md-sys-color-outline-variant, var(--color-border-subtle, rgba(255, 255, 255, 0.1)))",
-              boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.3)",
+              border: "1px solid var(--md-sys-color-outline-variant, rgba(0, 0, 0, 0.12))",
+              boxShadow: "var(--md-sys-elevation-3, 0 4px 12px rgba(0, 0, 0, 0.12))",
               padding: "32px",
               display: "flex",
               flexDirection: "column",
@@ -84,12 +84,13 @@ export class ErrorBoundary extends Component<Props, State> {
                   width: "48px",
                   height: "48px",
                   borderRadius: "12px",
-                  backgroundColor: "rgba(239, 68, 68, 0.15)",
-                  color: "var(--color-danger, #ef4444)",
+                  backgroundColor: "var(--md-sys-color-error-container, #fce8e6)",
+                  color: "var(--md-sys-color-error, #d93025)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
                   flexShrink: 0,
+                  border: "1px solid rgba(217, 48, 37, 0.18)",
                 }}
               >
                 <span className="material-symbols-outlined" style={{ fontSize: "28px" }}>
@@ -102,7 +103,7 @@ export class ErrorBoundary extends Component<Props, State> {
                     margin: 0,
                     fontSize: "18px",
                     fontWeight: 600,
-                    color: "var(--md-sys-color-on-surface, var(--color-text-primary, #f8fafc))",
+                    color: "var(--md-sys-color-on-surface, #202124)",
                   }}
                 >
                   Algo deu errado nesta tela
@@ -111,7 +112,7 @@ export class ErrorBoundary extends Component<Props, State> {
                   style={{
                     margin: "4px 0 0 0",
                     fontSize: "13.5px",
-                    color: "var(--md-sys-color-on-surface-variant, var(--color-text-secondary, #94a3b8))",
+                    color: "var(--md-sys-color-on-surface-variant, #5f6368)",
                   }}
                 >
                   A aplicação encontrou uma falha de renderização e evitou que a tela ficasse em branco.
@@ -121,22 +122,25 @@ export class ErrorBoundary extends Component<Props, State> {
 
             <div
               style={{
-                backgroundColor: "rgba(0, 0, 0, 0.25)",
-                border: "1px solid rgba(239, 68, 68, 0.2)",
+                backgroundColor: "var(--md-sys-color-error-container, #fce8e6)",
+                border: "1px solid rgba(217, 48, 37, 0.3)",
+                borderLeft: "4px solid var(--md-sys-color-error, #d93025)",
                 borderRadius: "8px",
                 padding: "12px 14px",
                 fontSize: "13px",
-                color: "var(--color-danger-light, #fca5a5)",
+                fontWeight: 500,
+                color: "var(--md-sys-color-on-error-container, #c5221f)",
                 fontFamily: "var(--font-family-mono, monospace)",
                 wordBreak: "break-word",
+                lineHeight: 1.5,
               }}
             >
               {errorMessage}
             </div>
 
             {errorStack && (
-              <details style={{ fontSize: "12px", color: "var(--color-text-muted, #64748b)" }}>
-                <summary style={{ cursor: "pointer", userSelect: "none", outline: "none", marginBottom: "8px" }}>
+              <details style={{ fontSize: "12.5px", color: "var(--md-sys-color-on-surface-variant, #5f6368)" }}>
+                <summary style={{ cursor: "pointer", userSelect: "none", outline: "none", marginBottom: "8px", fontWeight: 500 }}>
                   Ver detalhes técnicos do erro
                 </summary>
                 <pre
@@ -144,12 +148,14 @@ export class ErrorBoundary extends Component<Props, State> {
                     margin: 0,
                     maxHeight: "160px",
                     overflowY: "auto",
-                    padding: "10px",
-                    borderRadius: "6px",
-                    backgroundColor: "rgba(0, 0, 0, 0.4)",
-                    color: "#cbd5e1",
-                    fontSize: "11px",
-                    lineHeight: 1.4,
+                    padding: "12px",
+                    borderRadius: "8px",
+                    backgroundColor: "var(--md-sys-color-surface-container-high, #e8eaed)",
+                    color: "var(--md-sys-color-on-surface, #202124)",
+                    border: "1px solid var(--md-sys-color-outline-variant, #dadce0)",
+                    fontSize: "11.5px",
+                    lineHeight: 1.45,
+                    fontFamily: "var(--font-family-mono, monospace)",
                   }}
                 >
                   {errorStack}
@@ -175,9 +181,16 @@ export class ErrorBoundary extends Component<Props, State> {
                   fontSize: "13px",
                   fontWeight: 500,
                   backgroundColor: "transparent",
-                  color: "var(--color-text-secondary, #cbd5e1)",
-                  border: "1px solid var(--color-border-subtle, rgba(255, 255, 255, 0.15))",
+                  color: "var(--md-sys-color-on-surface, #202124)",
+                  border: "1px solid var(--md-sys-color-outline, #747775)",
                   cursor: "pointer",
+                  transition: "background-color 0.15s ease",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = "rgba(0, 0, 0, 0.05)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = "transparent";
                 }}
               >
                 Tentar Novamente
@@ -190,10 +203,17 @@ export class ErrorBoundary extends Component<Props, State> {
                   borderRadius: "8px",
                   fontSize: "13px",
                   fontWeight: 500,
-                  backgroundColor: "rgba(255, 255, 255, 0.1)",
-                  color: "#ffffff",
-                  border: "none",
+                  backgroundColor: "var(--md-sys-color-secondary-container, #e8eaed)",
+                  color: "var(--md-sys-color-on-secondary-container, #202124)",
+                  border: "1px solid var(--md-sys-color-outline-variant, #dadce0)",
                   cursor: "pointer",
+                  transition: "opacity 0.15s ease",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.opacity = "0.85";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.opacity = "1";
                 }}
               >
                 Recarregar Página
@@ -206,10 +226,18 @@ export class ErrorBoundary extends Component<Props, State> {
                   borderRadius: "8px",
                   fontSize: "13px",
                   fontWeight: 600,
-                  backgroundColor: "var(--color-primary, #2563eb)",
-                  color: "#ffffff",
+                  backgroundColor: "var(--md-sys-color-primary, #1a73e8)",
+                  color: "var(--md-sys-color-on-primary, #ffffff)",
                   border: "none",
                   cursor: "pointer",
+                  boxShadow: "var(--md-sys-elevation-1, 0 1px 3px rgba(0, 0, 0, 0.12))",
+                  transition: "opacity 0.15s ease",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.opacity = "0.9";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.opacity = "1";
                 }}
               >
                 Voltar ao Início

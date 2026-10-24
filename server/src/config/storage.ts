@@ -412,6 +412,16 @@ export function recordChange(
 
   if (existingIdx >= 0) {
     const existing = changes[existingIdx];
+
+    // Se o arquivo era uma nova adição local (ADDED) e agora foi excluído (DELETED):
+    // Como ele nunca existiu no repositório base / HEAD, o saldo líquido é nulo.
+    // Ele é simplesmente descartado da lista de alterações.
+    if (existing.type === "ADDED" && changeType === "DELETED") {
+      changes.splice(existingIdx, 1);
+      saveRepoWorkspaceChanges(repoName, changes, ownerOrOrg);
+      return;
+    }
+
     const preservedOldContent =
       existing.old_content !== undefined
         ? existing.old_content
@@ -448,6 +458,25 @@ export function recordChange(
   }
 
   saveRepoWorkspaceChanges(repoName, changes, ownerOrOrg);
+}
+
+export function removeWorkspaceChange(repoName: string, relPath: string, ownerOrOrg?: string): void {
+  const cleanPath = relPath.trim().replace(/^\/+/, "");
+  if (!cleanPath) return;
+  const changes = loadRepoWorkspaceChanges(repoName, ownerOrOrg);
+  const filtered = changes.filter((c) => c.path !== cleanPath);
+  if (filtered.length !== changes.length) {
+    saveRepoWorkspaceChanges(repoName, filtered, ownerOrOrg);
+  }
+  try {
+    const cfg = loadConfig();
+    if (cfg?.workspace_changes?.[repoName]) {
+      cfg.workspace_changes[repoName] = (cfg.workspace_changes[repoName] as WorkspaceChange[]).filter(
+        (c) => c.path !== cleanPath,
+      );
+      saveConfig(cfg);
+    }
+  } catch {}
 }
 
 export function clearWorkspaceChanges(repoName: string, ownerOrOrg?: string): void {

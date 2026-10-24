@@ -2334,6 +2334,10 @@ export class NotionEditorEngine {
     }
 
     switch (cmdId) {
+      case 'p':
+      case 'paragraph':
+        this.insertBlockHtml('<p>Texto normal...</p>');
+        break;
       case 'h1':
         this.insertBlockHtml('<h1>Título 1</h1>');
         break;

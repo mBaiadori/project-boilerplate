@@ -356,6 +356,21 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
 
     if (fileMetadata) {
       setDocMetadata(fileMetadata as DocumentMetadataItem);
+      if (parsedRef.current) {
+        parsedRef.current.metadata = {
+          ...parsedRef.current.metadata,
+          ...fileMetadata,
+        };
+        const hasMeta =
+          parsedRef.current.hasFrontmatter ||
+          Boolean(
+            fileMetadata.templateId ||
+            fileMetadata.status ||
+            fileMetadata.categories ||
+            (Array.isArray(fileMetadata.tags) && fileMetadata.tags.length > 0),
+          );
+        parsedRef.current.hasFrontmatter = hasMeta;
+      }
     }
 
     // Reset commit selection when switching file
@@ -731,7 +746,7 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
   };
 
   // Manual save trigger (Ctrl+S ou clique) que faz o flush imediato
-  const handleSave = useCallback(async () => {
+  const handleSave = useCallback(async (metaOverride?: Record<string, any>) => {
     if (engineRef.current) {
       engineRef.current.applyDictionaryHighlights();
     }
@@ -840,10 +855,24 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
     const metaToUse = {
       ...(parsedRef.current?.metadata || {}),
       ...(fileMetadata || {}),
+      ...(metaOverride || {}),
     };
-    const fullContent = parsedRef.current?.hasFrontmatter
+    const hasAnyMeta =
+      Boolean(parsedRef.current?.hasFrontmatter) ||
+      Boolean(
+        metaToUse.templateId ||
+        metaToUse.status ||
+        metaToUse.categories ||
+        (Array.isArray(metaToUse.tags) && metaToUse.tags.length > 0),
+      );
+    const fullContent = hasAnyMeta
       ? serializeFrontmatter(metaToUse, currentMd)
       : currentMd;
+
+    if (parsedRef.current) {
+      parsedRef.current.hasFrontmatter = hasAnyMeta;
+      parsedRef.current.metadata = metaToUse;
+    }
 
     if (onChangeRef.current) {
       onChangeRef.current(fullContent);
@@ -873,6 +902,58 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
 
   const handleSaveRef = useRef(handleSave);
   handleSaveRef.current = handleSave;
+
+  const handleAddLinkFromBar = useCallback(
+    async (url: string, text: string, type: "dependency" | "consumer") => {
+      if (!filePath) return;
+      const isDoc =
+        url.endsWith(".md") ||
+        url.includes(".md#") ||
+        url.includes(":~:text=") ||
+        url.startsWith("#");
+      const label = text || url;
+
+      if (type === "dependency") {
+        if (engineRef.current) {
+          engineRef.current.insertBlockHtml(
+            `<p><a href="${url}" class="${isDoc ? "notion-doc-link" : ""}" target="${isDoc ? "_self" : "_blank"}">${label}</a></p>`,
+          );
+        } else {
+          const linkMd = `\n[${label}](${url})\n`;
+          docBodyRef.current = (docBodyRef.current || "") + linkMd;
+        }
+
+        const currentLinks: string[] = Array.isArray(fileMetadata?.links)
+          ? [...fileMetadata.links]
+          : [];
+        if (!currentLinks.includes(url)) {
+          currentLinks.push(url);
+          await updateFileMetadata({ links: currentLinks });
+        }
+
+        await handleSave();
+      } else {
+        try {
+          const targetContext = await API.getDocumentContext(url);
+          const existingLinks: string[] = Array.isArray(targetContext?.dependencies)
+            ? targetContext.dependencies.map((d: any) => d.path || d.filePath || d)
+            : [];
+          if (!existingLinks.includes(filePath)) {
+            existingLinks.push(filePath);
+          }
+          await API.updateDocumentMetadataItem({
+            path: url,
+            meta: { links: existingLinks },
+            repo: activeRepo?.name,
+          });
+          await handleSave();
+        } catch (err) {
+          console.error("Erro ao vincular dependente:", err);
+        }
+      }
+    },
+    [filePath, fileMetadata, updateFileMetadata, handleSave, activeRepo?.name],
+  );
 
   // Initialize & Mount NotionEditorEngine
   useLayoutEffect(() => {
@@ -904,7 +985,15 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
             ...(parsedRef.current?.metadata || {}),
             ...(fileMetadata || {}),
           };
-          const newContent = parsedRef.current?.hasFrontmatter
+          const hasAnyMeta =
+            Boolean(parsedRef.current?.hasFrontmatter) ||
+            Boolean(
+              metaToUse.templateId ||
+              metaToUse.status ||
+              metaToUse.categories ||
+              (Array.isArray(metaToUse.tags) && metaToUse.tags.length > 0),
+            );
+          const newContent = hasAnyMeta
             ? serializeFrontmatter(metaToUse, currentMd)
             : currentMd;
           onChangeRef.current(newContent);
@@ -1524,6 +1613,7 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
             onSave={handleSave}
             saveStatus={saveStatus}
             isDirty={isDirty}
+            onAddLink={handleAddLinkFromBar}
           />
         )}
 

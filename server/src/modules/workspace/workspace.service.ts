@@ -6,6 +6,7 @@ import {
   loadConfig,
   saveConfig,
   recordChange,
+  removeWorkspaceChange,
   ensureDefaultRepoFiles,
   loadRepoWorkspaceChanges,
   saveRepoWorkspaceChanges,
@@ -732,8 +733,27 @@ export class WorkspaceService {
       throw new Error("Caminho de arquivo inválido.");
     }
 
-    const fullPath = path.join(this.getRepoDir(repoName), cleanPath);
+    const repoDir = this.getRepoDir(repoName);
+    const fullPath = path.join(repoDir, cleanPath);
     let oldContent = "";
+
+    // Verifica se o repositório é Git e se o arquivo já existia rastreado (no HEAD ou index)
+    let existedInGit = false;
+    const isGit = await isGitRepo(repoDir);
+    if (isGit) {
+      const headCheck = await executeGitCommand(
+        `git cat-file -e HEAD:"${cleanPath}"`,
+        repoDir,
+      );
+      existedInGit = headCheck.success;
+      if (!existedInGit) {
+        const indexCheck = await executeGitCommand(
+          `git ls-files --error-unmatch "${cleanPath}"`,
+          repoDir,
+        );
+        existedInGit = indexCheck.success;
+      }
+    }
 
     if (fs.existsSync(fullPath)) {
       if (fs.statSync(fullPath).isDirectory()) {
@@ -744,7 +764,14 @@ export class WorkspaceService {
       }
     }
 
-    recordChange(repoName, cleanPath, "DELETED", oldContent, "");
+    if (isGit && !existedInGit) {
+      // O arquivo nunca existiu no repositório Git (era apenas um rascunho/arquivo não rastreado local).
+      // Se porventura tiver sido indexado com git add, limpa do index do Git
+      await executeGitCommand(`git rm -f --cached -- "${cleanPath}"`, repoDir).catch(() => {});
+      removeWorkspaceChange(repoName, cleanPath);
+    } else {
+      recordChange(repoName, cleanPath, "DELETED", oldContent, "");
+    }
 
     docsMetadataService.deleteDocMetadata(repoName, cleanPath);
     translationsService.deleteTranslationsForPath(repoName, cleanPath);
@@ -851,6 +878,44 @@ export class WorkspaceService {
           ...(gitStatus.files || []),
           ...(gitStatus.systemFiles || []),
         ];
+
+        const gitFilesMap = new Map<string, any>();
+        for (const gf of allGitFiles) {
+          const cp = gf.path.trim().replace(/^\/+/, "");
+          if (cp) gitFilesMap.set(cp, gf);
+        }
+
+        // Expurgar alterações fantasmas em mergedMap (ex: arquivos novos criados e depois apagados localmente)
+        for (const [key, item] of Array.from(mergedMap.entries())) {
+          const fullPath = path.join(repoDir, key);
+          const fileExistsOnDisk = fs.existsSync(fullPath);
+
+          if (item.type === "DELETED") {
+            const headCheck = await executeGitCommand(
+              `git cat-file -e HEAD:"${key}"`,
+              repoDir,
+            );
+            if (!headCheck.success && !gitFilesMap.has(key)) {
+              mergedMap.delete(key);
+              removeWorkspaceChange(repoName, key);
+              continue;
+            }
+          } else if (item.type === "ADDED" && !fileExistsOnDisk && !gitFilesMap.has(key)) {
+            mergedMap.delete(key);
+            removeWorkspaceChange(repoName, key);
+            continue;
+          } else if (item.type === "MODIFIED" && !fileExistsOnDisk) {
+            const headCheck = await executeGitCommand(
+              `git cat-file -e HEAD:"${key}"`,
+              repoDir,
+            );
+            if (!headCheck.success && !gitFilesMap.has(key)) {
+              mergedMap.delete(key);
+              removeWorkspaceChange(repoName, key);
+              continue;
+            }
+          }
+        }
 
         for (const gf of allGitFiles) {
           const cleanPath = gf.path.trim().replace(/^\/+/, "");
