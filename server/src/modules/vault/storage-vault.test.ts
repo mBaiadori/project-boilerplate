@@ -1,11 +1,16 @@
 import { describe, it, after } from 'node:test';
 import assert from 'node:assert';
 import fs from 'node:fs';
+import os from 'node:os';
 import { loadConfig, saveConfig } from '../../config/storage.js';
 import { vaultService, VAULT_KEYS } from './vault.service.js';
 import { CONFIG_PATH } from '../../config/constants.js';
 
 describe('Storage <-> VaultService Integração', () => {
+  if (!CONFIG_PATH.startsWith(os.tmpdir())) {
+    throw new Error(`ABORT: CONFIG_PATH ("${CONFIG_PATH}") está fora de os.tmpdir(). Os testes devem rodar em ambiente isolado via scripts/run-tests.mjs.`);
+  }
+
   const TEST_GH_TOKEN = 'ghp_IntegrationTestToken1234567890abcdefgh';
   const TEST_AI_KEY = 'ai_IntegrationTestKey9876543210zyxwvutsrq';
 

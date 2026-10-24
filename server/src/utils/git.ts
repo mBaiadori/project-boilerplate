@@ -76,12 +76,23 @@ export function redactTokens(
   return safe;
 }
 
+export type GitExecutionHook = (args: string[], cwd: string) => void;
+let gitExecutionHook: GitExecutionHook | null = null;
+export function setGitExecutionHook(hook: GitExecutionHook | null): void {
+  gitExecutionHook = hook;
+}
+
 export function executeGitCommandWithProgress(
   args: string[],
   cwd: string,
   token?: string,
   onProgress?: (p: GitProgressEvent) => void,
 ): Promise<{ stdout: string; stderr: string; success: boolean }> {
+  if (gitExecutionHook) {
+    try {
+      gitExecutionHook(args, cwd);
+    } catch {}
+  }
   return new Promise((resolve) => {
     const finalArgs = [...args];
     const { env, activeToken, base64Token } = buildGitEnv(token);
@@ -189,6 +200,11 @@ export async function executeGit(
   explicitToken?: string,
   options: { timeout?: number; maxBuffer?: number } = {},
 ): Promise<{ stdout: string; stderr: string; success: boolean }> {
+  if (gitExecutionHook) {
+    try {
+      gitExecutionHook(args, cwd);
+    } catch {}
+  }
   const { env, activeToken, base64Token } = buildGitEnv(explicitToken);
 
   try {
@@ -713,7 +729,18 @@ export async function getGitBranches(
     branches.push(name);
   }
 
-  return { current, branches: branches.length > 0 ? branches : ["main"] };
+  if (branches.length === 0) {
+    try {
+      const symRes = await executeGit(["symbolic-ref", "--short", "HEAD"], repoDir);
+      if (symRes.success && symRes.stdout.trim()) {
+        const initial = symRes.stdout.trim();
+        return { current: initial, branches: [initial] };
+      }
+    } catch {}
+    return { current: "main", branches: ["main"] };
+  }
+
+  return { current, branches };
 }
 
 export async function commitChanges(
@@ -824,12 +851,26 @@ export async function getDefaultBranch(repoDir: string): Promise<string> {
     }
   } catch {}
 
-  // 2. Tenta checar se branch main ou master existe
+  // 2. Consulta refs locais diretamente via executeGit (sem chamar getGitBranches ou getGitStatus)
   try {
-    const { branches } = await getGitBranches(repoDir);
-    if (branches.includes("main")) return "main";
-    if (branches.includes("master")) return "master";
-    if (branches.length > 0) return branches[0];
+    const refsRes = await executeGit(
+      ["for-each-ref", "--format=%(refname:short)", "refs/heads"],
+      repoDir
+    );
+    if (refsRes.success && refsRes.stdout.trim()) {
+      const branches = refsRes.stdout.split("\n").map((b) => b.trim()).filter(Boolean);
+      if (branches.includes("main")) return "main";
+      if (branches.includes("master")) return "master";
+      if (branches.length > 0 && branches[0]) return branches[0];
+    }
+  } catch {}
+
+  // 3. Fallback para HEAD simbólico (ex: repositório recém-inicializado sem commits)
+  try {
+    const symHead = await executeGit(["symbolic-ref", "--short", "HEAD"], repoDir);
+    if (symHead.success && symHead.stdout.trim()) {
+      return symHead.stdout.trim();
+    }
   } catch {}
 
   return "main";

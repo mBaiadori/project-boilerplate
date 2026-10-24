@@ -10,6 +10,9 @@ describe('C8: local_mode sentinel migration to explicit mode field', () => {
   let backupConfig: string | null = null;
 
   beforeEach(() => {
+    if (!CONFIG_PATH.startsWith(os.tmpdir())) {
+      throw new Error(`ABORT: CONFIG_PATH ("${CONFIG_PATH}") está fora de os.tmpdir(). Os testes devem rodar em ambiente isolado via scripts/run-tests.mjs.`);
+    }
     if (fs.existsSync(CONFIG_PATH)) {
       backupConfig = fs.readFileSync(CONFIG_PATH, 'utf-8');
     }

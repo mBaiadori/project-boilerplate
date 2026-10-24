@@ -6,12 +6,15 @@ import os from 'node:os';
 import { executeGit, isGitRepo } from '../../utils/git.js';
 import { getDefaultBranch } from '../../utils/git.js';
 import { gitService } from '../git/git.service.js';
-import { loadConfig, saveConfig } from '../../config/storage.js';
+import { CONFIG_PATH } from '../../config/constants.js';
 
 describe('C3: default_branch preservation and origin/HEAD resolution', () => {
   let tmpDir: string;
 
   beforeEach(async () => {
+    if (!CONFIG_PATH.startsWith(os.tmpdir())) {
+      throw new Error(`ABORT: CONFIG_PATH ("${CONFIG_PATH}") está fora de os.tmpdir(). Os testes devem rodar em ambiente isolado via scripts/run-tests.mjs.`);
+    }
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'git-defbranch-test-'));
     await executeGit(['init', '-b', 'main'], tmpDir);
     await executeGit(['config', 'user.name', 'Tester'], tmpDir);
