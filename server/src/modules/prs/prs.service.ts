@@ -22,6 +22,7 @@ import { prSecurityService } from './pr-security.service.js';
 import { prWorktreeService } from './pr-worktree.service.js';
 import { prConflictsService } from './pr-conflicts.service.js';
 import { workspaceService } from '../workspace/workspace.service.js';
+import { healRepositoryState } from '../../utils/git-health.js';
 
 export interface PRApprovalAudit {
   user: string;
@@ -724,17 +725,18 @@ export class PRsService {
     let prHtmlUrl = activeRepo?.html_url ? `${activeRepo.html_url}/pull/${newId}` : '';
 
     try {
+      const activeToken = getActiveBearerToken(cfg.token);
+      await healRepositoryState(repoDir, { token: activeToken });
       await createAndCheckoutBranch(repoDir, branchName);
 
-      // 2. Commit changes to Git branch
+      // 2. Commit changes to Git branch - estritamente os arquivos alterados pelo usuário
       const commitMsg = payload.title || `Atualização de Governança #${newId}`;
-      await commitChanges(repoDir, commitMsg);
+      await commitChanges(repoDir, commitMsg, allChangedPaths);
 
       const headHashRes = await executeGitCommand(`git rev-parse HEAD`, repoDir);
       headSha = headHashRes.success ? (headHashRes.stdout || '').trim() : '';
 
       // 3. GitHub Remote PR (if authenticated and remote repo)
-      const activeToken = getActiveBearerToken(cfg.token);
       if (cfg.authenticated && activeToken && activeRepo?.full_name && !activeRepo?.is_local) {
         try {
           const pushRes = await executeGitCommand(`git push -u origin "${branchName}"`, repoDir, activeToken);
@@ -1360,22 +1362,10 @@ export class PRsService {
     const trailers = auditLines.length > 0 ? `\n\n${auditLines.join('\n')}\nReviewed-in: Context OS Governance Platform` : '';
     const commitMsg = `Merge PR #${targetPR.id}: ${targetPR.title}${trailers}`;
 
-    // 1. Limpa arquivo transitório de mudanças de workspace
+    // 1. Limpa arquivo transitório de mudanças e executa auto-cura do repositório
     clearWorkspaceChanges(repoName);
-    const workspaceChangesPath = path.join(repoDir, '.spec-memory', 'workspace_changes.json');
-    if (fs.existsSync(workspaceChangesPath)) {
-      try { fs.unlinkSync(workspaceChangesPath); } catch {}
-    }
-
-    // Limpa preventivamente conflitos residuais no index do Git (ex: merge anterior pendente ou workspace_changes.json)
-    try {
-      const unmergedRes = await executeGitCommand('git diff --name-only --diff-filter=U', repoDir);
-      if (unmergedRes.success && unmergedRes.stdout.trim().length > 0) {
-        await executeGitCommand('git merge --abort', repoDir).catch(() => {});
-        await executeGitCommand('git rm -f --ignore-unmatch .spec-memory/workspace_changes.json', repoDir).catch(() => {});
-        await executeGitCommand('git reset HEAD', repoDir).catch(() => {});
-      }
-    } catch {}
+    const activeToken = getActiveBearerToken(cfg.token);
+    await healRepositoryState(repoDir, { token: activeToken, unshallowIfNeeded: true });
 
     // 2. Se houver arquivos modificados ou untracked na working tree (ex: .docs.metadata.json ou .gitignore), guarda em stash temporário
     let didStash = false;
@@ -1403,7 +1393,7 @@ export class PRsService {
           const isShallowRes = await executeGitCommand('git rev-parse --is-shallow-repository', repoDir);
           if (isShallowRes.success && isShallowRes.stdout.trim() === 'true') {
             const activeToken = getActiveBearerToken(cfg.token);
-            await executeGitCommand('git fetch --unshallow origin', repoDir, activeToken).catch(() => {});
+            await executeGitCommand('git fetch --unshallow origin', repoDir, activeToken || undefined).catch(() => {});
           }
         } catch {}
 

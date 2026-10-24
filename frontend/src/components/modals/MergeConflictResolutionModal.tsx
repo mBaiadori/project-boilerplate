@@ -50,11 +50,11 @@ export const MergeConflictResolutionModal: React.FC<MergeConflictResolutionModal
         id: `conflict_${idx++}`,
         startIndex: match.index,
         endIndex: match.index + match[0].length,
-        oursLabel: match[1]?.trim() || 'Sua Versão (Local)',
+        oursLabel: match[1]?.trim() || 'Sua Proposta',
         oursContent: match[2] || '',
         theirsContent: match[3] || '',
-        theirsLabel: match[4]?.trim() || 'Versão Remota (Git)',
-        resolution: 'ours', // Padrão: mantém nossa versão local
+        theirsLabel: match[4]?.trim() || 'Versão Oficial Vigente',
+        resolution: 'ours', // Padrão: mantém nossa versão da proposta
       });
     }
 
@@ -122,7 +122,7 @@ export const MergeConflictResolutionModal: React.FC<MergeConflictResolutionModal
       title={
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <ShieldAlert size={20} color="var(--color-tertiary, #eab308)" />
-          <span>Resolução Visual de Conflito de Merge</span>
+          <span>Resolução de Divergências no Documento</span>
         </div>
       }
       size="xl"
@@ -134,14 +134,14 @@ export const MergeConflictResolutionModal: React.FC<MergeConflictResolutionModal
               size="sm"
               onClick={() => handleResolveAll('ours')}
             >
-              Aceitar Tudo Local
+              Usar Minha Proposta em Todos
             </Button>
             <Button
               variant="outline"
               size="sm"
               onClick={() => handleResolveAll('theirs')}
             >
-              Aceitar Tudo Remoto
+              Manter Oficial em Todos
             </Button>
           </div>
           <div style={{ display: 'flex', gap: '12px' }}>
@@ -150,7 +150,7 @@ export const MergeConflictResolutionModal: React.FC<MergeConflictResolutionModal
             </Button>
             <Button variant="primary" onClick={handleSaveAndFinish}>
               <Check size={16} style={{ marginRight: '6px' }} />
-              Concluir & Salvar Arquivo Limpo
+              Concluir & Publicar Versão Unificada
             </Button>
           </div>
         </div>
@@ -171,10 +171,10 @@ export const MergeConflictResolutionModal: React.FC<MergeConflictResolutionModal
         >
           <div>
             <div style={{ fontWeight: 600, fontSize: '13px', color: 'var(--color-on-surface)' }}>
-              Arquivo: <code style={{ color: 'var(--color-primary)' }}>{filePath}</code>
+              Documento: <code style={{ color: 'var(--color-primary)' }}>{filePath}</code>
             </div>
             <div style={{ fontSize: '12px', color: 'var(--color-outline)', marginTop: '2px' }}>
-              Detectamos {conflictBlocks.length} ponto(s) de colisão de linhas. Escolha a versão desejada para cada seção antes de salvar no Git.
+              Detectamos {conflictBlocks.length} trecho(s) com edições concorrentes. Escolha qual conteúdo deve prevalecer em cada seção para publicar a versão oficial.
             </div>
           </div>
           <div style={{ display: 'flex', gap: '6px' }}>
@@ -257,7 +257,7 @@ export const MergeConflictResolutionModal: React.FC<MergeConflictResolutionModal
                     }}
                   >
                     <span style={{ fontWeight: 600, fontSize: '12px', color: 'var(--color-tertiary, #eab308)' }}>
-                      Conflito #{index + 1} de {conflictBlocks.length}
+                      Divergência #{index + 1} de {conflictBlocks.length}
                     </span>
                     <div style={{ display: 'flex', gap: '6px' }}>
                       <button
@@ -273,7 +273,7 @@ export const MergeConflictResolutionModal: React.FC<MergeConflictResolutionModal
                           fontWeight: 600,
                         }}
                       >
-                        ✓ Manter Local
+                        ✓ Usar Minha Proposta
                       </button>
                       <button
                         onClick={() => handleSetBlockResolution(block.id, 'theirs')}
@@ -288,7 +288,7 @@ export const MergeConflictResolutionModal: React.FC<MergeConflictResolutionModal
                           fontWeight: 600,
                         }}
                       >
-                        ✓ Manter Remoto
+                        ✓ Manter Oficial
                       </button>
                       <button
                         onClick={() => handleSetBlockResolution(block.id, 'both_ours_first')}
@@ -302,7 +302,7 @@ export const MergeConflictResolutionModal: React.FC<MergeConflictResolutionModal
                           cursor: 'pointer',
                         }}
                       >
-                        Combinar Ambas
+                        Unir as Duas
                       </button>
                     </div>
                   </div>
@@ -318,7 +318,7 @@ export const MergeConflictResolutionModal: React.FC<MergeConflictResolutionModal
                       }}
                     >
                       <div style={{ fontSize: '11px', fontWeight: 600, color: '#10b981', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>computer</span>
+                        <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>edit_document</span>
                         {block.oursLabel}
                       </div>
                       <pre
@@ -343,7 +343,7 @@ export const MergeConflictResolutionModal: React.FC<MergeConflictResolutionModal
                       }}
                     >
                       <div style={{ fontSize: '11px', fontWeight: 600, color: '#3b82f6', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>cloud</span>
+                        <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>verified</span>
                         {block.theirsLabel}
                       </div>
                       <pre

@@ -473,13 +473,11 @@ export const PRCard: React.FC<PRCardProps> = ({
                     </span>
                     <div>
                       <strong>
-                        Conflitos de mesclagem detectados:
+                        Divergências concorrentes detectadas:
                       </strong>{" "}
                       Esta proposta possui{" "}
                       {mergeabilityMap[pr.id].conflicts.length}{" "}
-                      arquivo(s) com conflito em relação à branch
-                      oficial (
-                      <code>{pr.target_branch || "main"}</code>).
+                      documento(s) com edições simultâneas em relação à versão oficial.
                     </div>
                   </div>
                   <div
@@ -874,8 +872,8 @@ export const PRCard: React.FC<PRCardProps> = ({
               }}
             >
               <span>
-                Branch de origem: <code>{pr.branch}</code> &rarr; Destino:{" "}
-                <code>{pr.target_branch || "main"}</code>
+                Proposta #{pr.id} &rarr; Destino:{" "}
+                <code>{pr.target_branch === "main" ? "Versão Oficial" : pr.target_branch || "Versão Oficial"}</code>
               </span>
             </div>
 
@@ -897,7 +895,7 @@ export const PRCard: React.FC<PRCardProps> = ({
                   }
                   title="Restaurar o estado desta revisão como a versão ativa atual"
                 >
-                  Restaurar esta Versão (Rollback)
+                  Restaurar esta Versão
                 </Button>
               )}
 

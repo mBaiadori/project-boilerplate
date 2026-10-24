@@ -692,29 +692,29 @@ export async function commitChanges(
     return { success: false, message: "Diretório não é um repositório Git." };
 
   ensureGitIgnore(repoDir);
-  try {
-    const checkRes = await executeGitCommand(
-      "git ls-files --error-unmatch .docs.metadata.json .spec-memory/workspace_changes.json",
-      repoDir,
-    );
-    if (checkRes.success) {
-      if (checkRes.stdout.includes(".docs.metadata.json")) {
-        await executeGitCommand("git rm --cached --ignore-unmatch .docs.metadata.json", repoDir);
-      }
-      if (checkRes.stdout.includes("workspace_changes.json")) {
-        await executeGitCommand("git rm --cached --ignore-unmatch .spec-memory/workspace_changes.json", repoDir);
-      }
-    }
-  } catch {}
 
   if (files && files.length > 0) {
     for (const file of files) {
-      if (file.includes(".docs.metadata.json") || file.includes("workspace_changes.json")) continue;
+      if (
+        file.includes(".docs.metadata.json") ||
+        file.includes("workspace_changes.json") ||
+        file.includes(".spec-memory/sessions")
+      ) {
+        continue;
+      }
       await executeGitCommand(`git add "${file}"`, repoDir);
     }
   } else {
     await executeGitCommand("git add .", repoDir);
   }
+
+  // Garantia pós-staging: desindexa imediatamente arquivos transitórios do sistema caso tenham entrado no index
+  try {
+    await executeGitCommand(
+      "git rm --cached -r --ignore-unmatch .spec-memory/workspace_changes.json .spec-memory/sessions .docs.metadata.json",
+      repoDir,
+    );
+  } catch {}
 
   const safeMsg = message.replace(/"/g, '\\"');
   const commitRes = await executeGitCommand(

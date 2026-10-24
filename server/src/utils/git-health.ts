@@ -1,0 +1,116 @@
+import fs from "node:fs";
+import path from "node:path";
+import { executeGitCommand, isGitRepo, getActiveBearerToken, ensureGitIgnore } from "./git.js";
+
+export interface HealOptions {
+  token?: string | null;
+  unshallowIfNeeded?: boolean;
+}
+
+export interface HealResult {
+  healed: boolean;
+  actions: string[];
+}
+
+/**
+ * Garante a integridade e saúde do repositório Git local.
+ * Desfaz estados travados (merge/rebase pendente), remove arquivos de controle
+ * do index, desfaz conflitos residuais em arquivos do sistema e faz unshallow sob demanda.
+ */
+export async function healRepositoryState(
+  repoDir: string,
+  options: HealOptions = {},
+): Promise<HealResult> {
+  const actions: string[] = [];
+  if (!repoDir || !(await isGitRepo(repoDir))) {
+    return { healed: false, actions };
+  }
+
+  const gitDir = path.join(repoDir, ".git");
+
+  // 1. Garante .gitignore com padrões obrigatórios para arquivos transitórios
+  try {
+    ensureGitIgnore(repoDir);
+  } catch {}
+
+  // 2. Aborta merge travado (.git/MERGE_HEAD)
+  if (fs.existsSync(path.join(gitDir, "MERGE_HEAD"))) {
+    await executeGitCommand("git merge --abort", repoDir).catch(() => {});
+    actions.push("aborted_in_progress_merge");
+  }
+
+  // 3. Aborta rebase / cherry-pick travado
+  if (
+    fs.existsSync(path.join(gitDir, "rebase-merge")) ||
+    fs.existsSync(path.join(gitDir, "rebase-apply"))
+  ) {
+    await executeGitCommand("git rebase --abort", repoDir).catch(() => {});
+    actions.push("aborted_in_progress_rebase");
+  }
+  if (fs.existsSync(path.join(gitDir, "CHERRY_PICK_HEAD"))) {
+    await executeGitCommand("git cherry-pick --abort", repoDir).catch(() => {});
+    actions.push("aborted_in_progress_cherry_pick");
+  }
+
+  // 4. Remove arquivos transitórios de controle que possam ter sido adicionados ao index
+  const workspaceChangesPath = path.join(repoDir, ".spec-memory", "workspace_changes.json");
+  if (fs.existsSync(workspaceChangesPath)) {
+    try {
+      fs.unlinkSync(workspaceChangesPath);
+      actions.push("cleaned_transient_workspace_changes");
+    } catch {}
+  }
+
+  try {
+    const rmRes = await executeGitCommand(
+      "git rm --cached -r --ignore-unmatch .spec-memory/workspace_changes.json .spec-memory/sessions/",
+      repoDir,
+    );
+    if (rmRes.success && rmRes.stdout.trim().length > 0) {
+      actions.push("unindexed_transient_files");
+    }
+  } catch {}
+
+  // 5. Verifica e limpa caminhos não mesclados (unmerged paths) que travam checkout
+  try {
+    const unmergedRes = await executeGitCommand("git diff --name-only --diff-filter=U", repoDir);
+    if (unmergedRes.success && unmergedRes.stdout.trim().length > 0) {
+      const conflictingFiles = unmergedRes.stdout
+        .trim()
+        .split("\n")
+        .map((f) => f.trim())
+        .filter(Boolean);
+
+      for (const f of conflictingFiles) {
+        if (f.startsWith(".spec-memory/") || f === ".docs.metadata.json" || f === ".gitignore") {
+          await executeGitCommand(`git checkout --ours -- "${f}"`, repoDir).catch(() => {});
+          await executeGitCommand(`git add "${f}"`, repoDir).catch(() => {});
+          actions.push(`auto_resolved_system_conflict:${f}`);
+        }
+      }
+
+      // Se ainda houver conflito não resolvido no index, dá reset seguro no index
+      const remainingUnmerged = await executeGitCommand("git diff --name-only --diff-filter=U", repoDir);
+      if (remainingUnmerged.success && remainingUnmerged.stdout.trim().length > 0) {
+        await executeGitCommand("git reset HEAD", repoDir).catch(() => {});
+        actions.push("reset_corrupted_index");
+      }
+    }
+  } catch {}
+
+  // 6. Unshallow sob demanda se o repositório estiver shallow
+  if (options.unshallowIfNeeded !== false) {
+    try {
+      const isShallowRes = await executeGitCommand("git rev-parse --is-shallow-repository", repoDir);
+      if (isShallowRes.success && isShallowRes.stdout.trim() === "true") {
+        const activeToken = getActiveBearerToken(options.token || undefined);
+        const unshallowRes = await executeGitCommand("git fetch --unshallow origin", repoDir, activeToken || undefined);
+        if (unshallowRes.success) {
+          actions.push("unshallowed_shallow_repo");
+        }
+      }
+    } catch {}
+  }
+
+  return { healed: actions.length > 0, actions };
+}
