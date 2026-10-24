@@ -26,7 +26,7 @@ export async function runIsolatedScript(options: ScriptExecutionOptions): Promis
 
   const tempId = crypto.randomBytes(16).toString('hex');
   const tempDir = path.join(os.tmpdir(), `context-os-script-${tempId}`);
-  fs.mkdirSync(tempDir, { recursive: true });
+  fs.mkdirSync(tempDir, { recursive: true, mode: 0o700 });
 
   const payloadPath = path.join(tempDir, 'payload.json');
   const runnerScriptPath = path.join(tempDir, 'runner.mjs');
@@ -38,7 +38,7 @@ export async function runIsolatedScript(options: ScriptExecutionOptions): Promis
     safeRepoDir,
   };
 
-  fs.writeFileSync(payloadPath, JSON.stringify(payload), 'utf-8');
+  fs.writeFileSync(payloadPath, JSON.stringify(payload), { encoding: 'utf-8', mode: 0o600 });
 
   // Script do subprocesso runner
   const runnerCode = `
@@ -54,37 +54,43 @@ function isPathInside(parent, child) {
   return Boolean(rel && !rel.startsWith('..') && !path.isAbsolute(rel));
 }
 
-const safeUtils = {
+function assertSafeRepoPath(full) {
+  if (!isPathInside(safeRepoDir, full) && full !== safeRepoDir) {
+    throw new Error('Acesso negado: fora do diretório do projeto.');
+  }
+  if (fs.existsSync(full)) {
+    const real = fs.realpathSync(full);
+    if (!isPathInside(safeRepoDir, real) && real !== safeRepoDir) {
+      throw new Error('Acesso negado: symlink para fora do diretório do projeto.');
+    }
+  }
+}
+
+const safeUtils = Object.freeze({
   JSON,
   Math,
   Date,
   Buffer,
   readProjectFile: (relPath) => {
     const full = path.resolve(safeRepoDir, String(relPath || '').replace(/^\\/+/, ''));
-    if (!isPathInside(safeRepoDir, full) && full !== safeRepoDir) {
-      throw new Error('Acesso negado: fora do diretório do projeto.');
-    }
+    assertSafeRepoPath(full);
     if (!fs.existsSync(full)) return null;
     return fs.readFileSync(full, 'utf-8');
   },
   writeProjectFile: (relPath, content) => {
     const full = path.resolve(safeRepoDir, String(relPath || '').replace(/^\\/+/, ''));
-    if (!isPathInside(safeRepoDir, full) && full !== safeRepoDir) {
-      throw new Error('Acesso negado: fora do diretório do projeto.');
-    }
+    assertSafeRepoPath(full);
     fs.mkdirSync(path.dirname(full), { recursive: true });
     fs.writeFileSync(full, String(content ?? ''), 'utf-8');
     return true;
   },
   listProjectFiles: (relDir = '') => {
     const full = path.resolve(safeRepoDir, String(relDir || '').replace(/^\\/+/, ''));
-    if (!isPathInside(safeRepoDir, full) && full !== safeRepoDir) {
-      throw new Error('Acesso negado: fora do diretório do projeto.');
-    }
+    assertSafeRepoPath(full);
     if (!fs.existsSync(full)) return [];
     return fs.readdirSync(full);
   },
-};
+});
 
 const sandbox = {
   args,
@@ -126,17 +132,22 @@ try {
 }
 `;
 
-  fs.writeFileSync(runnerScriptPath, runnerCode, 'utf-8');
+  fs.writeFileSync(runnerScriptPath, runnerCode, { encoding: 'utf-8', mode: 0o600 });
 
   try {
-    const { stdout, stderr } = await execFileAsync(process.execPath, [runnerScriptPath], {
-      shell: false,
-      timeout: timeoutMs + 2000,
-      env: {
-        NODE_ENV: 'production',
-        PATH: process.env.PATH || '',
-      },
-    });
+    const { stdout, stderr } = await execFileAsync(
+      process.execPath,
+      ['--max-old-space-size=128', '--no-addons', runnerScriptPath],
+      {
+        shell: false,
+        timeout: timeoutMs + 2000,
+        maxBuffer: 2 * 1024 * 1024,
+        env: {
+          NODE_ENV: 'production',
+          PATH: process.env.PATH || '',
+        },
+      }
+    );
 
     if (!stdout.trim()) {
       throw new Error(stderr || 'Execução do script falhou sem saída.');

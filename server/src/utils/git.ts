@@ -697,14 +697,13 @@ export async function getGitBranches(
   repoDir: string,
 ): Promise<{ current: string; branches: string[] }> {
   const isRepo = await isGitRepo(repoDir);
-  const defBranch = await getDefaultBranch(repoDir);
-  if (!isRepo) return { current: defBranch, branches: [defBranch] };
+  if (!isRepo) return { current: "main", branches: ["main"] };
 
   const res = await executeGit(["branch", "--list"], repoDir);
-  if (!res.success) return { current: defBranch, branches: [defBranch] };
+  if (!res.success) return { current: "main", branches: ["main"] };
 
   const lines = res.stdout.split("\n").filter(Boolean);
-  let current = defBranch;
+  let current = "main";
   const branches: string[] = [];
 
   for (const line of lines) {
@@ -714,7 +713,7 @@ export async function getGitBranches(
     branches.push(name);
   }
 
-  return { current, branches };
+  return { current, branches: branches.length > 0 ? branches : ["main"] };
 }
 
 export async function commitChanges(

@@ -10,6 +10,7 @@ import { CustomToolDefinition, ProjectToolsManifest } from './skills.types.js';
 import { ToolResult } from '../ai/tools/tool.types.js';
 import { validateUrlForSSRF } from '../../utils/ssrf-guard.js';
 import { runIsolatedScript } from './script-runner.js';
+import { writeJsonAtomic } from '../../utils/atomic-write.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -106,7 +107,7 @@ export class CustomToolsService {
 
   private saveApprovals(approvals: Record<string, ToolApprovalRecord>): void {
     const p = this.getApprovalsStoragePath();
-    fs.writeFileSync(p, JSON.stringify(approvals, null, 2), 'utf-8');
+    writeJsonAtomic(p, approvals, 2);
   }
 
   public isToolApproved(
@@ -135,15 +136,16 @@ export class CustomToolsService {
     repoName: string,
     toolId: string,
     expectedHash: string,
-    approvedBy: string = 'user'
+    approvedBy?: string
   ): void {
     const safeRepo = getSafeRepo(repoName);
     const key = `${safeRepo}:${toolId}`;
     const approvals = this.loadApprovals();
+    const resolvedUser = approvedBy || loadConfig().user?.login || 'user';
     approvals[key] = {
       hash: expectedHash,
       approved_at: new Date().toISOString(),
-      approved_by: approvedBy,
+      approved_by: resolvedUser,
     };
     this.saveApprovals(approvals);
   }
