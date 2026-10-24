@@ -1,4 +1,5 @@
 import type { DictionaryTerm } from "../types";
+import { escapeHtml } from "./html-escape";
 
 export function getTermSynonyms(term: DictionaryTerm): string[] {
   const all = [
@@ -58,15 +59,7 @@ export function buildMatchEntries(terms: DictionaryTerm[]): MatchEntry[] {
   return entries.sort((a, b) => b.phrase.length - a.phrase.length);
 }
 
-function escapeHtml(text: string): string {
-  if (!text) return "";
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
+
 
 function escapeRegex(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
