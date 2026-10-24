@@ -21,7 +21,7 @@ import type { DictionaryTerm } from '../../types';
 import type { DictionaryPopoverData } from '../dictionary/DictionaryPopover';
 
 import mermaid from 'mermaid';
-import { isSafeUrl, sanitizeSvg } from '../../utils/sanitize';
+import { isSafeUrl, sanitizeSvg, sanitizeHtml, setSafeHtml, escapeHtml } from '../../utils/sanitize';
 
 try {
   mermaid.initialize({
@@ -32,16 +32,6 @@ try {
   });
 } catch (e) {
   console.warn('[NotionEditorEngine] Erro ao inicializar mermaid:', e);
-}
-
-function escapeHtml(text: string): string {
-  if (!text) return '';
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
 }
 
 export interface FragmentStatusInfo {
@@ -1114,7 +1104,7 @@ export class NotionEditorEngine {
       return '<p><br></p>';
     }
 
-    return htmlFragments.join('\n');
+    return sanitizeHtml(htmlFragments.join('\n'));
   }
 
   isFocused(): boolean {
@@ -1211,7 +1201,7 @@ export class NotionEditorEngine {
     }
 
     const lines = markdown.split(/\r?\n/);
-    this.canvas.innerHTML = this.parseMarkdownLinesToHtml(lines);
+    setSafeHtml(this.canvas, this.parseMarkdownLinesToHtml(lines));
     this.applyDictionaryHighlights();
     this.renderAllMermaidBlocks();
     this.attachInteractiveListeners();
@@ -1422,7 +1412,7 @@ export class NotionEditorEngine {
       const cleanHtml = stripDictionaryHighlightSpans(currentHtml);
       const decorated = decorateHtmlWithTerms(cleanHtml, this.dictionaryTerms);
       if (decorated !== currentHtml) {
-        el.innerHTML = decorated;
+        setSafeHtml(el, decorated);
       }
     });
   }
@@ -2160,7 +2150,9 @@ export class NotionEditorEngine {
               const cols = table.querySelectorAll('thead tr th').length || 2;
               const newTr = document.createElement('tr');
               for (let i = 0; i < cols; i++) {
-                newTr.innerHTML += '<td contenteditable="true"></td>';
+                const td = document.createElement('td');
+                td.setAttribute('contenteditable', 'true');
+                newTr.appendChild(td);
               }
               table.querySelector('tbody')?.appendChild(newTr);
               this.recordChange();
@@ -2689,7 +2681,7 @@ export class NotionEditorEngine {
 
     const prev = this.undoStack[this.undoStack.length - 1];
     if (prev) {
-      this.canvas.innerHTML = prev;
+      setSafeHtml(this.canvas, prev);
       this.attachInteractiveListeners();
       this.renderAllMermaidBlocks();
       this.onChange();
@@ -2701,7 +2693,7 @@ export class NotionEditorEngine {
     const next = this.redoStack.pop();
     if (next) {
       this.undoStack.push(next);
-      this.canvas.innerHTML = next;
+      setSafeHtml(this.canvas, next);
       this.attachInteractiveListeners();
       this.renderAllMermaidBlocks();
       this.onChange();

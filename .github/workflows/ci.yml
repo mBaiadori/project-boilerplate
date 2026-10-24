@@ -25,7 +25,7 @@ jobs:
         run: cd server && npm test
 
   frontend:
-    name: Frontend Checks (tsc + build)
+    name: Frontend Checks (tsc + strict + lint + test + build)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -36,8 +36,14 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Install frontend dependencies
         run: cd frontend && npm ci
-      - name: Frontend Typecheck (tsc)
+      - name: Frontend Standard Typecheck (tsc)
         run: cd frontend && npx tsc -p tsconfig.app.json --noEmit
+      - name: Frontend Strict Core Typecheck (tsconfig.strict.json)
+        run: cd frontend && npx tsc -p tsconfig.strict.json --noEmit
+      - name: Frontend Linter (oxlint)
+        run: cd frontend && npm run lint
+      - name: Frontend Unit Tests (vitest)
+        run: cd frontend && npm test
       - name: Frontend Production Build
         run: cd frontend && npm run build
 
@@ -53,9 +59,8 @@ jobs:
         run: node scripts/guards.mjs
 
   audit:
-    name: Dependency Audit (Informative in Phase 0)
+    name: Dependency Audit (Blocking)
     runs-on: ubuntu-latest
-    continue-on-error: true # Bloqueante a partir da Fase 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -65,3 +70,15 @@ jobs:
         run: cd server && npm audit --omit=dev --audit-level=high
       - name: Audit Frontend Dependencies
         run: cd frontend && npm audit --omit=dev --audit-level=high
+
+  gitleaks:
+    name: Gitleaks Secret Detection
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Run Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

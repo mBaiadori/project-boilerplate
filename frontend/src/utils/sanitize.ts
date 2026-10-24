@@ -40,6 +40,19 @@ export function isSafeUrl(rawUrl: string): boolean {
 }
 
 /**
+ * Escapa caracteres HTML perigosos em strings para renderização segura.
+ */
+export function escapeHtml(text: string): string {
+  if (!text) return '';
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+/**
  * Sanitiza com segurança strings de HTML geradas a partir de Markdown, diffs ou respostas de IA
  * antes de serem passadas para o dangerouslySetInnerHTML do React ou canvas do editor.
  */
@@ -47,9 +60,24 @@ export function sanitizeHtml(rawHtml: string): string {
   if (!rawHtml) return '';
   return DOMPurify.sanitize(rawHtml, {
     USE_PROFILES: { html: true },
-    ADD_TAGS: ['mark', 'ins', 'del', 'table', 'thead', 'tbody', 'tr', 'th', 'td'],
-    ADD_ATTR: ['target', 'rel', 'class', 'style'],
+    ADD_TAGS: [
+      'mark', 'ins', 'del', 'table', 'thead', 'tbody', 'tr', 'th', 'td',
+      'details', 'summary', 'blockquote', 'code', 'pre', 'span', 'input',
+    ],
+    ADD_ATTR: [
+      'target', 'rel', 'class', 'style', 'data-type', 'data-indent',
+      'data-mermaid-code', 'type', 'checked', 'spellcheck', 'contenteditable',
+      'data-term-key', 'data-id', 'id',
+    ],
+    ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto|tel):|#|\/|\.\/|\.\.\/)/i,
   });
+}
+
+/**
+ * Atribui HTML sanitizado de forma segura a um elemento DOM.
+ */
+export function setSafeHtml(element: HTMLElement, html: string): void {
+  element.innerHTML = sanitizeHtml(html);
 }
 
 /**

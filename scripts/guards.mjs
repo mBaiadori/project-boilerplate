@@ -58,6 +58,28 @@ for (const f of frontendFiles) {
   }
 }
 
+let innerHTMLUnsanitizedFrontend = 0;
+for (const f of frontendFiles) {
+  if (f.includes('.test.')) continue;
+  const content = fs.readFileSync(f, 'utf-8');
+  const lines = content.split('\n');
+  for (const line of lines) {
+    if (/\.innerHTML\s*\+?=\s*/.test(line)) {
+      // Ignora literais vazios/limpeza, quebras de linha estáticas e usos que chamam sanitizeHtml/sanitizeSvg/setSafeHtml
+      const isStaticOrSafe =
+        line.includes("= ''") ||
+        line.includes('=""') ||
+        line.includes("= '<br>'") ||
+        line.includes("= '<p><br></p>'") ||
+        line.includes('sanitizeHtml(') ||
+        line.includes('sanitizeSvg(');
+      if (!isStaticOrSafe) {
+        innerHTMLUnsanitizedFrontend++;
+      }
+    }
+  }
+}
+
 let frontendAnyCount = 0;
 for (const f of frontendFiles) {
   const content = fs.readFileSync(f, 'utf-8');
@@ -77,6 +99,7 @@ const current = {
   newFunction_server_src: newFunctionCount,
   execAsync_server_src: execAsyncCount,
   dangerouslySetInnerHTML_unsanitized_frontend: dangerouslySetInnerHTMLUnsanitized,
+  innerHTML_unsanitized_frontend: innerHTMLUnsanitizedFrontend,
   any_frontend_src: frontendAnyCount,
   any_server_src: serverAnyCount,
 };

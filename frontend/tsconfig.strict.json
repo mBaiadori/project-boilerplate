@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": {
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true
+  },
+  "include": [
+    "src/utils",
+    "src/services",
+    "src/types",
+    "src/hooks",
+    "src/i18n"
+  ]
+}

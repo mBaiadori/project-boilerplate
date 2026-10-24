@@ -4,6 +4,8 @@
 // menu de contexto no botão direito, botões flutuantes e navegação ágil.
 // =============================================================================
 
+import { isSafeUrl, escapeHtml } from '../../utils/sanitize';
+
 function parseInline(text: string): string {
   if (!text) return '';
   return text
@@ -14,7 +16,11 @@ function parseInline(text: string): string {
     .replace(/\*(.*?)\*/g, '<em>$1</em>')
     .replace(/~~(.*?)~~/g, '<s>$1</s>')
     .replace(/`([^`]+)`/g, '<code>$1</code>')
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_match, label, href) => {
+      const trimmedHref = (href || '').trim();
+      const safeHref = isSafeUrl(trimmedHref) ? escapeHtml(trimmedHref) : '#';
+      return `<a href="${safeHref}" target="_blank" rel="noopener noreferrer">${label}</a>`;
+    });
 }
 
 export class NotionTable {
@@ -241,14 +247,20 @@ export class NotionTable {
           const newTr = document.createElement('tr');
           const colsCount = tr.children.length;
           for (let i = 0; i < colsCount; i++) {
-            newTr.innerHTML += '<td contenteditable="true" spellcheck="false"></td>';
+            const td = document.createElement('td');
+            td.setAttribute('contenteditable', 'true');
+            td.setAttribute('spellcheck', 'false');
+            newTr.appendChild(td);
           }
           tbody?.insertAdjacentElement('afterbegin', newTr);
         } else {
           const newTr = document.createElement('tr');
           const colsCount = tr.children.length;
           for (let i = 0; i < colsCount; i++) {
-            newTr.innerHTML += '<td contenteditable="true" spellcheck="false"></td>';
+            const td = document.createElement('td');
+            td.setAttribute('contenteditable', 'true');
+            td.setAttribute('spellcheck', 'false');
+            newTr.appendChild(td);
           }
           tr.insertAdjacentElement('beforebegin', newTr);
         }
@@ -258,7 +270,10 @@ export class NotionTable {
         const newTr = document.createElement('tr');
         const colsCount = tr.children.length;
         for (let i = 0; i < colsCount; i++) {
-          newTr.innerHTML += '<td contenteditable="true" spellcheck="false"></td>';
+          const td = document.createElement('td');
+          td.setAttribute('contenteditable', 'true');
+          td.setAttribute('spellcheck', 'false');
+          newTr.appendChild(td);
         }
         tr.insertAdjacentElement('afterend', newTr);
         break;
@@ -304,7 +319,10 @@ export class NotionTable {
 
     const newTr = document.createElement('tr');
     for (let i = 0; i < colsCount; i++) {
-      newTr.innerHTML += '<td contenteditable="true" spellcheck="false"></td>';
+      const td = document.createElement('td');
+      td.setAttribute('contenteditable', 'true');
+      td.setAttribute('spellcheck', 'false');
+      newTr.appendChild(td);
     }
     tbody?.appendChild(newTr);
 

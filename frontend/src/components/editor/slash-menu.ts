@@ -1,4 +1,5 @@
 import type { DictionaryTerm } from '../../types';
+import { escapeHtml, setSafeHtml } from '../../utils/sanitize';
 
 export interface SlashCommand {
   id: string;
@@ -7,15 +8,6 @@ export interface SlashCommand {
   desc: string;
   icon: string;
   keywords: string[];
-}
-
-function escapeHtml(text: string): string {
-  if (!text) return '';
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
 }
 
 export class SlashMenuEngine {
@@ -392,11 +384,14 @@ export class SlashMenuEngine {
     }
 
     if (this.filteredItems.length === 0) {
-      this.listContainer.innerHTML = `
+      setSafeHtml(
+        this.listContainer,
+        `
         <div style="padding: 16px; text-align: center; color: var(--text-dim, #94a3b8); font-size: 13px;">
           Nenhuma ferramenta encontrada para "<strong>${escapeHtml(this.query)}</strong>"
         </div>
-      `;
+      `,
+      );
       this.selectedIndex = 0;
       this.positionMenu();
       return;
@@ -426,7 +421,7 @@ export class SlashMenuEngine {
       `;
     });
 
-    this.listContainer.innerHTML = html;
+    setSafeHtml(this.listContainer, html);
 
     this.listContainer.querySelectorAll('.slash-menu-item').forEach(item => {
       item.addEventListener('click', (e) => {
