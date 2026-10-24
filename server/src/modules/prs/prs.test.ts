@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { prsService } from './prs.service.js';
 import { resolveRepoDir } from '../../config/constants.js';
+import { executeGitCommand } from '../../utils/git.js';
 
 describe('PRsService - Isolamento de PRs por Repositório', () => {
   const TEST_REPO_A = 'test-repo-alpha';
@@ -42,5 +43,50 @@ describe('PRsService - Isolamento de PRs por Repositório', () => {
 
     assert.strictEqual(fs.existsSync(fileAPath), true);
     assert.strictEqual(fs.existsSync(fileBPath), true);
+  });
+});
+
+describe('PRsService - Geração Inteligente de Resumos (IA e Diff)', () => {
+  const TEST_REPO = 'test-repo-summary';
+  const repoDir = resolveRepoDir(TEST_REPO);
+
+  before(() => {
+    try {
+      if (fs.existsSync(repoDir)) fs.rmSync(repoDir, { recursive: true, force: true });
+      fs.mkdirSync(repoDir, { recursive: true });
+    } catch {}
+  });
+
+  after(() => {
+    try {
+      if (fs.existsSync(repoDir)) fs.rmSync(repoDir, { recursive: true, force: true });
+    } catch {}
+  });
+
+  it('Deve retornar mensagem padrão quando não houver alterações pendentes', async () => {
+    const summary = await prsService.generatePRSummary(TEST_REPO);
+    assert.strictEqual(summary.success, true);
+    assert.strictEqual(summary.is_ai_generated, false);
+    assert.match(summary.description, /Nenhuma alteração pendente detectada/);
+  });
+
+  it('Deve gerar resumo estruturado por Diff quando IA não estiver configurada', async () => {
+    // Inicializar repositório Git
+    await executeGitCommand('git init', repoDir);
+    await executeGitCommand('git config user.name "Test"', repoDir);
+    await executeGitCommand('git config user.email "test@test.com"', repoDir);
+
+    // Criar arquivo de teste no repo
+    const docPath = path.join(repoDir, 'auth.md');
+    fs.writeFileSync(docPath, '---\ntitle: "Autenticação OAuth"\nstatus: DRAFT\n---\n# Autenticação OAuth\n\n## Fluxo Inicial\nEspecificações...', 'utf-8');
+
+    const summary = await prsService.generatePRSummary(TEST_REPO);
+    assert.strictEqual(summary.success, true);
+    assert.strictEqual(summary.is_ai_generated, false);
+    // Título deve seguir Conventional Commits
+    assert.match(summary.title, /^(?:feat|docs|refactor)/);
+    // Descrição deve conter nota explicativa de fallback e análise estrutural
+    assert.match(summary.description, /Resumo gerado via análise estruturada de alterações/);
+    assert.match(summary.description, /auth\.md/);
   });
 });

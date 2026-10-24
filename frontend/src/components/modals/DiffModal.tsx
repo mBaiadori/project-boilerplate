@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useWorkspace } from "../../context/WorkspaceContext";
+import { useAI } from "../../context/AIContext";
 import { API } from "../../services/api";
 import { VisualMarkdownDiff } from "../editor/VisualMarkdownDiff";
 import {
@@ -38,6 +39,12 @@ export const DiffModal: React.FC<DiffModalProps> = ({
     refreshPendingChanges,
     activeRepo,
   } = useWorkspace();
+  const { aiSettings, openSettingsModal } = useAI();
+  const isAIConfigured = Boolean(
+    aiSettings?.has_key ||
+    aiSettings?.provider === "local" ||
+    aiSettings?.provider === "ollama"
+  );
   const [prTitle, setPrTitle] = useState("");
   const [prDesc, setPrDesc] = useState("");
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
@@ -424,22 +431,53 @@ export const DiffModal: React.FC<DiffModalProps> = ({
               <div
                 style={{
                   display: "flex",
+                  alignItems: "center",
                   justifyContent: "flex-end",
+                  gap: "6px",
                   marginTop: 2,
                 }}
               >
+                {!isAIConfigured && (
+                  <button
+                    type="button"
+                    onClick={openSettingsModal}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "4px",
+                      fontSize: "11px",
+                      fontWeight: 500,
+                      color: "var(--color-primary, #2563eb)",
+                      background: "transparent",
+                      border: "none",
+                      cursor: "pointer",
+                      padding: "2px 4px",
+                    }}
+                    title="Configurar IA"
+                  >
+                    <span className="material-symbols-outlined" style={{ fontSize: "13px" }}>
+                      smart_toy
+                    </span>
+                    <span>Configurar IA</span>
+                  </button>
+                )}
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
-                  leftIcon={<Sparkles size={13} />}
+                  leftIcon={isAIConfigured ? <Sparkles size={13} /> : <FileText size={13} />}
                   onClick={handleGenerateSummaryAI}
                   isLoading={isGeneratingSummary}
                   disabled={
                     isGeneratingSummary || pendingChanges.length === 0
                   }
+                  title={
+                    isAIConfigured
+                      ? "Gerar título Conventional Commits e descrição com IA"
+                      : "Gerar resumo estruturado via Git Diff (IA não configurada)"
+                  }
                 >
-                  Resumo Automático por IA
+                  {isAIConfigured ? "Resumo Automático por IA" : "Resumo por Diff"}
                 </Button>
               </div>
             }

@@ -451,9 +451,25 @@ export function useVersionsData(onOpenFile?: (path: string) => void) {
       if (res.ok && res.data) {
         if (res.data.title) setPrTitle(res.data.title);
         if (res.data.description) setPrDescription(res.data.description);
+
+        if (res.data.is_ai_generated) {
+          setFeedback({
+            type: "success",
+            message: "Resumo inteligente e título Conventional Commits gerados via IA com sucesso!",
+          });
+        } else {
+          setFeedback({
+            type: "success",
+            message: "Resumo estruturado gerado via Git Diff. Configure um modelo de IA nas configurações para obter resumos semânticos avançados.",
+          });
+        }
       }
     } catch (err) {
       console.error("[VersionsSubView] Erro ao gerar resumo IA:", err);
+      setFeedback({
+        type: "error",
+        message: "Falha ao gerar resumo das alterações.",
+      });
     } finally {
       setIsGeneratingAI(false);
     }

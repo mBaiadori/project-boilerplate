@@ -11,6 +11,7 @@ import {
 } from "../../../../components/ui";
 import { DiffViewer } from "../../../../components/common";
 import { VisualMarkdownDiff } from "../../../../components/editor/VisualMarkdownDiff";
+import { useAI } from "../../../../context/AIContext";
 import type { DraftItem } from "../types";
 
 interface DraftsTabProps {
@@ -66,6 +67,13 @@ export const DraftsTab: React.FC<DraftsTabProps> = ({
   setPrDescription,
   isCreatingPR,
 }) => {
+  const { aiSettings, openSettingsModal } = useAI();
+  const isAIConfigured = Boolean(
+    aiSettings?.has_key ||
+    aiSettings?.provider === "local" ||
+    aiSettings?.provider === "ollama"
+  );
+
   return (
     <div className="ui-stack ui-stack--lg">
       {/* Changed Files List */}
@@ -482,29 +490,70 @@ export const DraftsTab: React.FC<DraftsTabProps> = ({
               )}
             </div>
 
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              onClick={() => handleGenerateSummaryAI()}
-              disabled={isGeneratingAI || isClean}
-              icon={
-                <span
-                  className="material-symbols-outlined"
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              {!isAIConfigured && (
+                <button
+                  type="button"
+                  onClick={openSettingsModal}
                   style={{
-                    fontSize: "15px",
-                    animation: isGeneratingAI
-                      ? "spin 1s linear infinite"
-                      : "none",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "5px",
+                    fontSize: "11.5px",
+                    fontWeight: 500,
+                    color: "var(--color-primary, #2563eb)",
+                    background: "var(--color-primary-container-low, rgba(37, 99, 235, 0.08))",
+                    border: "1px solid var(--color-primary-container, rgba(37, 99, 235, 0.2))",
+                    cursor: "pointer",
+                    padding: "4px 8px",
+                    borderRadius: "6px",
+                    transition: "all 0.15s ease",
                   }}
+                  title="Clique para configurar IA (Gemini, OpenAI, Claude ou Ollama)"
                 >
-                  {isGeneratingAI ? "progress_activity" : "auto_fix_high"}
-                </span>
-              }
-              title="Preencher título e descrição automaticamente a partir dos arquivos alterados"
-            >
-              {isGeneratingAI ? "Gerando resumo..." : "Gerar Resumo"}
-            </Button>
+                  <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>
+                    smart_toy
+                  </span>
+                  <span>Configurar IA</span>
+                </button>
+              )}
+
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => handleGenerateSummaryAI()}
+                disabled={isGeneratingAI || isClean}
+                icon={
+                  <span
+                    className="material-symbols-outlined"
+                    style={{
+                      fontSize: "15px",
+                      animation: isGeneratingAI
+                        ? "spin 1s linear infinite"
+                        : "none",
+                    }}
+                  >
+                    {isGeneratingAI
+                      ? "progress_activity"
+                      : isAIConfigured
+                      ? "auto_fix_high"
+                      : "difference"}
+                  </span>
+                }
+                title={
+                  isAIConfigured
+                    ? "Analisar diffs e gerar título Conventional Commits e descrição com IA"
+                    : "Gerar resumo estruturado das alterações via Git Diff (IA não configurada)"
+                }
+              >
+                {isGeneratingAI
+                  ? "Gerando resumo..."
+                  : isAIConfigured
+                  ? "Gerar com IA"
+                  : "Gerar Resumo (Diff)"}
+              </Button>
+            </div>
           </Row>
 
           {isClean && (

@@ -437,7 +437,7 @@ export const API = {
     return this.sendChatMessage(payload);
   },
 
-  async generatePRSummaryAI(repo?: string): Promise<ApiResponse<{ success?: boolean; title?: string; description?: string }>> {
+  async generatePRSummaryAI(repo?: string): Promise<ApiResponse<{ success?: boolean; title?: string; description?: string; is_ai_generated?: boolean }>> {
     const res = await fetch('/api/workspace/generate-pr-summary', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
