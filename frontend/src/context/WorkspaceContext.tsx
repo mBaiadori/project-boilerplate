@@ -475,6 +475,21 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
         return { success: false, error: "Nenhum documento ativo para salvar" };
       }
 
+      // Se o arquivo for o ativo e o conteúdo já for idêntico ao original gravado no disco, sem metadados novos
+      const isContentIdentical =
+        file === activeFileRef.current &&
+        originalContentRef.current !== undefined &&
+        (content || "").trim() === (originalContentRef.current || "").trim();
+
+      if (isContentIdentical && !metaToSave) {
+        setSaveStatus("Salvo no disco");
+        if (statusTimerRef.current) clearTimeout(statusTimerRef.current);
+        statusTimerRef.current = setTimeout(() => {
+          setSaveStatus("Pronto");
+        }, 1500);
+        return { success: true };
+      }
+
       setIsSaving(true);
       setSaveStatus("Salvando...");
       try {
@@ -1059,10 +1074,68 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
       const repoName = activeDocRepoRef.current || activeRepoRef.current?.name;
       if (!currentFile || !repoName) return;
 
+      if (
+        !partialMeta ||
+        typeof partialMeta !== "object" ||
+        "_reactName" in partialMeta ||
+        "nativeEvent" in partialMeta ||
+        typeof (partialMeta as any).preventDefault === "function" ||
+        ("clientX" in partialMeta && "clientY" in partialMeta)
+      ) {
+        return;
+      }
+
+      const eventKeys = new Set([
+        "_reactName",
+        "nativeEvent",
+        "isTrusted",
+        "bubbles",
+        "cancelable",
+        "defaultPrevented",
+        "eventPhase",
+        "timeStamp",
+        "clientX",
+        "clientY",
+        "pageX",
+        "pageY",
+        "screenX",
+        "screenY",
+        "movementX",
+        "movementY",
+        "altKey",
+        "ctrlKey",
+        "metaKey",
+        "shiftKey",
+        "button",
+        "buttons",
+        "detail",
+        "target",
+        "currentTarget",
+      ]);
+      const cleanPartialMeta: Record<string, any> = {};
+      for (const [k, v] of Object.entries(partialMeta)) {
+        if (eventKeys.has(k)) continue;
+        if (
+          k === "type" &&
+          typeof v === "string" &&
+          ["click", "keydown", "change", "submit"].includes(v)
+        ) {
+          continue;
+        }
+        cleanPartialMeta[k] = v;
+      }
+
       const merged = {
         ...fileMetadataRef.current,
-        ...partialMeta,
+        ...cleanPartialMeta,
       };
+      // Clean any previously leaked event properties from merged
+      for (const k of eventKeys) {
+        delete (merged as any)[k];
+      }
+      if (merged.type === "click") {
+        delete merged.type;
+      }
       setFileMetadataState(merged);
       fileMetadataRef.current = merged;
 

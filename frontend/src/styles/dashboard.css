@@ -1538,6 +1538,15 @@ body.is-resizing .pane-resizer {
   cursor: wait;
 }
 
+.btn-icon-action.is-synced {
+  color: var(--color-outline, #94a3b8) !important;
+  background: var(--color-surface-variant, rgba(0, 0, 0, 0.03)) !important;
+  border-color: var(--color-outline-variant, #cbd5e1) !important;
+  cursor: not-allowed !important;
+  opacity: 0.65;
+  box-shadow: none !important;
+}
+
 .toolbar-divider {
   width: 1px;
   height: 20px;

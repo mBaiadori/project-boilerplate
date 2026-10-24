@@ -54,10 +54,40 @@ export function sanitizeMetadataForFrontmatter(
     "version",
     "isDraft",
     "id",
+    // Synthetic/DOM Event properties that should never be saved to frontmatter
+    "_reactName",
+    "nativeEvent",
+    "isTrusted",
+    "bubbles",
+    "cancelable",
+    "defaultPrevented",
+    "eventPhase",
+    "timeStamp",
+    "clientX",
+    "clientY",
+    "pageX",
+    "pageY",
+    "screenX",
+    "screenY",
+    "movementX",
+    "movementY",
+    "altKey",
+    "ctrlKey",
+    "metaKey",
+    "shiftKey",
+    "button",
+    "buttons",
+    "detail",
+    "target",
+    "currentTarget",
   ]);
 
   for (const [key, rawVal] of Object.entries(meta)) {
     if (internalKeys.has(key)) continue;
+    // Previne que 'type' seja sobrescrito por eventos como 'click'
+    if (key === "type" && typeof rawVal === "string" && ["click", "keydown", "change", "submit"].includes(rawVal)) {
+      continue;
+    }
     if (
       rawVal === undefined ||
       rawVal === null ||

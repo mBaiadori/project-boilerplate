@@ -9,6 +9,7 @@ import {
   createAndCheckoutBranch,
   executeGitCommand,
   getActiveBearerToken,
+  getGitDiff,
   getGitLog,
   getGitStatus,
   rollbackToCommit,

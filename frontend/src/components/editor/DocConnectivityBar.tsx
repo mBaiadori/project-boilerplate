@@ -2044,11 +2044,11 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
                 ? "is-saving"
                 : saveStatus === "Salvo no disco"
                   ? "saved-success"
-                  : saveStatus === "Erro"
+                  : saveStatus === "Erro" && isDirty
                     ? "has-error"
                     : isDirty
                       ? "has-unsaved"
-                      : ""
+                      : "is-synced"
             }`}
             type="button"
             title={
@@ -2056,14 +2056,14 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
                 ? "Gravando alterações no disco da máquina..."
                 : saveStatus === "Salvo no disco"
                   ? "Salvo no disco com sucesso!"
-                  : saveStatus === "Erro"
+                  : saveStatus === "Erro" && isDirty
                     ? "Erro ao gravar no disco. Rascunho preservado."
                     : isDirty
-                      ? "Gravando automaticamente no disco (ou clique/Ctrl+S para forçar gravação imediata)"
-                      : "Arquivo sincronizado no disco (Ctrl+S)"
+                      ? "Salvar alterações no disco (Ctrl+S)"
+                      : "Arquivo já sincronizado e salvo no disco (Ctrl+S)"
             }
-            onClick={onSave}
-            disabled={saveStatus === "Salvando..."}
+            onClick={isDirty && saveStatus !== "Salvando..." ? () => onSave() : undefined}
+            disabled={!isDirty || saveStatus === "Salvando..."}
             style={{
               height: "28px",
               width: "auto",
@@ -2074,12 +2074,12 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
               padding: "0 6px",
               borderRadius: "6px",
               fontSize: "11.5px",
-              cursor: saveStatus === "Salvando..." ? "not-allowed" : "pointer",
+              cursor: (!isDirty || saveStatus === "Salvando...") ? "not-allowed" : "pointer",
               border: "1px solid",
               borderColor:
                 saveStatus === "Salvo no disco"
                   ? "rgba(16, 185, 129, 0.4)"
-                  : saveStatus === "Erro"
+                  : saveStatus === "Erro" && isDirty
                     ? "rgba(239, 68, 68, 0.4)"
                     : isDirty
                       ? "rgba(37, 99, 235, 0.4)"
@@ -2087,19 +2087,20 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
               background:
                 saveStatus === "Salvo no disco"
                   ? "rgba(16, 185, 129, 0.08)"
-                  : saveStatus === "Erro"
+                  : saveStatus === "Erro" && isDirty
                     ? "rgba(239, 68, 68, 0.08)"
                     : isDirty
                       ? "var(--color-primary-container, #eff6ff)"
-                      : "var(--color-surface, #ffffff)",
+                      : "var(--color-surface-variant, rgba(0, 0, 0, 0.03))",
               color:
                 saveStatus === "Salvo no disco"
                   ? "#059669"
-                  : saveStatus === "Erro"
+                  : saveStatus === "Erro" && isDirty
                     ? "#dc2626"
                     : isDirty
                       ? "var(--color-primary, #2563eb)"
-                      : "var(--color-on-surface, #0f172a)",
+                      : "var(--color-outline, #94a3b8)",
+              opacity: !isDirty && saveStatus !== "Salvo no disco" ? 0.65 : 1,
               transition: "all 0.15s ease",
             }}
           >
@@ -2122,7 +2123,7 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
               >
                 check
               </span>
-            ) : saveStatus === "Erro" ? (
+            ) : saveStatus === "Erro" && isDirty ? (
               <span
                 className="material-symbols-outlined icon-xs"
                 style={{ color: "#ef4444", fontSize: "15px", flexShrink: 0 }}
@@ -2132,7 +2133,11 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
             ) : (
               <span
                 className="material-symbols-outlined icon-xs"
-                style={{ fontSize: "15px", flexShrink: 0 }}
+                style={{
+                  fontSize: "15px",
+                  flexShrink: 0,
+                  color: isDirty ? "var(--color-primary, #2563eb)" : "var(--color-outline, #94a3b8)",
+                }}
               >
                 save
               </span>

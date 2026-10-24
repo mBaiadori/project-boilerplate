@@ -189,10 +189,8 @@ export const DraftsTab: React.FC<DraftsTabProps> = ({
               if (!file?.path) return null;
               const fileKey = `${file.repoName}:${file.path}`;
               const isExpanded = !!expandedDraftFiles[fileKey];
-              const { diffText, additions, deletions, oldContent, newContent } = getDraftDiffInfo(
-                file.path,
-                file.repoName,
-              );
+              const { diffText, additions, deletions, oldContent, newContent } =
+                getDraftDiffInfo(file.path, file.repoName);
               const isLoadingDiff = !!loadingDraftDiffs[fileKey];
 
               return (
@@ -402,7 +400,8 @@ export const DraftsTab: React.FC<DraftsTabProps> = ({
                     <div
                       style={{
                         background: "var(--color-surface, #ffffff)",
-                        borderTop: "1px solid var(--color-border-subtle, #e2e8f0)",
+                        borderTop:
+                          "1px solid var(--color-border-subtle, #e2e8f0)",
                       }}
                     >
                       {isLoadingDiff ? (
@@ -416,7 +415,10 @@ export const DraftsTab: React.FC<DraftsTabProps> = ({
                         >
                           Carregando diferenças da versão...
                         </div>
-                      ) : (oldContent || newContent || file.old_content || file.new_content) ? (
+                      ) : oldContent ||
+                        newContent ||
+                        file.old_content ||
+                        file.new_content ? (
                         <VisualMarkdownDiff
                           oldContent={oldContent || file.old_content || ""}
                           newContent={newContent || file.new_content || ""}
@@ -427,7 +429,10 @@ export const DraftsTab: React.FC<DraftsTabProps> = ({
                         />
                       ) : (
                         <div style={{ padding: "12px 16px" }}>
-                          <DiffViewer diffText={diffText} isLoading={isLoadingDiff} />
+                          <DiffViewer
+                            diffText={diffText}
+                            isLoading={isLoadingDiff}
+                          />
                         </div>
                       )}
                     </div>
@@ -548,10 +553,7 @@ export const DraftsTab: React.FC<DraftsTabProps> = ({
             />
           </FormField>
 
-          <FormField
-            label="Descrição & Justificativa"
-            helperText="Opcional: detalhe os motivos das alterações, impactos e itens adicionados"
-          >
+          <FormField label="Descrição & Justificativa">
             <Textarea
               id="draft-pr-description"
               rows={3}

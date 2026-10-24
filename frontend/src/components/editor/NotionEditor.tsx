@@ -260,6 +260,11 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
   const docBody = parsed.hasFrontmatter ? parsed.body : (content || "");
   const effectivePrompt =
     promptContent !== undefined ? promptContent : fileMetadata?.prompt || "";
+  const parsedOriginal = parseFrontmatter(originalContent || "");
+  const originalBody = parsedOriginal.hasFrontmatter
+    ? parsedOriginal.body
+    : (originalContent || "");
+  const isDirty = (originalBody || "").trim() !== (docBody || "").trim();
 
   // Armazena com segurança o conteúdo íntegro do Documento Oficial (SSOT)
   const officialContentRef = useRef(content || "");
@@ -336,16 +341,16 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
     }
   }, [titleValue]);
 
-  // Toast de alerta caso ocorra falha de salvamento
+  // Toast de alerta caso ocorra falha de salvamento apenas se houver alterações não salvas
   useEffect(() => {
-    if (saveStatus === "Erro") {
+    if (saveStatus === "Erro" && isDirty) {
       setEditorToast({
         text: "Não foi possível gravar no disco. Rascunho temporário mantido na sessão.",
         type: "warning",
       });
       setTimeout(() => setEditorToast(null), 5000);
     }
-  }, [saveStatus]);
+  }, [saveStatus, isDirty]);
 
   // Sync document metadata and blame when file changes or git mode is opened
   useEffect(() => {
@@ -852,11 +857,64 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
       ? engineRef.current.getMarkdown()
       : docBodyRef.current;
     docBodyRef.current = currentMd;
-    const metaToUse = {
+
+    // Validação estrita: se metaOverride for um evento DOM ou SyntheticEvent do React, descarta-o
+    const isEvent =
+      metaOverride &&
+      (typeof (metaOverride as any).preventDefault === "function" ||
+        "_reactName" in metaOverride ||
+        "nativeEvent" in metaOverride ||
+        ("clientX" in metaOverride && "clientY" in metaOverride) ||
+        ("bubbles" in metaOverride && "cancelable" in metaOverride));
+    const safeMetaOverride = isEvent ? undefined : metaOverride;
+
+    const rawMetaToUse = {
       ...(parsedRef.current?.metadata || {}),
       ...(fileMetadata || {}),
-      ...(metaOverride || {}),
+      ...(safeMetaOverride || {}),
     };
+
+    // Remove propriedades de eventos que possam ter vazado para o metadado
+    const eventKeysToOmit = new Set([
+      "_reactName",
+      "nativeEvent",
+      "isTrusted",
+      "bubbles",
+      "cancelable",
+      "defaultPrevented",
+      "eventPhase",
+      "timeStamp",
+      "clientX",
+      "clientY",
+      "pageX",
+      "pageY",
+      "screenX",
+      "screenY",
+      "movementX",
+      "movementY",
+      "altKey",
+      "ctrlKey",
+      "metaKey",
+      "shiftKey",
+      "button",
+      "buttons",
+      "detail",
+      "target",
+      "currentTarget",
+    ]);
+    const metaToUse: Record<string, any> = {};
+    for (const [k, v] of Object.entries(rawMetaToUse)) {
+      if (eventKeysToOmit.has(k)) continue;
+      if (
+        k === "type" &&
+        typeof v === "string" &&
+        ["click", "keydown", "change", "submit"].includes(v)
+      ) {
+        continue;
+      }
+      metaToUse[k] = v;
+    }
+
     const hasAnyMeta =
       Boolean(parsedRef.current?.hasFrontmatter) ||
       Boolean(
@@ -868,6 +926,13 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
     const fullContent = hasAnyMeta
       ? serializeFrontmatter(metaToUse, currentMd)
       : currentMd;
+
+    // Se o documento já estiver idêntico ao original salvo no disco e sem override de metadados,
+    // não executa gravação redundante nem exibe alertas, pois já está devidamente salvo.
+    const isAlreadySaved = (originalContent || "").trim() === fullContent.trim();
+    if (isAlreadySaved && !safeMetaOverride) {
+      return;
+    }
 
     if (parsedRef.current) {
       parsedRef.current.hasFrontmatter = hasAnyMeta;
@@ -1253,11 +1318,6 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
     ? currentContent.trim().split(/\s+/).length
     : 0;
   const lineCount = currentContent ? currentContent.split(/\r?\n/).length : 0;
-  const parsedOriginal = parseFrontmatter(originalContent || "");
-  const originalBody = parsedOriginal.hasFrontmatter
-    ? parsedOriginal.body
-    : originalContent || "";
-  const isDirty = (originalBody || "").trim() !== (docBody || "").trim();
 
   if (!filePath) {
     return (
@@ -2161,7 +2221,7 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
                   </span>
                   <span style={{ color: "#10b981" }}>Salvo no disco</span>
                 </>
-              ) : saveStatus === "Erro" ? (
+              ) : saveStatus === "Erro" && isDirty ? (
                 <>
                   <span
                     className="material-symbols-outlined icon-xs"
