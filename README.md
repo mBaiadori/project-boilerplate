@@ -53,6 +53,12 @@ Estágios verificados:
 5. **Frontend Production Build** (`vite build` gerando bundle minificado)
 6. **Static Security & Quality Guards** (`scripts/guards.mjs` monitorando limites estritos de `new Function`, `executeGitCommand`, e contagem de tipagem `any`)
 
+### Limpeza de Processos de Teste Locais
+Caso algum processo de teste fique retido em segundo plano, utilize o utilitário de limpeza:
+```bash
+./scripts/kill-stale-tests.sh
+```
+
 ---
 
 ## 🏗️ Arquitetura e Segurança

@@ -10,6 +10,7 @@ jobs:
   server:
     name: Server Checks (tsc + tests)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -27,6 +28,7 @@ jobs:
   frontend:
     name: Frontend Checks (tsc + strict + lint + test + build)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -50,6 +52,7 @@ jobs:
   guards:
     name: Static Security & Quality Guards
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -61,6 +64,7 @@ jobs:
   audit:
     name: Dependency Audit (Blocking)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -74,6 +78,7 @@ jobs:
   gitleaks:
     name: Gitleaks Secret Detection
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:

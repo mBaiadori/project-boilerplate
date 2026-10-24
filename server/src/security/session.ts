@@ -6,7 +6,7 @@ import os from 'node:os';
 let activeSessionToken: string | null = null;
 
 function getTokenStoragePath(): string {
-  const home = process.env.HOME || os.homedir();
+  const home = process.env.CONTEXT_OS_USER_DATA || process.env.HOME || os.homedir();
   const dir = path.join(home, '.context-os');
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
