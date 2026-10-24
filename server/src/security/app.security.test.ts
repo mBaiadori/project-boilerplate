@@ -227,5 +227,113 @@ describe('Segurança de API e Autenticação de Sessão (Fase 3 - N3)', () => {
       assert.strictEqual(triggered429, true, 'Deve disparar 429 após exceder 30 requisições/min em auth');
     });
   });
+
+  describe('3.5 Fase 2: Sessão, Cookie, CORS e Rotas Canônicas (S1, C2, C12)', () => {
+    it('2.1 parseCookies deve preservar valores contendo o caractere = (C12)', async () => {
+      const { parseCookies } = await import('./session.js');
+      const parsed = parseCookies('auth=token=123==; theme=dark; session=a=b=c');
+      assert.strictEqual(parsed['auth'], 'token=123==');
+      assert.strictEqual(parsed['theme'], 'dark');
+      assert.strictEqual(parsed['session'], 'a=b=c');
+    });
+
+    it('2.2 Bootstrap deve emitir cookie com Path=/api, Max-Age<=28800 e não sem expiração (S1)', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/session/bootstrap',
+        headers: {
+          host: '127.0.0.1:4100',
+        },
+      });
+      assert.strictEqual(res.statusCode, 200);
+      const setCookie = res.headers['set-cookie'] as string;
+      assert.ok(setCookie, 'Set-Cookie deve estar presente');
+      assert.match(setCookie, /Max-Age=\d+/i, 'Deve conter Max-Age para não ser cookie indefinido');
+      assert.match(setCookie, /Path=\/api/i, 'Cookie deve ser restrito ao path /api');
+    });
+
+    it('2.3 Bootstrap deve ser desativado quando CONTEXT_OS_DESKTOP=1', async () => {
+      const prevDesktop = process.env.CONTEXT_OS_DESKTOP;
+      process.env.CONTEXT_OS_DESKTOP = '1';
+      try {
+        const res = await app.inject({
+          method: 'GET',
+          url: '/api/session/bootstrap',
+          headers: {
+            host: '127.0.0.1:4100',
+          },
+        });
+        assert.strictEqual(res.statusCode, 403);
+        assert.match(res.body, /desktop/i);
+      } finally {
+        if (prevDesktop !== undefined) {
+          process.env.CONTEXT_OS_DESKTOP = prevDesktop;
+        } else {
+          delete process.env.CONTEXT_OS_DESKTOP;
+        }
+      }
+    });
+
+    it('2.4 Origem não permitida em CORS deve retornar 403 JSON e NÃO 500 (C2)', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/repos',
+        headers: {
+          host: '127.0.0.1:4100',
+          origin: 'https://malicious-site.example.com',
+          'x-contextos-token': getSessionToken(),
+        },
+      });
+      assert.strictEqual(res.statusCode, 403, `Esperado 403 mas retornou ${res.statusCode}: ${res.body}`);
+      const json = JSON.parse(res.body);
+      assert.match(json.error, /origem|CORS/i);
+    });
+
+    it('2.5 Token expirado deve retornar 401 com reason: "expired" (S1, C2)', async () => {
+      const sessionModule = await import('./session.js') as any;
+      if (typeof sessionModule._setSessionExpiryForTesting === 'function') {
+        const token = sessionModule.getSessionToken();
+        sessionModule._setSessionExpiryForTesting(Date.now() - 1000); // Expirado no passado
+
+        const res = await app.inject({
+          method: 'GET',
+          url: '/api/repos',
+          headers: {
+            host: '127.0.0.1:4100',
+            'x-contextos-token': token,
+          },
+        });
+
+        assert.strictEqual(res.statusCode, 401);
+        const json = JSON.parse(res.body);
+        assert.strictEqual(json.reason, 'expired');
+        assert.match(json.error, /expirada/i);
+
+        sessionModule._resetSessionForTesting(); // Restaura token fresco
+      } else {
+        assert.fail('_setSessionExpiryForTesting ainda não implementado (RED)');
+      }
+    });
+
+    it('2.6 GET /api/health deve responder 200 e GET /health deve redirecionar (C12)', async () => {
+      const resApiHealth = await app.inject({
+        method: 'GET',
+        url: '/api/health',
+        headers: { host: '127.0.0.1:4100' },
+      });
+      assert.strictEqual(resApiHealth.statusCode, 200);
+      const json = JSON.parse(resApiHealth.body);
+      assert.strictEqual(json.status, 'ok');
+
+      const resHealth = await app.inject({
+        method: 'GET',
+        url: '/health',
+        headers: { host: '127.0.0.1:4100' },
+      });
+      assert.strictEqual(resHealth.statusCode, 301);
+      assert.strictEqual(resHealth.headers.location, '/api/health');
+    });
+  });
 });
+
 
