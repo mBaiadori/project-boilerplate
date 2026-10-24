@@ -43,9 +43,17 @@ export function executeGitCommandWithProgress(
   return new Promise((resolve) => {
     const finalArgs = [...args];
     const activeToken = getActiveBearerToken(token);
+    const gitEnv: NodeJS.ProcessEnv = {
+      ...process.env,
+      GIT_TERMINAL_PROMPT: "0",
+    };
+
+    let base64Token = "";
     if (activeToken) {
-      const authHeader = `AUTHORIZATION: basic ${Buffer.from(`x-access-token:${activeToken}`).toString("base64")}`;
-      finalArgs.unshift("-c", `http.extraHeader=${authHeader}`);
+      base64Token = Buffer.from(`x-access-token:${activeToken}`).toString("base64");
+      gitEnv.GIT_CONFIG_COUNT = "1";
+      gitEnv.GIT_CONFIG_KEY_0 = "http.extraHeader";
+      gitEnv.GIT_CONFIG_VALUE_0 = `AUTHORIZATION: basic ${base64Token}`;
     }
 
     let stdout = "";
@@ -54,10 +62,7 @@ export function executeGitCommandWithProgress(
     const child = spawn("git", finalArgs, {
       cwd,
       shell: false,
-      env: {
-        ...process.env,
-        GIT_TERMINAL_PROMPT: "0",
-      },
+      env: gitEnv,
     });
 
     const handleData = (chunk: Buffer) => {
@@ -82,8 +87,16 @@ export function executeGitCommandWithProgress(
     });
 
     child.on("close", (code) => {
-      const safeStdout = activeToken ? stdout.replaceAll(activeToken, "[REDACTED_TOKEN]") : stdout;
-      const safeStderr = activeToken ? stderr.replaceAll(activeToken, "[REDACTED_TOKEN]") : stderr;
+      let safeStdout = stdout;
+      let safeStderr = stderr;
+      if (activeToken) {
+        safeStdout = safeStdout.replaceAll(activeToken, "[REDACTED_TOKEN]");
+        safeStderr = safeStderr.replaceAll(activeToken, "[REDACTED_TOKEN]");
+      }
+      if (base64Token) {
+        safeStdout = safeStdout.replaceAll(base64Token, "[REDACTED_TOKEN]");
+        safeStderr = safeStderr.replaceAll(base64Token, "[REDACTED_TOKEN]");
+      }
       resolve({
         stdout: safeStdout.trim(),
         stderr: safeStderr.trim(),
@@ -141,38 +154,49 @@ export async function executeGitCommand(
   cwd: string,
   explicitToken?: string,
 ): Promise<{ stdout: string; stderr: string; success: boolean }> {
-  let finalCommand = command;
   const token = getActiveBearerToken(explicitToken);
+  const gitEnv: NodeJS.ProcessEnv = {
+    ...process.env,
+    GIT_TERMINAL_PROMPT: "0",
+  };
 
+  let base64Token = "";
   // Injeção automática de credencial nos cabeçalhos HTTP para comandos de rede Git
   const isNetworkCmd = /\bgit\s+(clone|fetch|pull|push|ls-remote)\b/.test(command);
   if (isNetworkCmd && token && !command.includes("http.extraHeader") && !command.includes("http.extraheader") && !command.includes("x-access-token")) {
-    const authHeader = `AUTHORIZATION: basic ${Buffer.from(`x-access-token:${token}`).toString("base64")}`;
-    finalCommand = command.replace(
-      /^git\s+/,
-      `git -c http.extraHeader="${authHeader}" `,
-    );
+    base64Token = Buffer.from(`x-access-token:${token}`).toString("base64");
+    gitEnv.GIT_CONFIG_COUNT = "1";
+    gitEnv.GIT_CONFIG_KEY_0 = "http.extraHeader";
+    gitEnv.GIT_CONFIG_VALUE_0 = `AUTHORIZATION: basic ${base64Token}`;
   }
 
   try {
-    const { stdout, stderr } = await execAsync(finalCommand, {
+    const { stdout, stderr } = await execAsync(command, {
       cwd,
       maxBuffer: 10 * 1024 * 1024,
       timeout: 30000,
-      env: {
-        ...process.env,
-        GIT_TERMINAL_PROMPT: "0",
-      },
+      env: gitEnv,
     });
 
-    const safeStdout = token ? stdout.replaceAll(token, "[REDACTED_TOKEN]") : stdout;
-    const safeStderr = token ? stderr.replaceAll(token, "[REDACTED_TOKEN]") : stderr;
+    let safeStdout = stdout;
+    let safeStderr = stderr;
+    if (token) {
+      safeStdout = safeStdout.replaceAll(token, "[REDACTED_TOKEN]");
+      safeStderr = safeStderr.replaceAll(token, "[REDACTED_TOKEN]");
+    }
+    if (base64Token) {
+      safeStdout = safeStdout.replaceAll(base64Token, "[REDACTED_TOKEN]");
+      safeStderr = safeStderr.replaceAll(base64Token, "[REDACTED_TOKEN]");
+    }
 
     return { stdout: safeStdout.trim(), stderr: safeStderr.trim(), success: true };
   } catch (error: any) {
     let errMessage = error.message || String(error);
     if (token) {
       errMessage = errMessage.replaceAll(token, "[REDACTED_TOKEN]");
+    }
+    if (base64Token) {
+      errMessage = errMessage.replaceAll(base64Token, "[REDACTED_TOKEN]");
     }
     return {
       stdout: "",

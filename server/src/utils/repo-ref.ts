@@ -160,3 +160,23 @@ export function resolveRepoDirPath(refOrRepo: RepoRef | string, ownerOrOrg?: str
 
   return resolved;
 }
+
+/**
+ * Verifica se um caminho está estritamente contido dentro de um diretório base permitido,
+ * prevenindo ataques de path traversal como ../ ou nomes de pasta irmãos.
+ */
+export function isPathInside(parentDir: string, targetPath: string): boolean {
+  const resolvedParent = path.resolve(parentDir);
+  const resolvedTarget = path.resolve(targetPath);
+  return (
+    resolvedTarget === resolvedParent ||
+    resolvedTarget.startsWith(resolvedParent + path.sep)
+  );
+}
+
+export function assertPathInside(parentDir: string, targetPath: string, label = "Caminho"): string {
+  if (!isPathInside(parentDir, targetPath)) {
+    throw new Error(`${label} fora do diretório permitido: ${targetPath}`);
+  }
+  return path.resolve(targetPath);
+}

@@ -42,9 +42,30 @@ export async function buildApp(): Promise<FastifyInstance> {
       : true,
   });
 
-  // 1. CORS
+  // 1. CORS: Permitir clientes locais e Electron/Webviews, bloqueando websites externos da internet
   await app.register(cors, {
-    origin: true,
+    origin: (origin, cb) => {
+      // Requisições diretas de apps locais sem header Origin (Electron main, cURL, desktop apps)
+      if (!origin) {
+        return cb(null, true);
+      }
+      try {
+        const parsed = new URL(origin);
+        const isLocalHost =
+          parsed.hostname === "localhost" ||
+          parsed.hostname === "127.0.0.1" ||
+          parsed.hostname === "::1" ||
+          parsed.protocol === "file:" ||
+          parsed.protocol === "vscode-webview:" ||
+          parsed.protocol === "app:";
+        if (isLocalHost) {
+          return cb(null, true);
+        }
+      } catch {
+        // Falha no parsing de URL
+      }
+      return cb(new Error("Acesso de origem cruzada não autorizado."), false);
+    },
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
   });

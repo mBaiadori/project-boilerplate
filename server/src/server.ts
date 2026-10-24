@@ -3,7 +3,7 @@ import { findAvailablePort } from './utils/port.js';
 import { eventsService } from './modules/events/events.service.js';
 
 const DESIRED_PORT = Number(process.env.PORT) || 4100;
-const HOST = process.env.HOST || '0.0.0.0';
+const HOST = process.env.HOST || '127.0.0.1';
 
 async function start() {
   try {

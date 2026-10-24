@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { marked } from "marked";
+import { sanitizeHtml } from "../../utils/sanitize";
 import { generateSideBySideMarkdownHtml } from "../../utils/rich-diff";
 import {
   parseFrontmatter,
@@ -455,7 +456,7 @@ export const VisualMarkdownDiff: React.FC<VisualMarkdownDiffProps> = ({
                 color: "var(--color-on-surface, #1e293b)",
               }}
               dangerouslySetInnerHTML={{
-                __html: renderedNewHtml,
+                __html: sanitizeHtml(renderedNewHtml),
               }}
             />
           </div>
@@ -531,7 +532,7 @@ export const VisualMarkdownDiff: React.FC<VisualMarkdownDiffProps> = ({
                 opacity: 0.85,
               }}
               dangerouslySetInnerHTML={{
-                __html: renderedOldHtml,
+                __html: sanitizeHtml(renderedOldHtml),
               }}
             />
           </div>
@@ -598,7 +599,7 @@ export const VisualMarkdownDiff: React.FC<VisualMarkdownDiffProps> = ({
                 color: "var(--color-on-surface, #1e293b)",
               }}
               dangerouslySetInnerHTML={{
-                __html: sideBySideHtml.oldHtml,
+                __html: sanitizeHtml(sideBySideHtml.oldHtml),
               }}
             />
           </div>
@@ -652,7 +653,7 @@ export const VisualMarkdownDiff: React.FC<VisualMarkdownDiffProps> = ({
                 color: "var(--color-on-surface, #1e293b)",
               }}
               dangerouslySetInnerHTML={{
-                __html: sideBySideHtml.newHtml,
+                __html: sanitizeHtml(sideBySideHtml.newHtml),
               }}
             />
           </div>

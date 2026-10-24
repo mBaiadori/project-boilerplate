@@ -3,6 +3,7 @@ import path from 'node:path';
 import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
 import { PROJECTS_DIR, resolveRepoDir } from '../../config/constants.js';
+import { isPathInside } from '../../utils/repo-ref.js';
 import { loadConfig, recordChange } from '../../config/storage.js';
 import { CustomToolDefinition, ProjectToolsManifest } from './skills.types.js';
 import { ToolResult } from '../ai/tools/tool.types.js';
@@ -212,7 +213,7 @@ export class CustomToolsService {
       Buffer,
       readProjectFile: (relPath: string) => {
         const full = path.resolve(safeRepoDir, relPath.replace(/^\/+/, ''));
-        if (!full.startsWith(safeRepoDir)) {
+        if (!isPathInside(safeRepoDir, full)) {
           throw new Error('Acesso negado: fora do diretório do projeto.');
         }
         if (!fs.existsSync(full)) return null;
@@ -220,7 +221,7 @@ export class CustomToolsService {
       },
       writeProjectFile: (relPath: string, content: string) => {
         const full = path.resolve(safeRepoDir, relPath.replace(/^\/+/, ''));
-        if (!full.startsWith(safeRepoDir)) {
+        if (!isPathInside(safeRepoDir, full)) {
           throw new Error('Acesso negado: fora do diretório do projeto.');
         }
         fs.mkdirSync(path.dirname(full), { recursive: true });
@@ -229,7 +230,7 @@ export class CustomToolsService {
       },
       listProjectFiles: (relDir = '') => {
         const full = path.resolve(safeRepoDir, relDir.replace(/^\/+/, ''));
-        if (!full.startsWith(safeRepoDir)) {
+        if (!isPathInside(safeRepoDir, full)) {
           throw new Error('Acesso negado: fora do diretório do projeto.');
         }
         if (!fs.existsSync(full)) return [];
@@ -335,7 +336,9 @@ export class CustomToolsService {
 
     // Replace parameter placeholders in command (e.g. {{file_path}}, {{query}})
     for (const [key, val] of Object.entries(args)) {
-      command = command.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), String(val));
+      // Previne injeção de múltiplos comandos de shell removendo caracteres de encadeamento
+      const cleanVal = String(val ?? '').replace(/[;&|`$\r\n]/g, '');
+      command = command.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), cleanVal);
     }
 
     const safeRepoDir = resolveRepoDir(getSafeRepo(context.repoName));

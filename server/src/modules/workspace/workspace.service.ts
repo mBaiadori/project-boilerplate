@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { execFile, exec } from "node:child_process";
+import { execFile } from "node:child_process";
 import { PROJECTS_DIR, resolveRepoDir } from "../../config/constants.js";
 import {
   loadConfig,
@@ -22,6 +22,7 @@ import {
 import { translationsService } from "../translations/translations.service.js";
 import { governanceService } from "../governance/governance.service.js";
 import { canAccessDocument } from "../../utils/crypto.js";
+import { isPathInside } from "../../utils/repo-ref.js";
 
 export interface TreeNode {
   name: string;
@@ -484,12 +485,10 @@ export class WorkspaceService {
         if (!itemRel) continue;
 
         const fullRelPath = cleanTarget ? `${cleanTarget}/${itemRel}` : itemRel;
-        const fullDiskPath = path.join(repoDir, fullRelPath);
+        const fullDiskPath = path.resolve(repoDir, fullRelPath);
 
-        // Security check against directory traversal
-        const resolvedPath = path.resolve(fullDiskPath);
-        const resolvedRepoDir = path.resolve(repoDir);
-        if (!resolvedPath.startsWith(resolvedRepoDir)) {
+        // Checagem robusta de segurança contra directory traversal
+        if (!isPathInside(repoDir, fullDiskPath)) {
           errors.push(`Caminho inválido: ${fullRelPath}`);
           continue;
         }
@@ -1274,7 +1273,11 @@ export class WorkspaceService {
     const repo = repoName || cfg.active_repo?.name || "local";
     const repoDir = this.getRepoDir(repo);
     const cleanRel = (relPath || "").trim().replace(/^\/+/, "");
-    const targetPath = cleanRel ? path.join(repoDir, cleanRel) : repoDir;
+    const targetPath = cleanRel ? path.resolve(repoDir, cleanRel) : repoDir;
+
+    if (!isPathInside(repoDir, targetPath)) {
+      throw new Error(`Caminho fora do diretório permitido: ${cleanRel}`);
+    }
 
     if (!fs.existsSync(targetPath)) {
       throw new Error(
@@ -1311,9 +1314,10 @@ export class WorkspaceService {
               );
           });
         } else {
-          // On Windows, explorer /select,path highlights the file
-          exec(
-            `explorer.exe /select,"${targetPath.replace(/\//g, "\\")}"`,
+          // No Windows, usa execFile com array seguro de argumentos
+          execFile(
+            "explorer.exe",
+            [`/select,${targetPath.replace(/\//g, "\\")}`],
             (err) => {
               if (err)
                 console.error(

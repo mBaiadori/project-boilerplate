@@ -132,7 +132,9 @@ export function loadConfig(): AppConfig {
   if (fs.existsSync(CONFIG_PATH)) {
     try {
       const data = fs.readFileSync(CONFIG_PATH, "utf-8");
-      cfg = JSON.parse(data);
+      if (data && data.trim()) {
+        cfg = JSON.parse(data);
+      }
     } catch (e) {
       console.error(`Erro ao carregar ${CONFIG_PATH}:`, e);
     }
@@ -187,10 +189,13 @@ export function loadConfig(): AppConfig {
 
   if (Array.isArray(cfg.accounts)) {
     for (const acc of cfg.accounts) {
-      if (!acc.token && acc.id) {
+      if (acc.id) {
         const accToken = vaultService.getSecret(`account_token_${acc.id}`);
         if (accToken) {
           acc.token = accToken;
+        } else if (acc.token && acc.token.trim()) {
+          // Migração suave: persiste no cofre nativo do SO
+          vaultService.setSecret(`account_token_${acc.id}`, acc.token.trim());
         }
       }
     }
@@ -283,7 +288,7 @@ export function saveConfig(cfg: AppConfig): void {
         ? cfg.accounts.map((a) => ({
             id: a.id,
             user: a.user,
-            token: a.token || "",
+            token: "",
             git_provider: a.git_provider,
             git_provider_url: a.git_provider_url,
             orgs: a.orgs || [],
@@ -293,10 +298,10 @@ export function saveConfig(cfg: AppConfig): void {
       ai_settings: cfg.ai_settings
         ? {
             provider: cfg.ai_settings.provider || "gemini",
-            model: cfg.ai_settings.model || "gemini-3.7-flash",
+            model: cfg.ai_settings.model || "gemini-2.5-flash",
             api_key: "",
             custom_endpoint: cfg.ai_settings.custom_endpoint || "http://localhost:11434/v1",
-            default_provider: cfg.ai_settings.default_provider || "antigravity",
+            default_provider: cfg.ai_settings.default_provider || "gemini",
           }
         : undefined,
       settings: cfg.settings || {},
@@ -306,7 +311,10 @@ export function saveConfig(cfg: AppConfig): void {
       workflows: cfg.workflows || [],
     };
 
-    fs.writeFileSync(CONFIG_PATH, JSON.stringify(sanitizedToDisk, null, 2), "utf-8");
+    // Escrita atômica em disco para evitar corrupção em caso de queda de energia ou desligamento repentino
+    const tmpFile = `${CONFIG_PATH}.${Date.now()}.tmp`;
+    fs.writeFileSync(tmpFile, JSON.stringify(sanitizedToDisk, null, 2), "utf-8");
+    fs.renameSync(tmpFile, CONFIG_PATH);
   } catch (e) {
     console.error(`Erro ao salvar ${CONFIG_PATH}:`, e);
   }

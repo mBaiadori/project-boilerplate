@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { marked } from "marked";
+import { sanitizeHtml } from "../../utils/sanitize";
 import { useAI } from "../../context/AIContext";
 import { useWorkspace } from "../../context/WorkspaceContext";
 import { SkillsHubModal } from "../modals/SkillsHubModal";
@@ -1997,7 +1998,7 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
                   : "ai-reply-content"
               }
               dangerouslySetInnerHTML={{
-                __html: marked.parse(msg.content) as string,
+                __html: sanitizeHtml(marked.parse(msg.content) as string),
               }}
             />
 

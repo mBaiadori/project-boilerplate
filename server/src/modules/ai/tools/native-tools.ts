@@ -8,6 +8,8 @@ import { templatesService } from "../../templates/templates.service.js";
 import { customToolsService } from "../../skills/custom-tools.service.js";
 import { wikiService } from "../../wiki/wiki.service.js";
 
+import { isPathInside } from "../../../utils/repo-ref.js";
+
 function getSafeRepoPath(
   repoName: string,
   relativeFilePath: string,
@@ -18,7 +20,7 @@ function getSafeRepoPath(
     repoDir,
     relativeFilePath.replace(/^\/+/, ""),
   );
-  if (!targetPath.startsWith(repoDir)) {
+  if (!isPathInside(repoDir, targetPath)) {
     return null; // Sandboxing: path traversal attempt blocked
   }
   return targetPath;

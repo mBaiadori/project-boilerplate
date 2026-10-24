@@ -14,7 +14,7 @@ config.json
 node_modules
 old_ui
 old_templates
-docs
+docs/*-main/
 ECC-main
 skills-main
 .VSCodeCounter

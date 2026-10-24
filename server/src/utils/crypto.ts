@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import os from 'node:os';
 import fs from 'node:fs';
 import path from 'node:path';
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import type { SecretScanResult, SecretScanViolation } from '../modules/governance/governance.types.js';
 
 export interface MergePlaintextResult {
@@ -176,10 +176,11 @@ export function mergePlaintext3Way(
     fs.writeFileSync(fOurs, oursText, 'utf-8');
     fs.writeFileSync(fTheirs, theirsText, 'utf-8');
 
-    // Executa git merge-file
+    // Executa git merge-file diretamente sem passar por shell
     try {
-      const mergedStdout = execSync(
-        `git merge-file -p -L "${lblOurs}" -L "${lblBase}" -L "${lblTheirs}" "${fOurs}" "${fBase}" "${fTheirs}"`,
+      const mergedStdout = execFileSync(
+        'git',
+        ['merge-file', '-p', '-L', lblOurs, '-L', lblBase, '-L', lblTheirs, fOurs, fBase, fTheirs],
         { encoding: 'utf-8', maxBuffer: 10 * 1024 * 1024 }
       );
       return {
@@ -190,7 +191,8 @@ export function mergePlaintext3Way(
     } catch (mergeErr: any) {
       // Se houver conflito, o git merge-file sai com código > 0 e o stdout contém os marcadores!
       const outputWithMarkers = mergeErr.stdout ? String(mergeErr.stdout) : '';
-      const conflictMarkers = (outputWithMarkers.match(new RegExp(`<<<<<<< ${lblOurs}`, 'g')) || []).length;
+      const escapedLbl = lblOurs.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
+      const conflictMarkers = (outputWithMarkers.match(new RegExp(`<<<<<<< ${escapedLbl}`, 'g')) || []).length;
 
       return {
         hasConflicts: true,

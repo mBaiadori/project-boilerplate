@@ -1,0 +1,14 @@
+flowchart TD
+    subgraph HumanInteraction ["1. Working Memory (Janela Imediata)"]
+        A[Documento Ativo ou Seleção do Cursor] --> D[Context Budget Manager]
+        B[Últimos 3-5 Turnos do Chat] --> D
+        C[Resumo Condensado de Decisões Anteriores] --> D
+    end
+    subgraph ProjectRAG ["2. Dynamic Project RAG (Sob Demanda)"]
+        E[Índice de Documentos do Projeto / Workspace] -->|Busca Semântica / BM25| F[Top 3 Fragmentos Relevantes]
+        F --> D
+    end
+    subgraph Taxonomies ["3. Governance & Metadata"]
+        G[Taxonomias do .project.config.json] --> D
+    end
+    D -->|Contexto Enxuto e Preciso| H[AI Model / Provider]
