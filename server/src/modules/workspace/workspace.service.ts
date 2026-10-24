@@ -380,6 +380,15 @@ export class WorkspaceService {
       throw new Error("Caminho não pode ser vazio.");
     }
 
+    if (!isFolder) {
+      const base = path.basename(cleanPath);
+      if (!base.includes(".")) {
+        cleanPath = `${cleanPath}.md`;
+      } else if (base.endsWith(".")) {
+        cleanPath = `${cleanPath.slice(0, -1)}.md`;
+      }
+    }
+
     // Validação estrita de Clearance de Governança
     if (!isFolder) {
       this.verifyUserClearance(repoName, cleanPath, meta);

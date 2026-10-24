@@ -347,6 +347,8 @@ export function ensureGitIgnore(repoDir: string): void {
     "*.log",
     ".env",
     ".docs.metadata.json",
+    ".spec-memory/workspace_changes.json",
+    ".spec-memory/sessions/",
   ];
 
   const systemPatternsToUnignore = [
@@ -437,7 +439,7 @@ export async function cloneGitRepo(
   }
 
   const cloneRes = await executeGitCommandWithProgress(
-    ["clone", "--depth", "1", "--progress", cleanRemoteUrl, repoDir],
+    ["clone", "--progress", cleanRemoteUrl, repoDir],
     parentDir,
     token,
     onProgress,
@@ -692,17 +694,22 @@ export async function commitChanges(
   ensureGitIgnore(repoDir);
   try {
     const checkRes = await executeGitCommand(
-      "git ls-files --error-unmatch .docs.metadata.json",
+      "git ls-files --error-unmatch .docs.metadata.json .spec-memory/workspace_changes.json",
       repoDir,
     );
-    if (checkRes.success && checkRes.stdout.includes(".docs.metadata.json")) {
-      await executeGitCommand("git rm --cached .docs.metadata.json", repoDir);
+    if (checkRes.success) {
+      if (checkRes.stdout.includes(".docs.metadata.json")) {
+        await executeGitCommand("git rm --cached --ignore-unmatch .docs.metadata.json", repoDir);
+      }
+      if (checkRes.stdout.includes("workspace_changes.json")) {
+        await executeGitCommand("git rm --cached --ignore-unmatch .spec-memory/workspace_changes.json", repoDir);
+      }
     }
   } catch {}
 
   if (files && files.length > 0) {
     for (const file of files) {
-      if (file.includes(".docs.metadata.json")) continue;
+      if (file.includes(".docs.metadata.json") || file.includes("workspace_changes.json")) continue;
       await executeGitCommand(`git add "${file}"`, repoDir);
     }
   } else {

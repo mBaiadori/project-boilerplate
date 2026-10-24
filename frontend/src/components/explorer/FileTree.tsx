@@ -335,8 +335,14 @@ export const FileTree: React.FC<FileTreeProps> = ({
     isSubmittingInlineRef.current = true;
     const { parentPath, isFolder } = inlineCreating;
     let fileName = rawName;
-    if (!isFolder && selectedTemplate && !fileName.includes(".")) {
-      fileName = `${fileName}.md`;
+    if (!isFolder) {
+      const parts = fileName.split("/");
+      const last = parts[parts.length - 1];
+      if (!last.includes(".")) {
+        fileName = `${fileName}.md`;
+      } else if (last.endsWith(".")) {
+        fileName = `${fileName.slice(0, -1)}.md`;
+      }
     }
 
     const isMarkdown =
@@ -345,7 +351,8 @@ export const FileTree: React.FC<FileTreeProps> = ({
         fileName.toLowerCase().endsWith(".markdown"));
 
     const targetPath = parentPath ? `${parentPath}/${fileName}` : fileName;
-    const docTitle = rawName.replace(/\.[^/.]+$/, "");
+    const baseDocName = fileName.split("/").pop() || fileName;
+    const docTitle = baseDocName.replace(/\.[^/.]+$/, "");
     const templateId = selectedTemplate?.id || "";
 
     try {

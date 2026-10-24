@@ -1367,6 +1367,16 @@ export class PRsService {
       try { fs.unlinkSync(workspaceChangesPath); } catch {}
     }
 
+    // Limpa preventivamente conflitos residuais no index do Git (ex: merge anterior pendente ou workspace_changes.json)
+    try {
+      const unmergedRes = await executeGitCommand('git diff --name-only --diff-filter=U', repoDir);
+      if (unmergedRes.success && unmergedRes.stdout.trim().length > 0) {
+        await executeGitCommand('git merge --abort', repoDir).catch(() => {});
+        await executeGitCommand('git rm -f --ignore-unmatch .spec-memory/workspace_changes.json', repoDir).catch(() => {});
+        await executeGitCommand('git reset HEAD', repoDir).catch(() => {});
+      }
+    } catch {}
+
     // 2. Se houver arquivos modificados ou untracked na working tree (ex: .docs.metadata.json ou .gitignore), guarda em stash temporário
     let didStash = false;
     try {
@@ -1388,10 +1398,48 @@ export class PRsService {
 
       // 4. Local Git Merge
       if (targetPR.branch) {
-        const mergeRes = await executeGitCommand(
+        // Se o repo for shallow, busca histórico completo para encontrar base comum de merge
+        try {
+          const isShallowRes = await executeGitCommand('git rev-parse --is-shallow-repository', repoDir);
+          if (isShallowRes.success && isShallowRes.stdout.trim() === 'true') {
+            const activeToken = getActiveBearerToken(cfg.token);
+            await executeGitCommand('git fetch --unshallow origin', repoDir, activeToken).catch(() => {});
+          }
+        } catch {}
+
+        let mergeRes = await executeGitCommand(
           `git merge "${targetPR.branch}" --no-ff -m "${commitMsg.replace(/"/g, '\\"')}"`,
           repoDir
         );
+
+        // Se o merge falhou, checa se os conflitos são exclusivamente em arquivos internos de metadados
+        if (!mergeRes.success) {
+          const unmergedRes = await executeGitCommand('git diff --name-only --diff-filter=U', repoDir);
+          if (unmergedRes.success && unmergedRes.stdout.trim().length > 0) {
+            const conflictingFiles = unmergedRes.stdout.trim().split('\n').map(f => f.trim()).filter(Boolean);
+            const onlyInternalConflicts = conflictingFiles.every(f => 
+              f.startsWith('.spec-memory/') || f === '.docs.metadata.json' || f === '.gitignore'
+            );
+
+            if (onlyInternalConflicts) {
+              // Remove arquivos transitórios que não devem ser versionados
+              await executeGitCommand('git rm -f --ignore-unmatch .spec-memory/workspace_changes.json', repoDir).catch(() => {});
+              // Para arquivos de metadados internos, adota a versão do branch de destino (ours)
+              for (const f of conflictingFiles) {
+                if (f !== '.spec-memory/workspace_changes.json') {
+                  await executeGitCommand(`git checkout --ours -- "${f}"`, repoDir).catch(() => {});
+                  await executeGitCommand(`git add "${f}"`, repoDir).catch(() => {});
+                }
+              }
+              // Conclui o commit de merge
+              mergeRes = await executeGitCommand(
+                `git commit -m "${commitMsg.replace(/"/g, '\\"')}"`,
+                repoDir
+              );
+            }
+          }
+        }
+
         if (!mergeRes.success) {
           await executeGitCommand('git merge --abort', repoDir);
           throw new Error(`Falha no merge do Git: ${mergeRes.stderr || mergeRes.stdout}`);
