@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main, master]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   server:
     name: Server Checks (tsc + tests)
@@ -48,6 +52,24 @@ jobs:
         run: cd frontend && npm test
       - name: Frontend Production Build
         run: cd frontend && npm run build
+
+  desktop:
+    name: Desktop Checks (tsc + build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "npm"
+          cache-dependency-path: desktop/package-lock.json
+      - name: Install desktop dependencies
+        run: cd desktop && npm ci
+      - name: Desktop Typecheck (tsc)
+        run: cd desktop && npx tsc --noEmit
+      - name: Desktop Build
+        run: cd desktop && npm run build:ts
 
   guards:
     name: Static Security & Quality Guards

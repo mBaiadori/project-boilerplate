@@ -754,7 +754,7 @@ export async function commitChanges(
 
   ensureGitIgnore(repoDir);
 
-  if (files && files.length > 0) {
+  if (Array.isArray(files) && files.length > 0) {
     const validFiles: string[] = [];
     for (const file of files) {
       if (

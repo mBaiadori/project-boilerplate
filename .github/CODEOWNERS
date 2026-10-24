@@ -1,0 +1,10 @@
+# Global default owners
+* @mBaiadori
+
+# Security & CI critical files
+/scripts/guards.baseline.json @mBaiadori
+/scripts/guards.mjs @mBaiadori
+/.github/workflows/ @mBaiadori
+/server/src/security/ @mBaiadori
+/server/src/utils/git-validate.ts @mBaiadori
+/docs/remediation/ @mBaiadori
