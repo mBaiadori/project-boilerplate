@@ -3,7 +3,7 @@ import assert from 'node:assert';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { executeGitCommand, commitChanges, rollbackToCommit, syncGit } from './git.js';
+import { executeGit, commitChanges, rollbackToCommit, syncGit } from './git.js';
 
 describe('Security: Git Command Injection Prevention (RED Tests)', () => {
   let tmpDir: string;
@@ -17,13 +17,13 @@ describe('Security: Git Command Injection Prevention (RED Tests)', () => {
     pwnedFile = path.join(tmpDir, 'PWNED');
 
     // Inicializa repo git básico
-    await executeGitCommand('git init -b main', repoDir);
-    await executeGitCommand('git config user.name "SecurityTester"', repoDir);
-    await executeGitCommand('git config user.email "sec@example.com"', repoDir);
+    await executeGit(['init', '-b', 'main'], repoDir);
+    await executeGit(['config', 'user.name', 'SecurityTester'], repoDir);
+    await executeGit(['config', 'user.email', 'sec@example.com'], repoDir);
 
     fs.writeFileSync(path.join(repoDir, 'init.txt'), 'hello world');
-    await executeGitCommand('git add .', repoDir);
-    await executeGitCommand('git commit -m "initial commit"', repoDir);
+    await executeGit(['add', '.'], repoDir);
+    await executeGit(['commit', '-m', 'initial commit'], repoDir);
   });
 
   afterEach(() => {

@@ -5,22 +5,22 @@ import path from "node:path";
 import { resolveRepoDir } from "../../config/constants.js";
 import { workspaceService } from "./workspace.service.js";
 import { recordChange, loadRepoWorkspaceChanges } from "../../config/storage.js";
-import { executeGitCommand } from "../../utils/git.js";
+import { executeGit } from "../../utils/git.js";
 
 test("WorkspaceService - Deleção e ciclo de vida de arquivos locais", async (t) => {
   const repo = "test-delete-lifecycle-repo";
   const repoDir = resolveRepoDir(repo);
 
   fs.mkdirSync(repoDir, { recursive: true });
-  await executeGitCommand("git init", repoDir);
-  await executeGitCommand("git config user.email 'test@test.com'", repoDir);
-  await executeGitCommand("git config user.name 'Test User'", repoDir);
+  await executeGit(["init"], repoDir);
+  await executeGit(["config", "user.email", "test@test.com"], repoDir);
+  await executeGit(["config", "user.name", "Test User"], repoDir);
 
   // Cria um arquivo oficial commitado
   const committedFile = path.join(repoDir, "oficial.md");
   fs.writeFileSync(committedFile, "# Arquivo Oficial", "utf-8");
-  await executeGitCommand("git add oficial.md", repoDir);
-  await executeGitCommand("git commit -m 'Initial commit'", repoDir);
+  await executeGit(["add", "oficial.md"], repoDir);
+  await executeGit(["commit", "-m", "Initial commit"], repoDir);
 
   await t.test(
     "Arquivo criado localmente e depois excluído NÃO deve ficar marcado como DELETED / REMOVIDO",

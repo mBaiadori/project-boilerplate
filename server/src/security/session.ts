@@ -64,7 +64,7 @@ export function isValidSessionToken(candidate?: string | null): boolean {
  * Validação estrita do header Host para proteção contra ataques de DNS Rebinding.
  */
 export function isValidHostHeader(hostHeader?: string): boolean {
-  if (!hostHeader) return true; // Requisições locais puras podem não incluir Host se via IPC
+  if (!hostHeader) return false; // Requisições HTTP legítimas exigem cabeçalho Host
   const clean = hostHeader.trim().toLowerCase();
 
   // Remove porta (ex: localhost:4100 -> localhost)

@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { prsService } from './prs.service.js';
 import { resolveRepoDir } from '../../config/constants.js';
-import { executeGitCommand } from '../../utils/git.js';
+import { executeGit } from '../../utils/git.js';
 
 describe('PRsService - Isolamento de PRs por Repositório', () => {
   const TEST_REPO_A = 'test-repo-alpha';
@@ -72,9 +72,9 @@ describe('PRsService - Geração Inteligente de Resumos (IA e Diff)', () => {
 
   it('Deve gerar resumo estruturado por Diff quando IA não estiver configurada', async () => {
     // Inicializar repositório Git
-    await executeGitCommand('git init', repoDir);
-    await executeGitCommand('git config user.name "Test"', repoDir);
-    await executeGitCommand('git config user.email "test@test.com"', repoDir);
+    await executeGit(['init'], repoDir);
+    await executeGit(['config', 'user.name', 'Test'], repoDir);
+    await executeGit(['config', 'user.email', 'test@test.com'], repoDir);
 
     // Criar arquivo de teste no repo
     const docPath = path.join(repoDir, 'auth.md');

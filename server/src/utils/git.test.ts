@@ -16,7 +16,7 @@ import {
   getFileContentAtCommit,
   getGitDiff,
   rollbackToCommit,
-  executeGitCommand,
+  executeGit,
 } from "./git.js";
 
 test("Git Utilities Suite - Cobertura de Funções Core de Versionamento", async (t) => {
@@ -71,9 +71,9 @@ test("Git Utilities Suite - Cobertura de Funções Core de Versionamento", async
     });
 
     // Inicializa o repositório git para os próximos testes
-    await executeGitCommand("git init -b main", repoDir);
-    await executeGitCommand('git config user.name "Test Dev"', repoDir);
-    await executeGitCommand('git config user.email "testdev@example.com"', repoDir);
+    await executeGit(["init", "-b", "main"], repoDir);
+    await executeGit(["config", "user.name", "Test Dev"], repoDir);
+    await executeGit(["config", "user.email", "testdev@example.com"], repoDir);
 
     // 4. isGitRepo após inicializar
     await t.test("isGitRepo deve retornar true após git init", async () => {
@@ -111,7 +111,7 @@ test("Git Utilities Suite - Cobertura de Funções Core de Versionamento", async
       fs.writeFileSync(path.join(specDir, "workspace_changes.json"), '{"changes":[]}', "utf-8");
 
       // Força staging do arquivo transitório
-      await executeGitCommand("git add -f .spec-memory/workspace_changes.json", repoDir);
+      await executeGit(["add", "-f", ".spec-memory/workspace_changes.json"], repoDir);
 
       // Modifica artigo.md e commita
       fs.writeFileSync(path.join(repoDir, "artigo.md"), "# Artigo Atualizado\n", "utf-8");
@@ -119,8 +119,8 @@ test("Git Utilities Suite - Cobertura de Funções Core de Versionamento", async
       assert.strictEqual(result.success, true);
 
       // Verifica se workspace_changes.json NÃO foi commitado
-      const lsResult = await executeGitCommand(
-        "git ls-files --error-unmatch .spec-memory/workspace_changes.json",
+      const lsResult = await executeGit(
+        ["ls-files", "--error-unmatch", ".spec-memory/workspace_changes.json"],
         repoDir,
       );
       assert.strictEqual(lsResult.success, false);

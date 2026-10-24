@@ -3,7 +3,7 @@ import assert from "node:assert";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { executeGitCommand, ensureGitRepo } from "./git.js";
+import { executeGit, ensureGitRepo } from "./git.js";
 import { healRepositoryState } from "./git-health.js";
 
 test("GitHealthGuard - Auto-cura preventiva do repositório Git", async (t) => {
@@ -11,14 +11,14 @@ test("GitHealthGuard - Auto-cura preventiva do repositório Git", async (t) => {
 
   // Setup: cria repo Git real para teste
   fs.mkdirSync(repoDir, { recursive: true });
-  await executeGitCommand("git init", repoDir);
-  await executeGitCommand('git config user.name "Test Runner"', repoDir);
-  await executeGitCommand('git config user.email "test@example.com"', repoDir);
+  await executeGit(["init"], repoDir);
+  await executeGit(["config", "user.name", "Test Runner"], repoDir);
+  await executeGit(["config", "user.email", "test@example.com"], repoDir);
 
   // Cria commit inicial
   fs.writeFileSync(path.join(repoDir, "documento.md"), "# Documento Inicial\n", "utf-8");
-  await executeGitCommand("git add documento.md", repoDir);
-  await executeGitCommand('git commit -m "initial commit"', repoDir);
+  await executeGit(["add", "documento.md"], repoDir);
+  await executeGit(["commit", "-m", "initial commit"], repoDir);
 
   await t.test("Repositório limpo deve retornar healed = false", async () => {
     const result = await healRepositoryState(repoDir, { unshallowIfNeeded: false });
@@ -44,7 +44,7 @@ test("GitHealthGuard - Auto-cura preventiva do repositório Git", async (t) => {
     fs.writeFileSync(changesFile, '{"changes": []}', "utf-8");
 
     // Simula git add no arquivo transitório
-    await executeGitCommand("git add -f .spec-memory/workspace_changes.json", repoDir);
+    await executeGit(["add", "-f", ".spec-memory/workspace_changes.json"], repoDir);
 
     const result = await healRepositoryState(repoDir, { unshallowIfNeeded: false });
     assert.strictEqual(result.healed, true);
@@ -54,8 +54,8 @@ test("GitHealthGuard - Auto-cura preventiva do repositório Git", async (t) => {
     );
 
     // O arquivo não deve mais estar rastreado no index
-    const checkRes = await executeGitCommand(
-      "git ls-files --error-unmatch .spec-memory/workspace_changes.json",
+    const checkRes = await executeGit(
+      ["ls-files", "--error-unmatch", ".spec-memory/workspace_changes.json"],
       repoDir,
     );
     assert.strictEqual(checkRes.success, false);

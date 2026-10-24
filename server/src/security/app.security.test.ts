@@ -118,4 +118,77 @@ describe('Segurança de API e Autenticação de Sessão (Fase 3 - N3)', () => {
       assert.strictEqual(res.statusCode, 200);
     });
   });
+
+  describe('3.3 Hardening do Bootstrap e Proteção de Sessão (Fase 1 - S1, S5)', () => {
+    it('deve rejeitar Host header ausente na função isValidHostHeader', () => {
+      assert.strictEqual(isValidHostHeader(undefined), false);
+      assert.strictEqual(isValidHostHeader(''), false);
+    });
+
+    it('deve recusar bootstrap com 403 se Origin for de porta local diferente não autorizada (ex: 3000 ou 9999)', async () => {
+      const res3000 = await app.inject({
+        method: 'GET',
+        url: '/api/session/bootstrap',
+        headers: {
+          host: '127.0.0.1:4100',
+          origin: 'http://localhost:3000',
+        },
+      });
+      assert.strictEqual(res3000.statusCode, 403);
+
+      const res9999 = await app.inject({
+        method: 'GET',
+        url: '/api/session/bootstrap',
+        headers: {
+          host: '127.0.0.1:4100',
+          origin: 'http://127.0.0.1:9999',
+        },
+      });
+      assert.strictEqual(res9999.statusCode, 403);
+    });
+
+    it('deve permitir bootstrap com 200 se Origin for da mesma origem ou Vite dev (5173)', async () => {
+      const resSameOrigin = await app.inject({
+        method: 'GET',
+        url: '/api/session/bootstrap',
+        headers: {
+          host: '127.0.0.1:4100',
+          origin: 'http://127.0.0.1:4100',
+        },
+      });
+      assert.strictEqual(resSameOrigin.statusCode, 200);
+
+      const resVite = await app.inject({
+        method: 'GET',
+        url: '/api/session/bootstrap',
+        headers: {
+          host: '127.0.0.1:4100',
+          origin: 'http://localhost:5173',
+        },
+      });
+      assert.strictEqual(resVite.statusCode, 200);
+    });
+
+    it('não deve registrar ou expor /api/test-leak-error quando em produção (S5)', async () => {
+      const prevEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = 'production';
+      try {
+        const prodApp = await buildApp();
+        await prodApp.ready();
+        const res = await prodApp.inject({
+          method: 'GET',
+          url: '/api/test-leak-error',
+          headers: {
+            host: '127.0.0.1:4100',
+            'x-contextos-token': getSessionToken(),
+          },
+        });
+        assert.strictEqual(res.statusCode, 404);
+        await prodApp.close();
+      } finally {
+        process.env.NODE_ENV = prevEnv;
+      }
+    });
+  });
 });
+

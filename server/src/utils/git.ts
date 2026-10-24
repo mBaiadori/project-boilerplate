@@ -180,59 +180,6 @@ export function getActiveBearerToken(explicitToken?: string): string | null {
 }
 
 /**
- * Divide uma string de comando em array de argumentos de forma segura,
- * respeitando aspas simples e duplas sem invocar nenhum shell (/bin/sh).
- */
-export function splitCommandToArgs(command: string): string[] {
-  const trimmed = command.trim();
-  const cmdStr = trimmed.startsWith("git ") ? trimmed.slice(4).trim() : trimmed;
-  const args: string[] = [];
-  let current = "";
-  let inQuotes: string | null = null;
-  let escapeNext = false;
-
-  for (let i = 0; i < cmdStr.length; i++) {
-    const char = cmdStr[i];
-
-    if (escapeNext) {
-      current += char;
-      escapeNext = false;
-      continue;
-    }
-
-    if (char === "\\") {
-      escapeNext = true;
-      continue;
-    }
-
-    if (inQuotes) {
-      if (char === inQuotes) {
-        inQuotes = null;
-      } else {
-        current += char;
-      }
-    } else {
-      if (char === '"' || char === "'") {
-        inQuotes = char;
-      } else if (/\s/.test(char)) {
-        if (current.length > 0) {
-          args.push(current);
-          current = "";
-        }
-      } else {
-        current += char;
-      }
-    }
-  }
-
-  if (current.length > 0) {
-    args.push(current);
-  }
-
-  return args;
-}
-
-/**
  * Executa comandos git diretamente via execFile sem invocação de shell (/bin/sh),
  * imune a injeção de comandos, expansão de crases, $(...) e caracteres especiais.
  */
@@ -273,18 +220,6 @@ export async function executeGit(
   }
 }
 
-/**
- * Interface legada que converte comandos em string para array de argumentos seguro
- * e despacha para executeGit com shell: false.
- */
-export async function executeGitCommand(
-  command: string,
-  cwd: string,
-  explicitToken?: string,
-): Promise<{ stdout: string; stderr: string; success: boolean }> {
-  const args = splitCommandToArgs(command);
-  return executeGit(args, cwd, explicitToken);
-}
 
 export async function callGitHubAPI(
   endpoint: string,
@@ -587,8 +522,9 @@ export async function pullGitRepo(
     return { success: false, message: "Repositório não está clonado localmente." };
   }
 
+  const defaultBranch = await getDefaultBranch(repoDir);
   const branchRes = await executeGit(["rev-parse", "--abbrev-ref", "HEAD"], repoDir);
-  const activeBranch = branch || branchRes.stdout?.trim() || "main";
+  const activeBranch = branch || branchRes.stdout?.trim() || defaultBranch;
 
   const fetchRes = await executeGitCommandWithProgress(
     ["fetch", "--progress", "origin", activeBranch],
@@ -651,7 +587,7 @@ export async function getGitStatus(repoDir: string): Promise<GitStatusResult> {
 
   // Current branch
   const branchRes = await executeGit(["rev-parse", "--abbrev-ref", "HEAD"], repoDir);
-  const branch = branchRes.stdout || "main";
+  const branch = branchRes.stdout || (await getDefaultBranch(repoDir));
 
   // Remote URL
   const remoteRes = await executeGit(["remote", "get-url", "origin"], repoDir);
@@ -761,13 +697,14 @@ export async function getGitBranches(
   repoDir: string,
 ): Promise<{ current: string; branches: string[] }> {
   const isRepo = await isGitRepo(repoDir);
-  if (!isRepo) return { current: "main", branches: ["main"] };
+  const defBranch = await getDefaultBranch(repoDir);
+  if (!isRepo) return { current: defBranch, branches: [defBranch] };
 
   const res = await executeGit(["branch", "--list"], repoDir);
-  if (!res.success) return { current: "main", branches: ["main"] };
+  if (!res.success) return { current: defBranch, branches: [defBranch] };
 
   const lines = res.stdout.split("\n").filter(Boolean);
-  let current = "main";
+  let current = defBranch;
   const branches: string[] = [];
 
   for (const line of lines) {
@@ -1013,8 +950,8 @@ export async function rollbackToCommit(
     }
   }
 
-  // 3. Checkout current branch (detect active default or main)
-  let activeBranch = "main";
+  // 3. Checkout current branch (detect active default or branch)
+  let activeBranch = await getDefaultBranch(repoDir);
   const branchRes = await executeGit(["branch", "--show-current"], repoDir);
   if (branchRes.success && branchRes.stdout.trim()) {
     activeBranch = branchRes.stdout.trim();

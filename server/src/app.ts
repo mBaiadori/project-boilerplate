@@ -117,7 +117,7 @@ export async function buildApp(): Promise<FastifyInstance> {
 
     if (!isValidSessionToken(candidateToken)) {
       return reply.status(401).send({
-        error: "Não autorizado: Sessão inválida ou expirada.",
+        error: "Não autorizado: Sessão inválida ou não informada.",
       });
     }
   });
@@ -148,13 +148,40 @@ export async function buildApp(): Promise<FastifyInstance> {
     });
   });
 
-  // Rota de teste controlada para validação de error handler em ambiente de teste
-  app.get('/api/test-leak-error', async () => {
-    throw new Error('Falha catastrófica em /Users/MarcosBaiadori/secrets/key.pem');
-  });
+  // Rota de teste controlada para validação de error handler exclusivamente fora de produção
+  if (process.env.NODE_ENV !== 'production') {
+    app.get('/api/test-leak-error', async () => {
+      throw new Error('Falha catastrófica em /Users/MarcosBaiadori/secrets/key.pem');
+    });
+  }
 
   // 3. Rota de Bootstrap de Sessão Local (emite cookie HttpOnly e retorna token para SPA/Electron)
-  app.get("/api/session/bootstrap", async (_request, reply) => {
+  app.get("/api/session/bootstrap", async (request, reply) => {
+    const origin = request.headers.origin;
+    if (origin) {
+      try {
+        const parsed = new URL(origin);
+        const hostHeader = (request.headers.host || '').toLowerCase();
+        const hostWithoutPort = hostHeader.split(':')[0];
+        const reqPort = hostHeader.includes(':') ? hostHeader.split(':')[1] : (parsed.protocol === 'https:' ? '443' : '80');
+
+        const isSameHost = (parsed.hostname === hostWithoutPort || (parsed.hostname === 'localhost' && hostWithoutPort === '127.0.0.1') || (parsed.hostname === '127.0.0.1' && hostWithoutPort === 'localhost'));
+        const isSameOrigin = isSameHost && (parsed.port === reqPort || (!parsed.port && reqPort === '80'));
+        const isViteDev = (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1') && (parsed.port === '5173' || parsed.port === '4100');
+        const isDesktopApp = parsed.protocol === 'app:' || parsed.protocol === 'vscode-webview:' || parsed.protocol === 'file:';
+
+        if (!isSameOrigin && !isViteDev && !isDesktopApp) {
+          return reply.status(403).send({
+            error: "Acesso de origem cruzada ao bootstrap de sessão negado.",
+          });
+        }
+      } catch {
+        return reply.status(403).send({
+          error: "Origin inválido para bootstrap de sessão.",
+        });
+      }
+    }
+
     const token = getSessionToken();
     reply.header(
       "Set-Cookie",
