@@ -20,7 +20,6 @@ skills-main
 .VSCodeCounter
 graphify-out/
 /graphify-out/
-docs/remediation/
 
 # =============================================================================
 # BUILD ARTIFACTS, DESKTOP RELEASES & DISTRIBUTIONS
