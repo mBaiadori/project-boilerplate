@@ -1,4 +1,4 @@
-import { FileText, FolderTree, Lock, Plus } from "lucide-react";
+import { FileText, Plus } from "lucide-react";
 import React, {
   useCallback,
   useEffect,
@@ -22,18 +22,13 @@ import type {
   SupportedLanguage,
   SyncToMainPreview,
 } from "../../types";
-import {
-  DictionaryPopover,
-  type DictionaryPopoverData,
-} from "../dictionary/DictionaryPopover";
-import { AddDictionaryTermModal } from "../modals/AddDictionaryTermModal";
-import { InsertLinkModal } from "../modals/InsertLinkModal";
-import { LinkSynonymModal } from "../modals/LinkSynonymModal";
-import { MergeConflictResolutionModal } from "../modals/MergeConflictResolutionModal";
-import { SyncTranslationModal } from "../modals/SyncTranslationModal";
+import type { DictionaryPopoverData } from "../dictionary/DictionaryPopover";
 import { DocConnectivityBar } from "./DocConnectivityBar";
 import { DocumentHistoryDrawer } from "./DocumentHistoryDrawer";
-import { LanguageSelectorDropdown } from "./LanguageSelectorDropdown";
+import { EditorFooter } from "./EditorFooter";
+import { EditorModalsContainer } from "./EditorModalsContainer";
+import { EditorSecurityLockGate } from "./EditorSecurityLockGate";
+import { EditorTopToolbar } from "./EditorTopToolbar";
 import {
   NotionEditorEngine,
   type FragmentStatusInfo,
@@ -1400,228 +1395,39 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
         }}
       >
         {/* 1. Document Header & Toolbar */}
-        <div className="editor-top-toolbar">
-          <div className="doc-meta-left">
-            <div
-              className="doc-breadcrumbs-container"
-              style={{ display: "flex", alignItems: "center", gap: "6px" }}
-            >
-              {/* Breadcrumb Path Input / Display */}
-              <div
-                className="doc-breadcrumbs"
-                style={{ display: "flex", alignItems: "center", gap: "4px" }}
-              >
-                <input
-                  type="text"
-                  id="doc-path-input"
-                  className="doc-path-input"
-                  value={
-                    filePath
-                      ? `${activeRepo?.name || "local"}/${filePath.replace(/^\/+/, "")}`
-                      : ""
-                  }
-                  readOnly
-                  placeholder="Selecione ou crie um documento..."
-                  spellCheck="false"
-                  title={`Caminho unificado: ${
-                    filePath
-                      ? `${activeRepo?.name || "local"}/${filePath.replace(/^\/+/, "")}`
-                      : ""
-                  }`}
-                  style={{
-                    width: "280px",
-                    minWidth: "180px",
-                  }}
-                />
-
-                {/* Action: Copiar Caminho Completo */}
-                <button
-                  id="btn-copy-doc-path"
-                  className="btn-icon-subtle"
-                  type="button"
-                  title="Copiar caminho completo (repositório/pasta/arquivo). Segure Alt para copiar URL web completa."
-                  onClick={(e) => {
-                    const fullPath = filePath
-                      ? `${activeRepo?.name || "local"}/${filePath.replace(/^\/+/, "")}`
-                      : "";
-                    if (e.altKey && filePath) {
-                      const currentUrl = window.location.href;
-                      navigator.clipboard.writeText(currentUrl);
-                      setEditorToast({
-                        text: `URL completa copiada: ${currentUrl}`,
-                        type: "info",
-                      });
-                    } else if (fullPath) {
-                      navigator.clipboard.writeText(fullPath);
-                      setEditorToast({
-                        text: `Caminho completo copiado: ${fullPath}`,
-                        type: "info",
-                      });
-                    }
-                    setTimeout(() => setEditorToast(null), 2500);
-                  }}
-                  disabled={!filePath}
-                >
-                  <svg
-                    width="13"
-                    height="13"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <rect
-                      x="9"
-                      y="9"
-                      width="13"
-                      height="13"
-                      rx="2"
-                      ry="2"
-                    ></rect>
-                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                  </svg>
-                </button>
-
-                {/* Action: Revelar na Árvore */}
-                <button
-                  id="btn-reveal-in-tree"
-                  className="btn-icon-subtle"
-                  type="button"
-                  title="Expandir pastas e revelar na árvore de documentos"
-                  onClick={handleRevealInTree}
-                  disabled={!filePath}
-                >
-                  <FolderTree size={14} />
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Native Editor Mode Tabs: Documento vs Prompt do Copilot */}
-          <div
-            className="notion-editor-mode-tabs"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "3px",
-              background: "var(--color-surface-container-high, #f1f5f9)",
-              padding: "3px",
-              borderRadius: "8px",
-              marginLeft: "10px",
-              flexShrink: 0,
-            }}
-          >
-            <button
-              id="tab-mode-document"
-              type="button"
-              className={`notion-tab-btn ${editorTab === "document" ? "active" : ""}`}
-              onClick={() => handleSwitchTab("document")}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "5px",
-                padding: "4px 10px",
-                borderRadius: "6px",
-                border: "none",
-                fontSize: "12px",
-                fontWeight: editorTab === "document" ? 600 : 500,
-                cursor: "pointer",
-                background:
-                  editorTab === "document"
-                    ? "var(--color-surface, #ffffff)"
-                    : "transparent",
-                color:
-                  editorTab === "document"
-                    ? "var(--color-primary, #2563eb)"
-                    : "var(--color-outline, #64748b)",
-                boxShadow:
-                  editorTab === "document"
-                    ? "0 1px 3px rgba(0,0,0,0.1)"
-                    : "none",
-                transition: "all 0.15s ease",
-              }}
-            >
-              <span
-                className="material-symbols-outlined icon-xs"
-                style={{ fontSize: "15px" }}
-              >
-                {isTemplateMode ? "view_quilt" : "description"}
-              </span>
-              <span>
-                {isTemplateMode ? "Conteúdo do Template" : "Documento"}
-              </span>
-            </button>
-
-            <button
-              id="tab-mode-copilot-prompt"
-              type="button"
-              className={`notion-tab-btn ${editorTab === "prompt" ? "active" : ""}`}
-              onClick={() => handleSwitchTab("prompt")}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "5px",
-                padding: "4px 10px",
-                borderRadius: "6px",
-                border: "none",
-                fontSize: "12px",
-                fontWeight: editorTab === "prompt" ? 600 : 500,
-                cursor: "pointer",
-                background:
-                  editorTab === "prompt"
-                    ? "var(--color-surface, #ffffff)"
-                    : "transparent",
-                color:
-                  editorTab === "prompt"
-                    ? "var(--color-primary, #2563eb)"
-                    : "var(--color-outline, #64748b)",
-                boxShadow:
-                  editorTab === "prompt" ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
-                transition: "all 0.15s ease",
-              }}
-            >
-              <span
-                className="material-symbols-outlined icon-xs"
-                style={{ fontSize: "15px" }}
-              >
-                smart_toy
-              </span>
-              <span>Prompt do Copilot</span>
-            </button>
-          </div>
-
-          <div className="editor-actions-right">
-            {/* Seletor de Idiomas & SSOT */}
-            {!isTemplateMode && filePath && (
-              <LanguageSelectorDropdown
-                filePath={filePath}
-                activeLanguage={activeLanguage}
-                onSelectLanguage={handleSelectLanguage}
-                onTranslationCreated={(lang, transContent) => {
-                  setActiveLanguage(lang);
-                  const parsedTrans = parseFrontmatter(transContent);
-                  translationParsedRef.current = parsedTrans;
-                  const bodyContent = parsedTrans.hasFrontmatter
-                    ? parsedTrans.body
-                    : transContent || "";
-                  docBodyRef.current = bodyContent;
-                  setTitleValue(parsedTrans.metadata?.title || "");
-                  if (engineRef.current) {
-                    isInternalChangeRef.current = true;
-                    engineRef.current.setMarkdown(bodyContent);
-                  }
-                  setEditorToast({
-                    text: `Tradução para ${lang.toUpperCase()} criada com sucesso!`,
-                    type: "success",
-                  });
-                  setTimeout(() => setEditorToast(null), 2500);
-                }}
-              />
-            )}
-          </div>
-        </div>
+        <EditorTopToolbar
+          filePath={filePath}
+          repoName={activeRepo?.name}
+          onRevealInTree={handleRevealInTree}
+          onShowToast={(text, type) => {
+            setEditorToast({ text, type });
+            setTimeout(() => setEditorToast(null), 2500);
+          }}
+          editorTab={editorTab}
+          onSwitchTab={handleSwitchTab}
+          isTemplateMode={isTemplateMode}
+          activeLanguage={activeLanguage}
+          onSelectLanguage={handleSelectLanguage}
+          onTranslationCreated={(lang, transContent) => {
+            setActiveLanguage(lang);
+            const parsedTrans = parseFrontmatter(transContent);
+            translationParsedRef.current = parsedTrans;
+            const bodyContent = parsedTrans.hasFrontmatter
+              ? parsedTrans.body
+              : transContent || "";
+            docBodyRef.current = bodyContent;
+            setTitleValue(parsedTrans.metadata?.title || "");
+            if (engineRef.current) {
+              isInternalChangeRef.current = true;
+              engineRef.current.setMarkdown(bodyContent);
+            }
+            setEditorToast({
+              text: `Tradução para ${lang.toUpperCase()} criada com sucesso!`,
+              type: "success",
+            });
+            setTimeout(() => setEditorToast(null), 2500);
+          }}
+        />
 
         {/* Floating Toast Notification */}
         {editorToast && (
@@ -1895,165 +1701,10 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
 
         {/* 2. Body: Either Document Lock Gate, Visual Markdown Diff (Git Mode) or Notion Live Editor */}
         {isDocumentLocked ? (
-          <div
-            className="document-security-lock-gate"
-            id="document-security-lock-gate"
-            style={{
-              flex: 1,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              padding: "32px 16px",
-              background: "var(--color-surface, #ffffff)",
-              overflowY: "auto",
-            }}
-          >
-            <div
-              style={{
-                maxWidth: "460px",
-                width: "100%",
-                padding: "36px 32px",
-                borderRadius: "16px",
-                border: `1px solid ${activeDeptObj?.color || "#ef4444"}35`,
-                background: "var(--color-surface-container-lowest, #ffffff)",
-                boxShadow: "0 14px 36px rgba(0, 0, 0, 0.07)",
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                textAlign: "center",
-                gap: "18px",
-              }}
-            >
-              <div
-                style={{
-                  width: "60px",
-                  height: "60px",
-                  borderRadius: "50%",
-                  backgroundColor: `${activeDeptObj?.color || "#ef4444"}15`,
-                  color: activeDeptObj?.color || "#ef4444",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Lock size={30} />
-              </div>
-
-              <div>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: "8px",
-                    marginBottom: "12px",
-                    flexWrap: "wrap",
-                  }}
-                >
-                  {activeDeptObj && (
-                    <div
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: "6px",
-                        padding: "4px 12px",
-                        borderRadius: "16px",
-                        backgroundColor: `${activeDeptObj.color}18`,
-                        border: `1px solid ${activeDeptObj.color}45`,
-                        color: activeDeptObj.color,
-                        fontSize: "12px",
-                        fontWeight: 700,
-                      }}
-                    >
-                      <span
-                        className="material-symbols-outlined"
-                        style={{ fontSize: "15px" }}
-                      >
-                        {activeDeptObj.icon || "folder"}
-                      </span>
-                      Departamento: {activeDeptObj.name}
-                    </div>
-                  )}
-                </div>
-
-                <h3
-                  style={{
-                    margin: "0 0 8px 0",
-                    fontSize: "19px",
-                    fontWeight: 700,
-                    color: "var(--color-on-surface, #0f172a)",
-                  }}
-                >
-                  Documento Restrito por Governança de Acesso
-                </h3>
-                <p
-                  style={{
-                    margin: "0 0 16px 0",
-                    fontSize: "13px",
-                    color: "var(--color-outline, #64748b)",
-                    lineHeight: "1.6",
-                  }}
-                >
-                  Este documento pertence à pasta restrita{" "}
-                  <strong style={{ color: activeDeptObj?.color || "#6366f1" }}>
-                    {activeDeptObj?.name ||
-                      fileMetadata?.department ||
-                      "Restrita"}
-                  </strong>{" "}
-                  e seu usuário não possui autorização de leitura para este
-                  departamento ou rota no projeto.
-                </p>
-
-                <div
-                  style={{
-                    background: "rgba(99, 102, 241, 0.05)",
-                    border: "1px solid rgba(99, 102, 241, 0.15)",
-                    borderRadius: "10px",
-                    padding: "12px 14px",
-                    fontSize: "12px",
-                    color: "var(--color-outline, #64748b)",
-                    textAlign: "left",
-                    marginBottom: "16px",
-                    lineHeight: "1.5",
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "6px",
-                      fontWeight: 700,
-                      color: "#6366f1",
-                      marginBottom: "4px",
-                    }}
-                  >
-                    <span
-                      className="material-symbols-outlined"
-                      style={{ fontSize: "16px" }}
-                    >
-                      lock
-                    </span>
-                    Como obter acesso a este documento:
-                  </div>
-                  <div>
-                    1. Solicite permissão para o departamento{" "}
-                    <strong>
-                      {activeDeptObj?.name || fileMetadata?.department}
-                    </strong>{" "}
-                    ao Administrador do repositório.
-                    <br />
-                    2. O Administrador pode liberar seu acesso no menu{" "}
-                    <strong>
-                      Governança & Equipe &rarr; Departamentos & Pastas
-                    </strong>
-                    .<br />
-                    3. As permissões são aplicadas automaticamente com base no
-                    seu perfil.
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+          <EditorSecurityLockGate
+            activeDeptObj={activeDeptObj}
+            departmentName={fileMetadata?.department}
+          />
         ) : isGitMode ? (
           <div
             style={{
@@ -2170,98 +1821,16 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
         )}
 
         {/* 3. Editor Status Footer */}
-        <footer className="editor-bottom-bar">
-          <div
-            className="editor-status-left"
-            style={{ display: "flex", alignItems: "center", gap: "8px" }}
-          >
-            <span
-              id="save-draft-status"
-              className="status-indicator"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "5px",
-              }}
-            >
-              {isGitMode ? (
-                <span>Modo Git & Auditoria Ativo</span>
-              ) : isTemplateMode ? (
-                <>
-                  <span
-                    className="material-symbols-outlined icon-xs"
-                    style={{ color: "#10b981" }}
-                  >
-                    bookmark
-                  </span>
-                  <span style={{ color: "#10b981" }}>
-                    {customSaveStatus || "Editor de Template"}
-                  </span>
-                </>
-              ) : saveStatus === "Salvando..." ? (
-                <>
-                  <span
-                    className="material-symbols-outlined icon-xs"
-                    style={{
-                      animation: "spin 1s linear infinite",
-                      color: "var(--primary, #2563eb)",
-                    }}
-                  >
-                    progress_activity
-                  </span>
-                  <span>Salvando no disco...</span>
-                </>
-              ) : saveStatus === "Salvo no disco" ? (
-                <>
-                  <span
-                    className="material-symbols-outlined icon-xs"
-                    style={{ color: "#10b981" }}
-                  >
-                    check_circle
-                  </span>
-                  <span style={{ color: "#10b981" }}>Salvo no disco</span>
-                </>
-              ) : saveStatus === "Erro" && isDirty ? (
-                <>
-                  <span
-                    className="material-symbols-outlined icon-xs"
-                    style={{ color: "#ef4444" }}
-                  >
-                    error
-                  </span>
-                  <span style={{ color: "#ef4444" }}>Erro ao gravar</span>
-                </>
-              ) : (
-                <>
-                  <span
-                    className="material-symbols-outlined icon-xs"
-                    style={{ color: "#10b981" }}
-                  >
-                    cloud_done
-                  </span>
-                  <span>Sincronizado</span>
-                </>
-              )}
-            </span>
-            <span className="status-divider">&bull;</span>
-            <span id="doc-word-count">{wordCount} palavras</span>
-            <span className="status-divider">&bull;</span>
-            <span id="doc-line-count">{lineCount} linhas</span>
-          </div>
-          <div className="editor-status-right">
-            <span style={{ fontSize: "11px", color: "var(--text-dim)" }}>
-              Atalho: <code>Ctrl+S</code> / <code>Cmd+S</code>
-            </span>
-            <button
-              id="btn-reload-doc"
-              className="btn-icon-subtle"
-              title="Recarregar do disco"
-              onClick={onReload}
-            >
-              <span className="material-symbols-outlined icon-xs">refresh</span>
-            </button>
-          </div>
-        </footer>
+        <EditorFooter
+          isGitMode={isGitMode}
+          isTemplateMode={isTemplateMode}
+          customSaveStatus={customSaveStatus}
+          saveStatus={saveStatus}
+          isDirty={isDirty}
+          wordCount={wordCount}
+          lineCount={lineCount}
+          onReload={onReload}
+        />
       </div>
 
       {/* Right Drawer: Document History Timeline & Governance */}
@@ -2277,102 +1846,29 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
         documentMeta={docMetadata}
       />
 
-      {/* Insert / Edit Link Modal */}
-      <InsertLinkModal
-        isOpen={isLinkModalOpen}
-        initialText={linkModalInitialText}
-        initialUrl={linkModalInitialUrl}
-        onClose={() => setIsLinkModalOpen(false)}
-        onConfirm={(url, text) => {
+      {/* Modals & Popovers */}
+      <EditorModalsContainer
+        isLinkModalOpen={isLinkModalOpen}
+        linkModalInitialText={linkModalInitialText}
+        linkModalInitialUrl={linkModalInitialUrl}
+        onCloseLinkModal={() => setIsLinkModalOpen(false)}
+        onConfirmLinkModal={(url, text) => {
           if (linkModalCallbackRef.current) {
             linkModalCallbackRef.current(url, text);
-            // Salvar imediatamente no disco para atualizar dependências e metadados em tempo real
             setTimeout(() => {
               saveCurrentFile();
             }, 80);
           }
           setIsLinkModalOpen(false);
         }}
-      />
-
-      {/* Import Doc Modal */}
-      {isImportModalOpen && (
-        <div
-          id="import-doc-modal"
-          className="modal-backdrop"
-          style={{ display: "flex" }}
-        >
-          <div className="modal-box" style={{ maxWidth: "580px" }}>
-            <div className="modal-header">
-              <div>
-                <h3
-                  style={{
-                    margin: 0,
-                    fontSize: "15px",
-                    fontWeight: 600,
-                    color: "#0f172a",
-                  }}
-                >
-                  Importar Documento
-                </h3>
-                <span style={{ fontSize: "11.5px", color: "#64748b" }}>
-                  Upload de arquivo .md ou colar texto
-                </span>
-              </div>
-              <button
-                id="btn-close-import-modal"
-                className="btn-close"
-                aria-label="Fechar"
-                onClick={() => setIsImportModalOpen(false)}
-              >
-                <span className="material-symbols-outlined icon-sm">close</span>
-              </button>
-            </div>
-            <div
-              className="modal-body"
-              style={{ padding: "18px 22px", gap: "14px" }}
-            >
-              <div className="import-paste-box">
-                <textarea
-                  id="import-paste-textarea"
-                  rows={8}
-                  placeholder="Ou cole seu texto Markdown aqui diretamente..."
-                  value={importText}
-                  onChange={(e) => setImportText(e.target.value)}
-                  style={{ width: "100%", fontFamily: "var(--font-mono)" }}
-                />
-              </div>
-            </div>
-            <div
-              className="modal-footer"
-              style={{
-                display: "flex",
-                justifyContent: "flex-end",
-                gap: "8px",
-              }}
-            >
-              <button
-                className="btn btn-secondary btn-sm"
-                onClick={() => setIsImportModalOpen(false)}
-              >
-                Cancelar
-              </button>
-              <button
-                className="btn btn-primary btn-sm"
-                onClick={handleConfirmPasteImport}
-                disabled={!importText.trim()}
-              >
-                Importar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      {/* Dictionary Modals */}
-      <AddDictionaryTermModal
-        isOpen={isAddTermModalOpen}
-        initialTerm={addTermInitialText}
-        onClose={() => setIsAddTermModalOpen(false)}
+        isImportModalOpen={isImportModalOpen}
+        importText={importText}
+        onImportTextChange={setImportText}
+        onCloseImportModal={() => setIsImportModalOpen(false)}
+        onConfirmPasteImport={handleConfirmPasteImport}
+        isAddTermModalOpen={isAddTermModalOpen}
+        addTermInitialText={addTermInitialText}
+        onCloseAddTermModal={() => setIsAddTermModalOpen(false)}
         onTermCreated={() => {
           if (engineRef.current) {
             engineRef.current.applyDictionaryHighlights();
@@ -2383,12 +1879,9 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
           });
           setTimeout(() => setEditorToast(null), 3000);
         }}
-      />
-
-      <LinkSynonymModal
-        isOpen={isLinkSynonymModalOpen}
-        synonymText={linkSynonymInitialText}
-        onClose={() => setIsLinkSynonymModalOpen(false)}
+        isLinkSynonymModalOpen={isLinkSynonymModalOpen}
+        linkSynonymInitialText={linkSynonymInitialText}
+        onCloseLinkSynonymModal={() => setIsLinkSynonymModalOpen(false)}
         onSynonymLinked={() => {
           if (engineRef.current) {
             engineRef.current.applyDictionaryHighlights();
@@ -2399,28 +1892,17 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
           });
           setTimeout(() => setEditorToast(null), 3000);
         }}
-      />
-
-      <DictionaryPopover
-        data={dictionaryPopoverData}
-        onClose={() => setDictionaryPopoverData(null)}
-      />
-
-      {/* Sync Translation to Main Modal */}
-      <SyncTranslationModal
-        isOpen={isSyncModalOpen}
-        onClose={() => setIsSyncModalOpen(false)}
-        preview={syncPreview}
-        onConfirmApply={handleConfirmApplyToMain}
-      />
-
-      {/* Merge Conflict Resolution Modal */}
-      <MergeConflictResolutionModal
-        isOpen={isConflictModalOpen}
-        onClose={() => setIsConflictModalOpen(false)}
-        filePath={filePath || "documento.md"}
-        content={conflictBundleText || content}
-        onSaveResolved={async (resolvedContent) => {
+        dictionaryPopoverData={dictionaryPopoverData}
+        onCloseDictionaryPopover={() => setDictionaryPopoverData(null)}
+        isSyncModalOpen={isSyncModalOpen}
+        onCloseSyncModal={() => setIsSyncModalOpen(false)}
+        syncPreview={syncPreview}
+        onConfirmApplyToMain={handleConfirmApplyToMain}
+        isConflictModalOpen={isConflictModalOpen}
+        onCloseConflictModal={() => setIsConflictModalOpen(false)}
+        filePath={filePath}
+        conflictContent={conflictBundleText || content}
+        onSaveResolvedConflict={async (resolvedContent) => {
           if (prId && filePath) {
             try {
               const res = await API.resolvePRConflict({

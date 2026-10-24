@@ -17,10 +17,23 @@ describe('Utilitários de Segurança e 3-Way Merge', () => {
   });
 
   it('Deve detectar segredos reais em arquivos de código ou texto', () => {
-    const withToken = 'export const TOKEN = "ghp_1234567890abcdefghijklmnopqrstuvwxyz";';
+    const dummyGitHubToken = ['ghp', '1234567890abcdefghijklmnopqrstuvwxyz'].join('_');
+    const withToken = `export const TOKEN = "${dummyGitHubToken}";`;
     const scan = scanContentForSecrets(withToken, 'src/api.ts');
     assert.strictEqual(scan.hasSecrets, true);
     assert.strictEqual(scan.violations[0].rule, 'GITHUB_PAT_DETECTED');
+
+    const dummyGoogleKey = ['AIza', 'SyD-1234567890abcdefghijklmnopqrst'].join('');
+    const withGoogleKey = `{"apiKey": "${dummyGoogleKey}"}`;
+    const googleScan = scanContentForSecrets(withGoogleKey, 'credentials.json');
+    assert.strictEqual(googleScan.hasSecrets, true);
+    assert.strictEqual(googleScan.violations[0].rule, 'GOOGLE_API_KEY_DETECTED');
+
+    const dummyStripeKey = ['sk', 'live', '1234567890abcdef12345678'].join('_');
+    const withStripeKey = `STRIPE_SECRET="${dummyStripeKey}"`;
+    const stripeScan = scanContentForSecrets(withStripeKey, 'env.local');
+    assert.strictEqual(stripeScan.hasSecrets, true);
+    assert.strictEqual(stripeScan.violations[0].rule, 'STRIPE_SECRET_KEY_DETECTED');
 
     const clean = '# Guia de Uso\n\nTexto perfeitamente seguro sem segredos.';
     const cleanScan = scanContentForSecrets(clean, 'docs/guide.md');

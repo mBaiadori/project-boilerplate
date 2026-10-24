@@ -26,7 +26,7 @@ import { workspaceRoutes } from "./modules/workspace/workspace.routes.js";
 export async function buildApp(): Promise<FastifyInstance> {
   const isDev = process.env.NODE_ENV === "development";
   const app = fastify({
-    bodyLimit: 50 * 1024 * 1024, // 50MB limit for importing documents, spreadsheets, PDFs and media
+    bodyLimit: 2 * 1024 * 1024, // 2MB safe global default for standard JSON requests (prevents memory DoS)
     logger: isDev
       ? {
           level: "info",

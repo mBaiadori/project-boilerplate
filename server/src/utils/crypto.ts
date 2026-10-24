@@ -96,15 +96,18 @@ export function scanContentForSecrets(content: string, filePath: string): Secret
     return { hasSecrets: false, violations };
   }
 
-  // Ignore internal system memory, caches and git metadata
+  // Ignore internal system memory, caches, dependencies and build artifacts
   const cleanPath = (filePath || '').replace(/\\/g, '/');
-  if (
+  const isSystemFile = 
     cleanPath.includes('.spec-memory') ||
-    cleanPath.includes('.git') ||
-    cleanPath.endsWith('.json') ||
-    cleanPath.includes('.keymap') ||
-    cleanPath.includes('node_modules')
-  ) {
+    cleanPath.includes('.git/') ||
+    cleanPath.includes('/node_modules/') ||
+    cleanPath.includes('/dist/') ||
+    cleanPath.endsWith('package.json') ||
+    cleanPath.endsWith('package-lock.json') ||
+    cleanPath.endsWith('tsconfig.json');
+
+  if (isSystemFile) {
     return { hasSecrets: false, violations };
   }
 
@@ -117,8 +120,8 @@ export function scanContentForSecrets(content: string, filePath: string): Secret
     });
   }
 
-  // Check 2: OpenAI / Anthropic / Generic API Keys
-  if (/sk-[A-Za-z0-9_-]{20,80}/.test(content) || /sk-ant-[A-Za-z0-9_-]{20,100}/.test(content)) {
+  // Check 2: OpenAI / Anthropic / Generic AI API Keys
+  if (/\bsk-[A-Za-z0-9_-]{20,80}\b/.test(content) || /\bsk-ant-[A-Za-z0-9_-]{20,100}\b/.test(content)) {
     violations.push({
       rule: 'AI_API_KEY_DETECTED',
       file: filePath,
@@ -126,7 +129,34 @@ export function scanContentForSecrets(content: string, filePath: string): Secret
     });
   }
 
-  // Check 3: AWS Access Keys
+  // Check 3: Google AI / Cloud API Keys
+  if (/\bAIza[0-9A-Za-z-_]{30,45}\b/.test(content)) {
+    violations.push({
+      rule: 'GOOGLE_API_KEY_DETECTED',
+      file: filePath,
+      message: 'Chave de API do Google Cloud / Gemini detectada no arquivo.',
+    });
+  }
+
+  // Check 4: Slack Tokens
+  if (/\bxox[baprs]-[0-9a-zA-Z-]{10,48}\b/.test(content)) {
+    violations.push({
+      rule: 'SLACK_TOKEN_DETECTED',
+      file: filePath,
+      message: 'Token de API do Slack detectado no arquivo.',
+    });
+  }
+
+  // Check 5: Stripe Secret Keys
+  if (/\b(?:sk|rk)_(?:test|live)_[0-9a-zA-Z]{24,}\b/.test(content)) {
+    violations.push({
+      rule: 'STRIPE_SECRET_KEY_DETECTED',
+      file: filePath,
+      message: 'Chave Secreta do Stripe detectada no arquivo.',
+    });
+  }
+
+  // Check 6: AWS Access Keys
   if (/(?:AKIA|ABIA|ACCA|ASIA)[A-Z0-9]{16}/.test(content)) {
     violations.push({
       rule: 'AWS_CREDENTIAL_DETECTED',
@@ -135,7 +165,7 @@ export function scanContentForSecrets(content: string, filePath: string): Secret
     });
   }
 
-  // Check 4: Private RSA / SSH Keys
+  // Check 7: Private RSA / SSH Keys
   if (/-----BEGIN (?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----/.test(content)) {
     violations.push({
       rule: 'PRIVATE_KEY_DETECTED',

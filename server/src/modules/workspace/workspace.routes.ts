@@ -164,7 +164,7 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
     }
   });
 
-  fastify.post("/api/workspace/save", async (request, reply) => {
+  fastify.post("/api/workspace/save", { bodyLimit: 50 * 1024 * 1024 }, async (request, reply) => {
     const body = request.body as {
       path?: string;
       content?: string;
@@ -241,7 +241,7 @@ export async function workspaceRoutes(fastify: FastifyInstance) {
     }
   });
 
-  fastify.post("/api/project/files/import", async (request, reply) => {
+  fastify.post("/api/project/files/import", { bodyLimit: 50 * 1024 * 1024 }, async (request, reply) => {
     const body = request.body as {
       target_folder?: string;
       targetFolder?: string;
