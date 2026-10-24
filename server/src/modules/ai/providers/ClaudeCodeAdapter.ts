@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import { IAgentProvider, ProviderCapabilities, ProviderId, ProviderMessage, ProviderMode, ProviderSessionConfig, ProviderStatus, ProviderStreamEvent } from './provider.types.js';
 import { PROJECTS_DIR, resolveRepoDir } from '../../../config/constants.js';
 import { loadConfig } from '../../../config/storage.js';
+import { validateCliExecutable } from '../../../utils/cli-validate.js';
 
 interface ActiveProcessSession {
   config: ProviderSessionConfig;
@@ -33,8 +34,11 @@ export class ClaudeCodeAdapter implements IAgentProvider {
   private resolveCliPath(): string | null {
     const cfg = loadConfig();
     const customPath = (cfg.settings as any)?.claude_cli_path || process.env.CLAUDE_CLI_PATH;
-    if (customPath && fs.existsSync(customPath)) {
-      return customPath;
+    if (customPath) {
+      const val = validateCliExecutable(customPath, ['claude']);
+      if (val.valid && val.realPath) {
+        return val.realPath;
+      }
     }
 
     const possiblePaths = [
@@ -44,8 +48,9 @@ export class ClaudeCodeAdapter implements IAgentProvider {
     ];
 
     for (const p of possiblePaths) {
-      if (fs.existsSync(p)) {
-        return p;
+      const val = validateCliExecutable(p, ['claude']);
+      if (val.valid && val.realPath) {
+        return val.realPath;
       }
     }
     return null;

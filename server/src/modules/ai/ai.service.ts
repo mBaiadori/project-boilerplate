@@ -9,6 +9,8 @@ import { toolRegistry } from './tools/ToolRegistry.js';
 import { ToolCallExecutionRecord } from './tools/tool.types.js';
 import { estimateTokens, calculateTokenCost } from './tokens.helper.js';
 import { wikiService } from '../wiki/wiki.service.js';
+import { checkAiPolicy } from './ai-policy.service.js';
+import { recordAuditEvent } from '../audit/audit-chain.service.js';
 
 export interface ChatMessage {
   role: 'user' | 'model' | 'assistant' | 'system';
@@ -157,6 +159,34 @@ export class AIService {
     const executionContext = { repoName, filePath };
     const executedToolRecords: ToolCallExecutionRecord[] = [];
     const maxSteps = 5;
+
+    // Validação da Política de IA / LGPD antes de disparar chamada
+    const policy = checkAiPolicy({
+      repoName,
+      filePath,
+      provider,
+    });
+    if (!policy.allowed) {
+      return {
+        reply: `🛡️ ${policy.reason || "Operação bloqueada pela Política de Privacidade LGPD do projeto."}`,
+        provider,
+        model,
+        duration_ms: Date.now() - startTime,
+        usage: {
+          prompt_tokens: 0,
+          completion_tokens: 0,
+          total_tokens: 0,
+          cost_usd: 0,
+          is_estimated: true,
+        },
+      };
+    }
+
+    recordAuditEvent(repoName, {
+      eventType: "ai_request",
+      user: activeUser,
+      payload: { provider, model, filePath, promptLength: prompt.length },
+    }).catch(() => {});
 
     // ──────────────────────────────────────────────────────────────────────────
     // 1. Google Gemini (com suporte a Function Calling e Retry)
