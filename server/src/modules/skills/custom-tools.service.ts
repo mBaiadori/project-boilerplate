@@ -10,7 +10,7 @@ import { CustomToolDefinition, ProjectToolsManifest } from './skills.types.js';
 import { ToolResult } from '../ai/tools/tool.types.js';
 import { validateUrlForSSRF } from '../../utils/ssrf-guard.js';
 import { runIsolatedScript } from './script-runner.js';
-import { writeJsonAtomic } from '../../utils/atomic-write.js';
+import { writeJsonAtomic, writeTextAtomic } from '../../utils/atomic-write.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -141,7 +141,11 @@ export class CustomToolsService {
     const safeRepo = getSafeRepo(repoName);
     const key = `${safeRepo}:${toolId}`;
     const approvals = this.loadApprovals();
-    const resolvedUser = approvedBy || loadConfig().user?.login || 'user';
+    const systemUser = os.userInfo().username || 'operator';
+    const resolvedUser =
+      approvedBy && approvedBy !== 'user'
+        ? approvedBy
+        : `operator:${systemUser}`;
     approvals[key] = {
       hash: expectedHash,
       approved_at: new Date().toISOString(),
@@ -184,7 +188,7 @@ export class CustomToolsService {
       fs.mkdirSync(toolsDir, { recursive: true });
     }
     const manifestPath = this.getManifestPath(repoName);
-    fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), 'utf-8');
+    writeJsonAtomic(manifestPath, manifest, 2);
   }
 
   public getProjectTools(repoName: string): CustomToolDefinition[] {
@@ -251,9 +255,9 @@ export class CustomToolsService {
     if (!fs.existsSync(toolDir)) {
       fs.mkdirSync(toolDir, { recursive: true });
     }
-    fs.writeFileSync(path.join(toolDir, 'tool.json'), JSON.stringify(cleanTool, null, 2), 'utf-8');
+    writeJsonAtomic(path.join(toolDir, 'tool.json'), cleanTool, 2);
     if (cleanTool.handler_type === 'javascript' && cleanTool.handler_code) {
-      fs.writeFileSync(path.join(toolDir, 'handler.js'), cleanTool.handler_code, 'utf-8');
+      writeTextAtomic(path.join(toolDir, 'handler.js'), cleanTool.handler_code);
     }
 
     recordChange(

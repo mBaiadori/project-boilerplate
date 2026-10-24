@@ -269,6 +269,7 @@ export async function skillsRoutes(fastify: FastifyInstance) {
   fastify.post('/api/aicenter/custom-tools/:id/approve', async (request, reply) => {
     const params = request.params as { id: string };
     const body = (request.body as { expected_hash?: string; repo?: string }) || {};
+    const confirmHeader = request.headers['x-contextos-confirm'] as string | undefined;
     const cfg = loadConfig();
     const repoName = body.repo || cfg.active_repo?.name || 'local';
     const { customToolsService, computeToolHash } = await import('./custom-tools.service.js');
@@ -279,13 +280,18 @@ export async function skillsRoutes(fastify: FastifyInstance) {
     }
 
     const currentHash = computeToolHash(tool);
-    if (body.expected_hash && body.expected_hash !== currentHash) {
-      return reply.status(400).send({
-        error: `Hash fornecido (${body.expected_hash.slice(0, 8)}) não corresponde ao hash atual da ferramenta (${currentHash.slice(0, 8)}).`,
+
+    // Validação estrita de confirmação com hash (Fase 1 - S4)
+    if (!confirmHeader || confirmHeader !== currentHash) {
+      return reply.status(409).send({
+        error: 'Aprovação de ferramenta exige confirmação explícita via cabeçalho X-ContextOS-Confirm com o hash atual do manifesto.',
+        required_hash: currentHash,
+        provided_hash: confirmHeader || null,
+        tool_id: tool.id,
       });
     }
 
-    const userLogin = cfg.user?.login || 'user';
+    const userLogin = cfg.user?.login ? `ui:${cfg.user.login}` : undefined;
     customToolsService.approveTool(repoName, tool.id, currentHash, userLogin);
 
     return reply.send({

@@ -253,7 +253,8 @@ describe('Segurança de Custom Tools (Fase 2 - N2)', () => {
 
       const res = await customToolsService.executeCustomTool(escapeSandboxTool, {}, { repoName });
       const data = res.data as any;
-      assert.strictEqual(data?.hasProcess, false);
+      assert.strictEqual(Boolean(data?.hasProcess), false);
+      assert.ok(data?.hasProcess === false || data?.error, 'Código hostil deve retornar hasProcess=false ou ser bloqueado com erro');
     });
 
     it('deve bloquear leitura de symlink que aponta para fora do repositório', async () => {

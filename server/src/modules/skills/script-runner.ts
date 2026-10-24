@@ -25,8 +25,10 @@ export async function runIsolatedScript(options: ScriptExecutionOptions): Promis
   const { code, args, context, safeRepoDir, timeoutMs = 15000 } = options;
 
   const tempId = crypto.randomBytes(16).toString('hex');
-  const tempDir = path.join(os.tmpdir(), `context-os-script-${tempId}`);
-  fs.mkdirSync(tempDir, { recursive: true, mode: 0o700 });
+  const rawTempDir = path.join(os.tmpdir(), `context-os-script-${tempId}`);
+  fs.mkdirSync(rawTempDir, { recursive: true, mode: 0o700 });
+  const tempDir = fs.realpathSync(rawTempDir);
+  const resolvedRepoDir = fs.existsSync(safeRepoDir) ? fs.realpathSync(safeRepoDir) : safeRepoDir;
 
   const payloadPath = path.join(tempDir, 'payload.json');
   const runnerScriptPath = path.join(tempDir, 'runner.mjs');
@@ -35,7 +37,7 @@ export async function runIsolatedScript(options: ScriptExecutionOptions): Promis
     code,
     args,
     context,
-    safeRepoDir,
+    safeRepoDir: resolvedRepoDir,
   };
 
   fs.writeFileSync(payloadPath, JSON.stringify(payload), { encoding: 'utf-8', mode: 0o600 });
@@ -58,19 +60,39 @@ function assertSafeRepoPath(full) {
   if (!isPathInside(safeRepoDir, full) && full !== safeRepoDir) {
     throw new Error('Acesso negado: fora do diretório do projeto.');
   }
-  if (fs.existsSync(full)) {
-    const real = fs.realpathSync(full);
-    if (!isPathInside(safeRepoDir, real) && real !== safeRepoDir) {
-      throw new Error('Acesso negado: symlink para fora do diretório do projeto.');
+  let curr = full;
+  while (curr && curr !== safeRepoDir && curr !== path.dirname(curr)) {
+    if (fs.existsSync(curr)) {
+      const real = fs.realpathSync(curr);
+      if (!isPathInside(safeRepoDir, real) && real !== safeRepoDir) {
+        throw new Error('Acesso negado: symlink para fora do diretório do projeto.');
+      }
     }
+    curr = path.dirname(curr);
   }
 }
 
+// Bloqueia acesso à rede global dentro do realm
+delete globalThis.fetch;
+
+// Cria sandbox isolada sem protótipos do realm pai (host)
+const sandbox = Object.create(null);
+sandbox.args = args;
+sandbox.context = context;
+
+const scriptContext = vm.createContext(sandbox, {
+  codeGeneration: { strings: false, wasm: false },
+});
+
+// Extrai instâncias intrínsecas ao próprio contexto para evitar vazamento do realm do host
+const intrinsic = vm.runInContext('({ JSON, Math, Date })', scriptContext);
+
 const safeUtils = Object.freeze({
-  JSON,
-  Math,
-  Date,
-  Buffer,
+  JSON: intrinsic.JSON,
+  Math: intrinsic.Math,
+  Date: intrinsic.Date,
+  toBase64: (str) => Buffer.from(String(str || ''), 'utf-8').toString('base64'),
+  fromBase64: (b64) => Buffer.from(String(b64 || ''), 'base64').toString('utf-8'),
   readProjectFile: (relPath) => {
     const full = path.resolve(safeRepoDir, String(relPath || '').replace(/^\\/+/, ''));
     assertSafeRepoPath(full);
@@ -92,21 +114,14 @@ const safeUtils = Object.freeze({
   },
 });
 
-const sandbox = {
-  args,
-  context,
-  utils: safeUtils,
-  console: {
-    log: (...a) => {},
-    warn: (...a) => {},
-    error: (...a) => {},
-  },
-  setTimeout,
-  clearTimeout,
-  Promise,
-};
+sandbox.utils = safeUtils;
+sandbox.console = Object.freeze({
+  log: (...a) => {},
+  warn: (...a) => {},
+  error: (...a) => {},
+});
 
-const scriptContext = vm.createContext(sandbox);
+Object.setPrototypeOf(sandbox, null);
 
 const wrappedSource = \`(async () => {
   \${code}
@@ -117,13 +132,7 @@ try {
     filename: 'custom-tool.js',
     timeout: ${timeoutMs},
   });
-  const resultPromise = script.runInContext(scriptContext);
-  let timer;
-  const timeoutPromise = new Promise((_, reject) => {
-    timer = setTimeout(() => reject(new Error('Timeout de execução excedido')), ${timeoutMs});
-  });
-  const result = await Promise.race([resultPromise, timeoutPromise]);
-  if (timer) clearTimeout(timer);
+  const result = await script.runInContext(scriptContext);
   process.stdout.write(JSON.stringify({ success: true, result }));
   process.exit(0);
 } catch (err) {
@@ -137,11 +146,22 @@ try {
   try {
     const { stdout, stderr } = await execFileAsync(
       process.execPath,
-      ['--max-old-space-size=128', '--no-addons', runnerScriptPath],
+      [
+        '--permission',
+        `--allow-fs-read=${tempDir}`,
+        `--allow-fs-read=${rawTempDir}`,
+        `--allow-fs-read=${resolvedRepoDir}`,
+        `--allow-fs-read=${safeRepoDir}`,
+        `--allow-fs-write=${resolvedRepoDir}`,
+        `--allow-fs-write=${safeRepoDir}`,
+        '--max-old-space-size=128',
+        '--no-addons',
+        runnerScriptPath,
+      ],
       {
         shell: false,
         timeout: timeoutMs + 2000,
-        maxBuffer: 2 * 1024 * 1024,
+        maxBuffer: 1024 * 1024,
         env: {
           NODE_ENV: 'production',
           PATH: process.env.PATH || '',
