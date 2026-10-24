@@ -39,18 +39,14 @@ export function isSafeUrl(rawUrl: string): boolean {
   }
 }
 
-/**
- * Escapa caracteres HTML perigosos em strings para renderização segura.
- */
-export function escapeHtml(text: string): string {
-  if (!text) return '';
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
-}
+export { escapeHtml } from './html-escape';
+
+// Força rel="noopener noreferrer" em links target="_blank" para mitigar tabnabbing
+DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+  if (node.tagName === 'A' && node.getAttribute('target') === '_blank') {
+    node.setAttribute('rel', 'noopener noreferrer');
+  }
+});
 
 /**
  * Sanitiza com segurança strings de HTML geradas a partir de Markdown, diffs ou respostas de IA
@@ -59,17 +55,17 @@ export function escapeHtml(text: string): string {
 export function sanitizeHtml(rawHtml: string): string {
   if (!rawHtml) return '';
   return DOMPurify.sanitize(rawHtml, {
-    USE_PROFILES: { html: true },
+    FORBID_ATTR: ['style'],
     ADD_TAGS: [
       'mark', 'ins', 'del', 'table', 'thead', 'tbody', 'tr', 'th', 'td',
       'details', 'summary', 'blockquote', 'code', 'pre', 'span', 'input',
     ],
     ADD_ATTR: [
-      'target', 'rel', 'class', 'style', 'data-type', 'data-indent',
+      'target', 'rel', 'class', 'data-type', 'data-indent',
       'data-mermaid-code', 'type', 'checked', 'spellcheck', 'contenteditable',
       'data-term-key', 'data-id', 'id',
     ],
-    ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto|tel):|#|\/|\.\/|\.\.\/)/i,
+    ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto|tel):|#|\/|\.\/|\.\.\/|_blank|_self|_parent|_top)/i,
   });
 }
 

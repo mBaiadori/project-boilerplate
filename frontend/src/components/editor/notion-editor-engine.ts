@@ -1419,22 +1419,71 @@ export class NotionEditorEngine {
 
   parseInlineMarkdown(text: string): string {
     if (!text) return '<br>';
-    return text
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-      .replace(/\*(.*?)\*/g, '<em>$1</em>')
-      .replace(/~~(.*?)~~/g, '<s>$1</s>')
-      .replace(/`([^`]+)`/g, '<code>$1</code>')
-      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_match, label, href) => {
-        // Remover prefixo residual 'description' decorrente da ligature do ícone
-        const cleanLabel = (label || '').replace(/^description(?=[a-zA-Z0-9_\sÀ-ÿ])/i, '').trim() || label;
-        const trimmedHref = (href || '').trim();
-        const safeTargetHref = isSafeUrl(trimmedHref) ? escapeHtml(trimmedHref) : '#';
-        const isDoc = trimmedHref.endsWith('.md') || trimmedHref.includes('.md#') || trimmedHref.includes(':~:text=') || trimmedHref.startsWith('#');
-        return `<a href="${safeTargetHref}" class="${isDoc ? 'notion-doc-link' : ''}" target="${isDoc ? '_self' : '_blank'}">${cleanLabel}</a>`;
-      });
+
+    // 1. Pass: Tokenizar trechos de código inline `...`
+    const codeTokens: string[] = [];
+    let processed = text.replace(/`([^`]+)`/g, (_m, code) => {
+      const idx = codeTokens.length;
+      codeTokens.push(`<code>${escapeHtml(code)}</code>`);
+      return `\x00CODE_${idx}\x00`;
+    });
+
+    // 2. Pass: Tokenizar links [label](url) com suporte a parênteses balanceados na URL
+    const linkTokens: string[] = [];
+    let linkProcessed = '';
+    let i = 0;
+    while (i < processed.length) {
+      if (processed[i] === '[') {
+        const labelClose = processed.indexOf(']', i + 1);
+        if (labelClose !== -1 && processed[labelClose + 1] === '(') {
+          const rawLabel = processed.substring(i + 1, labelClose);
+          let depth = 1;
+          let j = labelClose + 2;
+          while (j < processed.length && depth > 0) {
+            if (processed[j] === '(') depth++;
+            else if (processed[j] === ')') depth--;
+            j++;
+          }
+          if (depth === 0) {
+            const rawHref = processed.substring(labelClose + 2, j - 1);
+            const tokenIdx = linkTokens.length;
+
+            const cleanLabel = (rawLabel || '').replace(/^description(?=[a-zA-Z0-9_\sÀ-ÿ])/i, '').trim() || rawLabel;
+            const trimmedHref = (rawHref || '').trim();
+            const safeTargetHref = isSafeUrl(trimmedHref) ? escapeHtml(trimmedHref) : '#';
+            const isExternal = /^[a-z][a-z0-9+.-]*:/i.test(trimmedHref);
+            const isDoc = !isExternal && (trimmedHref.endsWith('.md') || trimmedHref.includes('.md#') || trimmedHref.startsWith('#') || trimmedHref.includes(':~:text='));
+
+            const formattedLabel = escapeHtml(cleanLabel);
+            const linkHtml = `<a href="${safeTargetHref}" class="${isDoc ? 'notion-doc-link' : ''}" target="${isDoc ? '_self' : '_blank'}"${!isDoc ? ' rel="noopener noreferrer"' : ''}>${formattedLabel}</a>`;
+            linkTokens.push(linkHtml);
+            linkProcessed += `\x00LINK_${tokenIdx}\x00`;
+            i = j;
+            continue;
+          }
+        }
+      }
+      linkProcessed += processed[i];
+      i++;
+    }
+    processed = linkProcessed;
+
+    // 3. Pass: Escapar HTML nos fragmentos de texto comuns fora de tokens
+    processed = escapeHtml(processed);
+
+    // 4. Pass: Formatação inline sobre o texto já escapado
+    // Negrito **texto**
+    processed = processed.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    // Tachado ~~texto~~
+    processed = processed.replace(/~~(.*?)~~/g, '<s>$1</s>');
+    // Itálico *texto* (protege expressões aritméticas como 2*3*4)
+    processed = processed.replace(/(^|[^\w\\])\*([^\s*](?:[\s\S]*?[^\s*])?)\*(?=[^\w\\]|$)/g, '$1<em>$2</em>');
+
+    // 5. Pass: Restaurar tokens de links e código
+    processed = processed.replace(/\x00LINK_(\d+)\x00/g, (_m, id) => linkTokens[Number(id)]);
+    processed = processed.replace(/\x00CODE_(\d+)\x00/g, (_m, id) => codeTokens[Number(id)]);
+
+    return processed;
   }
 
   serializeNode(node: Node | null): string {
@@ -2347,16 +2396,20 @@ export class NotionEditorEngine {
         if (this.onOpenLinkModal) {
           this.onOpenLinkModal('', (url, text) => {
             if (!url) return;
-            const isDoc = url.endsWith('.md') || url.includes('.md#') || url.includes(':~:text=') || url.startsWith('#');
+            const trimmedUrl = url.trim();
+            const isExternal = /^[a-z][a-z0-9+.-]*:/i.test(trimmedUrl);
+            const isDoc = !isExternal && (trimmedUrl.endsWith('.md') || trimmedUrl.includes('.md#') || trimmedUrl.includes(':~:text=') || trimmedUrl.startsWith('#'));
+            const safeHref = isSafeUrl(trimmedUrl) ? trimmedUrl : '#';
             const label = text || url;
             
             const anchor = document.createElement('a');
-            anchor.setAttribute('href', url);
+            anchor.setAttribute('href', safeHref);
             if (isDoc) {
               anchor.className = 'notion-doc-link';
               anchor.target = '_self';
             } else {
               anchor.target = '_blank';
+              anchor.rel = 'noopener noreferrer';
             }
             anchor.textContent = label;
 
@@ -2374,7 +2427,7 @@ export class NotionEditorEngine {
                 sel.addRange(newRange);
               }
             } else {
-              this.insertBlockHtml(`<p><a href="${escapeHtml(url)}" class="${isDoc ? 'notion-doc-link' : ''}" target="${isDoc ? '_self' : '_blank'}">${escapeHtml(label)}</a></p>`);
+              this.insertBlockHtml(`<p><a href="${escapeHtml(safeHref)}" class="${isDoc ? 'notion-doc-link' : ''}" target="${isDoc ? '_self' : '_blank'}"${!isDoc ? ' rel="noopener noreferrer"' : ''}>${escapeHtml(label)}</a></p>`);
             }
 
             this.attachInteractiveListeners();

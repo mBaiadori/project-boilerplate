@@ -16,17 +16,7 @@ export interface DiffLineItem {
   content: string;
 }
 
-/**
- * Escapes HTML characters to prevent XSS during custom diff injections.
- */
-export function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
-}
+export { escapeHtml } from './html-escape';
 
 /**
  * Computes statistics on added and removed words and lines.
