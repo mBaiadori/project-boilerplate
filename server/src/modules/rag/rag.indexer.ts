@@ -3,6 +3,7 @@ import path from 'node:path';
 import { PROJECTS_DIR, resolveRepoDir } from '../../config/constants.js';
 import { RagChunk, RagDiskStorage, RagFileManifestItem } from './rag.types.js';
 import { writeJsonAtomic } from '../../utils/atomic-write.js';
+import { checkAiPolicy } from '../ai/ai-policy.service.js';
 
 // Normalizador e Tokenizador Simples e Rápido
 export function tokenizeText(text: string): string[] {
@@ -31,8 +32,8 @@ export class RagIndexer {
     '.md', '.markdown', '.txt', '.json', '.yaml', '.yml', '.csv', '.mermaid', '.ts', '.js'
   ]);
 
-  private getDiskIndexPath(repoName: string): string {
-    const projectRoot = resolveRepoDir(repoName || 'local');
+  private getDiskIndexPath(repoName: string, explicitProjectRoot?: string): string {
+    const projectRoot = explicitProjectRoot || resolveRepoDir(repoName || 'local');
     const memoryDir = path.join(projectRoot, '.spec-memory');
     if (!fs.existsSync(memoryDir)) {
       try {
@@ -45,8 +46,8 @@ export class RagIndexer {
   /**
    * Carrega o índice persistido do disco em .spec-memory/rag-index.json
    */
-  loadDiskIndex(repoName: string): RagDiskStorage | null {
-    const indexPath = this.getDiskIndexPath(repoName);
+  loadDiskIndex(repoName: string, explicitProjectRoot?: string): RagDiskStorage | null {
+    const indexPath = this.getDiskIndexPath(repoName, explicitProjectRoot);
     if (!fs.existsSync(indexPath)) return null;
 
     try {
@@ -64,8 +65,8 @@ export class RagIndexer {
   /**
    * Salva o índice consolidado no disco
    */
-  saveDiskIndex(repoName: string, data: RagDiskStorage): void {
-    const indexPath = this.getDiskIndexPath(repoName);
+  saveDiskIndex(repoName: string, data: RagDiskStorage, explicitProjectRoot?: string): void {
+    const indexPath = this.getDiskIndexPath(repoName, explicitProjectRoot);
     try {
       writeJsonAtomic(indexPath, data, 2);
     } catch (err) {
@@ -76,13 +77,13 @@ export class RagIndexer {
   /**
    * Indexação Incremental com controle por mtime e manifesto de arquivos
    */
-  indexRepositoryIncremental(repoName: string): { chunks: RagChunk[]; indexedFiles: string[]; updatedCount: number } {
-    const projectRoot = resolveRepoDir(repoName || 'local');
+  indexRepositoryIncremental(repoName: string, explicitProjectRoot?: string): { chunks: RagChunk[]; indexedFiles: string[]; updatedCount: number } {
+    const projectRoot = explicitProjectRoot || resolveRepoDir(repoName || 'local');
     if (!fs.existsSync(projectRoot)) {
       return { chunks: [], indexedFiles: [], updatedCount: 0 };
     }
 
-    const diskCache = this.loadDiskIndex(repoName);
+    const diskCache = this.loadDiskIndex(repoName, projectRoot);
     const existingManifest: Record<string, RagFileManifestItem> = diskCache?.manifest || {};
     const existingChunksMap = new Map<string, RagChunk>();
 
@@ -103,6 +104,17 @@ export class RagIndexer {
       try {
         const stat = fs.statSync(fullPath);
         if (stat.size > 1024 * 1024) continue; // Pula arquivos > 1MB
+
+        // Consulta de privacidade LGPD: documentos restritos/confidenciais são excluídos do RAG
+        const privacyPolicy = checkAiPolicy({
+          projectRoot,
+          repoName,
+          filePath: relFile,
+          provider: 'rag',
+        });
+        if (!privacyPolicy.allowed || privacyPolicy.policy === 'deny') {
+          continue;
+        }
 
         const prevManifest = existingManifest[relFile];
         // SE o arquivo NÃO foi alterado no disco (mtime e tamanho idênticos)
@@ -141,7 +153,7 @@ export class RagIndexer {
       lastIndexedAt: Date.now(),
       manifest: newManifest,
       chunks: finalChunks,
-    });
+    }, projectRoot);
 
     return { chunks: finalChunks, indexedFiles: currentFiles, updatedCount };
   }
@@ -149,11 +161,21 @@ export class RagIndexer {
   /**
    * Indexa apenas um único arquivo pontual quando o evento do chokidar avisar
    */
-  indexSingleFile(repoName: string, relativePath: string): { chunks: RagChunk[]; updated: boolean } {
-    const projectRoot = resolveRepoDir(repoName || 'local');
+  indexSingleFile(repoName: string, relativePath: string, explicitProjectRoot?: string): { chunks: RagChunk[]; updated: boolean } {
+    const projectRoot = explicitProjectRoot || resolveRepoDir(repoName || 'local');
     const fullPath = path.join(projectRoot, relativePath);
 
     if (!fs.existsSync(fullPath)) {
+      return { chunks: [], updated: false };
+    }
+
+    const privacyPolicy = checkAiPolicy({
+      projectRoot,
+      repoName,
+      filePath: relativePath,
+      provider: 'rag',
+    });
+    if (!privacyPolicy.allowed || privacyPolicy.policy === 'deny') {
       return { chunks: [], updated: false };
     }
 

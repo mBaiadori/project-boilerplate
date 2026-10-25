@@ -9,6 +9,7 @@ import {
   verifyAuditChain,
 } from "../modules/audit/audit-chain.service.js";
 import { validateCliExecutable } from "../utils/cli-validate.js";
+import { RagIndexer } from "../modules/rag/rag.indexer.js";
 
 describe("Fase 7: Governança de IA, LGPD, Trilha de Auditoria e Validação de CLIs", () => {
   let tmpDir: string;
@@ -89,6 +90,56 @@ describe("Fase 7: Governança de IA, LGPD, Trilha de Auditoria e Validação de 
         provider: "gemini",
       });
       assert.equal(checkDept.allowed, false);
+    });
+
+    test("deve excluir documentos confidenciais do índice incremental RAG", () => {
+      const ragRepoDir = path.join(tmpDir, "rag-repo");
+      fs.mkdirSync(ragRepoDir, { recursive: true });
+
+      // Cria .project.config.json
+      fs.writeFileSync(
+        path.join(ragRepoDir, ".project.config.json"),
+        JSON.stringify({
+          project: { name: "rag-repo" },
+          ai_policy: {
+            default: "allow_external",
+            by_classification: {
+              confidential: "deny",
+              public: "allow_external",
+            },
+          },
+        }),
+        "utf-8"
+      );
+
+      // Cria metadados .docs.metadata.json
+      fs.writeFileSync(
+        path.join(ragRepoDir, ".docs.metadata.json"),
+        JSON.stringify([
+          {
+            path: "docs/secret-finances.md",
+            classification: "confidential",
+          },
+          {
+            path: "docs/public-guide.md",
+            classification: "public",
+          },
+        ]),
+        "utf-8"
+      );
+
+      // Cria arquivos
+      const docsDir = path.join(ragRepoDir, "docs");
+      fs.mkdirSync(docsDir, { recursive: true });
+      fs.writeFileSync(path.join(docsDir, "secret-finances.md"), "# Contas Bancárias Secretas\nDados sigilosos.", "utf-8");
+      fs.writeFileSync(path.join(docsDir, "public-guide.md"), "# Guia Aberto\nInstruções públicas da comunidade.", "utf-8");
+
+      const indexer = new RagIndexer();
+      const result = indexer.indexRepositoryIncremental("rag-repo", ragRepoDir);
+
+      const indexedFiles = result.chunks.map((c) => c.relativePath);
+      assert.ok(indexedFiles.some((f) => f.includes("public-guide.md")));
+      assert.ok(!indexedFiles.some((f) => f.includes("secret-finances.md")), "Arquivo confidencial não deve ser indexado no RAG");
     });
   });
 
