@@ -8,22 +8,19 @@ import { templatesService } from "../../templates/templates.service.js";
 import { customToolsService } from "../../skills/custom-tools.service.js";
 import { wikiService } from "../../wiki/wiki.service.js";
 
-import { isPathInside } from "../../../utils/repo-ref.js";
+import { resolveRepoDir } from "../../../config/constants.js";
+import { resolveSafeRepoPath } from "../../../utils/repo-ref.js";
 
-function getSafeRepoPath(
+export function getSafeRepoPath(
   repoName: string,
   relativeFilePath: string,
 ): string | null {
-  const safeRepo = repoName.replace(/[^a-zA-Z0-9_-]/g, "") || "local";
-  const repoDir = path.resolve(PROJECTS_DIR, safeRepo);
-  const targetPath = path.resolve(
-    repoDir,
-    relativeFilePath.replace(/^\/+/, ""),
-  );
-  if (!isPathInside(repoDir, targetPath)) {
-    return null; // Sandboxing: path traversal attempt blocked
+  try {
+    const repoDir = resolveRepoDir(repoName || "local");
+    return resolveSafeRepoPath(repoDir, relativeFilePath);
+  } catch {
+    return null;
   }
-  return targetPath;
 }
 
 export const nativeTools: AgentTool[] = [

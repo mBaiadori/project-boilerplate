@@ -25,6 +25,7 @@ import {
   loadHiddenFiles,
   isSystemPath,
 } from "../../utils/hidden-files.js";
+import { writeJsonAtomic } from "../../utils/atomic-write.js";
 import { aiService } from "../ai/ai.service.js";
 import {
   scanContentForSecrets,
@@ -149,8 +150,7 @@ export class PRsService {
   saveRepoPRs(repoName: string, prs: any[]): void {
     const filePath = this.getRepoPRsPath(repoName);
     try {
-      fs.mkdirSync(path.dirname(filePath), { recursive: true });
-      fs.writeFileSync(filePath, JSON.stringify(prs, null, 2), "utf-8");
+      writeJsonAtomic(filePath, prs, 2);
     } catch (e) {
       console.error(`Erro ao salvar prs para ${repoName}:`, e);
     }

@@ -44,7 +44,9 @@ import { validateRepoName } from "./utils/repo-ref.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const isDev = process.env.NODE_ENV === "development";
+  const trustProxy = process.env.BEHIND_PROXY === "true" || process.env.NODE_ENV === "production";
   const app = fastify({
+    trustProxy,
     bodyLimit: 2 * 1024 * 1024, // 2MB safe global default for standard JSON requests (prevents memory DoS)
     logger: isDev
       ? {
@@ -152,6 +154,12 @@ export async function buildApp(): Promise<FastifyInstance> {
 
     // Rate Limiting para rotas sensíveis
     const clientIp = request.ip || '127.0.0.1';
+    const sessionHeader = (request.headers['x-session-id'] as string) || (request.headers['x-contextos-session-id'] as string);
+    const queryObj = request.query && typeof request.query === 'object' ? (request.query as Record<string, unknown>) : undefined;
+    const sessionQuery = queryObj && typeof queryObj.session_id === 'string' ? queryObj.session_id : undefined;
+    const sessionKey = sessionHeader || sessionQuery;
+    const compositeAiKey = sessionKey ? `${clientIp}:${sessionKey}` : clientIp;
+
     if (pathname.startsWith('/api/auth/')) {
       const rateCheck = authRateLimiter.consume(clientIp);
       if (!rateCheck.allowed) {
@@ -167,7 +175,7 @@ export async function buildApp(): Promise<FastifyInstance> {
         });
       }
     } else if (pathname.startsWith('/api/ai/')) {
-      const rateCheck = aiRateLimiter.consume(clientIp);
+      const rateCheck = aiRateLimiter.consume(compositeAiKey);
       if (!rateCheck.allowed) {
         return reply.status(429).header('Retry-After', String(rateCheck.retryAfterSec || 1)).send({
           error: 'Muitas requisições para os serviços de inteligência artificial. Aguarde instantes.',
@@ -194,7 +202,7 @@ export async function buildApp(): Promise<FastifyInstance> {
         });
       }
     } else if (pathname === '/api/chat/stream') {
-      const rateCheck = aiStreamRateLimiter.consume(clientIp);
+      const rateCheck = aiStreamRateLimiter.consume(compositeAiKey);
       if (!rateCheck.allowed) {
         return reply.status(429).header('Retry-After', String(rateCheck.retryAfterSec || 1)).send({
           error: 'Muitas conexões de streaming de IA solicitadas. Aguarde instantes.',
