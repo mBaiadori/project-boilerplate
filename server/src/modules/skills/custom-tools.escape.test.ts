@@ -169,7 +169,7 @@ describe('Fase 1 (S3, S4, B4): Custom Tools Sandbox Escape Prevention & Strict A
       'VIOLAÇÃO S4: Rota de aprovação permitiu aprovação sem o cabeçalho X-ContextOS-Confirm'
     );
 
-    // 2. Tenta aprovar com hash divergente -> Deve responder 409 Conflict
+    // 2. Tenta aprovar com hash divergente -> Deve responder 403 ou 409
     const resWrongHash = await app.inject({
       method: 'POST',
       url: `/api/aicenter/custom-tools/${tool.id}/approve`,
@@ -183,13 +183,26 @@ describe('Fase 1 (S3, S4, B4): Custom Tools Sandbox Escape Prevention & Strict A
       },
     });
 
-    assert.strictEqual(
-      resWrongHash.statusCode,
-      409,
-      'VIOLAÇÃO S4: Rota de aprovação aceitou confirmação com hash divergente'
+    assert.ok(
+      resWrongHash.statusCode === 403 || resWrongHash.statusCode === 409,
+      'VIOLAÇÃO S4: Rota de aprovação aceitou confirmação com hash divergente ou sem desafio'
     );
 
-    // 3. Aprova com o cabeçalho correto -> Deve responder 200 e gravar identidade real
+    // 3. Solicita desafio de aprovação e aprova com headers válidos -> Deve responder 200 e gravar identidade real
+    const challengeRes = await app.inject({
+      method: 'POST',
+      url: `/api/aicenter/custom-tools/${tool.id}/request-approval`,
+      headers: {
+        host: '127.0.0.1:4100',
+        'x-contextos-token': token,
+      },
+      payload: {
+        repo: tmpRepoDir,
+      },
+    });
+    assert.strictEqual(challengeRes.statusCode, 200);
+    const { challenge_id } = JSON.parse(challengeRes.payload);
+
     const resSuccess = await app.inject({
       method: 'POST',
       url: `/api/aicenter/custom-tools/${tool.id}/approve`,
@@ -197,6 +210,7 @@ describe('Fase 1 (S3, S4, B4): Custom Tools Sandbox Escape Prevention & Strict A
         host: '127.0.0.1:4100',
         'x-contextos-token': token,
         'x-contextos-confirm': currentHash,
+        'x-contextos-challenge': challenge_id,
       },
       payload: {
         repo: tmpRepoDir,

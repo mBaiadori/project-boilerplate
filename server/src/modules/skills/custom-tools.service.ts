@@ -34,6 +34,42 @@ export function computeToolHash(tool: CustomToolDefinition): string {
   return crypto.createHash('sha256').update(JSON.stringify(canonicalData)).digest('hex');
 }
 
+interface ApprovalChallenge {
+  toolId: string;
+  expectedHash: string;
+  expiresAt: number;
+}
+
+const activeApprovalChallenges = new Map<string, ApprovalChallenge>();
+
+export function createApprovalChallenge(toolId: string, expectedHash: string): string {
+  const challengeId = crypto.randomBytes(24).toString('hex');
+  activeApprovalChallenges.set(challengeId, {
+    toolId,
+    expectedHash,
+    expiresAt: Date.now() + 60_000, // 60 segundos
+  });
+  return challengeId;
+}
+
+export function consumeApprovalChallenge(challengeId: string | undefined, toolId: string, providedHash: string): boolean {
+  if (!challengeId) return false;
+  const challenge = activeApprovalChallenges.get(challengeId);
+  if (!challenge) return false;
+
+  // Single-use: limpa imediatamente
+  activeApprovalChallenges.delete(challengeId);
+
+  if (Date.now() > challenge.expiresAt) return false;
+  if (challenge.toolId !== toolId) return false;
+
+  const bExpected = Buffer.from(challenge.expectedHash);
+  const bProvided = Buffer.from(providedHash);
+  if (bExpected.length !== bProvided.length) return false;
+
+  return crypto.timingSafeEqual(bExpected, bProvided);
+}
+
 function resolveExecutable(binName: string): string {
   const trimmed = binName.trim();
   if (path.isAbsolute(trimmed) && fs.existsSync(trimmed)) {
