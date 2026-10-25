@@ -37,6 +37,9 @@ describe('Frontend XSS Sanitization & URL Safety', () => {
     expect(isSafeUrl('./relative.md')).toBe(true);
     expect(isSafeUrl('#section-1')).toBe(true);
 
+    expect(isSafeUrl('https://example.com/api?connection=true&action=on_status')).toBe(true);
+    expect(isSafeUrl('https://example.com?toggle=on&connection=1')).toBe(true);
+
     expect(isSafeUrl('javascript:alert(1)')).toBe(false);
     expect(isSafeUrl('JAVASCRIPT:alert(1)')).toBe(false);
     expect(isSafeUrl('vbscript:msgbox(1)')).toBe(false);
@@ -44,6 +47,22 @@ describe('Frontend XSS Sanitization & URL Safety', () => {
     expect(isSafeUrl('javascript\n:alert(1)')).toBe(false);
     expect(isSafeUrl('//evil.com')).toBe(false);
     expect(isSafeUrl('//evil.com/phishing.md')).toBe(false);
+  });
+
+  it('sanitizeHtml should block protocol-relative beacons and purge DOM clobbering tags/attributes (M5)', () => {
+    // 1. Protocol-relative beacon deve ter src neutralizado
+    const beaconHtml = sanitizeHtml('<img src="//evil.com/beacon.png" alt="beacon">');
+    expect(beaconHtml.toLowerCase()).not.toContain('//evil.com');
+
+    // 2. Tags input de phishing devem ser removidas
+    const inputHtml = sanitizeHtml('<input type="password" placeholder="Digite sua senha">');
+    expect(inputHtml.toLowerCase()).not.toContain('<input');
+
+    // 3. Atributos de DOM clobbering (id, contenteditable) devem ser removidos
+    const clobberHtml = sanitizeHtml('<div id="adminPanel" contenteditable="true" data-type="block">Conteúdo</div>');
+    expect(clobberHtml.toLowerCase()).not.toContain('id=');
+    expect(clobberHtml.toLowerCase()).not.toContain('contenteditable=');
+    expect(clobberHtml).toContain('data-type="block"');
   });
 
   it('sanitizeSvg should purge malicious scripts and handlers from SVGs', () => {

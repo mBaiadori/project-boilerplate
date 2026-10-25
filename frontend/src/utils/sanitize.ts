@@ -7,11 +7,11 @@ const SAFE_URL_PROTOCOLS = new Set(['http:', 'https:', 'mailto:', 'tel:']);
  * Bloqueia protocolos perigosos como javascript:, vbscript:, data:, etc.
  */
 export function isSafeUrl(rawUrl: string): boolean {
-  if (!rawUrl) return false;
+  if (!rawUrl || typeof rawUrl !== 'string') return false;
   const trimmed = rawUrl.trim().replace(/[\x00-\x20\x7F-\x9F]+/g, '');
 
-  // Rejeitar qualquer URL com aspas, quebras de tag ou event handlers embutidos
-  if (/["'<>]/.test(rawUrl) || /on\w+\s*=/i.test(rawUrl)) {
+  // Rejeitar qualquer URL com aspas ou quebras de tag que possam quebrar atributos HTML
+  if (/["'<>]/.test(rawUrl)) {
     return false;
   }
 
@@ -20,7 +20,7 @@ export function isSafeUrl(rawUrl: string): boolean {
     return false;
   }
 
-  // Permitir âncoras locais e caminhos relativos de barra única
+  // Permitir âncoras locais e caminhos relativos de barra única (que não comecem com //)
   if (
     trimmed.startsWith('#') ||
     (trimmed.startsWith('/') && !trimmed.startsWith('//')) ||
@@ -41,10 +41,18 @@ export function isSafeUrl(rawUrl: string): boolean {
 
 export { escapeHtml } from './html-escape';
 
-// Força rel="noopener noreferrer" em links target="_blank" para mitigar tabnabbing
+// Força rel="noopener noreferrer" em links target="_blank" e neutraliza protocol-relative URLs (M5)
 DOMPurify.addHook('afterSanitizeAttributes', (node) => {
   if (node.tagName === 'A' && node.getAttribute('target') === '_blank') {
     node.setAttribute('rel', 'noopener noreferrer');
+  }
+  const href = node.getAttribute('href');
+  if (href && href.trim().startsWith('//')) {
+    node.removeAttribute('href');
+  }
+  const src = node.getAttribute('src');
+  if (src && src.trim().startsWith('//')) {
+    node.removeAttribute('src');
   }
 });
 
@@ -55,17 +63,18 @@ DOMPurify.addHook('afterSanitizeAttributes', (node) => {
 export function sanitizeHtml(rawHtml: string): string {
   if (!rawHtml) return '';
   return DOMPurify.sanitize(rawHtml, {
-    FORBID_ATTR: ['style'],
+    FORBID_TAGS: ['input'],
+    FORBID_ATTR: ['style', 'contenteditable', 'id'],
     ADD_TAGS: [
       'mark', 'ins', 'del', 'table', 'thead', 'tbody', 'tr', 'th', 'td',
-      'details', 'summary', 'blockquote', 'code', 'pre', 'span', 'input',
+      'details', 'summary', 'blockquote', 'code', 'pre', 'span',
     ],
     ADD_ATTR: [
       'target', 'rel', 'class', 'data-type', 'data-indent',
-      'data-mermaid-code', 'type', 'checked', 'spellcheck', 'contenteditable',
-      'data-term-key', 'data-id', 'id',
+      'data-mermaid-code', 'type', 'checked', 'spellcheck',
+      'data-term-key',
     ],
-    ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto|tel):|#|\/|\.\/|\.\.\/|_blank|_self|_parent|_top)/i,
+    ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto|tel):|#|\/(?!\/)|\.\/|\.\.\/|_blank|_self)/i,
   });
 }
 
