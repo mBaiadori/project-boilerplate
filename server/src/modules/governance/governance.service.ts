@@ -24,6 +24,7 @@ import {
   GovernanceActionWorkflowStatus,
 } from "./governance.types.js";
 import { scanContentForSecrets } from "../../utils/crypto.js";
+import { writeJsonAtomic, writeTextAtomic } from "../../utils/atomic-write.js";
 
 // In-memory Ephemeral Token Store for Secure AI Context Pipe
 interface EphemeralAIToken {
@@ -65,8 +66,7 @@ export class GovernanceService {
   private writeProjectConfig(repoName: string | undefined, data: any): void {
     const p = this.getProjectConfigPath(repoName);
     try {
-      fs.mkdirSync(path.dirname(p), { recursive: true });
-      fs.writeFileSync(p, JSON.stringify(data, null, 2), "utf-8");
+      writeJsonAtomic(p, data, 2);
     } catch (err) {
       console.warn(
         `[GovernanceService] Falha ao salvar .project.config.json:`,
@@ -1896,8 +1896,7 @@ jobs:
 `;
 
     try {
-      fs.mkdirSync(workflowsDir, { recursive: true });
-      fs.writeFileSync(workflowPath, workflowYaml, "utf-8");
+      writeTextAtomic(workflowPath, workflowYaml);
       this.logAudit(repoName, {
         action: "BRANCH_PROTECTED",
         actor: "System / Tech Lead",

@@ -7,6 +7,7 @@ import {
   DepartmentConfig,
 } from "../governance/governance.types.js";
 import { loadConfig } from "../../config/storage.js";
+import { writeJsonAtomic, writeTextAtomic } from "../../utils/atomic-write.js";
 
 export interface DocumentMetadataItem {
   id: string;
@@ -496,8 +497,7 @@ export class DocsMetadataService {
         valRes.errors,
       );
     }
-    fs.mkdirSync(path.dirname(cfgPath), { recursive: true });
-    fs.writeFileSync(cfgPath, JSON.stringify(merged, null, 2), "utf-8");
+    writeJsonAtomic(cfgPath, merged, 2);
     let currentMtime = Date.now();
     try {
       currentMtime = fs.statSync(cfgPath).mtimeMs;
@@ -958,28 +958,7 @@ export class DocsMetadataService {
     }
 
     const map = new Map(sanitizedList.map((item) => [item.path, item]));
-    fs.mkdirSync(path.dirname(metaPath), { recursive: true });
-
-    // Escrita atômica via arquivo temporário para tolerância a falhas
-    const tmpPath = `${metaPath}.${process.pid}.${Date.now()}.tmp`;
-    try {
-      fs.writeFileSync(
-        tmpPath,
-        JSON.stringify(sanitizedList, null, 2),
-        "utf-8",
-      );
-      fs.renameSync(tmpPath, metaPath);
-    } catch {
-      // Fallback em caso de erro de rename cross-device
-      fs.writeFileSync(
-        metaPath,
-        JSON.stringify(sanitizedList, null, 2),
-        "utf-8",
-      );
-      try {
-        if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
-      } catch {}
-    }
+    writeJsonAtomic(metaPath, sanitizedList, 2);
 
     let currentMtime = Date.now();
     try {
@@ -1195,7 +1174,7 @@ export class DocsMetadataService {
 
         const updatedMarkdown = updateFrontmatterInMarkdown(fileContent, frontmatterSyncPayload);
         if (updatedMarkdown !== fileContent) {
-          fs.writeFileSync(fullPath, updatedMarkdown, "utf-8");
+          writeTextAtomic(fullPath, updatedMarkdown);
           try {
             const stat = fs.statSync(fullPath);
             this.setFileStat(repoName, cleanPath, stat.mtimeMs, stat.size);
