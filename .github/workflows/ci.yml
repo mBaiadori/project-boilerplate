@@ -96,6 +96,8 @@ jobs:
         run: cd server && npm audit --omit=dev --audit-level=high
       - name: Audit Frontend Dependencies
         run: cd frontend && npm audit --omit=dev --audit-level=high
+      - name: Audit Desktop Dependencies
+        run: cd desktop && npm audit --omit=dev --audit-level=high
 
   gitleaks:
     name: Gitleaks Secret Detection
