@@ -7,6 +7,7 @@ import {
   type DocumentMetadata,
 } from "../../services/frontmatter";
 import { useTemplateStore } from "../../stores/templateStore";
+import { useWorkspace } from "../../context/WorkspaceContext";
 
 interface VisualMarkdownDiffProps {
   oldContent: string;
@@ -42,6 +43,13 @@ export const VisualMarkdownDiff: React.FC<VisualMarkdownDiffProps> = ({
 }) => {
   const [showMetadata, setShowMetadata] = useState<boolean | null>(null);
   const templates = useTemplateStore((s) => s.templates);
+  let projectMetaOptions: any = null;
+  try {
+    const ws = useWorkspace();
+    projectMetaOptions = ws?.projectMetaOptions;
+  } catch {
+    // Graceful fallback if rendered outside WorkspaceProvider
+  }
 
   // Parse frontmatter metadata and extract the pure document body for both versions
   const oldParsed = useMemo(
@@ -166,17 +174,57 @@ export const VisualMarkdownDiff: React.FC<VisualMarkdownDiffProps> = ({
 
       const isDiff = curStr !== otherStr;
 
+      let customColor: string | null = null;
+      if (curStr && curStr !== "<vazio>") {
+        if (key === "categories" || key === "category") {
+          const match = projectMetaOptions?.categories?.find(
+            (c: any) =>
+              (c.name || c.key || c.label)?.toLowerCase() === curStr.toLowerCase(),
+          );
+          if (match?.color) customColor = match.color;
+        } else if (key === "status") {
+          const match = projectMetaOptions?.statuses?.find(
+            (s: any) =>
+              (s.name || s.key || s.label)?.toLowerCase() === curStr.toLowerCase(),
+          );
+          if (match?.color) customColor = match.color;
+        } else if (key === "tags" || key === "tag") {
+          const match = projectMetaOptions?.tags?.find(
+            (t: any) =>
+              (t.name || t.key || t.label)?.toLowerCase() === curStr.toLowerCase(),
+          );
+          if (match?.color) customColor = match.color;
+        } else if (key === "badge" || key === "badges") {
+          const match = projectMetaOptions?.badges?.find(
+            (b: any) =>
+              (typeof b === "object" ? b.name : b)?.toLowerCase() ===
+              curStr.toLowerCase(),
+          );
+          if (typeof match === "object" && match?.color) customColor = match.color;
+        }
+      }
+
       const bg = isDiff
         ? side === "old"
           ? "rgba(239, 68, 68, 0.15)"
           : "rgba(34, 197, 94, 0.15)"
-        : "var(--color-surface-container, #e2e8f0)";
+        : customColor
+          ? `${customColor}18`
+          : "var(--color-surface-container, #e2e8f0)";
 
       const color = isDiff
         ? side === "old"
           ? "#991b1b"
           : "#166534"
-        : "var(--color-on-surface, #1e293b)";
+        : customColor || "var(--color-on-surface, #1e293b)";
+
+      const border = isDiff
+        ? side === "old"
+          ? "1px solid rgba(239, 68, 68, 0.3)"
+          : "1px solid rgba(34, 197, 94, 0.3)"
+        : customColor
+          ? `1px solid ${customColor}40`
+          : "1px solid var(--color-border-subtle, #e2e8f0)";
 
       return (
         <div
@@ -187,6 +235,7 @@ export const VisualMarkdownDiff: React.FC<VisualMarkdownDiffProps> = ({
             gap: "4px",
             background: bg,
             color: color,
+            border: border,
             padding: "2px 8px",
             borderRadius: "4px",
             fontSize: "11px",

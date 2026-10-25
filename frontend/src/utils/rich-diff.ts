@@ -103,7 +103,7 @@ export function generateVisualMarkdownDiffHtml(oldMarkdown: string = '', newMark
   const cleanNew = (newMarkdown || '').trim();
 
   if (!cleanOld && !cleanNew) {
-    return '<p style="color:var(--color-outline, #64748b);font-style:italic">Documento vazio.</p>';
+    return '<p class="diff-empty-message">Documento vazio.</p>';
   }
 
   if (cleanOld === cleanNew) {
@@ -123,17 +123,17 @@ export function generateVisualMarkdownDiffHtml(oldMarkdown: string = '', newMark
       const parsedAdded = marked.parse(next.value) as string;
 
       resultChunks.push(`
-        <div class="rich-diff-replacement-group" style="margin: 12px 0; border: 1px solid var(--color-outline-variant, #cbd5e1); border-radius: 8px; overflow: hidden;">
-          <div style="background: rgba(239, 68, 68, 0.08); padding: 8px 12px; border-bottom: 1px solid rgba(239, 68, 68, 0.2); color: #991b1b; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;">
+        <div class="rich-diff-replacement-group">
+          <div class="rich-diff-header rich-diff-header--removed">
             - Versão Oficial Anterior (Substituída)
           </div>
-          <div class="rich-diff-block rich-diff-removed" style="padding: 12px 16px; background: rgba(254, 226, 226, 0.25); text-decoration: line-through; opacity: 0.85;">
+          <div class="rich-diff-block rich-diff-removed">
             ${parsedRemoved}
           </div>
-          <div style="background: rgba(34, 197, 94, 0.08); padding: 8px 12px; border-top: 1px solid rgba(34, 197, 94, 0.2); border-bottom: 1px solid rgba(34, 197, 94, 0.2); color: #166534; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;">
+          <div class="rich-diff-header rich-diff-header--added">
             + Nova Versão Traduzida (Proposta)
           </div>
-          <div class="rich-diff-block rich-diff-added" style="padding: 12px 16px; background: rgba(220, 252, 231, 0.35);">
+          <div class="rich-diff-block rich-diff-added">
             ${parsedAdded}
           </div>
         </div>
@@ -146,8 +146,8 @@ export function generateVisualMarkdownDiffHtml(oldMarkdown: string = '', newMark
     if (current.added) {
       const parsedAdded = marked.parse(current.value) as string;
       resultChunks.push(`
-        <div class="rich-diff-block rich-diff-added" style="margin: 10px 0; border-left: 4px solid #22c55e; background: rgba(220, 252, 231, 0.35); padding: 10px 16px; border-radius: 0 6px 6px 0;">
-          <div style="font-size: 11px; font-weight: 700; color: #166534; text-transform: uppercase; margin-bottom: 4px;">
+        <div class="rich-diff-block rich-diff-block--added-standalone rich-diff-added">
+          <div class="rich-diff-tag rich-diff-tag--added">
             + Adicionado
           </div>
           ${parsedAdded}
@@ -160,8 +160,8 @@ export function generateVisualMarkdownDiffHtml(oldMarkdown: string = '', newMark
     if (current.removed) {
       const parsedRemoved = marked.parse(current.value) as string;
       resultChunks.push(`
-        <div class="rich-diff-block rich-diff-removed" style="margin: 10px 0; border-left: 4px solid #ef4444; background: rgba(254, 226, 226, 0.35); padding: 10px 16px; border-radius: 0 6px 6px 0; text-decoration: line-through; opacity: 0.85;">
-          <div style="font-size: 11px; font-weight: 700; color: #991b1b; text-transform: uppercase; margin-bottom: 4px;">
+        <div class="rich-diff-block rich-diff-block--removed-standalone rich-diff-removed">
+          <div class="rich-diff-tag rich-diff-tag--removed">
             - Removido
           </div>
           ${parsedRemoved}
@@ -172,7 +172,7 @@ export function generateVisualMarkdownDiffHtml(oldMarkdown: string = '', newMark
 
     // Case 4: Unchanged block
     const parsedUnchanged = marked.parse(current.value) as string;
-    resultChunks.push(`<div class="rich-diff-block rich-diff-unchanged" style="margin: 6px 0;">${parsedUnchanged}</div>`);
+    resultChunks.push(`<div class="rich-diff-block rich-diff-unchanged">${parsedUnchanged}</div>`);
   }
 
   return resultChunks.join('\n');
@@ -185,7 +185,7 @@ export interface SideBySideDiffHtmlResult {
 
 /**
  * Generates super clean side-by-side HTML for markdown documents.
- * Highlighting is applied strictly with soft background colors (no borders),
+ * Highlighting is applied strictly with soft background colors and subtle accent borders,
  * without repeating banners, labels, or extra text blocks.
  */
 export function generateSideBySideMarkdownHtml(
@@ -197,8 +197,8 @@ export function generateSideBySideMarkdownHtml(
 
   if (!cleanOld && !cleanNew) {
     return {
-      oldHtml: '<p style="color:var(--color-outline, #64748b);font-style:italic">Documento vazio.</p>',
-      newHtml: '<p style="color:var(--color-outline, #64748b);font-style:italic">Documento vazio.</p>',
+      oldHtml: '<p class="diff-empty-message">Documento vazio.</p>',
+      newHtml: '<p class="diff-empty-message">Documento vazio.</p>',
     };
   }
 
@@ -213,28 +213,28 @@ export function generateSideBySideMarkdownHtml(
 
   for (const part of lineDiff) {
     if (part.removed) {
-      // Left side: soft red background only, no borders
+      // Left side: soft red background
       const parsed = marked.parse(part.value) as string;
       oldChunks.push(
-        `<div class="diff-highlight-removed" style="background: rgba(239, 68, 68, 0.15); border-radius: 4px; padding: 2px 4px; margin: 2px 0;">${parsed}</div>`
+        `<div class="diff-highlight-removed">${parsed}</div>`
       );
     } else if (part.added) {
-      // Right side: soft green background only, no borders
+      // Right side: soft green background
       const parsed = marked.parse(part.value) as string;
       newChunks.push(
-        `<div class="diff-highlight-added" style="background: rgba(34, 197, 94, 0.15); border-radius: 4px; padding: 2px 4px; margin: 2px 0;">${parsed}</div>`
+        `<div class="diff-highlight-added">${parsed}</div>`
       );
     } else {
       // Unchanged content in both sides
       const parsed = marked.parse(part.value) as string;
-      oldChunks.push(`<div class="diff-block-unchanged" style="margin: 2px 0;">${parsed}</div>`);
-      newChunks.push(`<div class="diff-block-unchanged" style="margin: 2px 0;">${parsed}</div>`);
+      oldChunks.push(`<div class="diff-block-unchanged">${parsed}</div>`);
+      newChunks.push(`<div class="diff-block-unchanged">${parsed}</div>`);
     }
   }
 
   return {
-    oldHtml: oldChunks.join('\n') || '<p style="color:var(--color-outline, #64748b);font-style:italic">Documento vazio na versão oficial.</p>',
-    newHtml: newChunks.join('\n') || '<p style="color:var(--color-outline, #64748b);font-style:italic">Documento vazio no rascunho.</p>',
+    oldHtml: oldChunks.join('\n') || '<p class="diff-empty-message">Documento vazio na versão oficial.</p>',
+    newHtml: newChunks.join('\n') || '<p class="diff-empty-message">Documento vazio no rascunho.</p>',
   };
 }
 

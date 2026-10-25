@@ -1628,3 +1628,288 @@
   margin: 12px 0;
 }
 
+/* =============================================================================
+   VISUAL MARKDOWN DIFF & RICH DIFF RENDERING
+   ============================================================================= */
+
+/* Side-by-Side Diff Highlight for Removals (Base / Left Pane) */
+.notion-diff-canvas .diff-highlight-removed,
+.diff-highlight-removed {
+  background-color: rgba(239, 68, 68, 0.14) !important;
+  border-left: 3.5px solid #ef4444 !important;
+  border-radius: 0 4px 4px 0 !important;
+  padding: 4px 10px !important;
+  margin: 4px 0 !important;
+  color: #991b1b !important;
+}
+
+.notion-diff-canvas .diff-highlight-removed p,
+.notion-diff-canvas .diff-highlight-removed h1,
+.notion-diff-canvas .diff-highlight-removed h2,
+.notion-diff-canvas .diff-highlight-removed h3,
+.notion-diff-canvas .diff-highlight-removed h4,
+.notion-diff-canvas .diff-highlight-removed li,
+.notion-diff-canvas .diff-highlight-removed span,
+.notion-diff-canvas .diff-highlight-removed strong,
+.diff-highlight-removed p,
+.diff-highlight-removed h1,
+.diff-highlight-removed h2,
+.diff-highlight-removed h3,
+.diff-highlight-removed h4,
+.diff-highlight-removed li {
+  color: inherit !important;
+}
+
+.notion-diff-canvas .diff-highlight-removed p:first-child,
+.diff-highlight-removed p:first-child {
+  margin-top: 0 !important;
+}
+
+.notion-diff-canvas .diff-highlight-removed p:last-child,
+.diff-highlight-removed p:last-child {
+  margin-bottom: 0 !important;
+}
+
+/* Side-by-Side Diff Highlight for Additions (Draft / Right Pane) */
+.notion-diff-canvas .diff-highlight-added,
+.diff-highlight-added {
+  background-color: rgba(34, 197, 94, 0.14) !important;
+  border-left: 3.5px solid #22c55e !important;
+  border-radius: 0 4px 4px 0 !important;
+  padding: 4px 10px !important;
+  margin: 4px 0 !important;
+  color: #166534 !important;
+}
+
+.notion-diff-canvas .diff-highlight-added p,
+.notion-diff-canvas .diff-highlight-added h1,
+.notion-diff-canvas .diff-highlight-added h2,
+.notion-diff-canvas .diff-highlight-added h3,
+.notion-diff-canvas .diff-highlight-added h4,
+.notion-diff-canvas .diff-highlight-added li,
+.notion-diff-canvas .diff-highlight-added span,
+.notion-diff-canvas .diff-highlight-added strong,
+.diff-highlight-added p,
+.diff-highlight-added h1,
+.diff-highlight-added h2,
+.diff-highlight-added h3,
+.diff-highlight-added h4,
+.diff-highlight-added li {
+  color: inherit !important;
+}
+
+.notion-diff-canvas .diff-highlight-added p:first-child,
+.diff-highlight-added p:first-child {
+  margin-top: 0 !important;
+}
+
+.notion-diff-canvas .diff-highlight-added p:last-child,
+.diff-highlight-added p:last-child {
+  margin-bottom: 0 !important;
+}
+
+/* Unchanged Diff Block */
+.notion-diff-canvas .diff-block-unchanged,
+.diff-block-unchanged {
+  margin: 2px 0;
+}
+
+/* Empty Diff State Message */
+.notion-diff-canvas .diff-empty-message,
+.diff-empty-message {
+  color: var(--color-outline, #64748b);
+  font-style: italic;
+  padding: 12px 0;
+}
+
+/* Inline Additions and Deletions (<ins> and <del>) */
+.notion-diff-canvas ins,
+ins.diff-inline-add {
+  background-color: rgba(34, 197, 94, 0.22);
+  color: #166534;
+  text-decoration: none;
+  border-radius: 2px;
+  padding: 1px 4px;
+}
+
+.notion-diff-canvas del,
+del.diff-inline-del {
+  background-color: rgba(239, 68, 68, 0.22);
+  color: #991b1b;
+  text-decoration: line-through;
+  border-radius: 2px;
+  padding: 1px 4px;
+}
+
+/* Dark Theme Overrides for Side-by-Side and Inline Diff */
+[data-theme="dark"] .notion-diff-canvas .diff-highlight-removed,
+[data-theme="dark"] .diff-highlight-removed,
+.dark-theme .notion-diff-canvas .diff-highlight-removed,
+.dark-theme .diff-highlight-removed {
+  background-color: rgba(239, 68, 68, 0.22) !important;
+  border-left-color: #f87171 !important;
+  color: #fca5a5 !important;
+}
+
+[data-theme="dark"] .notion-diff-canvas .diff-highlight-added,
+[data-theme="dark"] .diff-highlight-added,
+.dark-theme .notion-diff-canvas .diff-highlight-added,
+.dark-theme .diff-highlight-added {
+  background-color: rgba(34, 197, 94, 0.22) !important;
+  border-left-color: #4ade80 !important;
+  color: #86efac !important;
+}
+
+[data-theme="dark"] .notion-diff-canvas ins,
+[data-theme="dark"] ins.diff-inline-add,
+.dark-theme .notion-diff-canvas ins,
+.dark-theme ins.diff-inline-add {
+  background-color: rgba(34, 197, 94, 0.3);
+  color: #86efac;
+}
+
+[data-theme="dark"] .notion-diff-canvas del,
+[data-theme="dark"] del.diff-inline-del,
+.dark-theme .notion-diff-canvas del,
+.dark-theme del.diff-inline-del {
+  background-color: rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
+}
+
+/* =============================================================================
+   RICH DIFF (UNIFIED / REPLACEMENT VIEW)
+   ============================================================================= */
+.rich-diff-replacement-group {
+  margin: 12px 0;
+  border: 1px solid var(--color-outline-variant, #cbd5e1);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--color-surface, #ffffff);
+}
+
+.rich-diff-header {
+  padding: 8px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.rich-diff-header--removed {
+  background: rgba(239, 68, 68, 0.08);
+  border-bottom: 1px solid rgba(239, 68, 68, 0.2);
+  color: #991b1b;
+}
+
+.rich-diff-header--added {
+  background: rgba(34, 197, 94, 0.08);
+  border-top: 1px solid rgba(34, 197, 94, 0.2);
+  border-bottom: 1px solid rgba(34, 197, 94, 0.2);
+  color: #166534;
+}
+
+.rich-diff-block {
+  padding: 12px 16px;
+}
+
+.rich-diff-block.rich-diff-removed {
+  background: rgba(254, 226, 226, 0.3);
+  text-decoration: line-through;
+  opacity: 0.88;
+  color: #991b1b;
+}
+
+.rich-diff-block.rich-diff-added {
+  background: rgba(220, 252, 231, 0.38);
+  color: #166534;
+}
+
+.rich-diff-block--added-standalone {
+  margin: 10px 0;
+  border-left: 4px solid #22c55e;
+  background: rgba(220, 252, 231, 0.38);
+  padding: 10px 16px;
+  border-radius: 0 6px 6px 0;
+  color: #166534;
+}
+
+.rich-diff-block--removed-standalone {
+  margin: 10px 0;
+  border-left: 4px solid #ef4444;
+  background: rgba(254, 226, 226, 0.3);
+  padding: 10px 16px;
+  border-radius: 0 6px 6px 0;
+  text-decoration: line-through;
+  opacity: 0.88;
+  color: #991b1b;
+}
+
+.rich-diff-tag {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.rich-diff-tag--added {
+  color: #166534;
+}
+
+.rich-diff-tag--removed {
+  color: #991b1b;
+}
+
+.rich-diff-block.rich-diff-unchanged {
+  margin: 6px 0;
+  padding: 0;
+}
+
+/* Dark Theme Overrides for Rich Diff */
+[data-theme="dark"] .rich-diff-replacement-group,
+.dark-theme .rich-diff-replacement-group {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: var(--md-sys-color-surface-container, #202124);
+}
+
+[data-theme="dark"] .rich-diff-header--removed,
+.dark-theme .rich-diff-header--removed {
+  background: rgba(239, 68, 68, 0.15);
+  border-bottom-color: rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
+}
+
+[data-theme="dark"] .rich-diff-header--added,
+.dark-theme .rich-diff-header--added {
+  background: rgba(34, 197, 94, 0.15);
+  border-top-color: rgba(34, 197, 94, 0.3);
+  border-bottom-color: rgba(34, 197, 94, 0.3);
+  color: #86efac;
+}
+
+[data-theme="dark"] .rich-diff-block.rich-diff-removed,
+.dark-theme .rich-diff-block.rich-diff-removed,
+[data-theme="dark"] .rich-diff-block--removed-standalone,
+.dark-theme .rich-diff-block--removed-standalone {
+  background: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
+}
+
+[data-theme="dark"] .rich-diff-block.rich-diff-added,
+.dark-theme .rich-diff-block.rich-diff-added,
+[data-theme="dark"] .rich-diff-block--added-standalone,
+.dark-theme .rich-diff-block--added-standalone {
+  background: rgba(34, 197, 94, 0.2);
+  color: #86efac;
+}
+
+[data-theme="dark"] .rich-diff-tag--added,
+.dark-theme .rich-diff-tag--added {
+  color: #86efac;
+}
+
+[data-theme="dark"] .rich-diff-tag--removed,
+.dark-theme .rich-diff-tag--removed {
+  color: #fca5a5;
+}
+
+
