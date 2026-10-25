@@ -111,3 +111,51 @@ jobs:
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  windows-build:
+    name: Windows Packaging & Installer Verification
+    runs-on: windows-latest
+    timeout-minutes: 25
+    needs: [server, frontend, desktop]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "npm"
+          cache-dependency-path: |
+            server/package-lock.json
+            frontend/package-lock.json
+            desktop/package-lock.json
+
+      - name: Install server dependencies
+        run: cd server && npm ci
+
+      - name: Install frontend dependencies
+        run: cd frontend && npm ci
+
+      - name: Install desktop dependencies
+        run: cd desktop && npm ci
+
+      - name: Build Server
+        run: cd server && npm run build
+
+      - name: Build Frontend
+        run: cd frontend && npm run build
+
+      - name: Package Desktop Windows Installer
+        run: |
+          cd desktop
+          npm run build
+          npm run compile:bytecode
+          npm run package:win
+
+      - name: Upload Windows Installer (.exe)
+        uses: actions/upload-artifact@v4
+        with:
+          name: context-os-windows-installer
+          path: desktop/release/*.exe
+          if-no-files-found: warn
+          retention-days: 7
+
