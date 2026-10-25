@@ -90,3 +90,5 @@ export const authRateLimiter = new RateLimiter(30, 60000); // 30 req/min para ro
 export const toolExecRateLimiter = new RateLimiter(45, 60000); // 45 req/min para execução de ferramentas
 export const aiRateLimiter = new RateLimiter(60, 60000); // 60 req/min para rotas de IA
 export const ragRateLimiter = new RateLimiter(60, 60000); // 60 req/min para buscas semânticas (RAG)
+export const gitHeavyOpsRateLimiter = new RateLimiter(20, 60000); // 20 req/min para operações pesadas Git
+export const aiStreamRateLimiter = new RateLimiter(30, 60000); // 30 req/min para streaming SSE de IA
