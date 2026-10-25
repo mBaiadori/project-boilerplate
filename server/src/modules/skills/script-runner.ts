@@ -62,8 +62,9 @@ function assertSafeRepoPath(full) {
   }
   const rel = path.relative(safeRepoDir, full).replaceAll('\\\\', '/');
   const parts = rel.split('/').filter(Boolean);
-  if (parts.some((p) => p === '.git' || p === '.tools' || p === '.context-os')) {
-    throw new Error('Acesso negado: manipulação de pastas internas de infraestrutura (.git / .tools) é estritamente proibida.');
+  const protectedDirs = ['.git', '.tools', '.context-os', '.github', '.agents'];
+  if (parts.some((p) => protectedDirs.includes(p))) {
+    throw new Error('Acesso negado: manipulação de pastas internas de infraestrutura (.git / .tools / .github / .agents) é estritamente proibida.');
   }
   let curr = full;
   while (curr && curr !== safeRepoDir && curr !== path.dirname(curr)) {
