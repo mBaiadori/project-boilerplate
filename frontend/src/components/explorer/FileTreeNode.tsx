@@ -1,4 +1,4 @@
-import React, { memo } from "react";
+import React, { memo, useMemo } from "react";
 import {
   Folder,
   FolderOpen,
@@ -16,9 +16,10 @@ import {
   Copy,
   Lock,
 } from "lucide-react";
-import type { TreeNode } from "../../types";
+import type { TreeNode, StatusItem, BadgeOption, CategoryOption, TagOption } from "../../types";
 import type { InlineCreatingState, InlineRenamingState, DraggedItem } from "./types";
 import { InlineCreateRow } from "./InlineCreateRow";
+import { useWorkspace } from "../../context/WorkspaceContext";
 
 interface FileTreeNodeProps {
   node: TreeNode;
@@ -124,6 +125,59 @@ export const FileTreeNode: React.FC<FileTreeNodeProps> = memo((props) => {
     depth,
     isFlatItem,
   } = props;
+
+  const { projectMetaOptions, projectConfig } = useWorkspace();
+
+  const dynamicTaxonomyColor = useMemo(() => {
+    if (node.status) {
+      const statuses: StatusItem[] =
+        projectMetaOptions?.statuses || projectConfig?.statuses || [];
+      const match = statuses.find(
+        (s: StatusItem) =>
+          s.key?.toLowerCase() === node.status?.toLowerCase() ||
+          s.name?.toLowerCase() === node.status?.toLowerCase() ||
+          s.label?.toLowerCase() === node.status?.toLowerCase(),
+      );
+      if (match?.color) return match.color;
+    }
+
+    if (node.badge) {
+      const badges: (BadgeOption | string)[] =
+        projectMetaOptions?.badges || projectConfig?.badges || [];
+      const match = badges.find(
+        (b: BadgeOption | string) =>
+          typeof b !== "string" && b.name?.toLowerCase() === node.badge?.toLowerCase(),
+      );
+      if (typeof match !== "string" && match?.color) return match.color;
+    }
+
+    const lowerPath = (node.path || "").toLowerCase();
+    const lowerName = (node.name || "").toLowerCase();
+
+    const categories: CategoryOption[] =
+      projectMetaOptions?.categories || projectConfig?.categories || [];
+    for (const cat of categories) {
+      if (typeof cat !== "string" && cat.color && cat.name) {
+        const catLower = cat.name.toLowerCase();
+        if (lowerPath.includes(catLower) || lowerName.includes(catLower)) {
+          return cat.color;
+        }
+      }
+    }
+
+    const tags: TagOption[] =
+      projectMetaOptions?.tags || projectConfig?.tags || [];
+    for (const tag of tags) {
+      if (typeof tag !== "string" && tag.color && tag.name) {
+        const tagLower = tag.name.toLowerCase();
+        if (lowerPath.includes(tagLower) || lowerName.includes(tagLower)) {
+          return tag.color;
+        }
+      }
+    }
+
+    return null;
+  }, [node.status, node.badge, node.path, node.name, projectMetaOptions, projectConfig]);
 
   const isDir =
     node.type === "dir" || node.type === "directory" || node.is_directory;
@@ -314,13 +368,6 @@ export const FileTreeNode: React.FC<FileTreeNodeProps> = memo((props) => {
     ? (node.name.split(".").pop() || "").toLowerCase()
     : "";
 
-  const dotClass =
-    node.name.includes("kpi") || node.path.includes("kpi")
-      ? "dot-t0"
-      : node.name.includes("ideacao") || node.path.includes("ideacao")
-        ? "dot-t1"
-        : "dot-t2";
-
   const cleanNodePath = node.path ? node.path.replace(/^\/+/, "") : "";
   const gitFile =
     gitStatusMap.get(cleanNodePath) || gitStatusMap.get(node.path);
@@ -363,7 +410,17 @@ export const FileTreeNode: React.FC<FileTreeNodeProps> = memo((props) => {
       >
         <div className="tree-file-left">
           {isMarkdown ? (
-            <span className={`tree-dot ${dotClass}`}></span>
+            <span
+              className={`tree-dot ${dynamicTaxonomyColor ? "" : "dot-default"}`}
+              style={
+                dynamicTaxonomyColor
+                  ? {
+                      backgroundColor: dynamicTaxonomyColor,
+                      boxShadow: `0 0 6px ${dynamicTaxonomyColor}66`,
+                    }
+                  : undefined
+              }
+            />
           ) : ["csv", "tsv", "xlsx", "xls"].includes(fileExt) ? (
             <FileSpreadsheet
               size={13}

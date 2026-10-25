@@ -37,6 +37,7 @@ import { prWorktreeService } from "./pr-worktree.service.js";
 import { prConflictsService } from "./pr-conflicts.service.js";
 import { workspaceService } from "../workspace/workspace.service.js";
 import { healRepositoryState } from "../../utils/git-health.js";
+import { recordAuditEvent } from "../audit/audit-chain.service.js";
 
 export interface PRApprovalAudit {
   user: string;
@@ -1539,6 +1540,21 @@ DIRETRIZES OBRIGATÓRIAS:
 
     this.saveRepoPRs(repoName, prs);
 
+    try {
+      await recordAuditEvent(repoName, {
+        eventType: "PR_APPROVED",
+        user: approver,
+        payload: {
+          prId: target.id,
+          title: target.title,
+          headSha: target.head_sha,
+          quorumReached,
+        },
+      });
+    } catch (auditErr) {
+      console.warn("[PRsService] Falha ao registrar evento de auditoria de aprovação:", auditErr);
+    }
+
     return {
       success: true,
       quorum_reached: quorumReached,
@@ -1796,6 +1812,21 @@ DIRETRIZES OBRIGATÓRIAS:
     target.merged_at = new Date().toISOString();
     this.saveRepoPRs(repoName, prs);
 
+    try {
+      await recordAuditEvent(repoName, {
+        eventType: "PR_MERGED",
+        user: cfg.user?.login || "maintainer",
+        payload: {
+          prId: target.id,
+          title: target.title,
+          targetBranch: target.target_branch || "main",
+          headSha: target.head_sha,
+        },
+      });
+    } catch (auditErr) {
+      console.warn("[PRsService] Falha ao registrar evento de auditoria de merge:", auditErr);
+    }
+
     return {
       success: true,
       pr: target,
@@ -1848,6 +1879,20 @@ DIRETRIZES OBRIGATÓRIAS:
     }
 
     this.saveRepoPRs(repoName, prs);
+
+    try {
+      await recordAuditEvent(repoName, {
+        eventType: "PR_CLOSED",
+        user: cfg.user?.login || "reviewer",
+        payload: {
+          prId: target.id,
+          title: target.title,
+          reason: target.rejection_reason,
+        },
+      });
+    } catch (auditErr) {
+      console.warn("[PRsService] Falha ao registrar evento de auditoria de fechamento:", auditErr);
+    }
 
     return {
       success: true,
@@ -1906,6 +1951,19 @@ DIRETRIZES OBRIGATÓRIAS:
           pushErr,
         );
       }
+    }
+
+    try {
+      await recordAuditEvent(repoName, {
+        eventType: "ROLLBACK_APPLIED",
+        user: cfg.user?.login || "operator",
+        payload: {
+          targetHash,
+          targetTitle,
+        },
+      });
+    } catch (auditErr) {
+      console.warn("[PRsService] Falha ao registrar evento de auditoria de rollback:", auditErr);
     }
 
     clearWorkspaceChanges(repoName);
