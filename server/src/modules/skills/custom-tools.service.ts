@@ -8,7 +8,7 @@ import { resolveRepoDir } from '../../config/constants.js';
 import { loadConfig, recordChange } from '../../config/storage.js';
 import { CustomToolDefinition, ProjectToolsManifest } from './skills.types.js';
 import { ToolResult } from '../ai/tools/tool.types.js';
-import { validateUrlForSSRF } from '../../utils/ssrf-guard.js';
+import { safeFetch } from '../../utils/ssrf-guard.js';
 import { runIsolatedScript } from './script-runner.js';
 import { writeJsonAtomic, writeTextAtomic } from '../../utils/atomic-write.js';
 
@@ -418,9 +418,7 @@ export class CustomToolsService {
       return { success: false, error: `URL HTTP não configurada para a ferramenta '${tool.name}'.` };
     }
 
-    // SSRF Guard: validação prévia de IP e resolução DNS
-    const safeUrl = await validateUrlForSSRF(rawUrl);
-
+    // SSRF Guard com IP Pinning determinístico (A4): elimina TOCTOU e DNS Rebinding
     const method = config.method || 'POST';
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -430,7 +428,6 @@ export class CustomToolsService {
     const fetchOptions: RequestInit = {
       method,
       headers,
-      redirect: 'error', // Bloqueia redirecionamentos não validados para evitar SSRF bypass
     };
 
     if (method !== 'GET') {
@@ -441,7 +438,7 @@ export class CustomToolsService {
       });
     }
 
-    const response = await fetch(safeUrl.toString(), fetchOptions);
+    const response = await safeFetch(rawUrl, fetchOptions);
     const contentType = response.headers.get('content-type') || '';
     let responseData: any = null;
 
