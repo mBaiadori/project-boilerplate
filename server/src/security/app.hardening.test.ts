@@ -93,4 +93,60 @@ describe('Fase 4 (S6, C13): Endurecimento do Servidor e Persistência Segura', (
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
   });
+
+  it('4.1.5: Rajada de requisições para rotas pesadas de Git (/api/repos/clone) deve retornar 429', async () => {
+    const token = getSessionToken();
+    let got429 = false;
+
+    // Dispara 25 requisições em sequência rápida (limite = 20)
+    for (let i = 0; i < 25; i++) {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/repos/clone',
+        headers: {
+          host: '127.0.0.1:4100',
+          'x-contextos-token': token,
+        },
+        payload: { repo_url: 'https://github.com/test/repo.git' },
+      });
+
+      if (res.statusCode === 429) {
+        got429 = true;
+        assert.ok(res.headers['retry-after'], 'Deve retornar header Retry-After');
+        const json = JSON.parse(res.body);
+        assert.ok(json.error.includes('operações pesadas de Git'), `Mensagem esperada: ${json.error}`);
+        break;
+      }
+    }
+
+    assert.strictEqual(got429, true, 'Rate limiter de operações pesadas de Git deve disparar 429');
+  });
+
+  it('4.1.6: Rajada de requisições para stream de chat (/api/chat/stream) deve retornar 429', async () => {
+    const token = getSessionToken();
+    let got429 = false;
+
+    // Dispara 35 conexões em sequência rápida (limite = 30) sem invocar chamada externa de LLM
+    for (let i = 0; i < 35; i++) {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/chat/stream',
+        headers: {
+          host: '127.0.0.1:4100',
+          'x-contextos-token': token,
+        },
+        payload: { prompt: '', repo: 'local' },
+      });
+
+      if (res.statusCode === 429) {
+        got429 = true;
+        assert.ok(res.headers['retry-after'], 'Deve retornar header Retry-After');
+        const json = JSON.parse(res.body);
+        assert.ok(json.error.includes('streaming de IA'), `Mensagem esperada: ${json.error}`);
+        break;
+      }
+    }
+
+    assert.strictEqual(got429, true, 'Rate limiter de streaming SSE de chat deve disparar 429');
+  });
 });

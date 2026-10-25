@@ -37,6 +37,8 @@ import {
   toolExecRateLimiter,
   aiRateLimiter,
   ragRateLimiter,
+  gitHeavyOpsRateLimiter,
+  aiStreamRateLimiter,
 } from "./security/rate-limit.js";
 import { validateRepoName } from "./utils/repo-ref.js";
 
@@ -176,6 +178,26 @@ export async function buildApp(): Promise<FastifyInstance> {
       if (!rateCheck.allowed) {
         return reply.status(429).header('Retry-After', String(rateCheck.retryAfterSec || 1)).send({
           error: 'Muitas requisições para buscas semânticas (RAG). Aguarde instantes.',
+        });
+      }
+    } else if (
+      pathname.startsWith('/api/repos/clone') ||
+      pathname.startsWith('/api/git/clone') ||
+      pathname === '/api/git/push' ||
+      pathname === '/api/git/pull' ||
+      pathname === '/api/git/sync'
+    ) {
+      const rateCheck = gitHeavyOpsRateLimiter.consume(clientIp);
+      if (!rateCheck.allowed) {
+        return reply.status(429).header('Retry-After', String(rateCheck.retryAfterSec || 1)).send({
+          error: 'Muitas operações pesadas de Git solicitadas. Aguarde instantes antes de tentar novamente.',
+        });
+      }
+    } else if (pathname === '/api/chat/stream') {
+      const rateCheck = aiStreamRateLimiter.consume(clientIp);
+      if (!rateCheck.allowed) {
+        return reply.status(429).header('Retry-After', String(rateCheck.retryAfterSec || 1)).send({
+          error: 'Muitas conexões de streaming de IA solicitadas. Aguarde instantes.',
         });
       }
     }
