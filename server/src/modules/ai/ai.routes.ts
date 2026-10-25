@@ -129,7 +129,16 @@ export async function aiRoutes(fastify: FastifyInstance) {
         skillsMeta,
       });
 
-      const briefing = aiService.getBriefing(repoName, filePath);
+      let ragContext = '';
+      if (!isRawMode) {
+        try {
+          ragContext = ragService.buildContextPrompt(prompt, repoName, 3);
+        } catch (ragErr) {
+          console.warn('[AI Chat Connected] Falha ao consultar RAG:', ragErr);
+        }
+      }
+      const rawBriefing = aiService.getBriefing(repoName, filePath);
+      const briefing = `${rawBriefing}${ragContext ? `\n\n${ragContext}` : ''}`.trim();
       const streamEvents: ProviderStreamEvent[] = [];
       const currentAuthor = cfg.user?.name || cfg.user?.login || 'Developer';
 
@@ -246,9 +255,18 @@ export async function aiRoutes(fastify: FastifyInstance) {
       allowed_tools: resolvedAllowedTools && resolvedAllowedTools.length > 0 ? resolvedAllowedTools : undefined,
     };
 
+    let ragContext = '';
+    if (!isRawMode) {
+      try {
+        ragContext = ragService.buildContextPrompt(prompt, repoName, 3);
+      } catch (ragErr) {
+        console.warn('[AI Chat Direct] Falha ao consultar RAG:', ragErr);
+      }
+    }
+
     const briefing = aiService.getBriefing(repoName, filePath);
     const basePrompt = body.assistant_prompt || cfg.settings?.global_system_prompt || '';
-    const customSystem = `${basePrompt}${resolvedSkillPrompt}${briefing ? `\n\n${briefing}` : ''}`.trim();
+    const customSystem = `${basePrompt}${resolvedSkillPrompt}${briefing ? `\n\n${briefing}` : ''}${ragContext ? `\n\n${ragContext}` : ''}`.trim();
 
     const result = await aiService.callLLM(
       aiSettings,
@@ -409,7 +427,16 @@ export async function aiRoutes(fastify: FastifyInstance) {
       skillIds: effectiveStreamSkillIds,
       skillsMeta: streamSkillsMeta,
     });
-    const briefing = aiService.getBriefing(repoName, filePath);
+    let streamRagContext = '';
+    if (!isRawMode) {
+      try {
+        streamRagContext = ragService.buildContextPrompt(prompt, repoName, 3);
+      } catch (ragErr) {
+        console.warn('[AI Stream] Falha ao consultar RAG:', ragErr);
+      }
+    }
+
+    const briefing = `${aiService.getBriefing(repoName, filePath)}${streamRagContext ? `\n\n${streamRagContext}` : ''}`.trim();
 
     let resolvedSkillPrompt = '';
     // Para Direct API, injetamos a skill no system prompt; para CLI, ela vai via contextPointers on-demand

@@ -5,6 +5,7 @@ import { loadConfig, clearWorkspaceChanges } from '../../config/storage.js';
 import { workspaceService } from '../workspace/workspace.service.js';
 import { eventsService } from '../events/events.service.js';
 import { parseRepoRef, resolveRepoDirPath, RepoRef } from '../../utils/repo-ref.js';
+import { recordAuditEvent } from '../audit/audit-chain.service.js';
 import {
   cloneGitRepo,
   pullGitRepo,
@@ -233,6 +234,18 @@ export class GitService {
 
     const result = await syncGit(repoDir, 'origin', targetBranch);
     workspaceService.invalidateTreeCache(repoName);
+
+    if (result.success) {
+      try {
+        await recordAuditEvent(repoName, {
+          eventType: 'GIT_SYNC_PUSH',
+          user: cfg.user?.login || 'developer',
+          payload: { branch: targetBranch, repo: repoName },
+        });
+      } catch (auditErr) {
+        console.warn('[GitService] Falha ao registrar evento de auditoria no sync:', auditErr);
+      }
+    }
 
     try {
       const status = await getGitStatus(repoDir);
