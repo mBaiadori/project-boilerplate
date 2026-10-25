@@ -90,6 +90,24 @@ interface AIContextType {
   projectTemplatePrompt: string;
 }
 
+const generateUniqueMessageId = (prefix: string): string => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return `${prefix}-${crypto.randomUUID()}`;
+  }
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+};
+
+const generateTurnId = (): string => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return `turn-${crypto.randomUUID()}`;
+  }
+  return `turn-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+};
+
+const getNowTimestamp = (): number => {
+  return Date.now();
+};
+
 const AIContext = createContext<AIContextType | undefined>(undefined);
 
 export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -154,7 +172,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
 
   const [docTemplatePrompt, setDocTemplatePrompt] = useState<string | null>(null);
   const [docTemplateTitle, setDocTemplateTitle] = useState<string | null>(null);
-  const [docTemplateId, setDocTemplateId] = useState<string | null>(null);
+  const docTemplateId = fileMetadata?.templateId || null;
   const [docTemplateSkills, setDocTemplateSkills] = useState<string[]>([]);
 
   const projectTemplatePrompt = projectConfig?.ai_template_prompt || 'Você é o Arquiteto Especialista em Criação e Padronização de Templates de Engenharia.\nAjude o usuário a definir uma estrutura lógica e rigorosa de seções (H1, H2, H3), criar placeholders dinâmicos {{CAMPO}} e redigir o system instruction do Copilot para este novo template.';
@@ -181,11 +199,11 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
 
   // Reactively resolve template when activeFile metadata has templateId
   useEffect(() => {
+    let isCancelled = false;
     const currentTemplateId = fileMetadata?.templateId || null;
-    setDocTemplateId(currentTemplateId);
-
     if (currentTemplateId) {
       resolveTemplate(currentTemplateId).then((tpl) => {
+        if (isCancelled) return;
         if (tpl) {
           setDocTemplatePrompt(tpl.prompt || tpl.systemPrompt || null);
           setDocTemplateTitle(tpl.title || tpl.templateName || tpl.id || null);
@@ -200,11 +218,17 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
         }
       });
     } else {
-      setDocTemplatePrompt(null);
-      setDocTemplateTitle(null);
-      setDocTemplateSkills([]);
-      setTemplateSkills([]);
+      queueMicrotask(() => {
+        if (isCancelled) return;
+        setDocTemplatePrompt(null);
+        setDocTemplateTitle(null);
+        setDocTemplateSkills([]);
+        setTemplateSkills([]);
+      });
     }
+    return () => {
+      isCancelled = true;
+    };
   }, [fileMetadata?.templateId, fileMetadata?.skills, activeRepo?.name, resolveTemplate, setTemplateSkills]);
 
   // Sync template skills when in Template Editor mode
@@ -213,7 +237,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       const skills = Array.isArray(activeEditingTemplate.skills) ? activeEditingTemplate.skills : [];
       setTemplateSkills(skills);
     }
-  }, [isTemplateEditorMode, activeEditingTemplate?.skills, setTemplateSkills]);
+  }, [isTemplateEditorMode, activeEditingTemplate, setTemplateSkills]);
 
   // Keep activeFile referenced when not in global scope and no custom references set yet
   useEffect(() => {
@@ -516,7 +540,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     }
 
     const userMessage: ChatMessage = {
-      id: `msg-user-${Date.now()}`,
+      id: generateUniqueMessageId('msg-user'),
       sender: 'user',
       content: prompt,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
@@ -579,10 +603,10 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       }
 
       const assistantPrompt = promptInstructions.length > 0 ? promptInstructions.join('\n\n---\n\n') : undefined;
-      const turnStartTime = Date.now();
+      const turnStartTime = getNowTimestamp();
       const currentHistoryLength = useCopilotStore.getState().messages.length;
       const turnIndex = Math.floor(currentHistoryLength / 2) + 1;
-      const turnId = `turn-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+      const turnId = generateTurnId();
 
       const activeSkillsList = useCopilotStore.getState().activeSkillIds;
       const primarySkillId = activeSkillsList[0] || activeSkillId || undefined;
@@ -604,7 +628,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       };
 
       let accumulatedReply = '';
-      const assistantMsgId = `msg-ai-${Date.now()}`;
+      const assistantMsgId = generateUniqueMessageId('msg-ai');
       let createdAssistantMsg = false;
       const streamEventsList: any[] = [];
       let receivedTelemetry: any = null;
@@ -662,7 +686,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
           });
         }
 
-        const durationMs = Date.now() - turnStartTime;
+        const durationMs = getNowTimestamp() - turnStartTime;
         const activeModelName = aiSettings?.active_model || 'gemini-2.5-flash';
         const historyText = historyPayload.map((h) => `${h.sender}: ${h.text}`).join('\n');
         const calculatedPromptTokens = estimateTokens(prompt + (effectiveContent ? `\n${effectiveContent}` : '') + (assistantPrompt ? `\n${assistantPrompt}` : '') + (historyText ? `\n${historyText}` : ''));
@@ -731,7 +755,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
               : m
           )
         );
-      } catch (streamErr) {
+      } catch {
         // Fallback síncrono em caso de indisponibilidade de streaming
         const res = await API.sendChatMessage(chatPayload);
 
@@ -749,7 +773,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
             }
           }
 
-          const durationMs = Date.now() - turnStartTime;
+          const durationMs = getNowTimestamp() - turnStartTime;
           const activeModelName = res.data.model || aiSettings?.active_model || 'gemini-2.5-flash';
           const historyText = historyPayload.map((h) => `${h.sender}: ${h.text}`).join('\n');
           const calculatedPromptTokens = estimateTokens(prompt + (effectiveContent ? `\n${effectiveContent}` : '') + (assistantPrompt ? `\n${assistantPrompt}` : '') + (historyText ? `\n${historyText}` : ''));
@@ -796,7 +820,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
           useCopilotStore.getState().addSessionTelemetryTurn(currentSessionId, turnTelemetry);
 
           const assistantMessage: ChatMessage = {
-            id: `msg-ai-${Date.now()}`,
+            id: generateUniqueMessageId('msg-ai'),
             sender: 'assistant',
             content: res.data.reply || 'Operação concluída com sucesso.',
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
@@ -811,7 +835,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
           useCopilotStore.getState().addMessage(assistantMessage);
         } else {
           const errorMessage: ChatMessage = {
-            id: `msg-err-${Date.now()}`,
+            id: generateUniqueMessageId('msg-err'),
             sender: 'system',
             content: 'Desculpe, ocorreu um erro ao se comunicar com o modelo de IA. Verifique as configurações de provedor.',
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
@@ -822,7 +846,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     } catch (err) {
       console.error('[AIContext] Erro no envio de mensagem para IA:', err);
       const errorMessage: ChatMessage = {
-        id: `msg-err-${Date.now()}`,
+        id: generateUniqueMessageId('msg-err'),
         sender: 'system',
         content: 'Falha na conexão com o servidor de IA.',
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
@@ -899,7 +923,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       setIsThinking(false);
       await API.stopSession({ session_id: currentSessionId, provider_id: activeProviderId });
       const cancelMessage: ChatMessage = {
-        id: `msg-cancel-${Date.now()}`,
+        id: generateUniqueMessageId('msg-cancel'),
         sender: 'system',
         content: '⏹️ Execução interrompida pelo usuário.',
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),

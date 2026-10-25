@@ -17,15 +17,17 @@ import { useAI } from '../context/AIContext';
 import { useAuth } from '../context/AuthContext';
 
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { LoadingPane } from '../components/layout/LoadingPane';
 import { EditorSubView } from './subviews/EditorSubView';
-import { VersionsSubView } from './subviews/VersionsSubView';
-import { WikiSubView } from './subviews/WikiSubView';
-import { DictionarySubView } from './subviews/DictionarySubView';
-import { PRsSubView } from './subviews/PRsSubView';
-import { TemplatesSubView } from './subviews/TemplatesSubView';
-import { AICenterSubView } from './subviews/AICenterSubView';
-import { GovernanceMembersSubView } from './subviews/GovernanceMembersSubView';
-import { SettingsSubView } from './subviews/SettingsSubView';
+
+const VersionsSubView = React.lazy(() => import('./subviews/VersionsSubView').then(m => ({ default: m.VersionsSubView })));
+const WikiSubView = React.lazy(() => import('./subviews/WikiSubView').then(m => ({ default: m.WikiSubView })));
+const DictionarySubView = React.lazy(() => import('./subviews/DictionarySubView').then(m => ({ default: m.DictionarySubView })));
+const PRsSubView = React.lazy(() => import('./subviews/PRsSubView').then(m => ({ default: m.PRsSubView })));
+const TemplatesSubView = React.lazy(() => import('./subviews/TemplatesSubView').then(m => ({ default: m.TemplatesSubView })));
+const AICenterSubView = React.lazy(() => import('./subviews/AICenterSubView').then(m => ({ default: m.AICenterSubView })));
+const GovernanceMembersSubView = React.lazy(() => import('./subviews/GovernanceMembersSubView').then(m => ({ default: m.GovernanceMembersSubView })));
+const SettingsSubView = React.lazy(() => import('./subviews/SettingsSubView').then(m => ({ default: m.SettingsSubView })));
 
 interface DashboardViewProps {}
 
@@ -311,43 +313,45 @@ export const DashboardView: React.FC<DashboardViewProps> = () => {
             />
           )}
 
-          {(activeSubView === 'edits' || activeSubView === 'versions') && (
-            <VersionsSubView
-              onOpenFile={(path) => {
-                handleOpenFile(path);
-                handleSelectView('editor');
-              }}
-              onOpenDiffModal={() => handleNavigateToEdits('drafts')}
-            />
-          )}
+          <React.Suspense fallback={<LoadingPane />}>
+            {(activeSubView === 'edits' || activeSubView === 'versions') && (
+              <VersionsSubView
+                onOpenFile={(path) => {
+                  handleOpenFile(path);
+                  handleSelectView('editor');
+                }}
+                onOpenDiffModal={() => handleNavigateToEdits('drafts')}
+              />
+            )}
 
-          {activeSubView === 'dictionary' && (
-            <DictionarySubView />
-          )}
+            {activeSubView === 'dictionary' && (
+              <DictionarySubView />
+            )}
 
-          {activeSubView === 'wiki' && (
-            <WikiSubView />
-          )}
+            {activeSubView === 'wiki' && (
+              <WikiSubView />
+            )}
 
-          {activeSubView === 'templates' && (
-            <TemplatesSubView onApplyTemplate={(tplPath) => tplPath ? handleOpenFile(tplPath) : handleSelectView('editor')} />
-          )}
+            {activeSubView === 'templates' && (
+              <TemplatesSubView onApplyTemplate={(tplPath) => tplPath ? handleOpenFile(tplPath) : handleSelectView('editor')} />
+            )}
 
-          {(activeSubView === 'aicenter' || activeSubView === 'skills') && (
-            <AICenterSubView />
-          )}
+            {(activeSubView === 'aicenter' || activeSubView === 'skills') && (
+              <AICenterSubView />
+            )}
 
-          {activeSubView === 'prs' && (
-            <PRsSubView onOpenDiffModal={() => setIsDiffModalOpen(true)} />
-          )}
+            {activeSubView === 'prs' && (
+              <PRsSubView onOpenDiffModal={() => setIsDiffModalOpen(true)} />
+            )}
 
-          {activeSubView === 'governance' && (
-            <GovernanceMembersSubView />
-          )}
+            {activeSubView === 'governance' && (
+              <GovernanceMembersSubView />
+            )}
 
-          {activeSubView === 'settings' && (
-            <SettingsSubView />
-          )}
+            {activeSubView === 'settings' && (
+              <SettingsSubView />
+            )}
+          </React.Suspense>
         </main>
 
         {/* Dedicated Full-Height Sidebars Docked to the LEFT of the AI Chat Pane */}
