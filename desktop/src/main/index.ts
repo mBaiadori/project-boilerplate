@@ -145,30 +145,84 @@ function createMainWindow(port: number) {
     return { action: 'deny' };
   });
 
+  // Intercepta e neutraliza navegação in-window para destinos externos (M3)
+  mainWindow.webContents.on('will-navigate', (event, navigationUrl) => {
+    try {
+      const parsed = new URL(navigationUrl);
+      const isLocal =
+        (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1') &&
+        (parsed.port === String(activeServerPort) || parsed.port === '5173' || parsed.port === '5174');
+
+      if (!isLocal) {
+        event.preventDefault();
+        shell.openExternal(navigationUrl);
+      }
+    } catch {
+      event.preventDefault();
+    }
+  });
+
+  mainWindow.webContents.on('will-redirect', (event, navigationUrl) => {
+    try {
+      const parsed = new URL(navigationUrl);
+      const isLocal =
+        (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1') &&
+        (parsed.port === String(activeServerPort) || parsed.port === '5173' || parsed.port === '5174');
+
+      if (!isLocal) {
+        event.preventDefault();
+        shell.openExternal(navigationUrl);
+      }
+    } catch {
+      event.preventDefault();
+    }
+  });
+
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
 }
 
-// Criptografia e Armazenamento Seguro via Keychain/DPAPI (safeStorage)
-ipcMain.handle('secure-store:encrypt', async (_event, plainText: string) => {
-  if (safeStorage.isEncryptionAvailable()) {
-    const buffer = safeStorage.encryptString(plainText);
-    return buffer.toString('base64');
+function validateIpcSender(event: Electron.IpcMainInvokeEvent): void {
+  const senderUrl = event.senderFrame?.url || '';
+  const allowedPrefixes = [
+    `http://localhost:${activeServerPort}`,
+    `http://127.0.0.1:${activeServerPort}`,
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+    'http://localhost:5174',
+    'http://127.0.0.1:5174',
+    'app://',
+    'file://',
+  ];
+  const isAllowed = allowedPrefixes.some((prefix) => senderUrl.startsWith(prefix));
+  if (!isAllowed) {
+    throw new Error(`Acesso IPC não autorizado originado de: '${senderUrl}'`);
   }
-  return Buffer.from(plainText, 'utf-8').toString('base64');
+}
+
+// Criptografia e Armazenamento Seguro via Keychain/DPAPI (safeStorage) - Fail-Closed (M1)
+ipcMain.handle('secure-store:encrypt', async (event, plainText: string) => {
+  validateIpcSender(event);
+  if (!safeStorage.isEncryptionAvailable()) {
+    throw new Error('Armazenamento seguro indisponível no sistema operacional (safeStorage indisponível).');
+  }
+  const buffer = safeStorage.encryptString(plainText);
+  return buffer.toString('base64');
 });
 
-ipcMain.handle('secure-store:decrypt', async (_event, encryptedBase64: string) => {
-  if (safeStorage.isEncryptionAvailable()) {
-    const buffer = Buffer.from(encryptedBase64, 'base64');
-    return safeStorage.decryptString(buffer);
+ipcMain.handle('secure-store:decrypt', async (event, encryptedBase64: string) => {
+  validateIpcSender(event);
+  if (!safeStorage.isEncryptionAvailable()) {
+    throw new Error('Armazenamento seguro indisponível no sistema operacional (safeStorage indisponível).');
   }
-  return Buffer.from(encryptedBase64, 'base64').toString('utf-8');
+  const buffer = Buffer.from(encryptedBase64, 'base64');
+  return safeStorage.decryptString(buffer);
 });
 
 // Fornece o token de sessão local para o frontend sem necessidade de bootstrap HTTP
-ipcMain.handle('desktop:get-session-token', async () => {
+ipcMain.handle('desktop:get-session-token', async (event) => {
+  validateIpcSender(event);
   try {
     const userDataDir = app.getPath('userData');
     const tokenPath = path.join(userDataDir, '.context-os', 'session-token');
