@@ -1,5 +1,4 @@
-import React from 'react';
-import { useWorkspace } from '../../../context/WorkspaceContext';
+import { useEditorStore } from '../../../stores/editorStore';
 import { useAI } from '../../../context/AIContext';
 import { FileTree } from '../../../components/explorer/FileTree';
 import { WorkbenchCanvas } from '../../../components/editor/WorkbenchCanvas';
@@ -13,7 +12,11 @@ export const EditorSubView: React.FC<EditorSubViewProps> = ({
   onToggleCopilot,
   onOpenFile,
 }) => {
-  const { activeFile, fileContent, setFileContent, loadFile, isLoadingFile } = useWorkspace();
+  const activeFile = useEditorStore((s) => s.activeFile);
+  const fileContent = useEditorStore((s) => s.fileContent);
+  const setFileContent = useEditorStore((s) => s.setFileContent);
+  const loadFile = useEditorStore((s) => s.loadFile);
+  const isLoadingFile = useEditorStore((s) => s.isLoadingFile);
   const { sendMessage } = useAI();
   const {
     isTreeCollapsed,

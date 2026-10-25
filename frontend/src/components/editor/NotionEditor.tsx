@@ -10,7 +10,10 @@ import React, {
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useSecurity } from "../../context/SecurityContext";
-import { useWorkspace } from "../../context/WorkspaceContext";
+import { useEditorStore } from "../../stores/editorStore";
+import { useRepoStore } from "../../stores/repoStore";
+import { useGitStore } from "../../stores/gitStore";
+import { useGovernanceStore } from "../../stores/governanceStore";
 import { API } from "../../services/api";
 import {
   parseFrontmatter,
@@ -73,18 +76,16 @@ export const NotionEditor: React.FC<NotionEditorProps> = ({
   customTitle,
   onCustomTitleChange,
 }) => {
-  const {
-    originalContent,
-    refreshPendingChanges,
-    refreshGitStatus,
-    activeRepo,
-    saveStatus,
-    saveCurrentFile,
-    fileMetadata,
-    updateDocumentTitle,
-    updateFileMetadata,
-    dictionaryTerms,
-  } = useWorkspace();
+  const originalContent = useEditorStore((s) => s.originalContent);
+  const saveStatus = useEditorStore((s) => s.saveStatus);
+  const saveCurrentFile = useEditorStore((s) => s.saveCurrentFile);
+  const fileMetadata = useEditorStore((s) => s.fileMetadata);
+  const updateDocumentTitle = useEditorStore((s) => s.updateDocumentTitle);
+  const updateFileMetadata = useEditorStore((s) => s.updateFileMetadata);
+  const activeRepo = useRepoStore((s) => s.activeRepo);
+  const refreshPendingChanges = useGitStore((s) => s.refreshPendingChanges);
+  const refreshGitStatus = useGitStore((s) => s.refreshGitStatus);
+  const dictionaryTerms = useGovernanceStore((s) => s.dictionaryTerms);
   const [editorTab, setEditorTab] = useState<"document" | "prompt">("document");
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [importText, setImportText] = useState("");
