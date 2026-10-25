@@ -53,10 +53,9 @@ function getAuditFilePath(projectRootOrName: string): string {
   return path.join(memoryDir, "audit-chain.jsonl");
 }
 
-/**
- * Registra um evento na trilha de auditoria encadeada com SHA-256
- */
-export async function recordAuditEvent(
+const writeQueues = new Map<string, Promise<unknown>>();
+
+async function internalRecordAuditEvent(
   projectRootOrName: string,
   input: RecordAuditEventInput,
 ): Promise<AuditRecord> {
@@ -104,6 +103,27 @@ export async function recordAuditEvent(
 
   fs.appendFileSync(filePath, JSON.stringify(record) + "\n", "utf-8");
   return record;
+}
+
+/**
+ * Registra um evento na trilha de auditoria encadeada com SHA-256 (com serialização garantida)
+ */
+export async function recordAuditEvent(
+  projectRootOrName: string,
+  input: RecordAuditEventInput,
+): Promise<AuditRecord> {
+  const key = projectRootOrName || "local";
+  const currentQueue = writeQueues.get(key) || Promise.resolve();
+
+  const nextOperation = currentQueue.then(() =>
+    internalRecordAuditEvent(projectRootOrName, input),
+  );
+
+  writeQueues.set(
+    key,
+    nextOperation.catch(() => {}),
+  );
+  return nextOperation;
 }
 
 /**

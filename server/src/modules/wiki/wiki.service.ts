@@ -1,8 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { PROJECTS_DIR, resolveRepoDir } from '../../config/constants.js';
-import { loadConfig } from '../../config/storage.js';
+import { loadConfig, recordChange } from '../../config/storage.js';
 import { resolveSafeRepoPath } from '../../utils/repo-ref.js';
+import { writeTextAtomic } from '../../utils/atomic-write.js';
 
 export interface WikiPage {
   slug: string;
@@ -188,7 +189,18 @@ export class WikiService {
     const finalTitle = title || cleanSlug;
     const finalContent = content.startsWith('# ') ? content : `# ${finalTitle}\n\n${content}`;
 
-    fs.writeFileSync(fullPath, finalContent, 'utf-8');
+    let oldContent = '';
+    const isNew = !fs.existsSync(fullPath);
+    if (!isNew) {
+      try {
+        oldContent = fs.readFileSync(fullPath, 'utf-8');
+      } catch {}
+    }
+
+    writeTextAtomic(fullPath, finalContent);
+
+    const relWikiPath = `.spec-memory/wiki/${cleanCat}/${cleanSlug}.md`;
+    recordChange(repoName, relWikiPath, isNew ? 'ADDED' : 'MODIFIED', oldContent, finalContent);
 
     return {
       success: true,
@@ -212,7 +224,13 @@ export class WikiService {
     const catDir = this.getCategoryDir(repoName, cleanCat);
     const fullPath = resolveSafeRepoPath(catDir, `${cleanSlug}.md`, 'Página Wiki');
     if (fs.existsSync(fullPath)) {
+      let oldContent = '';
+      try {
+        oldContent = fs.readFileSync(fullPath, 'utf-8');
+      } catch {}
       fs.unlinkSync(fullPath);
+      const relWikiPath = `.spec-memory/wiki/${cleanCat}/${cleanSlug}.md`;
+      recordChange(repoName, relWikiPath, 'DELETED', oldContent, '');
       return { success: true };
     }
 

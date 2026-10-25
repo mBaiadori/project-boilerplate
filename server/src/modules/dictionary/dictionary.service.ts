@@ -2,8 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { PROJECTS_DIR, resolveRepoDir } from '../../config/constants.js';
 import { loadConfig, recordChange } from '../../config/storage.js';
-
 import { validateJsonSchema } from '../../utils/schema.validator.js';
+import { writeJsonAtomic } from '../../utils/atomic-write.js';
 
 export class DictionaryService {
   private getDictionaryPath(repoName: string): string {
@@ -61,7 +61,7 @@ export class DictionaryService {
     }
 
     const newContent = JSON.stringify(data, null, 2);
-    fs.writeFileSync(dictPath, newContent, 'utf-8');
+    writeJsonAtomic(dictPath, data, 2);
 
     recordChange(repoName, '.dictionary.json', oldContent ? 'MODIFIED' : 'ADDED', oldContent, newContent);
 

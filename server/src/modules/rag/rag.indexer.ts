@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { PROJECTS_DIR, resolveRepoDir } from '../../config/constants.js';
 import { RagChunk, RagDiskStorage, RagFileManifestItem } from './rag.types.js';
+import { writeJsonAtomic } from '../../utils/atomic-write.js';
 
 // Normalizador e Tokenizador Simples e Rápido
 export function tokenizeText(text: string): string[] {
@@ -66,7 +67,7 @@ export class RagIndexer {
   saveDiskIndex(repoName: string, data: RagDiskStorage): void {
     const indexPath = this.getDiskIndexPath(repoName);
     try {
-      fs.writeFileSync(indexPath, JSON.stringify(data, null, 2), 'utf-8');
+      writeJsonAtomic(indexPath, data, 2);
     } catch (err) {
       console.warn(`[RAG Indexer] Falha ao persistir cache do disco em ${indexPath}:`, err);
     }

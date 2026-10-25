@@ -86,6 +86,7 @@ export function executeGitCommandWithProgress(
   cwd: string,
   token?: string,
   onProgress?: (p: GitProgressEvent) => void,
+  timeoutMs: number = 60000,
 ): Promise<{ stdout: string; stderr: string; success: boolean }> {
   if (gitExecutionHook) {
     try {
@@ -98,12 +99,20 @@ export function executeGitCommandWithProgress(
 
     let stdout = "";
     let stderr = "";
+    let timedOut = false;
 
     const child = spawn("git", finalArgs, {
       cwd,
       shell: false,
       env,
     });
+
+    const timer = setTimeout(() => {
+      timedOut = true;
+      try {
+        child.kill("SIGTERM");
+      } catch {}
+    }, timeoutMs);
 
     const handleData = (chunk: Buffer) => {
       const str = chunk.toString();
@@ -127,6 +136,7 @@ export function executeGitCommandWithProgress(
     });
 
     child.on("close", (code) => {
+      clearTimeout(timer);
       let safeStdout = stdout;
       let safeStderr = stderr;
       if (activeToken) {
@@ -137,14 +147,18 @@ export function executeGitCommandWithProgress(
         safeStdout = safeStdout.replaceAll(base64Token, "[REDACTED_TOKEN]");
         safeStderr = safeStderr.replaceAll(base64Token, "[REDACTED_TOKEN]");
       }
+      if (timedOut) {
+        safeStderr += `\nOperação Git abortada por timeout após ${timeoutMs}ms.`;
+      }
       resolve({
         stdout: safeStdout.trim(),
         stderr: safeStderr.trim(),
-        success: code === 0,
+        success: !timedOut && code === 0,
       });
     });
 
     child.on("error", (err) => {
+      clearTimeout(timer);
       resolve({
         stdout,
         stderr: err.message,
