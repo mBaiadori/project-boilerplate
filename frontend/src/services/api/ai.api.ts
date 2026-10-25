@@ -324,4 +324,26 @@ export const aiApi = {
     });
     return { ok: res.ok, data: await res.json() };
   },
+
+  async requestCustomToolApproval(toolId: string, repo?: string): Promise<ApiResponse<{ challenge_id: string; expires_in_sec: number }>> {
+    const res = await fetch(`/api/aicenter/custom-tools/${encodeURIComponent(toolId)}/request-approval`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ repo }),
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
+
+  async approveCustomTool(toolId: string, hash: string, challengeId: string, repo?: string): Promise<ApiResponse<{ success: boolean; message: string }>> {
+    const res = await fetch(`/api/aicenter/custom-tools/${encodeURIComponent(toolId)}/approve`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-ContextOS-Confirm': hash,
+        'X-ContextOS-Challenge': challengeId,
+      },
+      body: JSON.stringify({ repo }),
+    });
+    return { ok: res.ok, data: await res.json() };
+  },
 };
