@@ -78,5 +78,7 @@ Thumbs.db
 *.log
 scratch/
 .system_generated/
+.worktrees/
+*.worktrees
 docker/forgejo/data/
 forgejo-data/

@@ -23,7 +23,7 @@ import {
 import { translationsService } from "../translations/translations.service.js";
 import { governanceService } from "../governance/governance.service.js";
 import { canAccessDocument } from "../../utils/crypto.js";
-import { isPathInside } from "../../utils/repo-ref.js";
+import { isPathInside, resolveSafeRepoPath } from "../../utils/repo-ref.js";
 
 export interface TreeNode {
   name: string;
@@ -189,8 +189,9 @@ export class WorkspaceService {
   getFile(filePath: string, targetRepoName?: string) {
     const cfg = loadConfig();
     const repoName = targetRepoName || cfg.active_repo?.name || "local";
+    const repoDir = this.getRepoDir(repoName);
     const cleanPath = (filePath || "").trim().replace(/^\/+/, "");
-    const fullPath = path.join(this.getRepoDir(repoName), cleanPath);
+    const fullPath = resolveSafeRepoPath(repoDir, cleanPath, "Arquivo");
 
     if (!fs.existsSync(fullPath)) {
       throw new Error(`Arquivo '${cleanPath}' não encontrado no repositório '${repoName}'.`);
@@ -243,8 +244,9 @@ export class WorkspaceService {
   getRawFile(filePath: string, targetRepoName?: string) {
     const cfg = loadConfig();
     const repoName = targetRepoName || cfg.active_repo?.name || "local";
+    const repoDir = this.getRepoDir(repoName);
     const cleanPath = (filePath || "").trim().replace(/^\/+/, "");
-    const fullPath = path.join(this.getRepoDir(repoName), cleanPath);
+    const fullPath = resolveSafeRepoPath(repoDir, cleanPath, "Arquivo");
 
     if (!fs.existsSync(fullPath)) {
       throw new Error(`Arquivo '${cleanPath}' não encontrado no repositório '${repoName}'.`);
@@ -318,12 +320,12 @@ export class WorkspaceService {
   async saveFile(filePath: string, content: string, meta?: any, targetRepoName?: string) {
     const cfg = loadConfig();
     const repoName = targetRepoName || cfg.active_repo?.name || "local";
+    const repoDir = this.getRepoDir(repoName);
     const cleanPath = (filePath || "").trim().replace(/^\/+/, "");
+    const fullPath = resolveSafeRepoPath(repoDir, cleanPath, "Arquivo");
     
     // Validação estrita de Clearance de Governança
     this.verifyUserClearance(repoName, cleanPath, meta);
-
-    const fullPath = path.join(this.getRepoDir(repoName), cleanPath);
 
     let oldContent = "";
     let changeType: "ADDED" | "MODIFIED" = "ADDED";
@@ -400,7 +402,7 @@ export class WorkspaceService {
     const repoDir = this.getRepoDir(repoName);
 
     if (isFolder) {
-      const fullPath = path.join(repoDir, cleanPath);
+      const fullPath = resolveSafeRepoPath(repoDir, cleanPath, "Pasta");
       if (fs.existsSync(fullPath)) {
         throw new Error(`Pasta '${cleanPath}' já existe.`);
       }
@@ -417,7 +419,7 @@ export class WorkspaceService {
       };
     }
 
-    const fullPath = path.join(repoDir, cleanPath);
+    const fullPath = resolveSafeRepoPath(repoDir, cleanPath, "Arquivo");
     if (fs.existsSync(fullPath)) {
       throw new Error(`Arquivo '${cleanPath}' já existe.`);
     }
@@ -577,6 +579,7 @@ export class WorkspaceService {
   async renameFile(oldPath: string, newPath: string, targetRepoName?: string) {
     const cfg = loadConfig();
     const repoName = targetRepoName || cfg.active_repo?.name || "local";
+    const repoDir = this.getRepoDir(repoName);
     const cleanOld = (oldPath || "")
       .trim()
       .replace(/^\/+/, "")
@@ -586,7 +589,7 @@ export class WorkspaceService {
       .replace(/^\/+/, "")
       .replace(/\/+$/, "");
 
-    const fullOld = path.join(this.getRepoDir(repoName), cleanOld);
+    const fullOld = resolveSafeRepoPath(repoDir, cleanOld, "Origem");
     if (!fs.existsSync(fullOld)) {
       throw new Error(`Origem '${cleanOld}' não existe.`);
     }
@@ -596,7 +599,7 @@ export class WorkspaceService {
       cleanNew += ".md";
     }
 
-    const fullNew = path.join(this.getRepoDir(repoName), cleanNew);
+    const fullNew = resolveSafeRepoPath(repoDir, cleanNew, "Destino");
     if (fs.existsSync(fullNew)) {
       throw new Error(`Destino '${cleanNew}' já existe.`);
     }
@@ -734,7 +737,7 @@ export class WorkspaceService {
     }
 
     const repoDir = this.getRepoDir(repoName);
-    const fullPath = path.join(repoDir, cleanPath);
+    const fullPath = resolveSafeRepoPath(repoDir, cleanPath, "Arquivo");
     let oldContent = "";
 
     // Verifica se o repositório é Git e se o arquivo já existia rastreado (no HEAD ou index)
@@ -797,7 +800,7 @@ export class WorkspaceService {
     }
 
     const repoDir = this.getRepoDir(repoName);
-    const fullPath = path.join(repoDir, cleanPath);
+    const fullPath = resolveSafeRepoPath(repoDir, cleanPath, "Arquivo");
     if (!fs.existsSync(fullPath)) {
       throw new Error(`Arquivo '${cleanPath}' não existe.`);
     }

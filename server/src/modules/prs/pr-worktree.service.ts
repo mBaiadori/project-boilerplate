@@ -4,6 +4,7 @@ import { resolveRepoDir } from '../../config/constants.js';
 import { loadConfig } from '../../config/storage.js';
 import { executeGit } from '../../utils/git.js';
 import { assertBranchName } from '../../utils/git-validate.js';
+import { resolveSafeRepoPath } from '../../utils/repo-ref.js';
 
 export class PRWorktreeService {
   private getRepoDir(repoName?: string): string {
@@ -15,7 +16,7 @@ export class PRWorktreeService {
 
   getWorktreeDir(repoName: string, prId: number | string): string {
     const repoDir = this.getRepoDir(repoName);
-    return path.join(repoDir, '.git', 'context-pr-worktrees', String(prId));
+    return path.join(repoDir, '.worktrees', String(prId));
   }
 
   async ensurePRWorktree(
@@ -81,8 +82,8 @@ export class PRWorktreeService {
     relPlainPath: string,
     content: string
   ): Promise<{ relPlainPath: string }> {
-    const cleanPath = relPlainPath.replace(/\\/g, '/').replace(/^\/+/, '');
-    const fullPath = path.join(wtDir, cleanPath);
+    const fullPath = resolveSafeRepoPath(wtDir, relPlainPath, 'Arquivo de Worktree');
+    const cleanPath = path.relative(wtDir, fullPath).replace(/\\/g, '/');
     fs.mkdirSync(path.dirname(fullPath), { recursive: true });
     fs.writeFileSync(fullPath, content, 'utf-8');
     return { relPlainPath: cleanPath };

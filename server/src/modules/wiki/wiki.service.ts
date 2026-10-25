@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { PROJECTS_DIR, resolveRepoDir } from '../../config/constants.js';
 import { loadConfig } from '../../config/storage.js';
+import { resolveSafeRepoPath } from '../../utils/repo-ref.js';
 
 export interface WikiPage {
   slug: string;
@@ -30,8 +31,9 @@ export class WikiService {
   }
 
   private getCategoryDir(repoName: string, category: string): string {
+    const rootDir = this.getWikiRootDir(repoName);
     const cleanCategory = (category || 'decisions').toLowerCase().trim();
-    return path.join(this.getWikiRootDir(repoName), cleanCategory);
+    return resolveSafeRepoPath(rootDir, cleanCategory, 'Categoria Wiki');
   }
 
   private ensureMigration(repoName: string) {
@@ -135,7 +137,8 @@ export class WikiService {
     const cleanCat = (category || 'decisions').toLowerCase().trim();
     const cleanSlug = (slug || '').replace('.md', '').toLowerCase().trim();
 
-    const fullPath = path.join(this.getCategoryDir(repoName, cleanCat), `${cleanSlug}.md`);
+    const catDir = this.getCategoryDir(repoName, cleanCat);
+    const fullPath = resolveSafeRepoPath(catDir, `${cleanSlug}.md`, 'Página Wiki');
     if (!fs.existsSync(fullPath)) {
       // Fallback: tentar na raiz ou em outras categorias
       const allPages = this.getWikiPages(repoName);
@@ -181,7 +184,7 @@ export class WikiService {
       .replace(/[^a-z0-9_-]+/g, '-')
       .replace(/(^-|-$)/g, '');
 
-    const fullPath = path.join(catDir, `${cleanSlug}.md`);
+    const fullPath = resolveSafeRepoPath(catDir, `${cleanSlug}.md`, 'Página Wiki');
     const finalTitle = title || cleanSlug;
     const finalContent = content.startsWith('# ') ? content : `# ${finalTitle}\n\n${content}`;
 
@@ -206,7 +209,8 @@ export class WikiService {
     const cleanCat = (category || 'decisions').toLowerCase().trim();
     const cleanSlug = (slug || '').replace('.md', '').toLowerCase().trim();
 
-    const fullPath = path.join(this.getCategoryDir(repoName, cleanCat), `${cleanSlug}.md`);
+    const catDir = this.getCategoryDir(repoName, cleanCat);
+    const fullPath = resolveSafeRepoPath(catDir, `${cleanSlug}.md`, 'Página Wiki');
     if (fs.existsSync(fullPath)) {
       fs.unlinkSync(fullPath);
       return { success: true };

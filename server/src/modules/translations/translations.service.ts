@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { PROJECTS_DIR, resolveRepoDir } from '../../config/constants.js';
 import { loadConfig } from '../../config/storage.js';
+import { resolveSafeRepoPath } from '../../utils/repo-ref.js';
 import { dictionaryService } from '../dictionary/dictionary.service.js';
 import { docsMetadataService } from '../workspace/docs-metadata.service.js';
 import { translationProviderManager } from './providers/TranslationProviderManager.js';
@@ -27,6 +28,14 @@ export class TranslationsService {
     const active = repoName || cfg.active_repo?.name || 'local';
     const effectiveOwner = cfg.active_repo?.name === active ? cfg.active_repo?.owner : undefined;
     return resolveRepoDir(active, effectiveOwner);
+  }
+
+  private validateLangCode(lang: string): string {
+    const clean = (lang || '').trim();
+    if (!/^[a-zA-Z]{2}(-[a-zA-Z0-9]+)?$/.test(clean)) {
+      throw new Error(`Código de idioma inválido: '${lang}'`);
+    }
+    return clean;
   }
 
   getProjectLanguageConfig(repoName?: string): {
@@ -72,7 +81,7 @@ export class TranslationsService {
   } {
     const repoDir = this.getRepoDir(repoName);
     const cleanPath = (filePath || '').trim().replace(/^\/+/, '');
-    const mainFileFullPath = path.join(repoDir, cleanPath);
+    const mainFileFullPath = resolveSafeRepoPath(repoDir, cleanPath, 'Arquivo principal');
 
     const { defaultLanguage, supportedLanguages } = this.getProjectLanguageConfig(repoName);
 
@@ -128,12 +137,20 @@ export class TranslationsService {
     const repoDir = this.getRepoDir(repoName);
     const cleanPath = (filePath || '').trim().replace(/^\/+/, '');
     const { defaultLanguage } = this.getProjectLanguageConfig(repoName);
+    resolveSafeRepoPath(repoDir, cleanPath, 'Arquivo principal');
 
     const isMain = !lang || lang.toLowerCase() === defaultLanguage.toLowerCase();
-    const relPath = isMain
-      ? cleanPath
-      : path.join('.translations', lang, cleanPath).replace(/\\/g, '/');
-    const fullPath = path.join(repoDir, relPath);
+    let fullPath: string;
+    let relPath: string;
+
+    if (isMain) {
+      relPath = cleanPath;
+      fullPath = resolveSafeRepoPath(repoDir, relPath, 'Arquivo principal');
+    } else {
+      const cleanLang = this.validateLangCode(lang);
+      relPath = path.join('.translations', cleanLang, cleanPath).replace(/\\/g, '/');
+      fullPath = resolveSafeRepoPath(repoDir, relPath, 'Tradução');
+    }
 
     if (!fs.existsSync(fullPath)) {
       throw new Error(`Tradução para idioma '${lang}' no arquivo '${cleanPath}' não encontrada.`);
@@ -164,13 +181,21 @@ export class TranslationsService {
   saveTranslation(repoName: string, lang: string, filePath: string, content: string) {
     const repoDir = this.getRepoDir(repoName);
     const cleanPath = (filePath || '').trim().replace(/^\/+/, '');
+    resolveSafeRepoPath(repoDir, cleanPath, 'Arquivo principal');
     const { defaultLanguage } = this.getProjectLanguageConfig(repoName);
 
     const isMain = !lang || lang.toLowerCase() === defaultLanguage.toLowerCase();
-    const relPath = isMain
-      ? cleanPath
-      : path.join('.translations', lang, cleanPath).replace(/\\/g, '/');
-    const fullPath = path.join(repoDir, relPath);
+    let fullPath: string;
+    let relPath: string;
+
+    if (isMain) {
+      relPath = cleanPath;
+      fullPath = resolveSafeRepoPath(repoDir, relPath, 'Arquivo principal');
+    } else {
+      const cleanLang = this.validateLangCode(lang);
+      relPath = path.join('.translations', cleanLang, cleanPath).replace(/\\/g, '/');
+      fullPath = resolveSafeRepoPath(repoDir, relPath, 'Tradução');
+    }
 
     const dir = path.dirname(fullPath);
     if (!fs.existsSync(dir)) {
@@ -190,18 +215,20 @@ export class TranslationsService {
   deleteTranslation(repoName: string, lang: string, filePath: string) {
     const repoDir = this.getRepoDir(repoName);
     const cleanPath = (filePath || '').trim().replace(/^\/+/, '');
+    resolveSafeRepoPath(repoDir, cleanPath, 'Arquivo principal');
     const { defaultLanguage } = this.getProjectLanguageConfig(repoName);
 
     if (lang.toLowerCase() === defaultLanguage.toLowerCase()) {
       throw new Error('Não é permitido deletar o documento no idioma oficial via API de tradução.');
     }
 
-    const relPath = path.join('.translations', lang, cleanPath).replace(/\\/g, '/');
-    const fullPath = path.join(repoDir, relPath);
+    const cleanLang = this.validateLangCode(lang);
+    const relPath = path.join('.translations', cleanLang, cleanPath).replace(/\\/g, '/');
+    const fullPath = resolveSafeRepoPath(repoDir, relPath, 'Tradução');
 
     if (fs.existsSync(fullPath)) {
       fs.unlinkSync(fullPath);
-      this.cleanEmptyParentDirs(path.dirname(fullPath), path.join(repoDir, '.translations', lang));
+      this.cleanEmptyParentDirs(path.dirname(fullPath), path.join(repoDir, '.translations', cleanLang));
     }
 
     return { success: true };

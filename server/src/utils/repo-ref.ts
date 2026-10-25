@@ -222,3 +222,20 @@ export function assertPathInside(parentDir: string, targetPath: string, label = 
   }
   return resolveRealPath(targetPath);
 }
+
+/**
+ * Resolve e valida rigorosamente que o caminho resultante está contido dentro do diretório raiz autorizado,
+ * prevenindo escapes por '..', caminhos absolutos forçados e symlinks maliciosos.
+ */
+export function resolveSafeRepoPath(baseDir: string, userPath: string, label = "Caminho"): string {
+  if (!userPath || typeof userPath !== 'string') {
+    throw new Error(`${label} inválido ou não informado.`);
+  }
+  const clean = userPath.replace(/\0/g, '').trim().replace(/^\/+/, '');
+  const resolved = path.resolve(baseDir, clean);
+  if (!isPathInside(baseDir, resolved)) {
+    throw new Error(`Acesso negado: ${label} '${clean}' está fora do diretório permitido.`);
+  }
+  return resolved;
+}
+
