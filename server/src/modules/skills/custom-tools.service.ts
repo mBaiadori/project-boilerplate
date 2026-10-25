@@ -70,6 +70,49 @@ export function consumeApprovalChallenge(challengeId: string | undefined, toolId
   return crypto.timingSafeEqual(bExpected, bProvided);
 }
 
+export const ALLOWED_CLI_BINARIES = new Set([
+  'git',
+  'npm',
+  'npx',
+  'pnpm',
+  'yarn',
+  'cargo',
+  'go',
+  'docker',
+  'rg',
+  'grep',
+  'diff',
+  'patch',
+  'tree',
+  'echo',
+  'cat',
+  'ls',
+  'find',
+  'wc',
+]);
+
+export const FORBIDDEN_INTERPRETERS = new Set([
+  'bash',
+  'sh',
+  'zsh',
+  'csh',
+  'ksh',
+  'python',
+  'python3',
+  'node',
+  'deno',
+  'bun',
+  'perl',
+  'ruby',
+  'eval',
+  'cmd',
+  'cmd.exe',
+  'powershell',
+  'powershell.exe',
+  'pwsh',
+  'osascript',
+]);
+
 function resolveExecutable(binName: string): string {
   const trimmed = binName.trim();
   if (path.isAbsolute(trimmed) && fs.existsSync(trimmed)) {
@@ -479,6 +522,23 @@ export class CustomToolsService {
     const executable = (config.executable || '').trim();
     if (!executable) {
       return { success: false, error: `Executável shell não configurado para a ferramenta '${tool.name}'.` };
+    }
+
+    const baseBin = path.basename(executable).toLowerCase();
+    const baseBinNoExt = baseBin.replace(/\.exe$/, '');
+
+    if (FORBIDDEN_INTERPRETERS.has(baseBin) || FORBIDDEN_INTERPRETERS.has(baseBinNoExt)) {
+      return {
+        success: false,
+        error: `Execução bloqueada: o executável '${executable}' é um interpretador de comandos não permitido.`,
+      };
+    }
+
+    if (!ALLOWED_CLI_BINARIES.has(baseBin) && !ALLOWED_CLI_BINARIES.has(baseBinNoExt)) {
+      return {
+        success: false,
+        error: `Execução bloqueada: o binário '${executable}' não está na lista de utilitários permitidos.`,
+      };
     }
 
     // Substituição estruturada de parâmetros em array, sem invocação de shell

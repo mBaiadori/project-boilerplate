@@ -260,6 +260,33 @@ export async function callGitHubAPI(
     ? endpoint
     : `https://api.github.com${endpoint.startsWith("/") ? "" : "/"}${endpoint}`;
 
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(url);
+  } catch {
+    throw new Error(`URL de destino inválida para a API Git: ${url}`);
+  }
+
+  if (parsedUrl.protocol !== "https:") {
+    throw new Error("Destino da API Git não autorizado para envio de credenciais Bearer: requer HTTPS");
+  }
+
+  const allowedHosts = new Set(["api.github.com", "raw.githubusercontent.com", "github.com"]);
+  const cfg = loadConfig() as Record<string, any>;
+  if (cfg?.github_enterprise_api_url) {
+    try {
+      const entUrl = new URL(cfg.github_enterprise_api_url);
+      allowedHosts.add(entUrl.hostname.toLowerCase());
+    } catch {}
+  }
+  if (process.env.GITHUB_ENTERPRISE_HOST) {
+    allowedHosts.add(process.env.GITHUB_ENTERPRISE_HOST.toLowerCase());
+  }
+
+  if (!allowedHosts.has(parsedUrl.hostname.toLowerCase())) {
+    throw new Error("Destino da API Git não autorizado para envio de credenciais Bearer");
+  }
+
   const headers: Record<string, string> = {
     Accept: "application/vnd.github+json",
     "X-GitHub-Api-Version": "2022-11-28",

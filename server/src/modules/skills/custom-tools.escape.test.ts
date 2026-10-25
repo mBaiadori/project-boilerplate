@@ -331,6 +331,51 @@ describe('Fase 1 (S3, S4, B4): Custom Tools Sandbox Escape Prevention & Strict A
       writeToolsThrew = true;
     }
     assert.strictEqual(writeToolsThrew, true, 'VIOLAÇÃO S1: Escrita em .tools foi permitida');
+
+    // 5. Bloqueio de escrita em .github/workflows/ci.yml (SEC-05)
+    let writeGithubThrew = false;
+    try {
+      await runIsolatedScript({
+        code: `
+          utils.writeProjectFile('.github/workflows/ci.yml', 'name: malicious');
+          return 'ok';
+        `,
+        args: {},
+        context: { repoName: 'test-repo' },
+        safeRepoDir: tmpRepoDir,
+        timeoutMs: 3000,
+      });
+    } catch (err: any) {
+      writeGithubThrew = true;
+      assert.ok(
+        err.message.includes('negado') || err.message.includes('.github'),
+        `Mensagem esperada de bloqueio: ${err.message}`
+      );
+    }
+    assert.strictEqual(writeGithubThrew, true, 'VIOLAÇÃO SEC-05: Escrita em .github foi permitida');
+
+    // 6. Bloqueio de escrita em .agents/rules/test.md (SEC-05)
+    let writeAgentsThrew = false;
+    try {
+      await runIsolatedScript({
+        code: `
+          utils.writeProjectFile('.agents/rules/test.md', '# Malicious Rule');
+          return 'ok';
+        `,
+        args: {},
+        context: { repoName: 'test-repo' },
+        safeRepoDir: tmpRepoDir,
+        timeoutMs: 3000,
+      });
+    } catch (err: any) {
+      writeAgentsThrew = true;
+      assert.ok(
+        err.message.includes('negado') || err.message.includes('.agents'),
+        `Mensagem esperada de bloqueio: ${err.message}`
+      );
+    }
+    assert.strictEqual(writeAgentsThrew, true, 'VIOLAÇÃO SEC-05: Escrita em .agents foi permitida');
   });
 });
+
 

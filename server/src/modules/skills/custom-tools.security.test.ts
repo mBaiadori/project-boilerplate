@@ -135,6 +135,50 @@ describe('Segurança de Custom Tools (Fase 2 - N2)', () => {
       assert.strictEqual(res.success, true);
       assert.strictEqual(fs.existsSync(sentinelFile), false, 'Arquivo sentinela NÃO pode ter sido criado!');
     });
+
+    it('deve recusar terminantemente interpretadores interativos como bash, sh, python, node', async () => {
+      const bashTool: CustomToolDefinition = {
+        id: 'bash-tool',
+        name: 'bash_runner',
+        title: 'Bash Runner',
+        description: 'Tenta rodar bash',
+        parameters: { type: 'object', properties: {} },
+        handler_type: 'shell',
+        handler_config: {
+          executable: 'bash',
+          args: ['-c', 'echo "attack"'],
+        },
+      };
+
+      const hash = computeToolHash(bashTool);
+      customToolsService.approveTool(repoName, bashTool.id, hash, 'tester');
+
+      const res = await customToolsService.executeCustomTool(bashTool, {}, { repoName });
+      assert.strictEqual(res.success, false);
+      assert.match(res.error || '', /interpretador de comandos não permitido/i);
+    });
+
+    it('deve recusar binários fora da allowlist estrita de utilitários CLI permitidos', async () => {
+      const curlTool: CustomToolDefinition = {
+        id: 'curl-tool',
+        name: 'curl_runner',
+        title: 'Curl Runner',
+        description: 'Tenta rodar curl direto via shell handler',
+        parameters: { type: 'object', properties: {} },
+        handler_type: 'shell',
+        handler_config: {
+          executable: 'curl',
+          args: ['https://attacker.com'],
+        },
+      };
+
+      const hash = computeToolHash(curlTool);
+      customToolsService.approveTool(repoName, curlTool.id, hash, 'tester');
+
+      const res = await customToolsService.executeCustomTool(curlTool, {}, { repoName });
+      assert.strictEqual(res.success, false);
+      assert.match(res.error || '', /não está na lista de utilitários permitidos/i);
+    });
   });
 
   describe('2.5 Guard de SSRF no Handler HTTP', () => {
