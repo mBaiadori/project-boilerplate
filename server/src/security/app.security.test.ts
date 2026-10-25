@@ -248,7 +248,8 @@ describe('Segurança de API e Autenticação de Sessão (Fase 3 - N3)', () => {
       assert.strictEqual(parsed['session'], 'a=b=c');
     });
 
-    it('2.2 Bootstrap deve emitir cookie com Path=/api, Max-Age<=28800 e não sem expiração (S1)', async () => {
+    it('2.2 Bootstrap deve emitir cookie com Path=/api, Max-Age correspondente ao TTL canônico de 12h (SESSION_TTL_SEC) (S1)', async () => {
+      const { SESSION_TTL_SEC } = await import('./session.js');
       const res = await app.inject({
         method: 'GET',
         url: '/api/session/bootstrap',
@@ -259,7 +260,7 @@ describe('Segurança de API e Autenticação de Sessão (Fase 3 - N3)', () => {
       assert.strictEqual(res.statusCode, 200);
       const setCookie = res.headers['set-cookie'] as string;
       assert.ok(setCookie, 'Set-Cookie deve estar presente');
-      assert.match(setCookie, /Max-Age=\d+/i, 'Deve conter Max-Age para não ser cookie indefinido');
+      assert.match(setCookie, new RegExp(`Max-Age=${SESSION_TTL_SEC}`, 'i'), 'Deve conter Max-Age correspondente a SESSION_TTL_SEC (43200s)');
       assert.match(setCookie, /Path=\/api/i, 'Cookie deve ser restrito ao path /api');
     });
 

@@ -89,7 +89,7 @@ Para garantir clareza arquitetural e evitar falsa sensação de segurança, os s
 ### 6.2 Proteção contra Ataques Baseados em Navegador
 - **Content-Security-Policy (CSP)**: Implementado via `@fastify/helmet` com `default-src 'self'`.
 - **CORS Estrito**: Apenas a origem do frontend configurada é permitida; tentativas de origens não autorizadas respondem com HTTP 403 Forbidden estruturado.
-- **Cookies de Sessão**: O cookie `ctxos_session` utiliza `Path=/api`, `HttpOnly`, `SameSite=Strict` e tempo de expiração de 8 horas (`Max-Age=28800`).
+- **Cookies de Sessão**: O cookie `ctxos_session` utiliza `Path=/api`, `HttpOnly`, `SameSite=Strict` e tempo de expiração de 12 horas (`Max-Age=43200`) com renovação deslizante.
 
 ### 6.3 Sandbox de Custom Tools
 - Ferramentas personalizadas são executadas em contexto VM hermético sem acesso a protótipos do host (`Buffer`, `process`, `fetch` desabilitados).
