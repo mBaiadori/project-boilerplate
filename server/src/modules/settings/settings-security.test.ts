@@ -11,6 +11,9 @@ describe('Fase 7: Server Hardening & Security Gates', () => {
 
   before(async () => {
     app = await buildApp();
+    app.get('/api/test-leak-error', async () => {
+      throw new Error('Falha ao acessar /Users/MarcosBaiadori/secrets.txt');
+    });
     await app.ready();
     token = getSessionToken();
   });
