@@ -780,6 +780,7 @@ export interface Organization {
   avatar_url?: string;
   description?: string;
   is_owner?: boolean;
+  is_personal?: boolean;
   role?: 'admin' | 'member';
   public_repos?: number;
   total_private_repos?: number;

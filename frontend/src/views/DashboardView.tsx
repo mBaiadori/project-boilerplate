@@ -15,6 +15,7 @@ import { AlertBanner } from '../components/ui/AlertBanner';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { useAI } from '../context/AIContext';
 import { useAuth } from '../context/AuthContext';
+import { useRepoStore } from '../stores/repoStore';
 
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { LoadingPane } from '../components/layout/LoadingPane';
@@ -57,12 +58,25 @@ export const DashboardView: React.FC<DashboardViewProps> = () => {
   const [systemPrompt, setSystemPrompt] = useState('');
   const fileParam = searchParams.get('file');
 
-  // Sync Org from URL parameter if present
+  // Sync Org from URL parameter if present with protection against circular reverts
+  const lastSyncedOrgRef = useRef<string | null>(null);
+
   useEffect(() => {
-    if (org && (!activeOrg || activeOrg.login.toLowerCase() !== org.toLowerCase())) {
+    if (!org) {
+      lastSyncedOrgRef.current = null;
+      return;
+    }
+    const targetOrg = org.toLowerCase().trim();
+    if (lastSyncedOrgRef.current === targetOrg) {
+      return;
+    }
+    lastSyncedOrgRef.current = targetOrg;
+
+    const currentOrgLogin = useRepoStore.getState().activeOrg?.login?.toLowerCase().trim();
+    if (currentOrgLogin !== targetOrg) {
       selectOrg(org).catch(() => {});
     }
-  }, [org, activeOrg?.login, selectOrg]);
+  }, [org, selectOrg]);
 
   // Clear file param from URL if file load failed (prevent loop / lingering error)
   useEffect(() => {

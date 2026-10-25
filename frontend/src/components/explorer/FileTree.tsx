@@ -723,12 +723,25 @@ export const FileTree: React.FC<FileTreeProps> = ({
     }
 
     if (currentOrgLogin) {
+      const isPersonalScope = Boolean(
+        user?.login && currentOrgLogin === user.login.toLowerCase()
+      );
+
       const filtered = repos.filter((r) => {
         const owner = (
           r.owner || (r.full_name ? r.full_name.split("/")[0] : "")
         )
           .toLowerCase()
           .trim();
+        if (isPersonalScope) {
+          return (
+            owner === currentOrgLogin ||
+            owner === "local" ||
+            !owner ||
+            r.is_local ||
+            r.is_owner
+          );
+        }
         return owner === currentOrgLogin;
       });
 

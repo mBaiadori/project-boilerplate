@@ -110,7 +110,7 @@ const RepoRedirect: React.FC = () => {
 };
 
 const RootRedirect: React.FC = () => {
-  const { activeRepo, repos, isLoadingWorkspace } = useWorkspace();
+  const { activeRepo, repos, isLoadingWorkspace, activeOrg } = useWorkspace();
   const { t } = useTranslation('common');
 
   if (isLoadingWorkspace && !activeRepo && repos.length === 0) {
@@ -142,7 +142,11 @@ const RootRedirect: React.FC = () => {
     return <Navigate to={`/repo/${encodeURIComponent(repoName)}/editor`} replace />;
   }
 
-  return <DashboardView />;
+  if (activeOrg && activeOrg.login && activeOrg.login !== 'local' && !activeOrg.is_personal) {
+    return <Navigate to={`/org/${encodeURIComponent(activeOrg.login)}/editor`} replace />;
+  }
+
+  return <Navigate to="/editor" replace />;
 };
 
 export const App: React.FC = () => {

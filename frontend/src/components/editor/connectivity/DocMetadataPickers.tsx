@@ -125,7 +125,7 @@ export interface DocMetadataPickersProps {
   onRemoveTag: (tag: string) => void;
 
   activeDept: any;
-  onCloseOtherPickers: () => void;
+  onCloseOtherPickers?: () => void;
 }
 
 export const DocMetadataPickers: React.FC<DocMetadataPickersProps> = ({
@@ -164,7 +164,6 @@ export const DocMetadataPickers: React.FC<DocMetadataPickersProps> = ({
   onRemoveTag,
 
   activeDept,
-  onCloseOtherPickers,
 }) => {
   return (
     <>
@@ -174,10 +173,6 @@ export const DocMetadataPickers: React.FC<DocMetadataPickersProps> = ({
           type="button"
           onClick={() => {
             setShowStatusPicker(!showStatusPicker);
-            setShowCategoryPicker(false);
-            setShowTemplatePicker(false);
-            setShowTagPicker(false);
-            onCloseOtherPickers();
           }}
           style={{
             fontSize: "11px",
@@ -343,10 +338,6 @@ export const DocMetadataPickers: React.FC<DocMetadataPickersProps> = ({
           type="button"
           onClick={() => {
             setShowCategoryPicker(!showCategoryPicker);
-            setShowStatusPicker(false);
-            setShowTemplatePicker(false);
-            setShowTagPicker(false);
-            onCloseOtherPickers();
           }}
           style={{
             fontSize: "11px",
@@ -569,10 +560,6 @@ export const DocMetadataPickers: React.FC<DocMetadataPickersProps> = ({
           type="button"
           onClick={() => {
             setShowTemplatePicker(!showTemplatePicker);
-            setShowStatusPicker(false);
-            setShowCategoryPicker(false);
-            setShowTagPicker(false);
-            onCloseOtherPickers();
           }}
           style={{
             fontSize: "11px",
@@ -909,10 +896,6 @@ export const DocMetadataPickers: React.FC<DocMetadataPickersProps> = ({
           type="button"
           onClick={() => {
             setShowTagPicker(!showTagPicker);
-            setShowStatusPicker(false);
-            setShowCategoryPicker(false);
-            setShowTemplatePicker(false);
-            onCloseOtherPickers();
           }}
           style={{
             border: "1px dashed var(--color-outline-variant, #cbd5e1)",

@@ -152,12 +152,12 @@ export const TaxonomySection: React.FC<TaxonomySectionProps> = ({
 }) => {
   return (
     <section id="categories-tags" style={{ scrollMarginTop: "72px" }}>
-      <Card variant="elevated">
+      <Card variant="elevated" style={{ overflow: "visible" }}>
         <CardHeader
           title="Taxonomia & Governança"
           subtitle="Personalize categorias, tags, badges e status com cores integradas do sistema."
         />
-        <CardContent>
+        <CardContent style={{ overflow: "visible" }}>
           <Stack gap="md">
             {/* 1.1 Categorias */}
             <Stack gap="xs">

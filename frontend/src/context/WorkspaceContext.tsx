@@ -140,8 +140,10 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const gov = useGovernanceStore();
 
   useEffect(() => {
-    repo.loadOrgs().catch(() => {});
-  }, [isAuthenticated, repo]);
+    if (isAuthenticated) {
+      useRepoStore.getState().loadOrgs().catch(() => {});
+    }
+  }, [isAuthenticated]);
 
   useEffect(() => {
     const handleBeforeUnload = () => {

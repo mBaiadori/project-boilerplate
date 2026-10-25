@@ -40,16 +40,44 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
   isDirty = false,
   onAddLink,
 }) => {
-  const { fileMetadata, updateFileMetadata, projectMetaOptions } =
+  const { fileMetadata, updateFileMetadata, projectMetaOptions, projectConfig } =
     useWorkspace();
   const { templates, fetchTemplates } = useTemplateStore();
   const [contextData, setContextData] = useState<any>(null);
-  const [showConsumers, setShowConsumers] = useState(false);
-  const [showDeps, setShowDeps] = useState(false);
-  const [showStatusPicker, setShowStatusPicker] = useState(false);
-  const [showCategoryPicker, setShowCategoryPicker] = useState(false);
-  const [showTagPicker, setShowTagPicker] = useState(false);
-  const [showTemplatePicker, setShowTemplatePicker] = useState(false);
+  type ActivePickerType =
+    | "status"
+    | "category"
+    | "template"
+    | "tag"
+    | "consumers"
+    | "deps"
+    | null;
+  const [activePicker, setActivePicker] = useState<ActivePickerType>(null);
+
+  const showStatusPicker = activePicker === "status";
+  const setShowStatusPicker = (v: boolean) =>
+    setActivePicker((curr) => (v ? "status" : curr === "status" ? null : curr));
+
+  const showCategoryPicker = activePicker === "category";
+  const setShowCategoryPicker = (v: boolean) =>
+    setActivePicker((curr) => (v ? "category" : curr === "category" ? null : curr));
+
+  const showTemplatePicker = activePicker === "template";
+  const setShowTemplatePicker = (v: boolean) =>
+    setActivePicker((curr) => (v ? "template" : curr === "template" ? null : curr));
+
+  const showTagPicker = activePicker === "tag";
+  const setShowTagPicker = (v: boolean) =>
+    setActivePicker((curr) => (v ? "tag" : curr === "tag" ? null : curr));
+
+  const showConsumers = activePicker === "consumers";
+  const setShowConsumers = (v: boolean) =>
+    setActivePicker((curr) => (v ? "consumers" : curr === "consumers" ? null : curr));
+
+  const showDeps = activePicker === "deps";
+  const setShowDeps = (v: boolean) =>
+    setActivePicker((curr) => (v ? "deps" : curr === "deps" ? null : curr));
+
   const [templateSearchInput, setTemplateSearchInput] = useState("");
   const [newTagInput, setNewTagInput] = useState("");
   const [customCategoryInput, setCustomCategoryInput] = useState("");
@@ -58,19 +86,13 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
   const barRef = useRef<HTMLDivElement>(null);
 
   const closeOtherPickers = () => {
-    setShowStatusPicker(false);
-    setShowCategoryPicker(false);
-    setShowTemplatePicker(false);
-    setShowTagPicker(false);
-    setShowConsumers(false);
-    setShowDeps(false);
+    setActivePicker(null);
   };
 
   const openAddLinkModal = (type: "dependency" | "consumer") => {
     setAddLinkType(type);
     setIsAddLinkModalOpen(true);
-    setShowConsumers(false);
-    setShowDeps(false);
+    setActivePicker(null);
   };
 
   useEffect(() => {
@@ -131,8 +153,17 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
         closeOtherPickers();
       }
     };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        closeOtherPickers();
+      }
+    };
     document.addEventListener("mousedown", handleOutsideClick);
-    return () => document.removeEventListener("mousedown", handleOutsideClick);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
   }, []);
 
   const consumers = contextData?.consumers || [];
@@ -156,7 +187,7 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
 
   // Opções do projeto
   const statusOptions = useMemo<StatusItem[]>(() => {
-    const raw = projectMetaOptions?.statuses || [];
+    const raw = projectMetaOptions?.statuses || projectConfig?.statuses || [];
     return raw.map((s: any) => {
       const name = String(s.name || s.key || s.label || "")
         .toLowerCase()
@@ -166,25 +197,25 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
       const color = String(s.color || "#3b82f6");
       return { name, key, label, color };
     });
-  }, [projectMetaOptions?.statuses]);
+  }, [projectMetaOptions?.statuses, projectConfig?.statuses]);
 
   const categoryOptions = useMemo<TaxonomyItem[]>(() => {
-    const raw = projectMetaOptions?.categories || [];
+    const raw = projectMetaOptions?.categories || projectConfig?.categories || [];
     return raw.map((c: any) =>
       typeof c === "string"
         ? { name: c, color: "#3b82f6" }
         : { name: c.name || "", color: c.color || "#3b82f6" },
     );
-  }, [projectMetaOptions?.categories]);
+  }, [projectMetaOptions?.categories, projectConfig?.categories]);
 
   const availableTags = useMemo<TaxonomyItem[]>(() => {
-    const raw = projectMetaOptions?.tags || [];
+    const raw = projectMetaOptions?.tags || projectConfig?.tags || [];
     return raw.map((t: any) =>
       typeof t === "string"
         ? { name: t, color: "#6366f1" }
         : { name: t.name || "", color: t.color || "#6366f1" },
     );
-  }, [projectMetaOptions?.tags]);
+  }, [projectMetaOptions?.tags, projectConfig?.tags]);
 
   const handleStatusChange = async (newStatus: string) => {
     await updateFileMetadata({ status: newStatus });
@@ -292,6 +323,7 @@ export const DocConnectivityBar: React.FC<DocConnectivityBarProps> = ({
         fontSize: "12px",
         position: "relative",
         minHeight: "38px",
+        zIndex: 30,
       }}
     >
       {/* Left: Status + Categoria + Tags + Departamento + Conectividade */}

@@ -25,6 +25,8 @@ export type SubViewType =
   | "governance"
   | "settings";
 
+export const MODULES_SIDEBAR_COLLAPSED_KEY = "spec_modules_sidebar_collapsed";
+
 interface SidebarNavProps {
   activeView: SubViewType;
   onSelectView: (view: SubViewType) => void;
@@ -36,7 +38,24 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
   onSelectView,
   hasUnreadWhatsNew = false,
 }) => {
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem(MODULES_SIDEBAR_COLLAPSED_KEY);
+      return saved === "true";
+    } catch {
+      return false;
+    }
+  });
+
+  const handleToggleCollapse = () => {
+    setIsCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(MODULES_SIDEBAR_COLLAPSED_KEY, String(next));
+      } catch {}
+      return next;
+    });
+  };
 
   const navItems = [
     {
@@ -109,10 +128,14 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
           <button
             id="btn-toggle-global-sidebar"
             className="dash-sidebar-toggle-top"
+            aria-expanded={!isCollapsed}
+            aria-label={
+              isCollapsed ? "Expandir Menu Lateral" : "Recolher Menu Lateral"
+            }
             title={
               isCollapsed ? "Expandir Menu Lateral" : "Recolher Menu Lateral"
             }
-            onClick={() => setIsCollapsed(!isCollapsed)}
+            onClick={handleToggleCollapse}
           >
             <span className="toggle-arrow">
               <ChevronLeft size={14} />

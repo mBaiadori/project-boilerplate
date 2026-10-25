@@ -1,63 +1,158 @@
-import fs from 'node:fs';
-import path from 'node:path';
-import { PROJECTS_DIR, resolveRepoDir } from '../../config/constants.js';
-import { RagChunk, RagDiskStorage, RagFileManifestItem } from './rag.types.js';
-import { writeJsonAtomic } from '../../utils/atomic-write.js';
-import { checkAiPolicy } from '../ai/ai-policy.service.js';
+import fs from "node:fs";
+import path from "node:path";
+import { resolveRepoDir } from "../../config/constants.js";
+import { writeJsonAtomic } from "../../utils/atomic-write.js";
+import { checkAiPolicy } from "../ai/ai-policy.service.js";
+import { RagChunk, RagDiskStorage, RagFileManifestItem } from "./rag.types.js";
 
 // Normalizador e Tokenizador Simples e Rápido
 export function tokenizeText(text: string): string[] {
   return text
     .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '') // remove acentos
-    .replace(/[^\w\s-]/g, ' ')
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // remove acentos
+    .replace(/[^\w\s-]/g, " ")
     .split(/\s+/)
     .filter((token) => token.length >= 2 && !STOPWORDS.has(token));
 }
 
 const STOPWORDS = new Set([
-  'de', 'a', 'o', 'que', 'e', 'do', 'da', 'em', 'um', 'para', 'com', 'nao', 'uma', 'os', 'no', 'se', 'na', 'por', 'mais',
-  'as', 'dos', 'como', 'mas', 'ao', 'ele', 'das', 'sua', 'seu', 'ou', 'quando', 'muito', 'nos', 'ja', 'eu', 'tambem', 'so',
-  'pelo', 'pela', 'ate', 'isso', 'ela', 'entre', 'depois', 'sem', 'mesmo', 'aos', 'seus', 'quem', 'nas', 'me', 'esse', 'eles',
-  'the', 'and', 'to', 'of', 'a', 'in', 'is', 'that', 'for', 'it', 'as', 'was', 'with', 'on', 'are', 'this', 'by', 'at', 'be', 'from'
+  "de",
+  "a",
+  "o",
+  "que",
+  "e",
+  "do",
+  "da",
+  "em",
+  "um",
+  "para",
+  "com",
+  "nao",
+  "uma",
+  "os",
+  "no",
+  "se",
+  "na",
+  "por",
+  "mais",
+  "as",
+  "dos",
+  "como",
+  "mas",
+  "ao",
+  "ele",
+  "das",
+  "sua",
+  "seu",
+  "ou",
+  "quando",
+  "muito",
+  "nos",
+  "ja",
+  "eu",
+  "tambem",
+  "so",
+  "pelo",
+  "pela",
+  "ate",
+  "isso",
+  "ela",
+  "entre",
+  "depois",
+  "sem",
+  "mesmo",
+  "aos",
+  "seus",
+  "quem",
+  "nas",
+  "me",
+  "esse",
+  "eles",
+  "the",
+  "and",
+  "to",
+  "of",
+  "a",
+  "in",
+  "is",
+  "that",
+  "for",
+  "it",
+  "as",
+  "was",
+  "with",
+  "on",
+  "are",
+  "this",
+  "by",
+  "at",
+  "be",
+  "from",
 ]);
 
 export class RagIndexer {
   private ignoredDirs = new Set([
-    'node_modules', '.git', 'dist', 'build', '.cache', '.spec-memory', 'coverage', '.vscode', '.antigravity'
+    "node_modules",
+    ".git",
+    "dist",
+    "build",
+    ".cache",
+    ".spec-memory",
+    "coverage",
+    ".vscode",
+    ".antigravity",
   ]);
 
   private supportedExts = new Set([
-    '.md', '.markdown', '.txt', '.json', '.yaml', '.yml', '.csv', '.mermaid', '.ts', '.js'
+    ".md",
+    ".markdown",
+    ".txt",
+    ".json",
+    ".yaml",
+    ".yml",
+    ".csv",
+    ".mermaid",
+    ".ts",
+    ".js",
   ]);
 
-  private getDiskIndexPath(repoName: string, explicitProjectRoot?: string): string {
-    const projectRoot = explicitProjectRoot || resolveRepoDir(repoName || 'local');
-    const memoryDir = path.join(projectRoot, '.spec-memory');
+  private getDiskIndexPath(
+    repoName: string,
+    explicitProjectRoot?: string,
+  ): string {
+    const projectRoot =
+      explicitProjectRoot || resolveRepoDir(repoName || "local");
+    const memoryDir = path.join(projectRoot, ".spec-memory");
     if (!fs.existsSync(memoryDir)) {
       try {
         fs.mkdirSync(memoryDir, { recursive: true });
       } catch {}
     }
-    return path.join(memoryDir, 'rag-index.json');
+    return path.join(memoryDir, "rag-index.json");
   }
 
   /**
    * Carrega o índice persistido do disco em .spec-memory/rag-index.json
    */
-  loadDiskIndex(repoName: string, explicitProjectRoot?: string): RagDiskStorage | null {
+  loadDiskIndex(
+    repoName: string,
+    explicitProjectRoot?: string,
+  ): RagDiskStorage | null {
     const indexPath = this.getDiskIndexPath(repoName, explicitProjectRoot);
     if (!fs.existsSync(indexPath)) return null;
 
     try {
-      const raw = fs.readFileSync(indexPath, 'utf-8');
+      const raw = fs.readFileSync(indexPath, "utf-8");
       const parsed = JSON.parse(raw);
       if (parsed && Array.isArray(parsed.chunks) && parsed.manifest) {
         return parsed as RagDiskStorage;
       }
     } catch (err) {
-      console.warn(`[RAG Indexer] Falha ao ler cache do disco de ${repoName}:`, err);
+      console.warn(
+        `[RAG Indexer] Falha ao ler cache do disco de ${repoName}:`,
+        err,
+      );
     }
     return null;
   }
@@ -65,26 +160,38 @@ export class RagIndexer {
   /**
    * Salva o índice consolidado no disco
    */
-  saveDiskIndex(repoName: string, data: RagDiskStorage, explicitProjectRoot?: string): void {
+  saveDiskIndex(
+    repoName: string,
+    data: RagDiskStorage,
+    explicitProjectRoot?: string,
+  ): void {
     const indexPath = this.getDiskIndexPath(repoName, explicitProjectRoot);
     try {
       writeJsonAtomic(indexPath, data, 2);
     } catch (err) {
-      console.warn(`[RAG Indexer] Falha ao persistir cache do disco em ${indexPath}:`, err);
+      console.warn(
+        `[RAG Indexer] Falha ao persistir cache do disco em ${indexPath}:`,
+        err,
+      );
     }
   }
 
   /**
    * Indexação Incremental com controle por mtime e manifesto de arquivos
    */
-  indexRepositoryIncremental(repoName: string, explicitProjectRoot?: string): { chunks: RagChunk[]; indexedFiles: string[]; updatedCount: number } {
-    const projectRoot = explicitProjectRoot || resolveRepoDir(repoName || 'local');
+  indexRepositoryIncremental(
+    repoName: string,
+    explicitProjectRoot?: string,
+  ): { chunks: RagChunk[]; indexedFiles: string[]; updatedCount: number } {
+    const projectRoot =
+      explicitProjectRoot || resolveRepoDir(repoName || "local");
     if (!fs.existsSync(projectRoot)) {
       return { chunks: [], indexedFiles: [], updatedCount: 0 };
     }
 
     const diskCache = this.loadDiskIndex(repoName, projectRoot);
-    const existingManifest: Record<string, RagFileManifestItem> = diskCache?.manifest || {};
+    const existingManifest: Record<string, RagFileManifestItem> =
+      diskCache?.manifest || {};
     const existingChunksMap = new Map<string, RagChunk>();
 
     if (diskCache?.chunks) {
@@ -110,15 +217,19 @@ export class RagIndexer {
           projectRoot,
           repoName,
           filePath: relFile,
-          provider: 'rag',
+          provider: "rag",
         });
-        if (!privacyPolicy.allowed || privacyPolicy.policy === 'deny') {
+        if (!privacyPolicy.allowed || privacyPolicy.policy === "deny") {
           continue;
         }
 
         const prevManifest = existingManifest[relFile];
         // SE o arquivo NÃO foi alterado no disco (mtime e tamanho idênticos)
-        if (prevManifest && prevManifest.mtimeMs === stat.mtimeMs && prevManifest.size === stat.size) {
+        if (
+          prevManifest &&
+          prevManifest.mtimeMs === stat.mtimeMs &&
+          prevManifest.size === stat.size
+        ) {
           newManifest[relFile] = prevManifest;
           for (const cId of prevManifest.chunkIds) {
             const cachedChunk = existingChunksMap.get(cId);
@@ -128,8 +239,14 @@ export class RagIndexer {
           }
         } else {
           // Arquivo novo ou modificado: particiona apenas este arquivo!
-          const content = fs.readFileSync(fullPath, 'utf-8');
-          const fileChunks = this.chunkFile(repoName, fullPath, relFile, content, stat.mtimeMs);
+          const content = fs.readFileSync(fullPath, "utf-8");
+          const fileChunks = this.chunkFile(
+            repoName,
+            fullPath,
+            relFile,
+            content,
+            stat.mtimeMs,
+          );
           const chunkIds = fileChunks.map((c) => c.id);
 
           newManifest[relFile] = {
@@ -143,17 +260,24 @@ export class RagIndexer {
           updatedCount++;
         }
       } catch (err) {
-        console.warn(`[RAG Indexer] Erro ao processar arquivo ${relFile}:`, err);
+        console.warn(
+          `[RAG Indexer] Erro ao processar arquivo ${relFile}:`,
+          err,
+        );
       }
     }
 
     // Salva o novo índice consolidado em disco
-    this.saveDiskIndex(repoName, {
-      repo: repoName,
-      lastIndexedAt: Date.now(),
-      manifest: newManifest,
-      chunks: finalChunks,
-    }, projectRoot);
+    this.saveDiskIndex(
+      repoName,
+      {
+        repo: repoName,
+        lastIndexedAt: Date.now(),
+        manifest: newManifest,
+        chunks: finalChunks,
+      },
+      projectRoot,
+    );
 
     return { chunks: finalChunks, indexedFiles: currentFiles, updatedCount };
   }
@@ -161,8 +285,13 @@ export class RagIndexer {
   /**
    * Indexa apenas um único arquivo pontual quando o evento do chokidar avisar
    */
-  indexSingleFile(repoName: string, relativePath: string, explicitProjectRoot?: string): { chunks: RagChunk[]; updated: boolean } {
-    const projectRoot = explicitProjectRoot || resolveRepoDir(repoName || 'local');
+  indexSingleFile(
+    repoName: string,
+    relativePath: string,
+    explicitProjectRoot?: string,
+  ): { chunks: RagChunk[]; updated: boolean } {
+    const projectRoot =
+      explicitProjectRoot || resolveRepoDir(repoName || "local");
     const fullPath = path.join(projectRoot, relativePath);
 
     if (!fs.existsSync(fullPath)) {
@@ -173,16 +302,22 @@ export class RagIndexer {
       projectRoot,
       repoName,
       filePath: relativePath,
-      provider: 'rag',
+      provider: "rag",
     });
-    if (!privacyPolicy.allowed || privacyPolicy.policy === 'deny') {
+    if (!privacyPolicy.allowed || privacyPolicy.policy === "deny") {
       return { chunks: [], updated: false };
     }
 
     try {
       const stat = fs.statSync(fullPath);
-      const content = fs.readFileSync(fullPath, 'utf-8');
-      const fileChunks = this.chunkFile(repoName, fullPath, relativePath, content, stat.mtimeMs);
+      const content = fs.readFileSync(fullPath, "utf-8");
+      const fileChunks = this.chunkFile(
+        repoName,
+        fullPath,
+        relativePath,
+        content,
+        stat.mtimeMs,
+      );
       return { chunks: fileChunks, updated: true };
     } catch {
       return { chunks: [], updated: false };
@@ -195,11 +330,14 @@ export class RagIndexer {
       const entries = fs.readdirSync(dir, { withFileTypes: true });
       for (const entry of entries) {
         if (entry.isDirectory()) {
-          if (this.ignoredDirs.has(entry.name) || entry.name.startsWith('.')) continue;
-          results.push(...this.collectFiles(path.join(dir, entry.name), rootDir));
+          if (this.ignoredDirs.has(entry.name) || entry.name.startsWith("."))
+            continue;
+          results.push(
+            ...this.collectFiles(path.join(dir, entry.name), rootDir),
+          );
         } else if (entry.isFile()) {
           const ext = path.extname(entry.name).toLowerCase();
-          if (this.supportedExts.has(ext) && !entry.name.startsWith('.')) {
+          if (this.supportedExts.has(ext) && !entry.name.startsWith(".")) {
             const rel = path.relative(rootDir, path.join(dir, entry.name));
             results.push(rel);
           }
@@ -209,23 +347,35 @@ export class RagIndexer {
     return results;
   }
 
-  private chunkFile(repo: string, filePath: string, relativePath: string, content: string, updatedAt: number): RagChunk[] {
+  private chunkFile(
+    repo: string,
+    filePath: string,
+    relativePath: string,
+    content: string,
+    updatedAt: number,
+  ): RagChunk[] {
     const ext = path.extname(filePath).toLowerCase();
 
-    if (ext === '.md' || ext === '.markdown') {
-      return this.chunkMarkdown(repo, filePath, relativePath, content, updatedAt);
+    if (ext === ".md" || ext === ".markdown") {
+      return this.chunkMarkdown(
+        repo,
+        filePath,
+        relativePath,
+        content,
+        updatedAt,
+      );
     }
 
     // Para outros arquivos, particiona por blocos de linhas (~40 linhas por chunk com overlap)
-    const lines = content.split('\n');
+    const lines = content.split("\n");
     const chunks: RagChunk[] = [];
     const CHUNK_SIZE = 40;
     const OVERLAP = 10;
 
-    for (let i = 0; i < lines.length; i += (CHUNK_SIZE - OVERLAP)) {
+    for (let i = 0; i < lines.length; i += CHUNK_SIZE - OVERLAP) {
       const slice = lines.slice(i, i + CHUNK_SIZE);
       if (slice.length === 0) break;
-      const text = slice.join('\n').trim();
+      const text = slice.join("\n").trim();
       if (!text) continue;
 
       const tokens = tokenizeText(text);
@@ -254,8 +404,14 @@ export class RagIndexer {
     return chunks;
   }
 
-  private chunkMarkdown(repo: string, filePath: string, relativePath: string, content: string, updatedAt: number): RagChunk[] {
-    const lines = content.split('\n');
+  private chunkMarkdown(
+    repo: string,
+    filePath: string,
+    relativePath: string,
+    content: string,
+    updatedAt: number,
+  ): RagChunk[] {
+    const lines = content.split("\n");
     const chunks: RagChunk[] = [];
 
     let currentSection = relativePath;
@@ -267,16 +423,16 @@ export class RagIndexer {
       const isHeader = /^#{1,4}\s+(.+)$/.test(line.trim());
 
       if (isHeader && currentLines.length > 0) {
-        const text = currentLines.join('\n').trim();
+        const text = currentLines.join("\n").trim();
         if (text) {
-          const tokens = tokenizeText(currentSection + ' ' + text);
+          const tokens = tokenizeText(currentSection + " " + text);
           const tf: Record<string, number> = {};
           for (const tok of tokens) {
             tf[tok] = (tf[tok] || 0) + 1;
           }
 
           chunks.push({
-            id: `${relativePath}#${currentSection.replace(/\s+/g, '-').toLowerCase()}#L${startLine}-${idx}`,
+            id: `${relativePath}#${currentSection.replace(/\s+/g, "-").toLowerCase()}#L${startLine}-${idx}`,
             repo,
             filePath,
             relativePath,
@@ -300,16 +456,16 @@ export class RagIndexer {
     }
 
     if (currentLines.length > 0) {
-      const text = currentLines.join('\n').trim();
+      const text = currentLines.join("\n").trim();
       if (text) {
-        const tokens = tokenizeText(currentSection + ' ' + text);
+        const tokens = tokenizeText(currentSection + " " + text);
         const tf: Record<string, number> = {};
         for (const tok of tokens) {
           tf[tok] = (tf[tok] || 0) + 1;
         }
 
         chunks.push({
-          id: `${relativePath}#${currentSection.replace(/\s+/g, '-').toLowerCase()}#L${startLine}-${lines.length}`,
+          id: `${relativePath}#${currentSection.replace(/\s+/g, "-").toLowerCase()}#L${startLine}-${lines.length}`,
           repo,
           filePath,
           relativePath,

@@ -175,7 +175,7 @@ export const useRepoStore = create<RepoState>((set, get) => ({
   },
 
   loadRepos: async (targetOrg?: string) => {
-    set({ isLoading: true });
+    set({ isLoading: true, isLoadingWorkspace: true });
     try {
       const orgToFetch =
         targetOrg !== undefined
@@ -195,14 +195,22 @@ export const useRepoStore = create<RepoState>((set, get) => ({
     } catch (err) {
       console.error("[repoStore] Erro ao carregar repositórios:", err);
     } finally {
-      set({ isLoading: false });
+      set({ isLoading: false, isLoadingWorkspace: false });
     }
   },
 
   selectOrg: async (orgLogin: string) => {
+    if (!orgLogin) return;
     const found = get().orgs.find((o) => o.login.toLowerCase() === orgLogin.toLowerCase());
     const orgToSet = found || { login: orgLogin, full_name: orgLogin };
-    set({ activeOrg: orgToSet });
+    set({
+      activeOrg: orgToSet,
+      activeRepo: null,
+      tree: [],
+      repos: [],
+      isLoadingWorkspace: true,
+      isLoading: true,
+    });
     try {
       localStorage.setItem("spec_active_org_login", orgToSet.login);
     } catch {}

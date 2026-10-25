@@ -1,27 +1,49 @@
-import React, { useRef, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useRef, useEffect, useMemo } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import { Building2, ChevronDown, Check } from "lucide-react";
 import { useWorkspace } from "../../context/WorkspaceContext";
 import { useAuth } from "../../context/AuthContext";
 import { useOrgUiStore } from "../../stores/orgUiStore";
+
+const VALID_SUBVIEWS = [
+  "editor",
+  "edits",
+  "versions",
+  "dictionary",
+  "wiki",
+  "templates",
+  "skills",
+  "aicenter",
+  "prs",
+  "governance",
+  "settings",
+];
 
 export const OrgSelectorDropdown: React.FC = () => {
   const { activeOrg, orgs, selectOrg, resetActiveRepo } = useWorkspace();
   const { user } = useAuth();
   const { isOrgDropdownOpen, toggleOrgDropdown, closeOrgDropdown } = useOrgUiStore();
   const navigate = useNavigate();
+  const { subview } = useParams<{ subview?: string }>();
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const displayOrgs = (orgs && orgs.length > 0)
-    ? orgs
-    : user?.login
-      ? [{
-          login: user.login,
-          full_name: `${user.name || user.login} (Pessoal)`,
-          avatar_url: user.avatar_url,
-          is_personal: true,
-        }]
-      : [];
+  const currentSubView = subview && VALID_SUBVIEWS.includes(subview) ? subview : "editor";
+
+  const displayOrgs = useMemo(() => {
+    const list = [...(orgs || [])];
+    if (
+      user?.login &&
+      !list.some((o) => o.login.toLowerCase() === user.login.toLowerCase())
+    ) {
+      list.unshift({
+        login: user.login,
+        full_name: `${user.name || user.login} (Pessoal)`,
+        avatar_url: user.avatar_url,
+        is_personal: true,
+      });
+    }
+    return list;
+  }, [orgs, user?.login, user?.name, user?.avatar_url]);
 
   // Fecha o dropdown ao clicar fora ou pressionar Escape
   useEffect(() => {
@@ -170,11 +192,26 @@ export const OrgSelectorDropdown: React.FC = () => {
                 key={o.login}
                 role="option"
                 aria-selected={isSelected}
-                onClick={() => {
-                  selectOrg(o.login);
+                onClick={async () => {
+                  if (isSelected) {
+                    closeOrgDropdown();
+                    return;
+                  }
+
+                  const isPersonalOrLocal = Boolean(
+                    o.is_personal ||
+                    o.login === "local" ||
+                    o.login.toLowerCase() === (user?.login || "").toLowerCase()
+                  );
+
+                  const targetPath = isPersonalOrLocal
+                    ? `/${currentSubView}`
+                    : `/org/${encodeURIComponent(o.login)}/${currentSubView}`;
+
                   closeOrgDropdown();
                   resetActiveRepo();
-                  navigate("/");
+                  navigate(targetPath);
+                  await selectOrg(o.login);
                 }}
                 style={{
                   padding: "8px 10px",

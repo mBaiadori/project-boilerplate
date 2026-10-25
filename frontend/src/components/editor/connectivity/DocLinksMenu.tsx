@@ -9,7 +9,7 @@ export interface DocLinksMenuProps {
   setShowDeps: (show: boolean) => void;
   onNavigateFile: (path: string) => void;
   onOpenAddLinkModal: (type: "dependency" | "consumer") => void;
-  onCloseOtherPickers: () => void;
+  onCloseOtherPickers?: () => void;
 }
 
 export const DocLinksMenu: React.FC<DocLinksMenuProps> = ({
@@ -21,7 +21,6 @@ export const DocLinksMenu: React.FC<DocLinksMenuProps> = ({
   setShowDeps,
   onNavigateFile,
   onOpenAddLinkModal,
-  onCloseOtherPickers,
 }) => {
   return (
     <>
@@ -58,8 +57,6 @@ export const DocLinksMenu: React.FC<DocLinksMenuProps> = ({
             className={`btn-icon-action ${showConsumers ? "active" : ""}`}
             onClick={() => {
               setShowConsumers(!showConsumers);
-              setShowDeps(false);
-              onCloseOtherPickers();
             }}
             style={{
               height: "28px",
@@ -303,8 +300,6 @@ export const DocLinksMenu: React.FC<DocLinksMenuProps> = ({
             className={`btn-icon-action ${showDeps ? "active" : ""}`}
             onClick={() => {
               setShowDeps(!showDeps);
-              setShowConsumers(false);
-              onCloseOtherPickers();
             }}
             style={{
               height: "28px",
