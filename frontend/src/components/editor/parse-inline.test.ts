@@ -80,4 +80,14 @@ describe('Phase 3: Editor Bugs & HTML Hardening (B2, B3, style)', () => {
     expect(clean).toContain('rel="noopener noreferrer"');
     expect(clean).toContain('target="_blank"');
   });
+
+  it('3.1.10: Protocol-relative URLs (//evil.com) devem ser tratadas como externas e neutralizadas', () => {
+    const input = '[Phishing](//evil.com/phishing.md)';
+    const html = engine.parseInlineMarkdown(input);
+    expect(html).not.toContain('target="_self"');
+    expect(html).not.toContain('notion-doc-link');
+    expect(html).toContain('target="_blank"');
+    expect(html).toContain('rel="noopener noreferrer"');
+    expect(html).toContain('href="#"');
+  });
 });

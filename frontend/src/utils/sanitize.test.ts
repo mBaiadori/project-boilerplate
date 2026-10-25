@@ -42,6 +42,8 @@ describe('Frontend XSS Sanitization & URL Safety', () => {
     expect(isSafeUrl('vbscript:msgbox(1)')).toBe(false);
     expect(isSafeUrl('data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==')).toBe(false);
     expect(isSafeUrl('javascript\n:alert(1)')).toBe(false);
+    expect(isSafeUrl('//evil.com')).toBe(false);
+    expect(isSafeUrl('//evil.com/phishing.md')).toBe(false);
   });
 
   it('sanitizeSvg should purge malicious scripts and handlers from SVGs', () => {

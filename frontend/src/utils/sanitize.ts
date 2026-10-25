@@ -15,15 +15,15 @@ export function isSafeUrl(rawUrl: string): boolean {
     return false;
   }
 
-  // Bloquear schemes perigosos expressamente
-  if (/^(?:javascript|data|vbscript):/i.test(trimmed)) {
+  // Bloquear schemes perigosos expressamente e protocol-relative URLs (//)
+  if (/^(?:javascript|data|vbscript):/i.test(trimmed) || trimmed.startsWith('//')) {
     return false;
   }
 
-  // Permitir âncoras locais e caminhos relativos
+  // Permitir âncoras locais e caminhos relativos de barra única
   if (
     trimmed.startsWith('#') ||
-    trimmed.startsWith('/') ||
+    (trimmed.startsWith('/') && !trimmed.startsWith('//')) ||
     trimmed.startsWith('./') ||
     trimmed.startsWith('../') ||
     trimmed.startsWith('?')

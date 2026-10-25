@@ -1451,8 +1451,8 @@ export class NotionEditorEngine {
             const cleanLabel = (rawLabel || '').replace(/^description(?=[a-zA-Z0-9_\sÀ-ÿ])/i, '').trim() || rawLabel;
             const trimmedHref = (rawHref || '').trim();
             const safeTargetHref = isSafeUrl(trimmedHref) ? escapeHtml(trimmedHref) : '#';
-            const isExternal = /^[a-z][a-z0-9+.-]*:/i.test(trimmedHref);
-            const isDoc = !isExternal && (trimmedHref.endsWith('.md') || trimmedHref.includes('.md#') || trimmedHref.startsWith('#') || trimmedHref.includes(':~:text='));
+            const isExternal = /^[a-z][a-z0-9+.-]*:/i.test(trimmedHref) || trimmedHref.startsWith('//');
+            const isDoc = !isExternal && !trimmedHref.startsWith('//') && (trimmedHref.endsWith('.md') || trimmedHref.includes('.md#') || trimmedHref.startsWith('#') || trimmedHref.includes(':~:text='));
 
             const formattedLabel = escapeHtml(cleanLabel);
             const linkHtml = `<a href="${safeTargetHref}" class="${isDoc ? 'notion-doc-link' : ''}" target="${isDoc ? '_self' : '_blank'}"${!isDoc ? ' rel="noopener noreferrer"' : ''}>${formattedLabel}</a>`;
