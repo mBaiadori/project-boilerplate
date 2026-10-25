@@ -14,7 +14,7 @@ export async function prsRoutes(fastify: FastifyInstance) {
       search?: string;
     };
     const cfg = loadConfig();
-    const userLogin = query.user || cfg.user?.login;
+    const userLogin = query.user || cfg.user?.login || "local_user";
     const page = query.page ? parseInt(query.page, 10) : undefined;
     const limit = query.limit ? parseInt(query.limit, 10) : undefined;
     const result = await prsService.getPRs(query.repo, userLogin, {
@@ -35,7 +35,7 @@ export async function prsRoutes(fastify: FastifyInstance) {
       user?: string;
     };
     const cfg = loadConfig();
-    const userLogin = query.user || cfg.user?.login;
+    const userLogin = query.user || cfg.user?.login || "local_user";
     const diff = await prsService.getPRFileDiff(
       query.repo || "",
       query.path || "",
@@ -59,7 +59,7 @@ export async function prsRoutes(fastify: FastifyInstance) {
         .send({ error: "Parâmetros pr_id e path são obrigatórios." });
     }
     const cfg = loadConfig();
-    const userLogin = query.user || cfg.user?.login;
+    const userLogin = query.user || cfg.user?.login || "local_user";
     try {
       const fileData = await prsService.getPRFileContent(
         query.repo || "",
@@ -120,7 +120,7 @@ export async function prsRoutes(fastify: FastifyInstance) {
         .send({ error: `PR #${query.pr_id} não encontrado.` });
     }
     const cfg = loadConfig();
-    const userLogin = query.user || cfg.user?.login;
+    const userLogin = query.user || cfg.user?.login || "local_user";
     try {
       const bundle = await prConflictsService.getConflictBundle(
         repoName,
@@ -158,7 +158,7 @@ export async function prsRoutes(fastify: FastifyInstance) {
         .send({ error: `PR #${body.pr_id} não encontrado.` });
     }
     const cfg = loadConfig();
-    const userLogin = body.user || cfg.user?.login;
+    const userLogin = body.user || cfg.user?.login || "local_user";
     try {
       const res = await prConflictsService.resolveConflict(
         repoName,
@@ -197,7 +197,7 @@ export async function prsRoutes(fastify: FastifyInstance) {
         .send({ error: `PR #${body.pr_id} não encontrado.` });
     }
     const cfg = loadConfig();
-    const userLogin = body.user || cfg.user?.login;
+    const userLogin = body.user || cfg.user?.login || "local_user";
     try {
       const res = await prConflictsService.updateFromBase(
         repoName,

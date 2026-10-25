@@ -112,7 +112,7 @@ export class PRConflictsService {
     userLogin?: string,
   ) {
     const cfg = loadConfig();
-    const login = userLogin || cfg.user?.login;
+    const login = userLogin || cfg.user?.login || 'local_user';
     const repoDir = this.getRepoDir(repoName);
     const branch = assertBranchName(pr.branch);
     const targetBranch = pr.target_branch
@@ -190,7 +190,7 @@ export class PRConflictsService {
     userLogin?: string,
   ): Promise<{ success: boolean; commitHash: string }> {
     const cfg = loadConfig();
-    const login = userLogin || cfg.user?.login;
+    const login = userLogin || cfg.user?.login || 'local_user';
 
     // Clearance check
     const clearance = await prSecurityService.resolveDocClearance(
@@ -236,7 +236,7 @@ export class PRConflictsService {
     userLogin?: string,
   ): Promise<{ success: boolean; message: string; newCommitHash?: string }> {
     const cfg = loadConfig();
-    const login = userLogin || cfg.user?.login;
+    const login = userLogin || cfg.user?.login || 'local_user';
     const repoDir = this.getRepoDir(repoName);
     const branch = assertBranchName(pr.branch);
     const targetBranch = pr.target_branch

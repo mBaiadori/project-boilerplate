@@ -43,4 +43,23 @@ describe('C3: default_branch preservation and origin/HEAD resolution', () => {
     const defBranch = await getDefaultBranch(tmpDir);
     assert.strictEqual(defBranch, 'main');
   });
+
+  test('Repositório sem branch main/master com apenas branches temporárias não deve eleger prefixo gov/ ou fix/', async () => {
+    const specialTmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'git-defbranch-gov-'));
+    try {
+      await executeGit(['init', '-b', 'gov/update-1'], specialTmpDir);
+      await executeGit(['config', 'user.name', 'Tester'], specialTmpDir);
+      await executeGit(['config', 'user.email', 'test@example.com'], specialTmpDir);
+      fs.writeFileSync(path.join(specialTmpDir, 'README.md'), '# Test');
+      await executeGit(['add', 'README.md'], specialTmpDir);
+      await executeGit(['commit', '-m', 'initial commit'], specialTmpDir);
+      await executeGit(['branch', 'feat/login'], specialTmpDir);
+
+      const defBranch = await getDefaultBranch(specialTmpDir);
+      // Deve cair para 'main' e não eleger 'feat/login' ou 'gov/update-1'
+      assert.strictEqual(defBranch, 'main');
+    } finally {
+      fs.rmSync(specialTmpDir, { recursive: true, force: true });
+    }
+  });
 });

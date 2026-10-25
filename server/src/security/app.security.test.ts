@@ -167,6 +167,16 @@ describe('Segurança de API e Autenticação de Sessão (Fase 3 - N3)', () => {
         },
       });
       assert.strictEqual(resVite.statusCode, 200);
+
+      const resVite5174 = await app.inject({
+        method: 'GET',
+        url: '/api/session/bootstrap',
+        headers: {
+          host: '127.0.0.1:4100',
+          origin: 'http://localhost:5174',
+        },
+      });
+      assert.strictEqual(resVite5174.statusCode, 200);
     });
 
     it('não deve registrar ou expor /api/test-leak-error quando em produção (S5)', async () => {

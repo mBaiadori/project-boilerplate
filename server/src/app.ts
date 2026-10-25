@@ -244,7 +244,9 @@ export async function buildApp(): Promise<FastifyInstance> {
 
         const isSameHost = (parsed.hostname === hostWithoutPort || (parsed.hostname === 'localhost' && hostWithoutPort === '127.0.0.1') || (parsed.hostname === '127.0.0.1' && hostWithoutPort === 'localhost'));
         const isSameOrigin = isSameHost && (parsed.port === reqPort || (!parsed.port && reqPort === '80'));
-        const isViteDev = (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1') && (parsed.port === '5173' || parsed.port === '4100');
+        const portNum = parseInt(parsed.port || '80', 10);
+        const isLocalhostHost = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1';
+        const isViteDev = isLocalhostHost && ((portNum >= 5173 && portNum <= 5185) || (portNum >= 4100 && portNum <= 4110));
         const isDesktopApp = parsed.protocol === 'app:' || parsed.protocol === 'vscode-webview:' || parsed.protocol === 'file:';
 
         if (!isSameOrigin && !isViteDev && !isDesktopApp) {

@@ -169,7 +169,7 @@ export class PRsService {
     const cfg = loadConfig();
     const activeRepo = cfg.active_repo;
     const repoName = targetRepoQuery || activeRepo?.name || "local";
-    const login = userLogin || cfg.user?.login;
+    const login = userLogin || cfg.user?.login || "local_user";
     let allPRs = this.loadRepoPRs(repoName);
 
     const matchedRepo = cfg.repos?.find((r: any) => r.name === repoName);
@@ -545,7 +545,7 @@ export class PRsService {
     userLogin?: string,
   ) {
     const cfg = loadConfig();
-    const login = userLogin || cfg.user?.login;
+    const login = userLogin || cfg.user?.login || "local_user";
 
     let pr: any = null;
     if (prId) {
@@ -613,7 +613,7 @@ export class PRsService {
     userLogin?: string,
   ) {
     const cfg = loadConfig();
-    const login = userLogin || cfg.user?.login;
+    const login = userLogin || cfg.user?.login || "local_user";
     const prs = this.loadRepoPRs(repoName);
     const pr = prs.find((p: any) => String(p.id) === String(prId));
 
@@ -1568,7 +1568,7 @@ DIRETRIZES OBRIGATÓRIAS:
   ) {
     const cfg = loadConfig();
     const repoName = payload.repo || cfg.active_repo?.name || "local";
-    const login = userLogin || payload.author || cfg.user?.login;
+    const login = userLogin || payload.author || cfg.user?.login || "local_user";
     const prs = this.loadRepoPRs(repoName);
     const target = prs.find((p: any) => String(p.id) === String(payload.id));
 

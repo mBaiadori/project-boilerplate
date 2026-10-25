@@ -38,7 +38,7 @@ export async function getDefaultBranch(repoDir: string): Promise<string> {
   const isRepo = await isGitRepo(repoDir);
   if (!isRepo) return "main";
 
-  // 1. Tenta ler refs/remotes/origin/HEAD
+  // 1. Tenta ler refs/remotes/origin/HEAD (branch padrão oficial do remoto, se clonado)
   try {
     const headRes = await executeGit(["symbolic-ref", "refs/remotes/origin/HEAD"], repoDir);
     if (headRes.success && headRes.stdout.trim()) {
@@ -49,7 +49,7 @@ export async function getDefaultBranch(repoDir: string): Promise<string> {
     }
   } catch {}
 
-  // 2. Consulta refs locais diretamente via executeGit (sem chamar getGitBranches ou getGitStatus)
+  // 2. Consulta refs locais diretamente para convenções canônicas universais (main, master, develop)
   try {
     const refsRes = await executeGit(
       ["for-each-ref", "--format=%(refname:short)", "refs/heads"],
@@ -59,15 +59,18 @@ export async function getDefaultBranch(repoDir: string): Promise<string> {
       const branches = refsRes.stdout.split("\n").map((b) => b.trim()).filter(Boolean);
       if (branches.includes("main")) return "main";
       if (branches.includes("master")) return "master";
-      if (branches.length > 0 && branches[0]) return branches[0];
+      if (branches.includes("develop")) return "develop";
     }
   } catch {}
 
-  // 3. Fallback para HEAD simbólico (ex: repositório recém-inicializado sem commits)
+  // 3. Consulta HEAD simbólico local (ex: repo recém-inicializado sem commits ou com branch única personalizada)
   try {
     const symHead = await executeGit(["symbolic-ref", "--short", "HEAD"], repoDir);
     if (symHead.success && symHead.stdout.trim()) {
-      return symHead.stdout.trim();
+      const branch = symHead.stdout.trim();
+      if (branch && !branch.startsWith("gov/") && !branch.startsWith("fix/") && !branch.startsWith("feat/")) {
+        return branch;
+      }
     }
   } catch {}
 

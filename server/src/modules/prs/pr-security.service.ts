@@ -46,7 +46,7 @@ export class PRSecurityService {
     _branchOrCommitRef?: string,
   ): Promise<DocClearanceResult> {
     const cfg = loadConfig();
-    const login = userLogin || cfg.user?.login;
+    const login = userLogin || cfg.user?.login || 'local_user';
     const cleanPath = relPlainPath.replace(/\\/g, "/").replace(/^\/+/, "");
 
     // Public root files are always allowed
