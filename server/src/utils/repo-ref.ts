@@ -34,6 +34,52 @@ export function sanitizeRepoSegment(segment: string): string {
 }
 
 /**
+ * Valida rigorosamente um nome ou identificador de repositório (ex: "meu-repo" ou "owner/meu-repo").
+ * Rejeita directory traversal (..), caracteres nulos (\0), barras extras ou caracteres de controle.
+ * Retorna o identificador sanitizado ou lança Error.
+ */
+export function validateRepoName(name: string): string {
+  if (!name || typeof name !== 'string') {
+    throw new Error('Nome de repositório não informado ou inválido.');
+  }
+  if (name.includes('\0')) {
+    throw new Error('Nome de repositório contém caractere nulo (null byte).');
+  }
+  const trimmed = name.trim();
+  if (!trimmed) {
+    throw new Error('Nome de repositório não informado ou vazio.');
+  }
+
+  // Bloqueio rigoroso de qualquer tentativa de traversal
+  if (trimmed === '.' || trimmed === '..' || trimmed.includes('..') || /(^|[/\\])\.{1,2}([/\\]|$)/.test(trimmed)) {
+    throw new Error(`Identificador de repositório inválido ou path traversal detectado: "${name}"`);
+  }
+
+  // Se contiver caracteres perigosos de injeção
+  if (/[;`$<>|]/.test(trimmed)) {
+    throw new Error(`Identificador de repositório contém caracteres inválidos: "${name}"`);
+  }
+
+  // Se for caminho absoluto seguro (ex: diretórios de teste em tmpdir)
+  if (path.isAbsolute(trimmed)) {
+    return path.normalize(trimmed);
+  }
+
+  // Se contiver barra (formato owner/repo)
+  if (trimmed.includes('/') || trimmed.includes('\\')) {
+    const parts = trimmed.split(/[/\\]/);
+    if (parts.length !== 2 || parts.some((p) => !p)) {
+      throw new Error(`Identificador de repositório inválido ou path traversal detectado: "${name}"`);
+    }
+    const cleanOwner = sanitizeRepoSegment(parts[0]);
+    const cleanRepo = sanitizeRepoSegment(parts[1]);
+    return `${cleanOwner}/${cleanRepo}`;
+  }
+
+  return sanitizeRepoSegment(trimmed);
+}
+
+/**
  * Converte qualquer entrada (string "owner/repo", objeto com owner/name, etc.) em RepoRef canônico.
  */
 export function parseRepoRef(
