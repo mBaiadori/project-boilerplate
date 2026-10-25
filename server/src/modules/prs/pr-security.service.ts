@@ -1,11 +1,11 @@
-import crypto from 'node:crypto';
-import fs from 'node:fs';
-import path from 'node:path';
-import { PROJECTS_DIR, resolveRepoDir } from '../../config/constants.js';
-import { loadConfig } from '../../config/storage.js';
-import { executeGit } from '../../utils/git.js';
-import { assertCommitish, assertGitPath } from '../../utils/git-validate.js';
-import { canAccessDocument } from '../../utils/crypto.js';
+import crypto from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
+import { PROJECTS_DIR, resolveRepoDir } from "../../config/constants.js";
+import { loadConfig } from "../../config/storage.js";
+import { executeGit } from "../../utils/git.js";
+import { assertCommitish, assertGitPath } from "../../utils/git-validate.js";
+import { canAccessDocument } from "../../utils/crypto.js";
 
 export interface DocClearanceResult {
   allowed: boolean;
@@ -18,35 +18,42 @@ export class PRSecurityService {
 
   private getRepoDir(repoName?: string): string {
     const cfg = loadConfig();
-    const activeRepoName = repoName || cfg.active_repo?.name || 'local';
-    const effectiveOwner = cfg.active_repo?.name === activeRepoName ? cfg.active_repo?.owner : undefined;
+    const activeRepoName = repoName || cfg.active_repo?.name || "local";
+    const effectiveOwner =
+      cfg.active_repo?.name === activeRepoName
+        ? cfg.active_repo?.owner
+        : undefined;
     return resolveRepoDir(activeRepoName, effectiveOwner);
   }
 
   maskPath(filePath: string): string {
-    if (!filePath) return 'documento-restrito';
+    if (!filePath) return "documento-restrito";
     const ext = path.extname(filePath);
-    const hash = crypto.createHash('sha256').update(filePath).digest('hex').slice(0, 8);
-    const parts = filePath.split('/');
-    const dir = parts.length > 1 ? `${parts[0]}/` : '';
-    return `${dir}restrito-${hash}${ext || '.md'}`;
+    const hash = crypto
+      .createHash("sha256")
+      .update(filePath)
+      .digest("hex")
+      .slice(0, 8);
+    const parts = filePath.split("/");
+    const dir = parts.length > 1 ? `${parts[0]}/` : "";
+    return `${dir}restrito-${hash}${ext || ".md"}`;
   }
 
   async resolveDocClearance(
     repoName: string,
     userLogin: string | undefined,
     relPlainPath: string,
-    _branchOrCommitRef?: string
+    _branchOrCommitRef?: string,
   ): Promise<DocClearanceResult> {
     const cfg = loadConfig();
-    const login = userLogin || cfg.user?.login || 'marcosbaiadori';
-    const cleanPath = relPlainPath.replace(/\\/g, '/').replace(/^\/+/, '');
+    const login = userLogin || cfg.user?.login;
+    const cleanPath = relPlainPath.replace(/\\/g, "/").replace(/^\/+/, "");
 
     // Public root files are always allowed
     if (
-      cleanPath === 'README.md' ||
-      cleanPath === 'CHANGELOG.md' ||
-      cleanPath.startsWith('docs/public/')
+      cleanPath === "README.md" ||
+      cleanPath === "CHANGELOG.md" ||
+      cleanPath.startsWith("docs/public/")
     ) {
       return { allowed: true, restricted: false };
     }
@@ -57,18 +64,20 @@ export class PRSecurityService {
 
     if (!userProfile) {
       const repoDir = this.getRepoDir(repoName);
-      const cfgPath = path.join(repoDir, '.project.config.json');
+      const cfgPath = path.join(repoDir, ".project.config.json");
       let profile: any = {
         login,
-        departments: ['*'],
-        status: 'active',
+        departments: ["*"],
+        status: "active",
       };
 
       if (fs.existsSync(cfgPath)) {
         try {
-          const pConfig = JSON.parse(fs.readFileSync(cfgPath, 'utf-8'));
+          const pConfig = JSON.parse(fs.readFileSync(cfgPath, "utf-8"));
           const collabs = pConfig.governance_collaborators || {};
-          const matched = Object.entries(collabs).find(([k]) => k.toLowerCase() === login.toLowerCase());
+          const matched = Object.entries(collabs).find(
+            ([k]) => k.toLowerCase() === login.toLowerCase(),
+          );
           if (matched) {
             profile = matched[1];
           }
@@ -78,8 +87,8 @@ export class PRSecurityService {
       this.userProfileCache.set(cacheKey, userProfile);
     }
 
-    const folderParts = cleanPath.split('/');
-    const department = folderParts.length > 1 ? folderParts[0] : 'default';
+    const folderParts = cleanPath.split("/");
+    const department = folderParts.length > 1 ? folderParts[0] : "default";
 
     const allowed = canAccessDocument(userProfile, {
       department,
@@ -97,27 +106,37 @@ export class PRSecurityService {
     repoName: string,
     ref: string,
     relPlainPath: string,
-    userLogin?: string
+    userLogin?: string,
   ): Promise<string> {
-    if (!ref) return '';
+    if (!ref) return "";
     const repoDir = this.getRepoDir(repoName);
-    const cleanPath = relPlainPath.replace(/\\/g, '/').replace(/^\/+/, '');
+    const cleanPath = relPlainPath.replace(/\\/g, "/").replace(/^\/+/, "");
 
     // Verify clearance
-    const clearance = await this.resolveDocClearance(repoName, userLogin, cleanPath, ref);
+    const clearance = await this.resolveDocClearance(
+      repoName,
+      userLogin,
+      cleanPath,
+      ref,
+    );
     if (!clearance.allowed) {
-      throw new Error(`Acesso negado: Você não possui autorização para abrir o documento confidencial '${cleanPath}'.`);
+      throw new Error(
+        `Acesso negado: Você não possui autorização para abrir o documento confidencial '${cleanPath}'.`,
+      );
     }
 
     // Read plaintext at git ref
     const safeRef = assertCommitish(ref);
     const safePath = assertGitPath(cleanPath);
-    const plainRes = await executeGit(['show', `${safeRef}:${safePath}`], repoDir);
+    const plainRes = await executeGit(
+      ["show", `${safeRef}:${safePath}`],
+      repoDir,
+    );
     if (plainRes.success && plainRes.stdout !== undefined) {
       return plainRes.stdout;
     }
 
-    return '';
+    return "";
   }
 }
 
