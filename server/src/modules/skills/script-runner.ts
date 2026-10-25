@@ -60,6 +60,11 @@ function assertSafeRepoPath(full) {
   if (!isPathInside(safeRepoDir, full) && full !== safeRepoDir) {
     throw new Error('Acesso negado: fora do diretório do projeto.');
   }
+  const rel = path.relative(safeRepoDir, full).replaceAll('\\\\', '/');
+  const parts = rel.split('/').filter(Boolean);
+  if (parts.some((p) => p === '.git' || p === '.tools' || p === '.context-os')) {
+    throw new Error('Acesso negado: manipulação de pastas internas de infraestrutura (.git / .tools) é estritamente proibida.');
+  }
   let curr = full;
   while (curr && curr !== safeRepoDir && curr !== path.dirname(curr)) {
     if (fs.existsSync(curr)) {
@@ -75,6 +80,17 @@ function assertSafeRepoPath(full) {
 // Bloqueia acesso à rede global dentro do realm
 delete globalThis.fetch;
 
+// Esteriliza funções utilitárias contra escape de realm via construtor
+function secureFn(fn) {
+  Object.setPrototypeOf(fn, null);
+  Object.defineProperty(fn, 'constructor', {
+    value: undefined,
+    writable: false,
+    configurable: false,
+  });
+  return fn;
+}
+
 // Cria sandbox isolada sem protótipos do realm pai (host)
 const sandbox = Object.create(null);
 sandbox.args = args;
@@ -87,38 +103,44 @@ const scriptContext = vm.createContext(sandbox, {
 // Extrai instâncias intrínsecas ao próprio contexto para evitar vazamento do realm do host
 const intrinsic = vm.runInContext('({ JSON, Math, Date })', scriptContext);
 
+function sanitizeRel(p) {
+  let s = String(p || '');
+  while (s.startsWith('/') || s.startsWith('\\\\')) s = s.slice(1);
+  return s;
+}
+
 const safeUtils = Object.freeze({
   JSON: intrinsic.JSON,
   Math: intrinsic.Math,
   Date: intrinsic.Date,
-  toBase64: (str) => Buffer.from(String(str || ''), 'utf-8').toString('base64'),
-  fromBase64: (b64) => Buffer.from(String(b64 || ''), 'base64').toString('utf-8'),
-  readProjectFile: (relPath) => {
-    const full = path.resolve(safeRepoDir, String(relPath || '').replace(/^\\/+/, ''));
+  toBase64: secureFn((str) => Buffer.from(String(str || ''), 'utf-8').toString('base64')),
+  fromBase64: secureFn((b64) => Buffer.from(String(b64 || ''), 'base64').toString('utf-8')),
+  readProjectFile: secureFn((relPath) => {
+    const full = path.resolve(safeRepoDir, sanitizeRel(relPath));
     assertSafeRepoPath(full);
     if (!fs.existsSync(full)) return null;
     return fs.readFileSync(full, 'utf-8');
-  },
-  writeProjectFile: (relPath, content) => {
-    const full = path.resolve(safeRepoDir, String(relPath || '').replace(/^\\/+/, ''));
+  }),
+  writeProjectFile: secureFn((relPath, content) => {
+    const full = path.resolve(safeRepoDir, sanitizeRel(relPath));
     assertSafeRepoPath(full);
     fs.mkdirSync(path.dirname(full), { recursive: true });
     fs.writeFileSync(full, String(content ?? ''), 'utf-8');
     return true;
-  },
-  listProjectFiles: (relDir = '') => {
-    const full = path.resolve(safeRepoDir, String(relDir || '').replace(/^\\/+/, ''));
+  }),
+  listProjectFiles: secureFn((relDir = '') => {
+    const full = path.resolve(safeRepoDir, sanitizeRel(relDir));
     assertSafeRepoPath(full);
     if (!fs.existsSync(full)) return [];
     return fs.readdirSync(full);
-  },
+  }),
 });
 
 sandbox.utils = safeUtils;
 sandbox.console = Object.freeze({
-  log: (...a) => {},
-  warn: (...a) => {},
-  error: (...a) => {},
+  log: secureFn((...a) => {}),
+  warn: secureFn((...a) => {}),
+  error: secureFn((...a) => {}),
 });
 
 Object.setPrototypeOf(sandbox, null);
@@ -147,6 +169,7 @@ try {
     const { stdout, stderr } = await execFileAsync(
       process.execPath,
       [
+        '--disallow-code-generation-from-strings',
         '--permission',
         `--allow-fs-read=${tempDir}`,
         `--allow-fs-read=${rawTempDir}`,
