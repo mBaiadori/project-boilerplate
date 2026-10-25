@@ -31,10 +31,10 @@
 
 | Fase | Arquivo | Foco Principal | Prioridade | Esforço | Depende de | Status |
 |---|---|---|:---:|:---:|:---:|:---:|
-| **00** | [phase-00-execution-hardening-and-url-protection.md](phase-00-execution-hardening-and-url-protection.md) | **SEC-01 / SEC-02 / SEC-05:** Allowlist de binários para shell tools, blindagem de destino no `callGitHubAPI` e proteção de `.github/` e `.agents/` no sandbox | **P0** | Médio | — | ⏳ **Pendente** |
-| **01** | [phase-01-frontend-bugs-and-state-optimization.md](phase-01-frontend-bugs-and-state-optimization.md) | **BUG-01 / BUG-03 / D1:** Correção de TDZ em `SkillsHubModal.tsx`, otimização de seletores Zustand no `WorkspaceContext` e limpeza de `@types/papaparse` | **P0** | Pequeno | — | ⏳ **Pendente** |
-| **02** | [phase-02-repo-resolution-atomic-writes-and-rate-limit.md](phase-02-repo-resolution-atomic-writes-and-rate-limit.md) | **BUG-02 / SEC-04 / SEC-03:** Resolução de repositórios com owner em `native-tools`, escrita atômica em governança/PRs e resiliência em `rate-limit.ts` | **P1** | Médio | 00 | ⏳ **Pendente** |
-| **03** | [phase-03-rag-chat-integration-and-audit-coherence.md](phase-03-rag-chat-integration-and-audit-coherence.md) | **INC-02 / INC-01 / INC-03:** Conexão do RAG local ao chat de IA, unificação da auditoria SHA-256 e aplicação dinâmica de cores no explorador | **P1** | Médio | 02 | ⏳ **Pendente** |
+| **00** | [phase-00-execution-hardening-and-url-protection.md](phase-00-execution-hardening-and-url-protection.md) | **SEC-01 / SEC-02 / SEC-05:** Allowlist de binários para shell tools, blindagem de destino no `callGitHubAPI` e proteção de `.github/` e `.agents/` no sandbox | **P0** | Médio | — | ✅ **Concluído** (`25f4a31`) |
+| **01** | [phase-01-frontend-bugs-and-state-optimization.md](phase-01-frontend-bugs-and-state-optimization.md) | **BUG-01 / BUG-03 / D1:** Correção de TDZ em `SkillsHubModal.tsx`, otimização de seletores Zustand no `WorkspaceContext` e limpeza de `@types/papaparse` | **P0** | Pequeno | — | ✅ **Concluído** (`f3d81fd`) |
+| **02** | [phase-02-repo-resolution-atomic-writes-and-rate-limit.md](phase-02-repo-resolution-atomic-writes-and-rate-limit.md) | **BUG-02 / SEC-04 / SEC-03:** Resolução de repositórios com owner em `native-tools`, escrita atômica em governança/PRs e resiliência em `rate-limit.ts` | **P1** | Médio | 00 | ✅ **Concluído** (`93e288f`) |
+| **03** | [phase-03-rag-chat-integration-and-audit-coherence.md](phase-03-rag-chat-integration-and-audit-coherence.md) | **INC-02 / INC-01 / INC-03:** Conexão do RAG local ao chat de IA, unificação da auditoria SHA-256 e aplicação dinâmica de cores no explorador | **P1** | Médio | 02 | ✅ **Concluído** (`dc39e70`) |
 
 ---
 
