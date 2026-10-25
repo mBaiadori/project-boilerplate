@@ -178,14 +178,20 @@ export class AntigravityAdapter implements IAgentProvider {
         }
         spawnArgs.push('-p', formattedPrompt);
 
+        const safeEnv: NodeJS.ProcessEnv = {
+          PATH: process.env.PATH || '',
+          HOME: process.env.HOME || '',
+          USER: process.env.USER || '',
+          LANG: process.env.LANG || 'en_US.UTF-8',
+          PAGER: 'cat',
+          FORCE_COLOR: '0',
+          CONTEXT_OS_PROJECT_ROOT: targetCwd,
+        };
+
         // Dispara o processo diretamente sem shell intermediário para evitar falha de parse de strings
         const child = spawn(cli.command, spawnArgs, {
           cwd: targetCwd,
-          env: {
-            ...process.env,
-            PAGER: 'cat',
-            FORCE_COLOR: '0',
-          },
+          env: safeEnv,
         });
 
         session!.process = child;

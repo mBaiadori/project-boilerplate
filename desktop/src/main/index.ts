@@ -92,11 +92,11 @@ async function startEmbeddedServer(): Promise<number> {
     }
   }
 
-  // Polling de verificação de prontidão do servidor Fastify (até 15 segundos)
+  // Polling de verificação de prontidão do servidor Fastify
   console.log(`[Desktop Main] Aguardando inicialização do servidor HTTP na porta ${port}...`);
   for (let attempt = 1; attempt <= 30; attempt++) {
     try {
-      const res = await fetch(`http://localhost:${port}/api/status`);
+      const res = await fetch(`http://localhost:${port}/api/health`);
       if (res.ok) {
         console.log(`[Desktop Main] Servidor Fastify pronto e respondendo na porta ${port}!`);
         return port;
@@ -104,7 +104,7 @@ async function startEmbeddedServer(): Promise<number> {
     } catch {
       // Servidor ainda subindo
     }
-    await new Promise((r) => setTimeout(r, 300));
+    await new Promise((r) => setTimeout(r, 200));
   }
 
   console.warn('[Desktop Main] Timeout no polling do servidor, prosseguindo com carregamento da janela...');
@@ -165,6 +165,23 @@ ipcMain.handle('secure-store:decrypt', async (_event, encryptedBase64: string) =
     return safeStorage.decryptString(buffer);
   }
   return Buffer.from(encryptedBase64, 'base64').toString('utf-8');
+});
+
+// Fornece o token de sessão local para o frontend sem necessidade de bootstrap HTTP
+ipcMain.handle('desktop:get-session-token', async () => {
+  try {
+    const userDataDir = app.getPath('userData');
+    const tokenPath = path.join(userDataDir, '.context-os', 'session-token');
+    if (fs.existsSync(tokenPath)) {
+      return fs.readFileSync(tokenPath, 'utf-8').trim();
+    }
+    const home = process.env.HOME || '';
+    const homeTokenPath = path.join(home, '.context-os', 'session-token');
+    if (fs.existsSync(homeTokenPath)) {
+      return fs.readFileSync(homeTokenPath, 'utf-8').trim();
+    }
+  } catch {}
+  return null;
 });
 
 // Inicialização do ciclo de vida do Electron

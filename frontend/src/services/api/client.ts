@@ -1,4 +1,18 @@
-export interface ApiResponse<T = any> {
+interface DesktopBridge {
+  isDesktop?: boolean;
+  platform?: string;
+  getSessionToken?: () => Promise<string | null>;
+  encrypt?: (plainText: string) => Promise<string>;
+  decrypt?: (encryptedBase64: string) => Promise<string>;
+}
+
+declare global {
+  interface Window {
+    desktopBridge?: DesktopBridge;
+  }
+}
+
+export interface ApiResponse<T = unknown> {
   ok: boolean;
   data: T;
 }
@@ -13,6 +27,19 @@ export async function bootstrapSession(): Promise<string | null> {
   if (bootstrapPromise) return bootstrapPromise;
 
   bootstrapPromise = (async () => {
+    // 1. Tentar obter via desktopBridge se estiver em ambiente Desktop
+    if (typeof window !== 'undefined' && window.desktopBridge?.getSessionToken) {
+      try {
+        const desktopToken = await window.desktopBridge.getSessionToken();
+        if (desktopToken) {
+          cachedSessionToken = desktopToken;
+          return desktopToken;
+        }
+      } catch (err) {
+        console.warn('[SessionSecurity] Erro ao obter token via desktopBridge:', err);
+      }
+    }
+
     try {
       const res = await (window.fetch ? window.fetch.bind(window) : fetch)('/api/session/bootstrap', {
         credentials: 'include',
