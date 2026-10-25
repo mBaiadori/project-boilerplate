@@ -231,4 +231,106 @@ describe('Fase 1 (S3, S4, B4): Custom Tools Sandbox Escape Prevention & Strict A
       `VIOLAÇÃO S4: approved_by gravou literal 'user' em vez da identidade real: ${approvalRecord.approved_by}`
     );
   });
+
+  test('1.1.6: utils.toBase64.constructor("return process")() não deve vazar o objeto process do host', async () => {
+    let escapedProcess: any = null;
+    let didThrow = false;
+    try {
+      escapedProcess = await runIsolatedScript({
+        code: `
+          const P = utils.toBase64.constructor('return process')();
+          return P ? (typeof P + ':' + P.version) : null;
+        `,
+        args: {},
+        context: { repoName: 'test-repo' },
+        safeRepoDir: tmpRepoDir,
+        timeoutMs: 3000,
+      });
+    } catch (err) {
+      didThrow = true;
+    }
+
+    assert.ok(
+      didThrow || escapedProcess === null || escapedProcess === undefined,
+      `VIOLAÇÃO S1: O sandbox permitiu escape de process via utils.toBase64.constructor (resultado: ${escapedProcess})`
+    );
+  });
+
+  test('1.1.7: utils.writeProjectFile e readProjectFile devem rejeitar acesso a .git/ e .tools/', async () => {
+    // 1. Bloqueio de escrita em .git
+    let writeGitThrew = false;
+    try {
+      await runIsolatedScript({
+        code: `
+          utils.writeProjectFile('.git/config', '[core]\\n fsmonitor = touch /tmp/pwned');
+          return 'ok';
+        `,
+        args: {},
+        context: { repoName: 'test-repo' },
+        safeRepoDir: tmpRepoDir,
+        timeoutMs: 3000,
+      });
+    } catch (err: any) {
+      writeGitThrew = true;
+      assert.ok(
+        err.message.includes('negado') || err.message.includes('.git'),
+        `Mensagem esperada de bloqueio: ${err.message}`
+      );
+    }
+    assert.strictEqual(writeGitThrew, true, 'VIOLAÇÃO S1: Escrita em .git/config foi permitida');
+
+    // 2. Bloqueio de escrita em .git/hooks/pre-commit
+    let writeHookThrew = false;
+    try {
+      await runIsolatedScript({
+        code: `
+          utils.writeProjectFile('.git/hooks/pre-commit', '#!/bin/sh\\necho pwned');
+          return 'ok';
+        `,
+        args: {},
+        context: { repoName: 'test-repo' },
+        safeRepoDir: tmpRepoDir,
+        timeoutMs: 3000,
+      });
+    } catch (err: any) {
+      writeHookThrew = true;
+    }
+    assert.strictEqual(writeHookThrew, true, 'VIOLAÇÃO S1: Escrita em .git/hooks foi permitida');
+
+    // 3. Bloqueio de leitura em .git
+    let readGitThrew = false;
+    try {
+      await runIsolatedScript({
+        code: `
+          return utils.readProjectFile('.git/HEAD');
+        `,
+        args: {},
+        context: { repoName: 'test-repo' },
+        safeRepoDir: tmpRepoDir,
+        timeoutMs: 3000,
+      });
+    } catch (err: any) {
+      readGitThrew = true;
+    }
+    assert.strictEqual(readGitThrew, true, 'VIOLAÇÃO S1: Leitura de .git/HEAD foi permitida');
+
+    // 4. Bloqueio de escrita em .tools
+    let writeToolsThrew = false;
+    try {
+      await runIsolatedScript({
+        code: `
+          utils.writeProjectFile('.tools/tools.manifest.json', '{"injected": true}');
+          return 'ok';
+        `,
+        args: {},
+        context: { repoName: 'test-repo' },
+        safeRepoDir: tmpRepoDir,
+        timeoutMs: 3000,
+      });
+    } catch (err: any) {
+      writeToolsThrew = true;
+    }
+    assert.strictEqual(writeToolsThrew, true, 'VIOLAÇÃO S1: Escrita em .tools foi permitida');
+  });
 });
+
