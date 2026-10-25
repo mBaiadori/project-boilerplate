@@ -30,8 +30,14 @@ import {
   validateSessionToken,
   isValidHostHeader,
   parseCookies,
+  SESSION_TTL_SEC,
 } from "./security/session.js";
-import { authRateLimiter, toolExecRateLimiter } from "./security/rate-limit.js";
+import {
+  authRateLimiter,
+  toolExecRateLimiter,
+  aiRateLimiter,
+  ragRateLimiter,
+} from "./security/rate-limit.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const isDev = process.env.NODE_ENV === "development";
@@ -157,6 +163,20 @@ export async function buildApp(): Promise<FastifyInstance> {
           error: 'Muitas execuções de ferramentas customizadas solicitadas.',
         });
       }
+    } else if (pathname.startsWith('/api/ai/')) {
+      const rateCheck = aiRateLimiter.consume(clientIp);
+      if (!rateCheck.allowed) {
+        return reply.status(429).header('Retry-After', String(rateCheck.retryAfterSec || 1)).send({
+          error: 'Muitas requisições para os serviços de inteligência artificial. Aguarde instantes.',
+        });
+      }
+    } else if (pathname.startsWith('/api/rag/')) {
+      const rateCheck = ragRateLimiter.consume(clientIp);
+      if (!rateCheck.allowed) {
+        return reply.status(429).header('Retry-After', String(rateCheck.retryAfterSec || 1)).send({
+          error: 'Muitas requisições para buscas semânticas (RAG). Aguarde instantes.',
+        });
+      }
     }
 
     // Allowlist explícita de endpoints públicos
@@ -219,13 +239,6 @@ export async function buildApp(): Promise<FastifyInstance> {
     });
   });
 
-  // Rota de teste controlada para validação de error handler exclusivamente fora de produção
-  if (process.env.NODE_ENV !== 'production') {
-    app.get('/api/test-leak-error', async () => {
-      throw new Error('Falha catastrófica em /Users/MarcosBaiadori/secrets/key.pem');
-    });
-  }
-
   // 3. Rota de Bootstrap de Sessão Local (emite cookie HttpOnly e retorna token para SPA/Electron)
   app.get("/api/session/bootstrap", async (request, reply) => {
     if (process.env.CONTEXT_OS_DESKTOP === "1") {
@@ -264,7 +277,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     const token = getSessionToken();
     reply.header(
       "Set-Cookie",
-      `ctxos_session=${token}; Path=/api; HttpOnly; SameSite=Strict; Max-Age=28800`,
+      `ctxos_session=${token}; Path=/api; HttpOnly; SameSite=Strict; Max-Age=${SESSION_TTL_SEC}`,
     );
     return reply.send({ token, authenticated: true });
   });

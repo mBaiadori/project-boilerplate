@@ -14,6 +14,10 @@ describe('Fase 4 (S6, C13): Endurecimento do Servidor e Persistência Segura', (
 
   before(async () => {
     app = await buildApp();
+    // Injetar rota deliberada para teste de mascaramento de erro 500 sem expor no app de produção
+    app.get('/api/test-leak-error', async () => {
+      throw new Error('Erro ao ler /Users/marcos/secret.txt');
+    });
     await app.ready();
   });
 

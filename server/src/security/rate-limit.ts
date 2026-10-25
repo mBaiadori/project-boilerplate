@@ -26,6 +26,14 @@ export class RateLimiter {
     }
   }
 
+  public get max(): number {
+    return this.maxTokens;
+  }
+
+  public get window(): number {
+    return this.refillIntervalMs;
+  }
+
   public consume(key: string, cost = 1): { allowed: boolean; remaining: number; retryAfterSec?: number } {
     const now = Date.now();
     let bucket = this.buckets.get(key);
@@ -80,3 +88,5 @@ export class RateLimiter {
 // Instâncias pré-configuradas para diferentes sensibilidades
 export const authRateLimiter = new RateLimiter(30, 60000); // 30 req/min para rotas de auth
 export const toolExecRateLimiter = new RateLimiter(45, 60000); // 45 req/min para execução de ferramentas
+export const aiRateLimiter = new RateLimiter(60, 60000); // 60 req/min para rotas de IA
+export const ragRateLimiter = new RateLimiter(60, 60000); // 60 req/min para buscas semânticas (RAG)

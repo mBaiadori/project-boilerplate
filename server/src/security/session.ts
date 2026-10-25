@@ -3,7 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 
-const SESSION_TTL_MS = 12 * 60 * 60 * 1000; // 12 horas
+export const SESSION_TTL_MS = 12 * 60 * 60 * 1000; // 12 horas
+export const SESSION_TTL_SEC = SESSION_TTL_MS / 1000; // 43.200 segundos
 
 let activeSessionToken: string | null = null;
 let sessionExpiresAt: number = 0;

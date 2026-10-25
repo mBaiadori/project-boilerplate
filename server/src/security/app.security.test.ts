@@ -61,6 +61,7 @@ describe('Segurança de API e Autenticação de Sessão (Fase 3 - N3)', () => {
       assert.ok(json.token, 'Deve retornar o token de sessão');
       const setCookie = res.headers['set-cookie'];
       assert.ok(setCookie, 'Deve emitir Set-Cookie com ctxos_session');
+      assert.match(String(setCookie), /Max-Age=43200/i, 'Cookie deve conter Max-Age=43200 alinhado com 12h de sessão');
     });
 
     it('deve recusar com 401 chamadas a /api/* sem token de sessão', async () => {
@@ -342,6 +343,26 @@ describe('Segurança de API e Autenticação de Sessão (Fase 3 - N3)', () => {
       });
       assert.strictEqual(resHealth.statusCode, 301);
       assert.strictEqual(resHealth.headers.location, '/api/health');
+    });
+
+    it('2.7 Rota de depuração /api/test-leak-error não deve existir em produção (retorna 404)', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/test-leak-error',
+        headers: {
+          host: '127.0.0.1:4100',
+          'x-contextos-token': getSessionToken(),
+        },
+      });
+      assert.strictEqual(res.statusCode, 404, 'Rota de teste deve retornar 404 em produção');
+    });
+
+    it('2.8 Rate limiters de IA e RAG devem estar exportados e configurados com 60 req/min', async () => {
+      const rateLimitModule = await import('./rate-limit.js');
+      assert.ok(rateLimitModule.aiRateLimiter, 'aiRateLimiter deve estar exportado');
+      assert.ok(rateLimitModule.ragRateLimiter, 'ragRateLimiter deve estar exportado');
+      assert.strictEqual(rateLimitModule.aiRateLimiter.max, 60);
+      assert.strictEqual(rateLimitModule.ragRateLimiter.max, 60);
     });
   });
 });
