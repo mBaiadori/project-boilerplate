@@ -20,13 +20,13 @@ Cada fase foi estruturada para ser executada de forma estritamente modular, orie
 ---
 
 ## Matriz de Fases v7
-
-| Fase | Arquivo | Foco Principal | Prioridade | Esforço | Depende de |
-|---|---|---|:---:|:---:|:---:|
-| **00** | [phase-00-sandbox-hardening-and-git-protection.md](phase-00-sandbox-hardening-and-git-protection.md) | **S1:** Blindagem do sandbox contra escape de Realm (via construtor de funções do host) e proibição de leitura/escrita em `.git/` e `.tools/` | **P0** | Médio | — |
-| **01** | [phase-01-threat-model-and-session-coherence.md](phase-01-threat-model-and-session-coherence.md) | **S2:** Sincronização do `THREAT_MODEL.md` com o TTL de 12 horas (43.200s) e atualização de asserções em testes | **P0** | Pequeno | — |
-| **02** | [phase-02-heavy-ops-rate-limiting.md](phase-02-heavy-ops-rate-limiting.md) | **S3:** Rate limiting para operações volumosas de Git (`clone`, `pull`, `push`) e streaming de chat (`/api/chat/stream`) | **P1** | Médio | 00 |
-| **03** | [phase-03-rag-privacy-and-dependency-cleanup.md](phase-03-rag-privacy-and-dependency-cleanup.md) | **S4:** Validação de política LGPD no indexador semântico RAG e desinstalação de dependências mortas (`@fastify/rate-limit`) | **P1** | Pequeno | 02 |
+ 
+| Fase | Arquivo | Foco Principal | Prioridade | Esforço | Depende de | Status |
+|---|---|---|:---:|:---:|:---:|:---:|
+| **00** | [phase-00-sandbox-hardening-and-git-protection.md](phase-00-sandbox-hardening-and-git-protection.md) | **S1:** Blindagem do sandbox contra escape de Realm (via construtor de funções do host) e proibição de leitura/escrita em `.git/` e `.tools/` | **P0** | Médio | — | ✅ **Concluído** (`e7644aa`) |
+| **01** | [phase-01-threat-model-and-session-coherence.md](phase-01-threat-model-and-session-coherence.md) | **S2:** Sincronização do `THREAT_MODEL.md` com o TTL de 12 horas (43.200s) e atualização de asserções em testes | **P0** | Pequeno | — | ✅ **Concluído** (`6c49744`) |
+| **02** | [phase-02-heavy-ops-rate-limiting.md](phase-02-heavy-ops-rate-limiting.md) | **S3:** Rate limiting para operações volumosas de Git (`clone`, `pull`, `push`) e streaming de chat (`/api/chat/stream`) | **P1** | Médio | 00 | ✅ **Concluído** (`b142c99`) |
+| **03** | [phase-03-rag-privacy-and-dependency-cleanup.md](phase-03-rag-privacy-and-dependency-cleanup.md) | **S4:** Validação de política LGPD no indexador semântico RAG e desinstalação de dependências mortas (`@fastify/rate-limit`) | **P1** | Pequeno | 02 | ✅ **Concluído** (`4ad6968`) |
 
 ---
 
