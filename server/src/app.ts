@@ -38,6 +38,7 @@ import {
   aiRateLimiter,
   ragRateLimiter,
 } from "./security/rate-limit.js";
+import { validateRepoName } from "./utils/repo-ref.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const isDev = process.env.NODE_ENV === "development";
@@ -208,6 +209,40 @@ export async function buildApp(): Promise<FastifyInstance> {
           : "Não autorizado: Sessão inválida ou não informada.",
         reason: validation.reason,
       });
+    }
+  });
+
+  // 2.3 Hook Centralizado de Validação do Parâmetro repo (prevenção contra Path Traversal)
+  app.addHook("preValidation", async (request, reply) => {
+    const url = request.raw.url || "";
+    if (!url.startsWith("/api/")) return;
+
+    // 1. Extração do parâmetro repo de query string
+    const query = request.query as Record<string, unknown> | undefined;
+    if (query && typeof query.repo === 'string' && query.repo.trim()) {
+      try {
+        validateRepoName(query.repo.trim());
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return reply.status(400).send({
+          error: `Parâmetro de repositório inválido: ${message}`,
+          code: 'INVALID_REPO_NAME',
+        });
+      }
+    }
+
+    // 2. Extração do parâmetro repo do corpo JSON
+    const body = request.body as Record<string, unknown> | undefined;
+    if (body && typeof body.repo === 'string' && body.repo.trim()) {
+      try {
+        validateRepoName(body.repo.trim());
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return reply.status(400).send({
+          error: `Parâmetro de repositório inválido no corpo da requisição: ${message}`,
+          code: 'INVALID_REPO_NAME',
+        });
+      }
     }
   });
 

@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "tsx watch --exclude 'dist/**' --exclude 'projects/**' --exclude '../projects/**' src/server.ts",
     "test": "node ../scripts/run-tests.mjs",
-    "build": "tsc && node ../scripts/copy-schemas.mjs",
+    "clean": "node -e \"fs.rmSync('dist', { recursive: true, force: true })\"",
+    "build": "npm run clean && tsc && node ../scripts/copy-schemas.mjs",
     "start": "node dist/server.js"
   },
   "dependencies": {

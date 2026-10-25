@@ -11,12 +11,13 @@
     "build:frontend": "npm --prefix frontend run build",
     "build": "npm run build:server && npm run build:frontend",
     "start": "npm --prefix server start",
+    "clean": "npm --prefix server run clean && npm --prefix frontend run clean && npm --prefix desktop run clean",
     "desktop:dev": "npm --prefix desktop run dev",
-    "desktop:build": "npm --prefix desktop run build:ts",
-    "desktop:package:mac": "npm run build && npm --prefix desktop run build:ts && npm --prefix desktop run compile:bytecode && npm --prefix desktop run package:mac",
-    "desktop:package:win": "npm run build && npm --prefix desktop run build:ts && npm --prefix desktop run compile:bytecode && npm --prefix desktop run package:win",
-    "desktop:package:linux": "npm run build && npm --prefix desktop run build:ts && npm --prefix desktop run compile:bytecode && npm --prefix desktop run package:linux",
-    "desktop:package:all": "npm run build && npm --prefix desktop run build:ts && npm --prefix desktop run compile:bytecode && npm --prefix desktop run package:all",
+    "desktop:build": "npm --prefix desktop run build",
+    "desktop:package:mac": "npm run clean && npm run build && npm --prefix desktop run build && npm --prefix desktop run compile:bytecode && npm --prefix desktop run package:mac",
+    "desktop:package:win": "npm run clean && npm run build && npm --prefix desktop run build && npm --prefix desktop run compile:bytecode && npm --prefix desktop run package:win",
+    "desktop:package:linux": "npm run clean && npm run build && npm --prefix desktop run build && npm --prefix desktop run compile:bytecode && npm --prefix desktop run package:linux",
+    "desktop:package:all": "npm run clean && npm run build && npm --prefix desktop run build && npm --prefix desktop run compile:bytecode && npm --prefix desktop run package:all",
     "verify": "bash scripts/verify.sh"
   }
 }
