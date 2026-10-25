@@ -33,6 +33,10 @@ describe('SSRF Guard: Proteção contra Server-Side Request Forgery', () => {
       assert.strictEqual(isPrivateOrReservedIP('::ffff:127.0.0.1'), true);
       assert.strictEqual(isPrivateOrReservedIP('::ffff:169.254.169.254'), true);
       assert.strictEqual(isPrivateOrReservedIP('::ffff:10.0.0.1'), true);
+      assert.strictEqual(isPrivateOrReservedIP('::ffff:7f00:1'), true);
+      assert.strictEqual(isPrivateOrReservedIP('::ffff:7f00:0001'), true);
+      assert.strictEqual(isPrivateOrReservedIP('0:0:0:0:0:ffff:127.0.0.1'), true);
+      assert.strictEqual(isPrivateOrReservedIP('0000:0000:0000:0000:0000:ffff:7f00:0001'), true);
     });
 
     it('deve permitir IPs públicos legítimos', () => {
@@ -73,6 +77,24 @@ describe('SSRF Guard: Proteção contra Server-Side Request Forgery', () => {
       );
       await assert.rejects(
         () => validateUrlForSSRF('http://[::1]:8080'),
+        /Endereço de destino restrito/
+      );
+      await assert.rejects(
+        () => validateUrlForSSRF('http://[::ffff:7f00:1]:8080'),
+        /Endereço de destino restrito/
+      );
+      await assert.rejects(
+        () => validateUrlForSSRF('http://[0:0:0:0:0:ffff:127.0.0.1]:8080'),
+        /Endereço de destino restrito/
+      );
+    });
+  });
+
+  describe('safeFetch (IP Pinning)', () => {
+    it('deve rejeitar URL com IP restrito mesmo antes de conectar', async () => {
+      const { safeFetch } = await import('./ssrf-guard.js');
+      await assert.rejects(
+        () => safeFetch('http://127.0.0.1:9999/api'),
         /Endereço de destino restrito/
       );
     });
