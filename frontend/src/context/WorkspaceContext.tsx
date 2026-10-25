@@ -179,19 +179,8 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
 export const useWorkspace = (): WorkspaceContextType => {
   const context = useContext(WorkspaceContext);
-  if (context) return context;
-
-  // Fallback direct access to stores if invoked outside WorkspaceProvider
-  const editor = useEditorStore();
-  const repo = useRepoStore();
-  const git = useGitStore();
-  const gov = useGovernanceStore();
-
-  return useMemo(() => ({
-    ...editor,
-    ...repo,
-    ...git,
-    ...gov,
-    getRepoOwnerOrOrg,
-  }), [editor, repo, git, gov]);
+  if (!context) {
+    throw new Error('useWorkspace deve ser utilizado dentro de um WorkspaceProvider');
+  }
+  return context;
 };

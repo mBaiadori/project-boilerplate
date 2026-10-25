@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Sparkles, 
   Download, 
@@ -40,13 +40,7 @@ export const SkillsHubModal: React.FC<SkillsHubModalProps> = ({
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [actionType, setActionType] = useState<'info' | 'success' | 'error'>('info');
 
-  useEffect(() => {
-    if (isOpen) {
-      loadData();
-    }
-  }, [isOpen, activeRepo]);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const [hubRes, projRes] = await Promise.all([
@@ -65,7 +59,13 @@ export const SkillsHubModal: React.FC<SkillsHubModalProps> = ({
     } finally {
       setLoading(false);
     }
-  };
+  }, [activeRepo]);
+
+  useEffect(() => {
+    if (isOpen) {
+      loadData();
+    }
+  }, [isOpen, loadData]);
 
   const handleInstall = async (skill: SkillItem) => {
     try {
