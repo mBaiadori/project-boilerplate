@@ -280,20 +280,24 @@ export const RepoTreeItem: React.FC<RepoTreeItemProps> = memo((props) => {
             <FolderPlus size={12} />
           </button>
 
-          {/* 7. Excluir Repositório (Apenas Admin/Owner) */}
-          {canAdminRepo && (
-            <button
-              type="button"
-              className="btn-tree-action delete"
-              title="Excluir Repositório"
-              onClick={(e) => {
-                e.stopPropagation();
-                onDeleteRepoPrompt(r);
-              }}
-            >
-              <Trash2 size={12} />
-            </button>
-          )}
+          {/* 7. Excluir / Desvincular Repositório */}
+          <button
+            type="button"
+            className="btn-tree-action delete"
+            title={
+              canAdminRepo
+                ? "Excluir Repositório"
+                : r.is_cloned_locally
+                  ? "Desvincular Repositório Local"
+                  : "Opções do Repositório"
+            }
+            onClick={(e) => {
+              e.stopPropagation();
+              onDeleteRepoPrompt(r);
+            }}
+          >
+            <Trash2 size={12} />
+          </button>
         </div>
       </div>
 

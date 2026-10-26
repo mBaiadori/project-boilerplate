@@ -201,7 +201,12 @@ export function resolveRepoDirPath(refOrRepo: RepoRef | string, ownerOrOrg?: str
   const rootResolved = path.resolve(PROJECTS_DIR);
 
   // Validação de segurança para garantir que não escapa de PROJECTS_DIR
-  if (!resolved.startsWith(rootResolved + path.sep)) {
+  // No Windows, normalizamos para lowercase para evitar falso-positivo em drive letters (C: vs c:)
+  const isWindows = process.platform === 'win32';
+  const normResolved = isWindows ? resolved.toLowerCase() : resolved;
+  const normRoot = isWindows ? rootResolved.toLowerCase() : rootResolved;
+
+  if (!normResolved.startsWith(normRoot + path.sep)) {
     throw new Error(`Caminho fora do diretório de projetos permitido: ${resolved}`);
   }
 

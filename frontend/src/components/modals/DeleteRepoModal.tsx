@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { Modal, Button, FormField, Input } from "../ui";
 import { API } from "../../services/api";
+import { useRepoStore } from "../../stores/repoStore";
+import { useAuth } from "../../context/AuthContext";
 import type { Repo } from "../../types";
-import { Trash2, AlertTriangle, HardDrive, Globe } from "lucide-react";
+import { Trash2, AlertTriangle, HardDrive, Globe, Info } from "lucide-react";
 
 interface DeleteRepoModalProps {
   isOpen: boolean;
@@ -26,8 +28,16 @@ export const DeleteRepoModal: React.FC<DeleteRepoModalProps> = ({
   const [isDeleting, setIsDeleting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const isAdmin = repo?.permissions?.admin ?? (repo?.is_owner || repo?.is_local || false);
+  const { activeOrg } = useRepoStore();
+  const { user } = useAuth();
+  const isOrgAdmin = Boolean(
+    activeOrg?.role === "admin" ||
+    (activeOrg as any)?.is_owner ||
+    (user?.login && activeOrg?.login && activeOrg.login.toLowerCase() === user.login.toLowerCase())
+  );
+  const isAdmin = Boolean(repo?.permissions?.admin ?? (repo?.is_owner || repo?.is_local || isOrgAdmin));
   const hasRemote = !repo?.is_local && Boolean(repo?.html_url || repo?.full_name);
+  const isUnclonedAndNotAdmin = !isAdmin && !repo?.is_cloned_locally && hasRemote;
 
   useEffect(() => {
     if (isOpen) {
@@ -82,6 +92,44 @@ export const DeleteRepoModal: React.FC<DeleteRepoModalProps> = ({
     }
   };
 
+  if (isUnclonedAndNotAdmin) {
+    return (
+      <Modal
+        isOpen={isOpen}
+        onClose={onClose}
+        title="Repositório Remoto"
+        size="md"
+      >
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "flex-start",
+              gap: 12,
+              padding: "12px 14px",
+              borderRadius: "var(--radius-md, 8px)",
+              backgroundColor: "rgba(59, 130, 246, 0.08)",
+              border: "1px solid rgba(59, 130, 246, 0.2)",
+            }}
+          >
+            <Info size={20} style={{ color: "var(--primary, #2563eb)", flexShrink: 0, marginTop: 2 }} />
+            <div style={{ fontSize: "13px", lineHeight: "1.5", color: "var(--text-primary)" }}>
+              <strong>Repositório Não Clonado:</strong> Este repositório pertence à organização remota e ainda não está baixado na sua máquina local.
+              <br /><br />
+              Como você não possui privilégios de administrador nesta organização, o GitHub barra comandos de exclusão remota (403 Forbidden). Como ele ainda não está clonado na sua máquina, não há arquivos locais para desvincular.
+            </div>
+          </div>
+
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
+            <Button variant="primary" size="sm" onClick={onClose}>
+              Entendido
+            </Button>
+          </div>
+        </div>
+      </Modal>
+    );
+  }
+
   const isUnlinking = deleteMode === "local_only" && hasRemote;
 
   return (
@@ -105,7 +153,9 @@ export const DeleteRepoModal: React.FC<DeleteRepoModalProps> = ({
         >
           <AlertTriangle size={20} style={{ color: "#ef4444", flexShrink: 0, marginTop: 2 }} />
           <div style={{ fontSize: "13px", lineHeight: "1.5", color: "var(--text-primary)" }}>
-            <strong>Atenção:</strong> Esta ação é irreversível para os arquivos selecionados.
+            <strong>Atenção:</strong> {isUnlinking
+              ? `Esta ação removerá a cópia local do repositório da sua máquina (projects/${repo.name}). O repositório remoto permanecerá intacto.`
+              : "Esta ação é irreversível para os arquivos selecionados."}
           </div>
         </div>
 

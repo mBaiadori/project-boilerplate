@@ -29,6 +29,8 @@ dist/
 build/
 release/
 */release/
+desktop/resources/git-win/
+desktop/resources/*.zip
 *.jsc
 *.bundle.cjs
 loader.cjs

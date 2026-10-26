@@ -22,8 +22,12 @@ function fileExistsInTree(nodes: TreeNode[], targetPath: string): boolean {
   return false;
 }
 
-export const getRepoOwnerOrOrg = (targetRepo?: Repo | null): string | undefined => {
-  const r = targetRepo !== undefined ? targetRepo : useRepoStore.getState().activeRepo;
+function resolveRepoOwnerOrOrg(
+  targetRepo?: Repo | null,
+  activeRepo?: Repo | null,
+  activeOrg?: Organization | null,
+): string | undefined {
+  const r = targetRepo !== undefined ? targetRepo : activeRepo;
   if (r) {
     if (typeof r.owner === "string" && r.owner && r.owner !== "local") return r.owner;
     if (typeof r.owner === "object" && r.owner !== null && "login" in r.owner) {
@@ -35,19 +39,18 @@ export const getRepoOwnerOrOrg = (targetRepo?: Repo | null): string | undefined 
       if (orgPart && orgPart !== "local") return orgPart;
     }
   }
-  const match = window.location.pathname.match(/\/org\/([^/]+)/);
+  const match = typeof window !== "undefined" ? window.location.pathname.match(/\/org\/([^/]+)/) : null;
   if (match && match[1]) {
     const decoded = decodeURIComponent(match[1]);
     if (decoded !== "local") return decoded;
   }
-  const activeOrg = useRepoStore.getState().activeOrg;
   if (activeOrg?.login && activeOrg.login !== "local") return activeOrg.login;
   try {
     const saved = localStorage.getItem("spec_active_org_login");
     if (saved && saved !== "local") return saved;
   } catch {}
   return undefined;
-};
+}
 
 interface RepoState {
   activeOrg: Organization | null;
@@ -144,7 +147,8 @@ export const useRepoStore = create<RepoState>((set, get) => ({
   setRepoProgress: (repoProgress) => set({ repoProgress }),
   setEffectivePermission: (effectivePermission) => set({ effectivePermission }),
   setAuthError: (authError) => set({ authError }),
-  getRepoOwnerOrOrg,
+  getRepoOwnerOrOrg: (targetRepo) =>
+    resolveRepoOwnerOrOrg(targetRepo, get().activeRepo, get().activeOrg),
 
   loadOrgs: async () => {
     try {
@@ -158,16 +162,12 @@ export const useRepoStore = create<RepoState>((set, get) => ({
           );
           if (found) {
             set({ activeOrg: found });
+            await get().loadRepos(found.login);
             return;
           }
         }
-        if (res.data.orgs.length > 0) {
-          set((state) => {
-            if (state.activeOrg) return state;
-            localStorage.setItem("spec_active_org_login", res.data.orgs[0].login);
-            return { activeOrg: res.data.orgs[0] };
-          });
-        }
+        // Se não há organização previamente escolhida, mantemos activeOrg null
+        // para que o SelectOrgModal seja apresentado ao usuário.
       }
     } catch (e) {
       console.warn("[repoStore] Erro ao carregar organizações:", e);
@@ -414,7 +414,6 @@ export const useRepoStore = create<RepoState>((set, get) => ({
 
     const found = currentRepos.find((r) => r.name.toLowerCase() === repoName.toLowerCase());
     if (found) {
-      if (!found.is_cloned_locally) return false;
       await get().selectRepo(found, initialFile);
       return true;
     }
@@ -606,3 +605,7 @@ export const useRepoStore = create<RepoState>((set, get) => ({
     }
   },
 }));
+
+export const getRepoOwnerOrOrg = (targetRepo?: Repo | null): string | undefined =>
+  useRepoStore.getState().getRepoOwnerOrOrg(targetRepo);
+

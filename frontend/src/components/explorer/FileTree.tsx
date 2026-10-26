@@ -249,12 +249,19 @@ export const FileTree: React.FC<FileTreeProps> = ({
       setCollapsedRepos((prev) => ({ ...prev, [r.name]: false }));
       setLoadingRepos((prev) => ({ ...prev, [r.name]: true }));
       try {
-        await cloneLocalRepo(r);
+        const res = await cloneLocalRepo(r);
+        if (!res.success) {
+          showToast(res.error || "Falha ao baixar repositório", "warning");
+        } else {
+          showToast(`Repositório ${r.name} baixado com sucesso!`, "info");
+        }
+      } catch (err: any) {
+        showToast(err.message || "Erro ao clonar repositório", "warning");
       } finally {
         setLoadingRepos((prev) => ({ ...prev, [r.name]: false }));
       }
     },
-    [cloneLocalRepo],
+    [cloneLocalRepo, showToast],
   );
 
   const handleSyncRepo = useCallback(

@@ -58,8 +58,10 @@ export async function cloneGitRepo(
     fs.rmSync(repoDir, { recursive: true, force: true });
   }
 
+  const repoFolderName = path.basename(repoDir);
+
   const cloneRes = await executeGitCommandWithProgress(
-    ["clone", "--progress", cleanRemoteUrl, repoDir],
+    ["clone", "--progress", cleanRemoteUrl, repoFolderName],
     parentDir,
     token,
     onProgress,

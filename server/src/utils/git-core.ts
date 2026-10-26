@@ -57,6 +57,17 @@ export function buildGitEnv(token?: string): {
     gitEnv.GIT_CONFIG_KEY_0 = "http.extraHeader";
     gitEnv.GIT_CONFIG_VALUE_0 = `AUTHORIZATION: basic ${base64Token}`;
   }
+
+  const gitBin = resolveGitBinary();
+  if (gitBin !== "git") {
+    const gitDir = path.dirname(path.dirname(gitBin));
+    const cmdDir = path.join(gitDir, "cmd");
+    const usrBinDir = path.join(gitDir, "usr", "bin");
+    const existingPath = gitEnv.PATH || gitEnv.Path || "";
+    gitEnv.PATH = `${cmdDir}${path.delimiter}${usrBinDir}${path.delimiter}${existingPath}`;
+    gitEnv.Path = gitEnv.PATH;
+  }
+
   return { env: gitEnv, activeToken, base64Token };
 }
 
@@ -81,6 +92,39 @@ export function setGitExecutionHook(hook: GitExecutionHook | null): void {
   gitExecutionHook = hook;
 }
 
+/**
+ * Localiza o executável do Git, priorizando o MinGit embutido no pacote do Electron (Windows)
+ */
+export function resolveGitBinary(): string {
+  const resourcesDir = process.env.CONTEXT_OS_RESOURCES || (process as any).resourcesPath;
+  if (resourcesDir) {
+    const candidates = [
+      path.join(resourcesDir, "git", "cmd", "git.exe"),
+      path.join(resourcesDir, "git", "bin", "git.exe"),
+    ];
+    for (const c of candidates) {
+      if (fs.existsSync(c)) {
+        return c;
+      }
+    }
+  }
+
+  if (process.platform === "win32") {
+    const devCandidates = [
+      path.resolve(process.cwd(), "desktop", "resources", "git-win", "cmd", "git.exe"),
+      path.resolve(process.cwd(), "resources", "git-win", "cmd", "git.exe"),
+      path.resolve(process.cwd(), "..", "desktop", "resources", "git-win", "cmd", "git.exe"),
+    ];
+    for (const dev of devCandidates) {
+      if (fs.existsSync(dev)) {
+        return dev;
+      }
+    }
+  }
+
+  return "git";
+}
+
 export function executeGitCommandWithProgress(
   args: string[],
   cwd: string,
@@ -101,7 +145,8 @@ export function executeGitCommandWithProgress(
     let stderr = "";
     let timedOut = false;
 
-    const child = spawn("git", finalArgs, {
+    const gitBin = resolveGitBinary();
+    const child = spawn(gitBin, finalArgs, {
       cwd,
       shell: false,
       env,
@@ -157,11 +202,15 @@ export function executeGitCommandWithProgress(
       });
     });
 
-    child.on("error", (err) => {
+    child.on("error", (err: any) => {
       clearTimeout(timer);
+      const isMissingGit = err.code === "ENOENT" || err.message?.includes("ENOENT");
+      const errorMsg = isMissingGit
+        ? "Git não encontrado no sistema operacional. Instale o Git para Windows (https://git-scm.com) e reinicie o aplicativo."
+        : err.message;
       resolve({
         stdout,
-        stderr: err.message,
+        stderr: errorMsg,
         success: false,
       });
     });
@@ -221,7 +270,8 @@ export async function executeGit(
   const { env, activeToken, base64Token } = buildGitEnv(explicitToken);
 
   try {
-    const { stdout, stderr } = await execFileAsync("git", args, {
+    const gitBin = resolveGitBinary();
+    const { stdout, stderr } = await execFileAsync(gitBin, args, {
       cwd,
       shell: false,
       maxBuffer: options.maxBuffer || 10 * 1024 * 1024,

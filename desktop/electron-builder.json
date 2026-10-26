@@ -47,6 +47,13 @@
         "target": "nsis",
         "arch": ["x64"]
       }
+    ],
+    "extraResources": [
+      {
+        "from": "resources/git-win",
+        "to": "git",
+        "filter": ["**/*"]
+      }
     ]
   },
   "nsis": {

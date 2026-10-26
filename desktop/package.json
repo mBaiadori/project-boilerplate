@@ -12,8 +12,9 @@
     "build:ts": "tsc",
     "build": "npm run clean && npm run build:ts",
     "compile:bytecode": "node scripts/compile-bytecode.js",
+    "fetch:git": "node scripts/ensure-mingit.js",
     "package:mac": "electron-builder --mac",
-    "package:win": "electron-builder --win",
+    "package:win": "node scripts/ensure-mingit.js && electron-builder --win",
     "package:linux": "electron-builder --linux",
     "package:all": "electron-builder -mwl"
   },
