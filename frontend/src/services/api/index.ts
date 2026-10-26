@@ -10,6 +10,7 @@ import { skillsApi } from './skills.api';
 import { systemApi } from './system.api';
 import { translationsApi } from './translations.api';
 import { governanceApi } from './governance.api';
+import { notificationsApi } from './notifications.api';
 
 export * from './client';
 export * from './auth.api';
@@ -24,6 +25,7 @@ export * from './skills.api';
 export * from './system.api';
 export * from './translations.api';
 export * from './governance.api';
+export * from './notifications.api';
 
 /**
  * Fachada unificada retrocompatível da API do Context OS.
@@ -42,5 +44,7 @@ export const API = {
   ...systemApi,
   ...translationsApi,
   ...governanceApi,
+  ...notificationsApi,
 };
+
 

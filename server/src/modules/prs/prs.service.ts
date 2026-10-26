@@ -38,6 +38,7 @@ import { prConflictsService } from "./pr-conflicts.service.js";
 import { workspaceService } from "../workspace/workspace.service.js";
 import { healRepositoryState } from "../../utils/git-health.js";
 import { recordAuditEvent } from "../audit/audit-chain.service.js";
+import { notificationService } from "../notifications/notification.service.js";
 
 export interface PRApprovalAudit {
   user: string;
@@ -1503,6 +1504,21 @@ DIRETRIZES OBRIGATÓRIAS:
         target: `PR branch '${payload.branch || "new-pr"}'`,
         details: `Criação de PR bloqueada por violações de segredos: ${violationSummary}`,
       });
+      // Disparo de notificação de segurança/compliance
+      setImmediate(() => {
+        notificationService.dispatch({
+          event: "compliance_violation",
+          repo: repoName,
+          title: "Alerta de Segurança: Segredos detectados no PR",
+          message: `Tentativa de criação de PR bloqueada por conter credenciais ou segredos expostos: ${violationSummary}`,
+          author: actor.replace(/^@/, ""),
+          severity: "critical",
+          statusColor: "#EF4444",
+          details: { violations },
+        }, repoName).catch((err) => {
+          console.warn("[PRsService] Falha ao despachar notificação de violação de compliance:", err);
+        });
+      });
       throw new Error(
         `[Secret Guard] Criação de PR bloqueada! Foram detectados segredos (chaves de API ou credenciais): ${violationSummary}`,
       );
@@ -1659,6 +1675,23 @@ DIRETRIZES OBRIGATÓRIAS:
     repoPRs.unshift(newPR);
     this.saveRepoPRs(repoName, repoPRs);
     clearWorkspaceChanges(repoName);
+
+    // Disparo assíncrono de notificação para solicitação de quorum
+    setImmediate(() => {
+      notificationService.dispatch({
+        event: "quorum_requested",
+        repo: repoName,
+        title: `Novo Pull Request aberto: ${newPR.title}`,
+        message: `O PR #${newPR.id} foi aberto por ${newPR.author} e requer revisão e assinaturas para atingir o quorum de governança.`,
+        prNumber: newPR.id,
+        author: String(newPR.author || '').replace(/^@/, ""),
+        actionUrl: prHtmlUrl || undefined,
+        severity: "warning",
+        statusColor: "#F59E0B",
+      }, repoName).catch((err) => {
+        console.warn("[PRsService] Falha ao despachar notificação de novo PR:", err);
+      });
+    });
 
     return {
       success: true,
@@ -1904,6 +1937,24 @@ DIRETRIZES OBRIGATÓRIAS:
       });
     } catch (auditErr) {
       console.warn("[PRsService] Falha ao registrar evento de auditoria de aprovação:", auditErr);
+    }
+
+    if (quorumReached) {
+      setImmediate(() => {
+        notificationService.dispatch({
+          event: "quorum_approved",
+          repo: repoName,
+          title: `Quorum de Governança Atingido: ${target.title}`,
+          message: `O PR #${target.id} atingiu o quorum mínimo de aprovações (${validCount}/${govRules.is_solo ? 1 : minApprovals}) com o voto de @${approver}. O merge foi liberado!`,
+          prNumber: target.id,
+          author: String(target.author || '').replace(/^@/, ""),
+          actionUrl: target.html_url || undefined,
+          severity: "info",
+          statusColor: "#10B981",
+        }, repoName).catch((err) => {
+          console.warn("[PRsService] Falha ao despachar notificação de quorum aprovado:", err);
+        });
+      });
     }
 
     return {

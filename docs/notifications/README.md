@@ -22,10 +22,10 @@ flowchart LR
 
 | Fase | Documento | Status | Objetivo Principal |
 | :---: | :--- | :---: | :--- |
-| **01** | [phase-01-schema-vault-contracts.md](./phase-01-schema-vault-contracts.md) | 📋 Pronto para Execução | Tipagem TypeScript, extensão do `.project.config.json` e chaves seguras no `VaultService`. |
-| **02** | [phase-02-engine-providers-anti-fatigue.md](./phase-02-engine-providers-anti-fatigue.md) | 📋 Planejado | Criação do `NotificationService`, engine de cooldown/deduplicação e provedores (Resend/SMTP/Webhook). |
-| **03** | [phase-03-governance-integration.md](./phase-03-governance-integration.md) | 📋 Planejado | Conexão dos gatilhos no `GovernanceService` (solicitação de quorum, aprovação, violações de segredos). |
-| **04** | [phase-04-frontend-settings-ux.md](./phase-04-frontend-settings-ux.md) | 📋 Planejado | Interface no Frontend (`Settings > Governança`), disparo de teste e chips visuais dinâmicas. |
+| **01** | [phase-01-schema-vault-contracts.md](./phase-01-schema-vault-contracts.md) | ✅ Concluído | Tipagem TypeScript, extensão do `.project.config.json` e chaves seguras no `VaultService`. |
+| **02** | [phase-02-engine-providers-anti-fatigue.md](./phase-02-engine-providers-anti-fatigue.md) | ✅ Concluído | Criação do `NotificationService`, engine de cooldown/deduplicação e provedores (Resend/SMTP/Webhook). |
+| **03** | [phase-03-governance-integration.md](./phase-03-governance-integration.md) | ✅ Concluído | Conexão dos gatilhos no `GovernanceService` (solicitação de quorum, aprovação, violações de segredos). |
+| **04** | [phase-04-frontend-settings-ux.md](./phase-04-frontend-settings-ux.md) | ✅ Concluído | Interface no Frontend (`Settings > Governança`), disparo de teste e chips visuais dinâmicas. |
 
 ---
 

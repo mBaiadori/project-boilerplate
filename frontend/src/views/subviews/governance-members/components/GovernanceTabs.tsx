@@ -1,5 +1,5 @@
 import React from "react";
-import { GitBranch, Layers, Users } from "lucide-react";
+import { Bell, GitBranch, Layers, Users } from "lucide-react";
 import { Badge } from "../../../../components/ui/Badge";
 import type { GovernanceTab } from "../types";
 
@@ -113,6 +113,33 @@ export const GovernanceTabs: React.FC<GovernanceTabsProps> = ({
             Actions Ativo
           </Badge>
         )}
+      </button>
+
+      <button
+        onClick={() => onSelectTab("notifications")}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "8px",
+          padding: "10px 18px",
+          background: "none",
+          border: "none",
+          borderBottom:
+            activeTab === "notifications"
+              ? "2px solid var(--color-primary, #6366f1)"
+              : "2px solid transparent",
+          color:
+            activeTab === "notifications"
+              ? "var(--color-primary, #6366f1)"
+              : "var(--color-outline, #a6adc8)",
+          fontWeight: activeTab === "notifications" ? 600 : 500,
+          cursor: "pointer",
+          fontSize: "14px",
+          whiteSpace: "nowrap",
+        }}
+      >
+        <Bell size={16} />
+        <span>Notificações & Alertas</span>
       </button>
     </div>
   );

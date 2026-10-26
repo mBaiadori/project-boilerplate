@@ -1,4 +1,4 @@
-export type GovernanceTab = "members" | "teams" | "protection";
+export type GovernanceTab = "members" | "teams" | "protection" | "notifications";
 
 export interface PermissionMeta {
   label: string;

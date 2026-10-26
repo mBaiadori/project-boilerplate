@@ -13,6 +13,7 @@ import { eventsRoutes } from "./modules/events/events.routes.js";
 import { eventsService } from "./modules/events/events.service.js";
 import { gitRoutes } from "./modules/git/git.routes.js";
 import { governanceRoutes } from "./modules/governance/governance.routes.js";
+import { notificationRoutes } from "./modules/notifications/notification.routes.js";
 import { prsRoutes } from "./modules/prs/prs.routes.js";
 import { ragRoutes } from "./modules/rag/rag.routes.js";
 import { reposRoutes } from "./modules/repos/repos.routes.js";
@@ -374,6 +375,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(systemRoutes);
   await app.register(translationsRoutes);
   await app.register(governanceRoutes);
+  await app.register(notificationRoutes);
 
   // 3. Static Assets & SPA Fallback (Serving ui/dist or ui/)
   const staticRoot = resolveUiDistDir();

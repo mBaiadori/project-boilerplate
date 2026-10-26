@@ -5,6 +5,7 @@ import { GovernanceHeader } from "./components/GovernanceHeader";
 import { GovernanceTabs } from "./components/GovernanceTabs";
 import { InviteMemberModal } from "./components/InviteMemberModal";
 import { MembersTab } from "./components/MembersTab";
+import { NotificationsTab } from "./components/NotificationsTab";
 import { ProtectionTab } from "./components/ProtectionTab";
 import { TeamsTab } from "./components/TeamsTab";
 import { useGovernanceMembersData } from "./hooks/useGovernanceMembersData";
@@ -126,6 +127,10 @@ export const GovernanceMembersSubView: React.FC = () => {
           isInstallingWorkflow={isInstallingWorkflow}
           onInstallWorkflow={handleInstallWorkflow}
         />
+      )}
+
+      {activeTab === "notifications" && (
+        <NotificationsTab repoName={repoName} isAdmin={isAdmin} />
       )}
 
       <InviteMemberModal

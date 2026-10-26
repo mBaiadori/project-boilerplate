@@ -37,6 +37,9 @@ function getKeyringEntryClass(): KeyringEntryConstructor | null {
 export const VAULT_KEYS = {
   GITHUB_TOKEN: 'github_token',
   AI_API_KEY: 'ai_api_key',
+  NOTIFICATION_EMAIL_KEY: 'notification_email_key',
+  NOTIFICATION_SMTP_CONFIG: 'notification_smtp_config',
+  NOTIFICATION_WEBHOOK_SECRET: 'notification_webhook_secret',
 } as const;
 
 export type VaultKey = typeof VAULT_KEYS[keyof typeof VAULT_KEYS] | string;
@@ -83,6 +86,13 @@ export class VaultService {
     }
     this.fallbackStore.set(key, trimmed);
     return true;
+  }
+
+  /**
+   * Alias de conveniência para setSecret
+   */
+  saveSecret(key: VaultKey, secret: string): boolean {
+    return this.setSecret(key, secret);
   }
 
   /**

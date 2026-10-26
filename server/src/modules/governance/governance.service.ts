@@ -63,7 +63,7 @@ export class GovernanceService {
     return {};
   }
 
-  private writeProjectConfig(repoName: string | undefined, data: any): void {
+  public writeProjectConfig(repoName: string | undefined, data: any): void {
     const p = this.getProjectConfigPath(repoName);
     try {
       writeJsonAtomic(p, data, 2);
@@ -663,6 +663,31 @@ export class GovernanceService {
       actor,
       target: `@${cleanUsername}`,
       details: `Perfil de acesso de @${cleanUsername} atualizado:${role ? ` Cargo '${role}',` : ""} Permissão '${permission}'${allowedPaths ? `, Rotas: [${allowedPaths.join(", ")}]` : ""}.`,
+    });
+
+    // Disparo assíncrono de notificação de alteração de clearance
+    setImmediate(() => {
+      import("../notifications/notification.service.js")
+        .then(({ notificationService }) => {
+          notificationService.dispatch({
+            event: "clearance_changed",
+            repo: targetRepoName,
+            title: `Permissões de Governança Atualizadas para @${cleanUsername}`,
+            message: `O perfil de governança de @${cleanUsername} foi atualizado no projeto ${targetRepoName} com permissão '${permission}' e cargo '${role || "Colaborador"}'.`,
+            author: actor.replace(/^@/, ""),
+            severity: "info",
+            statusColor: "#3B82F6",
+            details: {
+              username: cleanUsername,
+              permission,
+              role,
+              allowedPaths,
+            },
+          }, targetRepoName).catch((err) => {
+            console.warn("[GovernanceService] Falha ao despachar notificação de clearance:", err);
+          });
+        })
+        .catch(() => {});
     });
 
     return {

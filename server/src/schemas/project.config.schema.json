@@ -74,7 +74,44 @@
     "governance_rules": {
       "type": "object",
       "properties": {
-        "min_approvals_default": { "type": "number" }
+        "min_approvals_default": { "type": "number" },
+        "notifications": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "cooldown_minutes": { "type": "number", "default": 15 },
+            "channels": {
+              "type": "object",
+              "properties": {
+                "email": {
+                  "type": "object",
+                  "properties": {
+                    "enabled": { "type": "boolean" },
+                    "provider": { "type": "string", "enum": ["resend", "smtp", "sendgrid"] },
+                    "sender_address": { "type": "string" },
+                    "sender_name": { "type": "string" }
+                  }
+                },
+                "webhook": {
+                  "type": "object",
+                  "properties": {
+                    "enabled": { "type": "boolean" },
+                    "url": { "type": "string" }
+                  }
+                }
+              }
+            },
+            "events": {
+              "type": "object",
+              "properties": {
+                "on_quorum_requested": { "type": "boolean", "default": true },
+                "on_quorum_approved": { "type": "boolean", "default": true },
+                "on_compliance_violation": { "type": "boolean", "default": true },
+                "on_clearance_changed": { "type": "boolean", "default": false }
+              }
+            }
+          }
+        }
       }
     },
     "reviewers": {
@@ -85,8 +122,17 @@
           "id": { "type": "string" },
           "name": { "type": "string" },
           "handle": { "type": "string" },
+          "email": { "type": "string" },
           "role": { "type": "string" },
-          "tier": { "type": "string" }
+          "tier": { "type": "string" },
+          "notify_channels": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "notify_events": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
         }
       }
     },
