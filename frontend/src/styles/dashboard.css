@@ -1379,9 +1379,10 @@ body.is-resizing .pane-resizer {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: #ffffff;
+  background: var(--color-surface, #ffffff);
   flex-shrink: 0;
-  z-index: 5;
+  position: relative;
+  z-index: 50;
 }
 
 .doc-meta-left {
@@ -1484,6 +1485,8 @@ body.is-resizing .pane-resizer {
   display: flex;
   align-items: center;
   gap: 8px;
+  position: relative;
+  z-index: 51;
 }
 
 .doc-icon-actions {

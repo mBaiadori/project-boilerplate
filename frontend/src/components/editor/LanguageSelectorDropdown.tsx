@@ -153,7 +153,7 @@ export const LanguageSelectorDropdown: React.FC<
     <div
       ref={containerRef}
       className="language-selector-dropdown-wrapper"
-      style={{ position: "relative", display: "inline-block" }}
+      style={{ position: "relative", display: "inline-block", zIndex: 52 }}
     >
       <button
         type="button"
