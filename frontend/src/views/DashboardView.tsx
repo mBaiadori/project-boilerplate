@@ -1,64 +1,102 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { TopHeader } from '../components/layout/TopHeader';
-import { SidebarNav, type SubViewType } from '../components/layout/SidebarNav';
-import { AICopilotPanel } from '../components/copilot/AICopilotPanel';
-import { PromptSidebar } from '../components/copilot/PromptSidebar';
-import { HistorySidebar } from '../components/copilot/HistorySidebar';
-import { RawInspectorSidebar } from '../components/copilot/RawInspectorSidebar';
-import { ContextSidebar } from '../components/copilot/ContextSidebar';
-import { SkillsSidebar } from '../components/copilot/SkillsSidebar';
-import { DiffModal } from '../components/modals/DiffModal';
-import { ScaffoldModal } from '../components/modals/ScaffoldModal';
-import { AISettingsModal } from '../components/modals/AISettingsModal';
-import { OnboardingModal } from '../components/modals/OnboardingModal';
-import { SelectOrgModal } from '../components/modals/SelectOrgModal';
-import { AlertBanner } from '../components/ui/AlertBanner';
-import { useWorkspace } from '../context/WorkspaceContext';
-import { useAI } from '../context/AIContext';
-import { useAuth } from '../context/AuthContext';
-import { useRepoStore } from '../stores/repoStore';
+import React, { useState, useRef, useEffect, useCallback } from "react";
+import { TopHeader } from "../components/layout/TopHeader";
+import { SidebarNav, type SubViewType } from "../components/layout/SidebarNav";
+import { AICopilotPanel } from "../components/copilot/AICopilotPanel";
+import { PromptSidebar } from "../components/copilot/PromptSidebar";
+import { HistorySidebar } from "../components/copilot/HistorySidebar";
+import { RawInspectorSidebar } from "../components/copilot/RawInspectorSidebar";
+import { ContextSidebar } from "../components/copilot/ContextSidebar";
+import { SkillsSidebar } from "../components/copilot/SkillsSidebar";
+import { DiffModal } from "../components/modals/DiffModal";
+import { ScaffoldModal } from "../components/modals/ScaffoldModal";
+import { AISettingsModal } from "../components/modals/AISettingsModal";
+import { OnboardingModal } from "../components/modals/OnboardingModal";
+import { SelectOrgModal } from "../components/modals/SelectOrgModal";
+import { AlertBanner } from "../components/ui/AlertBanner";
+import { useWorkspace } from "../context/WorkspaceContext";
+import { useAI } from "../context/AIContext";
+import { useAuth } from "../context/AuthContext";
+import { useRepoStore } from "../stores/repoStore";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
+import { LoadingPane } from "../components/layout/LoadingPane";
+import { EditorSubView } from "./subviews/EditorSubView";
+import { VersionsSubView } from "./subviews/VersionsSubView";
+import { WikiSubView } from "./subviews/WikiSubView";
+import { DictionarySubView } from "./subviews/DictionarySubView";
+import { PRsSubView } from "./subviews/PRsSubView";
+import { TemplatesSubView } from "./subviews/TemplatesSubView";
+import { GovernanceMembersSubView } from "./subviews/GovernanceMembersSubView";
 
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { LoadingPane } from '../components/layout/LoadingPane';
-import { EditorSubView } from './subviews/EditorSubView';
-
-const VersionsSubView = React.lazy(() => import('./subviews/VersionsSubView').then(m => ({ default: m.VersionsSubView })));
-const WikiSubView = React.lazy(() => import('./subviews/WikiSubView').then(m => ({ default: m.WikiSubView })));
-const DictionarySubView = React.lazy(() => import('./subviews/DictionarySubView').then(m => ({ default: m.DictionarySubView })));
-const PRsSubView = React.lazy(() => import('./subviews/PRsSubView').then(m => ({ default: m.PRsSubView })));
-const TemplatesSubView = React.lazy(() => import('./subviews/TemplatesSubView').then(m => ({ default: m.TemplatesSubView })));
-const AICenterSubView = React.lazy(() => import('./subviews/AICenterSubView').then(m => ({ default: m.AICenterSubView })));
-const GovernanceMembersSubView = React.lazy(() => import('./subviews/GovernanceMembersSubView').then(m => ({ default: m.GovernanceMembersSubView })));
-const SettingsSubView = React.lazy(() => import('./subviews/SettingsSubView').then(m => ({ default: m.SettingsSubView })));
+const AICenterSubView = React.lazy(() =>
+  import("./subviews/AICenterSubView").then((m) => ({
+    default: m.AICenterSubView,
+  })),
+);
+const SettingsSubView = React.lazy(() =>
+  import("./subviews/SettingsSubView").then((m) => ({
+    default: m.SettingsSubView,
+  })),
+);
 
 interface DashboardViewProps {}
 
-const AI_WIDTH_STORAGE_KEY = 'spec_ai_pane_width';
+const AI_WIDTH_STORAGE_KEY = "spec_ai_pane_width";
 const DEFAULT_AI_WIDTH = 360;
 
-const VALID_SUBVIEWS: SubViewType[] = ['editor', 'edits', 'versions', 'dictionary', 'wiki', 'templates', 'skills', 'aicenter', 'prs', 'governance', 'settings'];
+const VALID_SUBVIEWS: SubViewType[] = [
+  "editor",
+  "edits",
+  "versions",
+  "dictionary",
+  "wiki",
+  "templates",
+  "skills",
+  "aicenter",
+  "prs",
+  "governance",
+  "settings",
+];
 
 export const DashboardView: React.FC<DashboardViewProps> = () => {
-  const { org, repoName, subview } = useParams<{ org?: string; repoName: string; subview?: string }>();
+  const { org, repoName, subview } = useParams<{
+    org?: string;
+    repoName: string;
+    subview?: string;
+  }>();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
 
-  const activeSubView: SubViewType = (subview && VALID_SUBVIEWS.includes(subview as SubViewType))
-    ? (subview as SubViewType)
-    : 'editor';
+  const activeSubView: SubViewType =
+    subview && VALID_SUBVIEWS.includes(subview as SubViewType)
+      ? (subview as SubViewType)
+      : "editor";
 
   const [isCopilotOpen, setIsCopilotOpen] = useState(false);
-  const [activeCopilotSidebar, setActiveCopilotSidebar] = useState<'prompt' | 'history' | 'raw' | 'context' | 'skills' | null>(null);
+  const [activeCopilotSidebar, setActiveCopilotSidebar] = useState<
+    "prompt" | "history" | "raw" | "context" | "skills" | null
+  >(null);
   const [isDiffModalOpen, setIsDiffModalOpen] = useState(false);
   const [isScaffoldModalOpen, setIsScaffoldModalOpen] = useState(false);
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
   const [isSelectOrgModalOpen, setIsSelectOrgModalOpen] = useState(false);
 
-  const { activeFile, activeRepo, fileContent, selectRepoByName, loadFile, hasUnreadWhatsNew, activeOrg, orgs, selectOrg, authError, setAuthError } = useWorkspace();
+  const {
+    activeFile,
+    activeRepo,
+    fileContent,
+    selectRepoByName,
+    loadFile,
+    hasUnreadWhatsNew,
+    activeOrg,
+    orgs,
+    selectOrg,
+    authError,
+    setAuthError,
+  } = useWorkspace();
   const { logout } = useAuth();
   const { messages, aiSettings, openSettingsModal } = useAI();
-  const [systemPrompt, setSystemPrompt] = useState('');
-  const fileParam = searchParams.get('file');
+  const [systemPrompt, setSystemPrompt] = useState("");
+  const fileParam = searchParams.get("file");
 
   useEffect(() => {
     if (!activeOrg && orgs && orgs.length > 0) {
@@ -82,7 +120,10 @@ export const DashboardView: React.FC<DashboardViewProps> = () => {
     }
     lastSyncedOrgRef.current = targetOrg;
 
-    const currentOrgLogin = useRepoStore.getState().activeOrg?.login?.toLowerCase().trim();
+    const currentOrgLogin = useRepoStore
+      .getState()
+      .activeOrg?.login?.toLowerCase()
+      .trim();
     if (currentOrgLogin !== targetOrg) {
       selectOrg(org).catch(() => {});
     }
@@ -91,14 +132,18 @@ export const DashboardView: React.FC<DashboardViewProps> = () => {
   // Clear file param from URL if file load failed (prevent loop / lingering error)
   useEffect(() => {
     const handleFileLoadError = () => {
-      if (searchParams.has('file')) {
+      if (searchParams.has("file")) {
         const newParams = new URLSearchParams(searchParams);
-        newParams.delete('file');
+        newParams.delete("file");
         setSearchParams(newParams, { replace: true });
       }
     };
-    window.addEventListener('workspace:file-load-error', handleFileLoadError);
-    return () => window.removeEventListener('workspace:file-load-error', handleFileLoadError);
+    window.addEventListener("workspace:file-load-error", handleFileLoadError);
+    return () =>
+      window.removeEventListener(
+        "workspace:file-load-error",
+        handleFileLoadError,
+      );
   }, [searchParams, setSearchParams]);
 
   // Sync Repo from URL parameter with double-invocation protection
@@ -118,23 +163,37 @@ export const DashboardView: React.FC<DashboardViewProps> = () => {
       return;
     }
 
-    const isRepoSwitch = lastSyncedRepoRef.current !== null && lastSyncedRepoRef.current !== target;
+    const isRepoSwitch =
+      lastSyncedRepoRef.current !== null &&
+      lastSyncedRepoRef.current !== target;
     lastSyncedRepoRef.current = target;
 
     // Se trocou de repositório, o fileParam da URL pertencia ao repositório anterior; limpa da URL
     if (isRepoSwitch && fileParam) {
       const newParams = new URLSearchParams(searchParams);
-      newParams.delete('file');
+      newParams.delete("file");
       setSearchParams(newParams, { replace: true });
     }
 
-    const effectiveInitialFile = isRepoSwitch ? undefined : (fileParam || undefined);
+    const effectiveInitialFile = isRepoSwitch
+      ? undefined
+      : fileParam || undefined;
     selectRepoByName(repoName, effectiveInitialFile).then((ok) => {
       if (!ok) {
-        console.warn(`[DashboardView] Repositório "${repoName}" não encontrado ou não clonado.`);
+        console.warn(
+          `[DashboardView] Repositório "${repoName}" não encontrado ou não clonado.`,
+        );
       }
     });
-  }, [repoName, activeRepo?.name, selectRepoByName, fileParam, navigate, searchParams, setSearchParams]);
+  }, [
+    repoName,
+    activeRepo?.name,
+    selectRepoByName,
+    fileParam,
+    navigate,
+    searchParams,
+    setSearchParams,
+  ]);
 
   // Sync File from search parameter ?file=...
   useEffect(() => {
@@ -145,7 +204,7 @@ export const DashboardView: React.FC<DashboardViewProps> = () => {
       repoName &&
       activeRepo.name.toLowerCase() === repoName.toLowerCase()
     ) {
-      const currentHash = window.location.hash || '';
+      const currentHash = window.location.hash || "";
       loadFile(`${fileParam}${currentHash}`, activeRepo.name);
     }
   }, [fileParam, activeFile, activeRepo?.name, repoName, loadFile]);
@@ -173,33 +232,39 @@ export const DashboardView: React.FC<DashboardViewProps> = () => {
     startAiXRef.current = e.clientX;
     startAiWidthRef.current = aiWidth;
 
-    document.body.classList.add('is-resizing');
+    document.body.classList.add("is-resizing");
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
       if (!isAiDraggingRef.current) return;
       const deltaX = moveEvent.clientX - startAiXRef.current;
-      const newWidth = Math.max(240, Math.min(750, startAiWidthRef.current - deltaX));
+      const newWidth = Math.max(
+        240,
+        Math.min(750, startAiWidthRef.current - deltaX),
+      );
       setAiWidth(newWidth);
     };
 
     const handleMouseUp = (upEvent: MouseEvent) => {
       if (!isAiDraggingRef.current) return;
       isAiDraggingRef.current = false;
-      document.body.classList.remove('is-resizing');
+      document.body.classList.remove("is-resizing");
 
       const deltaX = upEvent.clientX - startAiXRef.current;
-      const finalWidth = Math.max(240, Math.min(750, startAiWidthRef.current - deltaX));
+      const finalWidth = Math.max(
+        240,
+        Math.min(750, startAiWidthRef.current - deltaX),
+      );
       setAiWidth(finalWidth);
       try {
         localStorage.setItem(AI_WIDTH_STORAGE_KEY, String(finalWidth));
       } catch (e) {}
 
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
     };
 
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', handleMouseUp);
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
   };
 
   const toggleCopilot = useCallback(() => {
@@ -212,42 +277,58 @@ export const DashboardView: React.FC<DashboardViewProps> = () => {
     });
   }, []);
 
-  const buildRepoBaseUrl = useCallback((view: SubViewType) => {
-    const currentRepoName = repoName || activeRepo?.name;
-    const effectiveOrg = org || (activeRepo?.owner && activeRepo.owner !== 'local' && !activeRepo.is_local ? activeRepo.owner : (activeOrg?.login && activeOrg.login !== 'local' && !activeRepo?.is_local ? activeOrg.login : null));
-    if (currentRepoName) {
-      if (effectiveOrg) {
-        return `/org/${encodeURIComponent(effectiveOrg)}/repo/${encodeURIComponent(currentRepoName)}/${view}`;
+  const buildRepoBaseUrl = useCallback(
+    (view: SubViewType) => {
+      const currentRepoName = repoName || activeRepo?.name;
+      const effectiveOrg =
+        org ||
+        (activeRepo?.owner &&
+        activeRepo.owner !== "local" &&
+        !activeRepo.is_local
+          ? activeRepo.owner
+          : activeOrg?.login &&
+              activeOrg.login !== "local" &&
+              !activeRepo?.is_local
+            ? activeOrg.login
+            : null);
+      if (currentRepoName) {
+        if (effectiveOrg) {
+          return `/org/${encodeURIComponent(effectiveOrg)}/repo/${encodeURIComponent(currentRepoName)}/${view}`;
+        }
+        return `/repo/${encodeURIComponent(currentRepoName)}/${view}`;
       }
-      return `/repo/${encodeURIComponent(currentRepoName)}/${view}`;
-    }
 
-    if (effectiveOrg) {
-      return `/org/${encodeURIComponent(effectiveOrg)}/${view}`;
-    }
-    return `/${view}`;
-  }, [org, repoName, activeRepo, activeOrg?.login]);
+      if (effectiveOrg) {
+        return `/org/${encodeURIComponent(effectiveOrg)}/${view}`;
+      }
+      return `/${view}`;
+    },
+    [org, repoName, activeRepo, activeOrg?.login],
+  );
 
   const handleSelectView = (view: SubViewType) => {
     const base = buildRepoBaseUrl(view);
-    if (view === 'editor' && activeFile) {
+    if (view === "editor" && activeFile) {
       navigate(`${base}?file=${encodeURIComponent(activeFile)}`);
-    } else if (view === 'edits' || view === 'versions') {
-      const defaultTab = hasUnreadWhatsNew ? 'whats-new' : 'drafts';
-      navigate(`${buildRepoBaseUrl('edits')}?tab=${defaultTab}`);
+    } else if (view === "edits" || view === "versions") {
+      const defaultTab = hasUnreadWhatsNew ? "whats-new" : "drafts";
+      navigate(`${buildRepoBaseUrl("edits")}?tab=${defaultTab}`);
     } else {
       navigate(base);
     }
   };
 
-  const handleNavigateToEdits = useCallback((tab?: 'drafts' | 'whats-new') => {
-    const base = buildRepoBaseUrl('edits');
-    const targetTab = tab || (hasUnreadWhatsNew ? 'whats-new' : 'drafts');
-    navigate(`${base}?tab=${targetTab}`);
-  }, [buildRepoBaseUrl, hasUnreadWhatsNew, navigate]);
+  const handleNavigateToEdits = useCallback(
+    (tab?: "drafts" | "whats-new") => {
+      const base = buildRepoBaseUrl("edits");
+      const targetTab = tab || (hasUnreadWhatsNew ? "whats-new" : "drafts");
+      navigate(`${base}?tab=${targetTab}`);
+    },
+    [buildRepoBaseUrl, hasUnreadWhatsNew, navigate],
+  );
 
   const handleOpenDiffModal = useCallback(() => {
-    handleNavigateToEdits('drafts');
+    handleNavigateToEdits("drafts");
   }, [handleNavigateToEdits]);
 
   const handleOpenGitModal = useCallback(() => {
@@ -259,21 +340,25 @@ export const DashboardView: React.FC<DashboardViewProps> = () => {
   }, []);
 
   const handleOpenFile = (rawPath: string) => {
-    const base = buildRepoBaseUrl('editor');
+    const base = buildRepoBaseUrl("editor");
     if (!rawPath) {
       navigate(base);
-      loadFile('', repoName || activeRepo?.name);
+      loadFile("", repoName || activeRepo?.name);
       return;
     }
-    const hashIndex = rawPath.indexOf('#');
+    const hashIndex = rawPath.indexOf("#");
     const cleanPath = hashIndex !== -1 ? rawPath.slice(0, hashIndex) : rawPath;
-    const hash = hashIndex !== -1 ? rawPath.slice(hashIndex) : '';
+    const hash = hashIndex !== -1 ? rawPath.slice(hashIndex) : "";
 
     navigate(`${base}?file=${encodeURIComponent(cleanPath)}${hash}`);
   };
 
   return (
-    <div id="view-dashboard" className="screen-view" style={{ display: 'flex' }}>
+    <div
+      id="view-dashboard"
+      className="screen-view"
+      style={{ display: "flex" }}
+    >
       {/* Top Global Header */}
       <TopHeader
         onOpenDiffModal={handleOpenDiffModal}
@@ -295,19 +380,35 @@ export const DashboardView: React.FC<DashboardViewProps> = () => {
         {/* Main Views Container */}
         <main className="dash-views-container">
           {authError && (
-            <div style={{ padding: '8px 16px', background: 'var(--bg-surface)', borderBottom: '1px solid var(--border)' }}>
+            <div
+              style={{
+                padding: "8px 16px",
+                background: "var(--bg-surface)",
+                borderBottom: "1px solid var(--border)",
+              }}
+            >
               <AlertBanner
                 type="error"
                 title="Autenticação com GitHub Necessária"
                 message={authError}
                 onClose={() => setAuthError(null)}
                 action={
-                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: "8px",
+                      alignItems: "center",
+                    }}
+                  >
                     <button
                       type="button"
                       className="btn btn--primary btn--sm"
-                      onClick={() => navigate('/login')}
-                      style={{ fontSize: '12px', padding: '4px 10px', height: '28px' }}
+                      onClick={() => navigate("/login")}
+                      style={{
+                        fontSize: "12px",
+                        padding: "4px 10px",
+                        height: "28px",
+                      }}
                     >
                       Reconectar Conta
                     </button>
@@ -316,9 +417,13 @@ export const DashboardView: React.FC<DashboardViewProps> = () => {
                       className="btn btn--secondary btn--sm"
                       onClick={async () => {
                         await logout();
-                        navigate('/login');
+                        navigate("/login");
                       }}
-                      style={{ fontSize: '12px', padding: '4px 10px', height: '28px' }}
+                      style={{
+                        fontSize: "12px",
+                        padding: "4px 10px",
+                        height: "28px",
+                      }}
                     >
                       Desconectar
                     </button>
@@ -328,103 +433,99 @@ export const DashboardView: React.FC<DashboardViewProps> = () => {
             </div>
           )}
 
-          {activeSubView === 'editor' && (
+          {activeSubView === "editor" && (
             <EditorSubView
               onOpenScaffoldWizard={() => setIsScaffoldModalOpen(true)}
-              onOpenDiffModal={() => handleNavigateToEdits('drafts')}
+              onOpenDiffModal={() => handleNavigateToEdits("drafts")}
               onToggleCopilot={toggleCopilot}
               onOpenFile={handleOpenFile}
             />
           )}
 
           <React.Suspense fallback={<LoadingPane />}>
-            {(activeSubView === 'edits' || activeSubView === 'versions') && (
+            {(activeSubView === "edits" || activeSubView === "versions") && (
               <VersionsSubView
                 onOpenFile={(path) => {
                   handleOpenFile(path);
-                  handleSelectView('editor');
+                  handleSelectView("editor");
                 }}
-                onOpenDiffModal={() => handleNavigateToEdits('drafts')}
+                onOpenDiffModal={() => handleNavigateToEdits("drafts")}
               />
             )}
 
-            {activeSubView === 'dictionary' && (
-              <DictionarySubView />
+            {activeSubView === "dictionary" && <DictionarySubView />}
+
+            {activeSubView === "wiki" && <WikiSubView />}
+
+            {activeSubView === "templates" && (
+              <TemplatesSubView
+                onApplyTemplate={(tplPath) =>
+                  tplPath ? handleOpenFile(tplPath) : handleSelectView("editor")
+                }
+              />
             )}
 
-            {activeSubView === 'wiki' && (
-              <WikiSubView />
-            )}
-
-            {activeSubView === 'templates' && (
-              <TemplatesSubView onApplyTemplate={(tplPath) => tplPath ? handleOpenFile(tplPath) : handleSelectView('editor')} />
-            )}
-
-            {(activeSubView === 'aicenter' || activeSubView === 'skills') && (
+            {(activeSubView === "aicenter" || activeSubView === "skills") && (
               <AICenterSubView />
             )}
 
-            {activeSubView === 'prs' && (
+            {activeSubView === "prs" && (
               <PRsSubView onOpenDiffModal={() => setIsDiffModalOpen(true)} />
             )}
 
-            {activeSubView === 'governance' && (
-              <GovernanceMembersSubView />
-            )}
+            {activeSubView === "governance" && <GovernanceMembersSubView />}
 
-            {activeSubView === 'settings' && (
-              <SettingsSubView />
-            )}
+            {activeSubView === "settings" && <SettingsSubView />}
           </React.Suspense>
         </main>
 
         {/* Dedicated Full-Height Sidebars Docked to the LEFT of the AI Chat Pane */}
-        {isCopilotOpen && activeCopilotSidebar === 'prompt' && (
+        {isCopilotOpen && activeCopilotSidebar === "prompt" && (
           <PromptSidebar
             isOpen={true}
             onClose={() => setActiveCopilotSidebar(null)}
             systemPrompt={systemPrompt}
             defaultPrompt="Você é o Arquiteto de Software & Assistente do Spec-Driven Context OS."
             onSavePrompt={(p) => setSystemPrompt(p)}
-            onResetPrompt={() => setSystemPrompt('')}
+            onResetPrompt={() => setSystemPrompt("")}
             onOpenAIModal={openSettingsModal}
-            modelName={aiSettings?.active_model || 'gemini-3.5-flash'}
+            modelName={aiSettings?.active_model || "gemini-3.5-flash"}
           />
         )}
 
-        {isCopilotOpen && activeCopilotSidebar === 'history' && (
+        {isCopilotOpen && activeCopilotSidebar === "history" && (
           <HistorySidebar
             isOpen={true}
             onClose={() => setActiveCopilotSidebar(null)}
-            repo={activeRepo?.name || 'default'}
-            docPath={activeFile || 'index.md'}
+            repo={activeRepo?.name || "default"}
+            docPath={activeFile || "index.md"}
             onRestoreSession={() => {}}
           />
         )}
 
-        {isCopilotOpen && activeCopilotSidebar === 'raw' && (
+        {isCopilotOpen && activeCopilotSidebar === "raw" && (
           <RawInspectorSidebar
             isOpen={true}
             onClose={() => setActiveCopilotSidebar(null)}
-            docPath={activeFile || 'index.md'}
+            docPath={activeFile || "index.md"}
             rawPayload={{
               repo: activeRepo?.name,
               docPath: activeFile,
               contentLength: fileContent?.length || 0,
-              model: aiSettings?.active_model
+              model: aiSettings?.active_model,
             }}
             rawResponse={messages[messages.length - 1] || null}
           />
         )}
 
-        {isCopilotOpen && activeCopilotSidebar === 'context' && (
+        {isCopilotOpen && activeCopilotSidebar === "context" && (
           <ContextSidebar
             isOpen={true}
             onClose={() => setActiveCopilotSidebar(null)}
           />
         )}
 
-        {isCopilotOpen && activeCopilotSidebar === 'skills' && (
+        {isCopilotOpen && activeCopilotSidebar === "skills" && (
           <SkillsSidebar
             isOpen={true}
             onClose={() => setActiveCopilotSidebar(null)}
@@ -446,8 +547,8 @@ export const DashboardView: React.FC<DashboardViewProps> = () => {
           id="global-ai-pane"
           className="workbench-ai-pane"
           style={{
-            display: isCopilotOpen ? 'flex' : 'none',
-            width: `${aiWidth}px`
+            display: isCopilotOpen ? "flex" : "none",
+            width: `${aiWidth}px`,
           }}
         >
           <AICopilotPanel
@@ -456,11 +557,31 @@ export const DashboardView: React.FC<DashboardViewProps> = () => {
               setIsCopilotOpen(false);
               setActiveCopilotSidebar(null);
             }}
-            onOpenPrompt={() => setActiveCopilotSidebar(activeCopilotSidebar === 'prompt' ? null : 'prompt')}
-            onOpenHistory={() => setActiveCopilotSidebar(activeCopilotSidebar === 'history' ? null : 'history')}
-            onOpenRaw={() => setActiveCopilotSidebar(activeCopilotSidebar === 'raw' ? null : 'raw')}
-            onOpenContext={() => setActiveCopilotSidebar(activeCopilotSidebar === 'context' ? null : 'context')}
-            onOpenSkills={() => setActiveCopilotSidebar(activeCopilotSidebar === 'skills' ? null : 'skills')}
+            onOpenPrompt={() =>
+              setActiveCopilotSidebar(
+                activeCopilotSidebar === "prompt" ? null : "prompt",
+              )
+            }
+            onOpenHistory={() =>
+              setActiveCopilotSidebar(
+                activeCopilotSidebar === "history" ? null : "history",
+              )
+            }
+            onOpenRaw={() =>
+              setActiveCopilotSidebar(
+                activeCopilotSidebar === "raw" ? null : "raw",
+              )
+            }
+            onOpenContext={() =>
+              setActiveCopilotSidebar(
+                activeCopilotSidebar === "context" ? null : "context",
+              )
+            }
+            onOpenSkills={() =>
+              setActiveCopilotSidebar(
+                activeCopilotSidebar === "skills" ? null : "skills",
+              )
+            }
           />
         </aside>
       </div>
@@ -471,7 +592,7 @@ export const DashboardView: React.FC<DashboardViewProps> = () => {
       <DiffModal
         isOpen={isDiffModalOpen}
         onClose={() => setIsDiffModalOpen(false)}
-        onPROpened={() => handleSelectView('prs')}
+        onPROpened={() => handleSelectView("prs")}
       />
 
       <ScaffoldModal
@@ -481,7 +602,7 @@ export const DashboardView: React.FC<DashboardViewProps> = () => {
           if (createdPath) {
             handleOpenFile(createdPath);
           } else {
-            handleSelectView('editor');
+            handleSelectView("editor");
           }
         }}
       />
