@@ -191,9 +191,13 @@ export function loadConfig(): AppConfig {
   if (Array.isArray(cfg.accounts)) {
     for (const acc of cfg.accounts) {
       if (acc.id) {
-        const accToken = vaultService.getSecret(`account_token_${acc.id}`);
+        let accToken = vaultService.getSecret(`account_token_${acc.id}`);
+        if (!accToken && cfg.user?.login && acc.user?.login?.toLowerCase() === cfg.user.login.toLowerCase()) {
+          accToken = vaultService.getSecret(VAULT_KEYS.GITHUB_TOKEN);
+        }
         if (accToken) {
           acc.token = accToken;
+          vaultService.setSecret(`account_token_${acc.id}`, accToken);
         } else if (acc.token && acc.token.trim()) {
           // Migração suave: persiste no cofre nativo do SO
           vaultService.setSecret(`account_token_${acc.id}`, acc.token.trim());

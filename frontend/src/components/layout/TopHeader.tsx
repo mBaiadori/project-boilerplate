@@ -58,10 +58,12 @@ export const TopHeader: React.FC<TopHeaderProps> = React.memo(
       }
     };
 
+    const [avatarError, setAvatarError] = React.useState(false);
+
     return (
       <header className="dashboard-navbar" style={{ position: "relative" }}>
         <div className="dash-brand">
-          {user?.avatar_url ? (
+          {user?.avatar_url && !avatarError ? (
             <img
               id="dash-user-avatar"
               src={user.avatar_url}
@@ -69,6 +71,7 @@ export const TopHeader: React.FC<TopHeaderProps> = React.memo(
               title={user.name || user.login || "Usuário"}
               loading="eager"
               decoding="async"
+              onError={() => setAvatarError(true)}
               style={{
                 width: "28px",
                 height: "28px",

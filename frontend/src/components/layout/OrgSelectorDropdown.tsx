@@ -19,6 +19,45 @@ const VALID_SUBVIEWS = [
   "settings",
 ];
 
+const OrgAvatar: React.FC<{ url?: string; login: string; isSelected?: boolean; size?: number }> = ({ url, login, isSelected, size = 20 }) => {
+  const [hasError, setHasError] = React.useState(false);
+  if (url && !hasError) {
+    return (
+      <img
+        src={url}
+        alt={login}
+        onError={() => setHasError(true)}
+        style={{
+          width: `${size}px`,
+          height: `${size}px`,
+          borderRadius: size > 20 ? "6px" : "50%",
+          objectFit: "cover",
+          flexShrink: 0,
+        }}
+      />
+    );
+  }
+  return (
+    <div
+      style={{
+        width: `${size}px`,
+        height: `${size}px`,
+        borderRadius: size > 20 ? "6px" : "50%",
+        backgroundColor: isSelected
+          ? "var(--md-sys-color-primary, #1a73e8)"
+          : "var(--md-sys-color-surface-container, #f1f3f4)",
+        color: isSelected ? "#ffffff" : "var(--md-sys-color-on-surface-variant, #5f6368)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        flexShrink: 0,
+      }}
+    >
+      <Building2 size={size === 20 ? 12 : 14} />
+    </div>
+  );
+};
+
 export const OrgSelectorDropdown: React.FC = () => {
   const { activeOrg, orgs, selectOrg, resetActiveRepo } = useWorkspace();
   const { user } = useAuth();
@@ -112,35 +151,11 @@ export const OrgSelectorDropdown: React.FC = () => {
           maxWidth: "200px",
         }}
       >
-        {currentOrg?.avatar_url ? (
-          <img
-            src={currentOrg.avatar_url}
-            alt={currentOrg.login}
-            style={{
-              width: "20px",
-              height: "20px",
-              borderRadius: "50%",
-              objectFit: "cover",
-              flexShrink: 0,
-            }}
-          />
-        ) : (
-          <div
-            style={{
-              width: "20px",
-              height: "20px",
-              borderRadius: "50%",
-              backgroundColor: "var(--md-sys-color-primary-container, #d2e3fc)",
-              color: "var(--md-sys-color-primary, #1a73e8)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              flexShrink: 0,
-            }}
-          >
-            <Building2 size={12} />
-          </div>
-        )}
+        <OrgAvatar
+          url={currentOrg?.avatar_url}
+          login={currentOrg?.login || "org"}
+          size={20}
+        />
 
         <span
           style={{
@@ -241,37 +256,12 @@ export const OrgSelectorDropdown: React.FC = () => {
                   }
                 }}
               >
-                {o.avatar_url ? (
-                  <img
-                    src={o.avatar_url}
-                    alt={o.login}
-                    style={{
-                      width: "22px",
-                      height: "22px",
-                      borderRadius: "6px",
-                      objectFit: "cover",
-                      flexShrink: 0,
-                    }}
-                  />
-                ) : (
-                  <div
-                    style={{
-                      width: "22px",
-                      height: "22px",
-                      borderRadius: "6px",
-                      backgroundColor: isSelected
-                        ? "var(--md-sys-color-primary, #1a73e8)"
-                        : "var(--md-sys-color-surface-container, #f1f3f4)",
-                      color: isSelected ? "#ffffff" : "var(--md-sys-color-on-surface-variant, #5f6368)",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      flexShrink: 0,
-                    }}
-                  >
-                    <Building2 size={13} />
-                  </div>
-                )}
+                <OrgAvatar
+                  url={o.avatar_url}
+                  login={o.login}
+                  isSelected={isSelected}
+                  size={22}
+                />
 
                 <div
                   style={{

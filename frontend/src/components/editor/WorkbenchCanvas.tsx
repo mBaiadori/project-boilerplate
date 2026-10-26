@@ -1,5 +1,6 @@
 import React, { Suspense, lazy } from "react";
 import { useSearchParams } from "react-router-dom";
+import { FileText, FileSearch } from "lucide-react";
 import { NotionEditor } from "./NotionEditor";
 import { getFileCategory } from "../../utils/file-types";
 
@@ -76,9 +77,7 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
               : "var(--md-sys-color-primary, #005ac1)",
           }}
         >
-          <span className="material-symbols-outlined" style={{ fontSize: 32 }}>
-            {hasEmptyFileParam ? "find_in_page" : "description"}
-          </span>
+          {hasEmptyFileParam ? <FileSearch size={32} /> : <FileText size={32} />}
         </div>
 
         <h3

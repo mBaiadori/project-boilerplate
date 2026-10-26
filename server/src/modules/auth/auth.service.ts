@@ -1,5 +1,6 @@
 import { loadConfig, saveConfig } from '../../config/storage.js';
 import { callGitHubAPI } from '../../utils/git.js';
+import { vaultService, VAULT_KEYS } from '../vault/vault.service.js';
 
 export class AuthService {
   async authenticateWithToken(token: string) {
@@ -214,8 +215,21 @@ export class AuthService {
       throw new Error(`Conta não encontrada no sistema: ${accountId}`);
     }
 
+    let targetToken: string | null = target.token || null;
+    if (!targetToken) {
+      targetToken = vaultService.getSecret(`account_token_${target.id}`) || null;
+      if (!targetToken && target.user?.login && cfg.user?.login?.toLowerCase() === target.user.login.toLowerCase()) {
+        targetToken = vaultService.getSecret(VAULT_KEYS.GITHUB_TOKEN);
+      }
+    }
+
+    if (!targetToken) {
+      throw new Error(`Sessão expirada para a conta @${target.user?.login || accountId}. Por favor, conecte-se novamente com a empresa.`);
+    }
+
+    target.token = targetToken;
     cfg.authenticated = true;
-    cfg.token = target.token;
+    cfg.token = targetToken;
     cfg.git_provider = target.git_provider || 'github';
     delete cfg.git_provider_url;
     cfg.user = target.user;

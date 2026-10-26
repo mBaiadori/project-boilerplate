@@ -1,3 +1,5 @@
+import { createRequire } from 'node:module';
+
 let KeyringEntry: any = null;
 let keyringInitAttempted = false;
 
@@ -5,7 +7,12 @@ function getKeyringEntryClass() {
   if (keyringInitAttempted) return KeyringEntry;
   keyringInitAttempted = true;
   try {
-    const req = typeof require !== 'undefined' ? require : null;
+    let req: NodeRequire | any = null;
+    if (typeof require !== 'undefined') {
+      req = require;
+    } else {
+      req = createRequire(import.meta.url);
+    }
     if (req) {
       const mod = req('@napi-rs/keyring');
       KeyringEntry = mod?.Entry || mod?.default?.Entry || mod;

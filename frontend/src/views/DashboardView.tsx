@@ -11,6 +11,7 @@ import { DiffModal } from '../components/modals/DiffModal';
 import { ScaffoldModal } from '../components/modals/ScaffoldModal';
 import { AISettingsModal } from '../components/modals/AISettingsModal';
 import { OnboardingModal } from '../components/modals/OnboardingModal';
+import { SelectOrgModal } from '../components/modals/SelectOrgModal';
 import { AlertBanner } from '../components/ui/AlertBanner';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { useAI } from '../context/AIContext';
@@ -51,12 +52,21 @@ export const DashboardView: React.FC<DashboardViewProps> = () => {
   const [isDiffModalOpen, setIsDiffModalOpen] = useState(false);
   const [isScaffoldModalOpen, setIsScaffoldModalOpen] = useState(false);
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
+  const [isSelectOrgModalOpen, setIsSelectOrgModalOpen] = useState(false);
 
-  const { activeFile, activeRepo, fileContent, selectRepoByName, loadFile, hasUnreadWhatsNew, activeOrg, selectOrg, authError, setAuthError } = useWorkspace();
+  const { activeFile, activeRepo, fileContent, selectRepoByName, loadFile, hasUnreadWhatsNew, activeOrg, orgs, selectOrg, authError, setAuthError } = useWorkspace();
   const { logout } = useAuth();
   const { messages, aiSettings, openSettingsModal } = useAI();
   const [systemPrompt, setSystemPrompt] = useState('');
   const fileParam = searchParams.get('file');
+
+  useEffect(() => {
+    if (!activeOrg && orgs && orgs.length > 0) {
+      setIsSelectOrgModalOpen(true);
+    } else {
+      setIsSelectOrgModalOpen(false);
+    }
+  }, [activeOrg, orgs]);
 
   // Sync Org from URL parameter if present with protection against circular reverts
   const lastSyncedOrgRef = useRef<string | null>(null);
@@ -482,6 +492,11 @@ export const DashboardView: React.FC<DashboardViewProps> = () => {
         onNavigateView={handleSelectView}
         onToggleCopilot={toggleCopilot}
         onOpenGitModal={() => handleNavigateToEdits()}
+      />
+
+      <SelectOrgModal
+        isOpen={isSelectOrgModalOpen}
+        onClose={() => setIsSelectOrgModalOpen(false)}
       />
     </div>
   );
