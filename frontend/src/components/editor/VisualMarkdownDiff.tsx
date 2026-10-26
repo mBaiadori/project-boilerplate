@@ -7,7 +7,7 @@ import {
   type DocumentMetadata,
 } from "../../services/frontmatter";
 import { useTemplateStore } from "../../stores/templateStore";
-import { useWorkspace } from "../../context/WorkspaceContext";
+import { useGovernanceStore } from "../../stores/governanceStore";
 
 interface VisualMarkdownDiffProps {
   oldContent: string;
@@ -43,13 +43,7 @@ export const VisualMarkdownDiff: React.FC<VisualMarkdownDiffProps> = ({
 }) => {
   const [showMetadata, setShowMetadata] = useState<boolean | null>(null);
   const templates = useTemplateStore((s) => s.templates);
-  let projectMetaOptions: any = null;
-  try {
-    const ws = useWorkspace();
-    projectMetaOptions = ws?.projectMetaOptions;
-  } catch {
-    // Graceful fallback if rendered outside WorkspaceProvider
-  }
+  const projectMetaOptions = useGovernanceStore((s) => s.projectMetaOptions);
 
   // Parse frontmatter metadata and extract the pure document body for both versions
   const oldParsed = useMemo(
@@ -158,13 +152,13 @@ export const VisualMarkdownDiff: React.FC<VisualMarkdownDiffProps> = ({
       if (key === "templateId") {
         displayLabel = "template";
         const tplCur = templates?.find(
-          (t: any) =>
+          (t) =>
             t.id === curStr || t.templateName === curStr || t.title === curStr,
         );
         if (tplCur?.title) curStr = tplCur.title;
 
         const tplOther = templates?.find(
-          (t: any) =>
+          (t) =>
             t.id === otherStr ||
             t.templateName === otherStr ||
             t.title === otherStr,
@@ -177,29 +171,28 @@ export const VisualMarkdownDiff: React.FC<VisualMarkdownDiffProps> = ({
       let customColor: string | null = null;
       if (curStr && curStr !== "<vazio>") {
         if (key === "categories" || key === "category") {
-          const match = projectMetaOptions?.categories?.find(
-            (c: any) =>
-              (c.name || c.key || c.label)?.toLowerCase() === curStr.toLowerCase(),
-          );
-          if (match?.color) customColor = match.color;
+          const match = projectMetaOptions?.categories?.find((c) => {
+            const name = typeof c === "object" ? c.name || c.label : c;
+            return name?.toLowerCase() === curStr.toLowerCase();
+          });
+          if (typeof match === "object" && match?.color) customColor = match.color;
         } else if (key === "status") {
           const match = projectMetaOptions?.statuses?.find(
-            (s: any) =>
+            (s) =>
               (s.name || s.key || s.label)?.toLowerCase() === curStr.toLowerCase(),
           );
           if (match?.color) customColor = match.color;
         } else if (key === "tags" || key === "tag") {
-          const match = projectMetaOptions?.tags?.find(
-            (t: any) =>
-              (t.name || t.key || t.label)?.toLowerCase() === curStr.toLowerCase(),
-          );
-          if (match?.color) customColor = match.color;
+          const match = projectMetaOptions?.tags?.find((t) => {
+            const name = typeof t === "object" ? t.name || t.label : t;
+            return name?.toLowerCase() === curStr.toLowerCase();
+          });
+          if (typeof match === "object" && match?.color) customColor = match.color;
         } else if (key === "badge" || key === "badges") {
-          const match = projectMetaOptions?.badges?.find(
-            (b: any) =>
-              (typeof b === "object" ? b.name : b)?.toLowerCase() ===
-              curStr.toLowerCase(),
-          );
+          const match = projectMetaOptions?.badges?.find((b) => {
+            const name = typeof b === "object" ? b.name : b;
+            return name?.toLowerCase() === curStr.toLowerCase();
+          });
           if (typeof match === "object" && match?.color) customColor = match.color;
         }
       }
