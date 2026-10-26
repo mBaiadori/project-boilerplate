@@ -1,9 +1,27 @@
+export interface UpdaterStatusEvent {
+  status: 'checking' | 'available' | 'up-to-date' | 'downloaded' | 'error';
+  version?: string;
+  releaseDate?: string;
+  error?: string;
+}
+
+export interface UpdaterProgressEvent {
+  percent: number;
+  bytesPerSecond: number;
+  transferred: number;
+  total: number;
+}
+
 interface DesktopBridge {
   isDesktop?: boolean;
   platform?: string;
   getSessionToken?: () => Promise<string | null>;
   encrypt?: (plainText: string) => Promise<string>;
   decrypt?: (encryptedBase64: string) => Promise<string>;
+  checkForUpdates?: () => Promise<{ status: string; updateInfo?: unknown; error?: string }>;
+  quitAndInstallUpdate?: () => Promise<void>;
+  onUpdaterStatus?: (callback: (data: UpdaterStatusEvent) => void) => () => void;
+  onUpdaterProgress?: (callback: (progress: UpdaterProgressEvent) => void) => () => void;
 }
 
 declare global {

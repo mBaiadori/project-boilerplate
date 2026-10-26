@@ -179,21 +179,21 @@ export class PRsService {
   ): { pr: any; repoName: string; prs: any[] } | null {
     if (preferredRepo && preferredRepo !== "all") {
       const prs = this.loadRepoPRs(preferredRepo);
-      const pr = prs.find((p: any) => String(p.id) === String(prId));
+      const pr = prs.find((p: Record<string, unknown>) => String(p.id) === String(prId));
       if (pr) return { pr, repoName: preferredRepo, prs };
     }
     const cfg = loadConfig();
     const activeName = cfg.active_repo?.name;
     if (activeName && activeName !== preferredRepo) {
       const prs = this.loadRepoPRs(activeName);
-      const pr = prs.find((p: any) => String(p.id) === String(prId));
+      const pr = prs.find((p: Record<string, unknown>) => String(p.id) === String(prId));
       if (pr) return { pr, repoName: activeName, prs };
     }
     const allRepos = this.getAllLocalRepos();
     for (const r of allRepos) {
       if (r.name === preferredRepo || r.name === activeName) continue;
       const candidatePRs = this.loadRepoPRs(r.name);
-      const found = candidatePRs.find((p: any) => String(p.id) === String(prId));
+      const found = candidatePRs.find((p: Record<string, unknown>) => String(p.id) === String(prId));
       if (found) return { pr: found, repoName: r.name, prs: candidatePRs };
     }
     return null;

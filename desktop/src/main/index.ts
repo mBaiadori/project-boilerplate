@@ -5,6 +5,7 @@ import net from 'node:net';
 import Module from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import bytenode from 'bytenode';
+import { setupAutoUpdater } from './updater.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -260,6 +261,9 @@ ipcMain.handle('desktop:get-session-token', async (event) => {
 app.whenReady().then(async () => {
   const port = await startEmbeddedServer();
   createMainWindow(port);
+
+  // Inicializa o serviço de atualizações automáticas via GitHub Releases
+  setupAutoUpdater(() => mainWindow, validateIpcSender);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

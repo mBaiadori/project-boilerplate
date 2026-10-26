@@ -1,24 +1,35 @@
 import { createRequire } from 'node:module';
 
-let KeyringEntry: any = null;
+interface KeyringEntryInstance {
+  getPassword(): string | null;
+  setPassword(password: string): void;
+  deletePassword(): void;
+}
+
+interface KeyringEntryConstructor {
+  new (service: string, account: string): KeyringEntryInstance;
+}
+
+let KeyringEntry: KeyringEntryConstructor | null = null;
 let keyringInitAttempted = false;
 
-function getKeyringEntryClass() {
+function getKeyringEntryClass(): KeyringEntryConstructor | null {
   if (keyringInitAttempted) return KeyringEntry;
   keyringInitAttempted = true;
   try {
-    let req: NodeRequire | any = null;
+    let req: NodeRequire | null = null;
     if (typeof require !== 'undefined') {
       req = require;
     } else {
       req = createRequire(import.meta.url);
     }
     if (req) {
-      const mod = req('@napi-rs/keyring');
-      KeyringEntry = mod?.Entry || mod?.default?.Entry || mod;
+      const mod = req('@napi-rs/keyring') as { Entry?: KeyringEntryConstructor; default?: { Entry?: KeyringEntryConstructor } };
+      KeyringEntry = mod?.Entry || mod?.default?.Entry || null;
     }
-  } catch (err: any) {
-    console.warn('[VaultService] Módulo nativo @napi-rs/keyring não disponível:', err?.message || err);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn('[VaultService] Módulo nativo @napi-rs/keyring não disponível:', msg);
   }
   return KeyringEntry;
 }
@@ -44,8 +55,9 @@ export class VaultService {
         const entry = new Entry(this.serviceName, key);
         const secret = entry.getPassword();
         if (secret) return secret;
-      } catch (err: any) {
-        console.warn(`[VaultService] Aviso ao ler segredo '${key}' do cofre nativo:`, err?.message || err);
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.warn(`[VaultService] Aviso ao ler segredo '${key}' do cofre nativo:`, msg);
       }
     }
     return this.fallbackStore.get(key) || null;
@@ -60,14 +72,13 @@ export class VaultService {
       return this.deleteSecret(key);
     }
     const Entry = getKeyringEntryClass();
-    let savedInKeyring = false;
     if (Entry) {
       try {
         const entry = new Entry(this.serviceName, key);
         entry.setPassword(trimmed);
-        savedInKeyring = true;
-      } catch (err: any) {
-        console.warn(`[VaultService] Aviso ao gravar segredo '${key}' no cofre nativo:`, err?.message || err);
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.warn(`[VaultService] Aviso ao gravar segredo '${key}' no cofre nativo:`, msg);
       }
     }
     this.fallbackStore.set(key, trimmed);
