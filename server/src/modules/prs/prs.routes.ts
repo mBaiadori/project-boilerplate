@@ -80,14 +80,13 @@ export async function prsRoutes(fastify: FastifyInstance) {
         .status(400)
         .send({ error: "Parâmetro pr_id é obrigatório." });
     }
-    const repoName = query.repo || "";
-    const prs = prsService.loadRepoPRs(repoName);
-    const pr = prs.find((p: any) => String(p.id) === String(query.pr_id));
-    if (!pr) {
+    const foundData = prsService.findPRAcrossRepos(query.pr_id, query.repo);
+    if (!foundData) {
       return reply
         .status(404)
         .send({ error: `PR #${query.pr_id} não encontrado.` });
     }
+    const { pr, repoName } = foundData;
     try {
       const mergeability = await prConflictsService.getMergeability(
         repoName,
@@ -111,14 +110,13 @@ export async function prsRoutes(fastify: FastifyInstance) {
         .status(400)
         .send({ error: "Parâmetros pr_id e path são obrigatórios." });
     }
-    const repoName = query.repo || "";
-    const prs = prsService.loadRepoPRs(repoName);
-    const pr = prs.find((p: any) => String(p.id) === String(query.pr_id));
-    if (!pr) {
+    const foundData = prsService.findPRAcrossRepos(query.pr_id, query.repo);
+    if (!foundData) {
       return reply
         .status(404)
         .send({ error: `PR #${query.pr_id} não encontrado.` });
     }
+    const { pr, repoName } = foundData;
     const cfg = loadConfig();
     const userLogin = query.user || cfg.user?.login || "local_user";
     try {
@@ -149,14 +147,13 @@ export async function prsRoutes(fastify: FastifyInstance) {
           error: "Campos pr_id, filePath e resolvedContent são obrigatórios.",
         });
     }
-    const repoName = body.repo || "";
-    const prs = prsService.loadRepoPRs(repoName);
-    const pr = prs.find((p: any) => String(p.id) === String(body.pr_id));
-    if (!pr) {
+    const foundData = prsService.findPRAcrossRepos(body.pr_id, body.repo);
+    if (!foundData) {
       return reply
         .status(404)
         .send({ error: `PR #${body.pr_id} não encontrado.` });
     }
+    const { pr, repoName, prs } = foundData;
     const cfg = loadConfig();
     const userLogin = body.user || cfg.user?.login || "local_user";
     try {
@@ -188,14 +185,13 @@ export async function prsRoutes(fastify: FastifyInstance) {
     if (!body.pr_id) {
       return reply.status(400).send({ error: "Campo pr_id é obrigatório." });
     }
-    const repoName = body.repo || "";
-    const prs = prsService.loadRepoPRs(repoName);
-    const pr = prs.find((p: any) => String(p.id) === String(body.pr_id));
-    if (!pr) {
+    const foundData = prsService.findPRAcrossRepos(body.pr_id, body.repo);
+    if (!foundData) {
       return reply
         .status(404)
         .send({ error: `PR #${body.pr_id} não encontrado.` });
     }
+    const { pr, repoName, prs } = foundData;
     const cfg = loadConfig();
     const userLogin = body.user || cfg.user?.login || "local_user";
     try {

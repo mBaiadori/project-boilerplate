@@ -59,7 +59,22 @@ async function compileProjectBytecode() {
       console.warn('  ⚠️ Aviso Bytenode:', e.message);
     }
 
-    console.log('✅ [Bytecode & Bundle Compiler] Backend pronto e protegido com sucesso!');
+    // 3. Compilação do script de Preload em CommonJS (necessário para sandbox seguro do Electron)
+    const preloadSrc = path.resolve(__dirname, '../src/preload/index.ts');
+    const preloadDistCjs = path.resolve(__dirname, '../dist/preload/index.cjs');
+    if (fs.existsSync(preloadSrc)) {
+      console.log('  🔌 3/3 Empacotando preload em CommonJS...');
+      await esbuild.build({
+        entryPoints: [preloadSrc],
+        bundle: true,
+        platform: 'node',
+        format: 'cjs',
+        outfile: preloadDistCjs,
+        external: ['electron'],
+      });
+    }
+
+    console.log('✅ [Bytecode & Bundle Compiler] Backend e Preload prontos com sucesso!');
   } catch (err) {
     console.error('❌ [Bytecode Compiler] Erro na compilação:', err);
     process.exit(1);

@@ -44,6 +44,44 @@ describe('PRsService - Isolamento de PRs por Repositório', () => {
     assert.strictEqual(fs.existsSync(fileAPath), true);
     assert.strictEqual(fs.existsSync(fileBPath), true);
   });
+
+  it('Deve purgar automaticamente propostas contaminadas de outros repositórios ao carregar', () => {
+    // Simula contaminação: PR apontando para github.com/.../test-repo-alpha gravado indevidamente no repo-beta
+    const contaminatedPRs = [
+      { id: 99, title: 'PR Legítimo Beta', repo_name: TEST_REPO_B, status: 'OPEN' },
+      { id: 100, title: 'PR Vazado de Alpha', repo_name: TEST_REPO_A, html_url: `https://github.com/enursy/${TEST_REPO_A}/pull/100`, status: 'OPEN' }
+    ];
+    prsService.saveRepoPRs(TEST_REPO_B, contaminatedPRs);
+
+    const loaded = prsService.loadRepoPRs(TEST_REPO_B);
+    assert.strictEqual(loaded.length, 1);
+    assert.strictEqual(loaded[0].id, 99);
+    assert.strictEqual(loaded[0].title, 'PR Legítimo Beta');
+  });
+
+  it('Deve encontrar propostas pelo findPRAcrossRepos mesmo se o repositório passado estiver incorreto', () => {
+    const prA = [{ id: 1234, title: 'PR Exclusivo de Alpha', repo_name: TEST_REPO_A, status: 'OPEN' }];
+    prsService.saveRepoPRs(TEST_REPO_A, prA);
+
+    // Consulta passando repo_name errado ('test-repo-beta')
+    const found = prsService.findPRAcrossRepos(1234, TEST_REPO_B);
+    assert.notStrictEqual(found, null);
+    assert.strictEqual(found?.repoName, TEST_REPO_A);
+    assert.strictEqual(found?.pr.title, 'PR Exclusivo de Alpha');
+  });
+
+  it('getPRs("all") deve agregar propostas de múltiplos repositórios com contagens precisas', async () => {
+    const prA = [{ id: 101, title: 'PR 101 Alpha', repo_name: TEST_REPO_A, status: 'OPEN', created_at: new Date().toISOString() }];
+    const prB = [{ id: 202, title: 'PR 202 Beta', repo_name: TEST_REPO_B, status: 'OPEN', created_at: new Date().toISOString() }];
+    prsService.saveRepoPRs(TEST_REPO_A, prA);
+    prsService.saveRepoPRs(TEST_REPO_B, prB);
+
+    const res = await prsService.getPRs('all');
+    assert.strictEqual(res.repo_name, 'all');
+    assert.strictEqual(typeof res.repoOpenCounts, 'object');
+    assert.ok(res.prs.some((p: any) => p.id === 101 && p.repo_name === TEST_REPO_A));
+    assert.ok(res.prs.some((p: any) => p.id === 202 && p.repo_name === TEST_REPO_B));
+  });
 });
 
 describe('PRsService - Geração Inteligente de Resumos (IA e Diff)', () => {

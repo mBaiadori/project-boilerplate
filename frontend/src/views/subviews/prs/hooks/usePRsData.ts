@@ -147,21 +147,20 @@ export function usePRsData() {
 
       const currentRepoList: Repo[] = reposRef.current || [];
       const currentActive = activeRepoRef.current;
+      const isAll = filter === "all";
 
       // 1. Identifica o repositório em contexto
       const contextRepo =
-        (filter !== "all"
+        !isAll
           ? currentRepoList.find(
               (r: Repo) => r.name.toLowerCase() === filter.toLowerCase(),
             ) ||
             (currentActive?.name.toLowerCase() === filter.toLowerCase()
               ? currentActive
               : { name: filter })
-          : currentActive) ||
-        currentRepoList.find((r: Repo) => r.is_cloned_locally) ||
-        currentRepoList[0];
+          : null;
 
-      const contextRepoName = contextRepo?.name || "local";
+      const contextRepoName = isAll ? "all" : (contextRepo?.name || "local");
       const isContextCloned = Boolean(
         contextRepo?.is_cloned_locally ||
         currentRepoList.find(
@@ -169,12 +168,12 @@ export function usePRsData() {
         )?.is_cloned_locally,
       );
 
-      // PRIORIDADE 1: Pull sempre para o repositório em contexto (se clonado)
-      if (!skipContextPull && isContextCloned && contextRepoName !== "local") {
+      // PRIORIDADE 1: Pull sempre para o repositório em contexto (se clonado e específico)
+      if (!isAll && !skipContextPull && isContextCloned && contextRepoName !== "local") {
         try {
           const owner = getRepoOwnerOrOrg
             ? getRepoOwnerOrOrg(contextRepo)
-            : contextRepo.owner || undefined;
+            : contextRepo?.owner || undefined;
           await API.pullLocalRepo({ repo: contextRepoName, owner });
         } catch (pullErr) {
           console.warn(
@@ -184,7 +183,8 @@ export function usePRsData() {
         }
       }
 
-      // CARREGAMENTO DAS REVISÕES PAGINADAS DO CONTEXTO
+      // CARREGAMENTO DAS REVISÕES PAGINADAS DO CONTEXTO (ou de Todos os Repositórios)
+      let receivedRepoOpenCounts = false;
       try {
         const res = await API.getPRs(contextRepoName, {
           page: curPage,
@@ -198,7 +198,7 @@ export function usePRsData() {
           res && Array.isArray(res.prs)
             ? res.prs.map((p: PR) => ({
                 ...p,
-                repo_name: p.repo_name || contextRepoName,
+                repo_name: p.repo_name || (contextRepoName !== "all" ? contextRepoName : "local"),
               }))
             : [];
 
@@ -214,20 +214,28 @@ export function usePRsData() {
           setCounts(res.counts);
         }
 
-        const openCount =
-          res.counts?.open ??
-          contextPrs.filter((p: any) => {
-            const s = (p.status || "").toLowerCase();
-            return s === "open" || s === "in_review";
-          }).length;
+        if (res?.repoOpenCounts) {
+          receivedRepoOpenCounts = true;
+          setRepoOpenCounts((prev) => ({
+            ...prev,
+            ...res.repoOpenCounts,
+          }));
+        } else if (contextRepoName !== "all") {
+          const openCount =
+            res.counts?.open ??
+            contextPrs.filter((p: any) => {
+              const s = (p.status || "").toLowerCase();
+              return s === "open" || s === "in_review";
+            }).length;
 
-        setRepoOpenCounts((prev) => ({
-          ...prev,
-          [contextRepoName]: openCount,
-        }));
+          setRepoOpenCounts((prev) => ({
+            ...prev,
+            [contextRepoName]: openCount,
+          }));
+        }
       } catch (err) {
         console.error(
-          `[PRsSubView] Erro ao carregar revisões do contexto (${contextRepoName}):`,
+          `[PRsSubView] Erro ao carregar revisões (${contextRepoName}):`,
           err,
         );
       } finally {
@@ -236,36 +244,37 @@ export function usePRsData() {
         }
       }
 
-      // PRIORIDADE 2: Em segundo plano APENAS para os repositórios clonados (contagem rápida)
-      const backgroundClonedRepos = currentRepoList.filter(
-        (r: Repo) =>
-          r.is_cloned_locally &&
-          r.name.toLowerCase() !== contextRepoName.toLowerCase(),
-      );
+      // PRIORIDADE 2: Em segundo plano APENAS se o backend não retornou repoOpenCounts
+      if (!receivedRepoOpenCounts && !isAll) {
+        const backgroundClonedRepos = currentRepoList.filter(
+          (r: Repo) =>
+            r.is_cloned_locally &&
+            r.name.toLowerCase() !== contextRepoName.toLowerCase(),
+        );
 
-      if (backgroundClonedRepos.length > 0) {
-        (async () => {
-          for (const bgRepo of backgroundClonedRepos) {
-            if (executionIdRef.current !== currentExecId) break;
-
-            try {
-              // Carrega apenas 1 item para atualizar o badge sem sobrecarregar o git
-              const bgRes = await API.getPRs(bgRepo.name, { page: 1, limit: 1 });
+        if (backgroundClonedRepos.length > 0) {
+          (async () => {
+            for (const bgRepo of backgroundClonedRepos) {
               if (executionIdRef.current !== currentExecId) break;
 
-              const openCount = bgRes?.counts?.open ?? 0;
-              setRepoOpenCounts((prev) => ({
-                ...prev,
-                [bgRepo.name]: openCount,
-              }));
-            } catch (e) {
-              console.warn(
-                `[PRsSubView] Erro ao obter contagens em background de ${bgRepo.name}:`,
-                e,
-              );
+              try {
+                const bgRes = await API.getPRs(bgRepo.name, { page: 1, limit: 1 });
+                if (executionIdRef.current !== currentExecId) break;
+
+                const openCount = bgRes?.counts?.open ?? 0;
+                setRepoOpenCounts((prev) => ({
+                  ...prev,
+                  [bgRepo.name]: openCount,
+                }));
+              } catch (e) {
+                console.warn(
+                  `[PRsSubView] Erro ao obter contagens em background de ${bgRepo.name}:`,
+                  e,
+                );
+              }
             }
-          }
-        })();
+          })();
+        }
       }
     },
     [

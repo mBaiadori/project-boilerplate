@@ -2,6 +2,7 @@ import { app, BrowserWindow, shell, ipcMain, safeStorage } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
 import net from 'node:net';
+import Module from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import bytenode from 'bytenode';
 
@@ -41,6 +42,19 @@ async function startEmbeddedServer(): Promise<number> {
   // Garante diretório do usuário criado
   if (!fs.existsSync(userDataDir)) {
     fs.mkdirSync(userDataDir, { recursive: true });
+  }
+
+  // Registra caminhos do node_modules no Module.globalPaths
+  const appPath = app.getAppPath();
+  const candidateModulePaths = [
+    path.join(appPath, 'node_modules'),
+    path.join(appPath + '.unpacked', 'node_modules'),
+    path.join(resourcesDir, 'node_modules'),
+  ];
+  for (const p of candidateModulePaths) {
+    if (fs.existsSync(p) && !(Module as any).globalPaths.includes(p)) {
+      (Module as any).globalPaths.push(p);
+    }
   }
 
   // Detecta porta livre dinamicamente (resiliência contra conflito com dev server)
@@ -115,6 +129,10 @@ async function startEmbeddedServer(): Promise<number> {
  * Criação da janela principal do Context OS
  */
 function createMainWindow(port: number) {
+  const preloadPath = fs.existsSync(path.join(__dirname, '../preload/index.cjs'))
+    ? path.join(__dirname, '../preload/index.cjs')
+    : path.join(__dirname, '../preload/index.js');
+
   mainWindow = new BrowserWindow({
     width: 1440,
     height: 900,
@@ -124,7 +142,7 @@ function createMainWindow(port: number) {
     backgroundColor: '#0f172a',
     titleBarStyle: 'default',
     webPreferences: {
-      preload: path.join(__dirname, '../preload/index.js'),
+      preload: preloadPath,
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,

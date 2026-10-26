@@ -23,7 +23,8 @@
   ],
   "asar": true,
   "asarUnpack": [
-    "**/node_modules/bytenode/**/*"
+    "**/node_modules/bytenode/**/*",
+    "**/node_modules/@napi-rs/**/*"
   ],
   "mac": {
     "category": "public.app-category.developer-tools",

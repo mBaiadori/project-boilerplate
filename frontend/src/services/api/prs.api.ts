@@ -15,6 +15,7 @@ export const prsApi = {
     limit?: number;
     total_pages?: number;
     counts?: { all: number; open: number; merged: number; closed: number };
+    repoOpenCounts?: Record<string, number>;
     available_repos?: Array<{ name: string; count: number }>;
     governance?: any; 
   }> {

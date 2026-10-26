@@ -106,6 +106,150 @@ export class PRsService {
     };
   }
 
+  getAllLocalRepos(): Array<{ name: string; owner?: string; dir: string }> {
+    const results: Array<{ name: string; owner?: string; dir: string }> = [];
+    const seen = new Set<string>();
+    const cfg = loadConfig();
+
+    if (cfg.active_repo?.name) {
+      const name = cfg.active_repo.name;
+      const owner = cfg.active_repo.owner;
+      const dir = resolveRepoDir(name, owner);
+      if (fs.existsSync(dir)) {
+        seen.add(name.toLowerCase());
+        results.push({ name, owner, dir });
+      }
+    }
+
+    if (Array.isArray(cfg.repos)) {
+      for (const r of cfg.repos) {
+        if (r.name && !seen.has(r.name.toLowerCase())) {
+          const dir = resolveRepoDir(r.name, r.owner);
+          if (fs.existsSync(dir)) {
+            seen.add(r.name.toLowerCase());
+            results.push({ name: r.name, owner: r.owner, dir });
+          }
+        }
+      }
+    }
+
+    if (fs.existsSync(PROJECTS_DIR)) {
+      try {
+        const topEntries = fs.readdirSync(PROJECTS_DIR, { withFileTypes: true });
+        for (const entry of topEntries) {
+          if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
+          const ownerDir = path.join(PROJECTS_DIR, entry.name);
+          const subEntries = fs.readdirSync(ownerDir, { withFileTypes: true });
+          for (const sub of subEntries) {
+            if (!sub.isDirectory() || sub.name.startsWith(".")) continue;
+            const repoDir = path.join(ownerDir, sub.name);
+            const isRepo =
+              fs.existsSync(path.join(repoDir, ".git")) ||
+              fs.existsSync(path.join(repoDir, ".spec-memory")) ||
+              fs.existsSync(path.join(repoDir, ".project.config.json"));
+            if (isRepo) {
+              const repoName = sub.name;
+              if (!seen.has(repoName.toLowerCase())) {
+                seen.add(repoName.toLowerCase());
+                results.push({ name: repoName, owner: entry.name, dir: repoDir });
+              }
+            }
+          }
+          const isOwnerRepo =
+            fs.existsSync(path.join(ownerDir, ".git")) ||
+            fs.existsSync(path.join(ownerDir, ".spec-memory")) ||
+            fs.existsSync(path.join(ownerDir, ".project.config.json"));
+          if (isOwnerRepo) {
+            const repoName = entry.name;
+            if (!seen.has(repoName.toLowerCase())) {
+              seen.add(repoName.toLowerCase());
+              results.push({ name: repoName, owner: "local", dir: ownerDir });
+            }
+          }
+        }
+      } catch {}
+    }
+
+    return results;
+  }
+
+  findPRAcrossRepos(
+    prId: number | string,
+    preferredRepo?: string,
+  ): { pr: any; repoName: string; prs: any[] } | null {
+    if (preferredRepo && preferredRepo !== "all") {
+      const prs = this.loadRepoPRs(preferredRepo);
+      const pr = prs.find((p: any) => String(p.id) === String(prId));
+      if (pr) return { pr, repoName: preferredRepo, prs };
+    }
+    const cfg = loadConfig();
+    const activeName = cfg.active_repo?.name;
+    if (activeName && activeName !== preferredRepo) {
+      const prs = this.loadRepoPRs(activeName);
+      const pr = prs.find((p: any) => String(p.id) === String(prId));
+      if (pr) return { pr, repoName: activeName, prs };
+    }
+    const allRepos = this.getAllLocalRepos();
+    for (const r of allRepos) {
+      if (r.name === preferredRepo || r.name === activeName) continue;
+      const candidatePRs = this.loadRepoPRs(r.name);
+      const found = candidatePRs.find((p: any) => String(p.id) === String(prId));
+      if (found) return { pr: found, repoName: r.name, prs: candidatePRs };
+    }
+    return null;
+  }
+
+  private resolveTargetRepoObj(
+    repoName: string,
+    cfg: any,
+  ): { full_name?: string; is_local?: boolean; owner?: string; name: string } | null {
+    if (!repoName || repoName === "all" || repoName === "local") return null;
+    const cleanName = repoName.toLowerCase();
+    if (cfg.active_repo?.name?.toLowerCase() === cleanName) {
+      return cfg.active_repo;
+    }
+    const matched = cfg.repos?.find(
+      (r: any) => r.name?.toLowerCase() === cleanName,
+    );
+    if (matched) return matched;
+
+    // Detect from local directory git config or .project.config.json
+    const repoDir = this.getRepoDir(repoName);
+    const gitConfigPath = path.join(repoDir, ".git", "config");
+    if (fs.existsSync(gitConfigPath)) {
+      try {
+        const gitCfg = fs.readFileSync(gitConfigPath, "utf-8");
+        const match = gitCfg.match(
+          /url\s*=\s*.*github\.com[/:]([^/]+)\/([^/\s.]+)/i,
+        );
+        if (match && match[1] && match[2]) {
+          const owner = match[1];
+          const repo = match[2].replace(/\.git$/, "");
+          if (repo.toLowerCase() === cleanName) {
+            return {
+              name: repoName,
+              owner,
+              full_name: `${owner}/${repo}`,
+              is_local: false,
+            };
+          }
+        }
+      } catch {}
+    }
+
+    const parentDir = path.basename(path.dirname(repoDir));
+    if (parentDir && parentDir !== "projects" && parentDir !== "local") {
+      return {
+        name: repoName,
+        owner: parentDir,
+        full_name: `${parentDir}/${repoName}`,
+        is_local: false,
+      };
+    }
+
+    return null;
+  }
+
   getRepoPRsPath(repoName: string): string {
     const repoDir = this.getRepoDir(repoName);
     return path.join(repoDir, ".spec-memory", "prs.json");
@@ -119,8 +263,32 @@ export class PRsService {
         const list = JSON.parse(data);
         if (Array.isArray(list)) {
           let modified = false;
+          const cleanRepoName = repoName.toLowerCase();
+
+          // Purga de contaminação cruzada: descarta PRs pertencentes a outro repo
+          const sanitizedList = list.filter((pr: any) => {
+            if (cleanRepoName !== "local") {
+              if (pr.html_url) {
+                const urlMatch = pr.html_url.match(/github\.com\/[^/]+\/([^/]+)\/pull\//i);
+                if (urlMatch && urlMatch[1] && urlMatch[1].toLowerCase() !== cleanRepoName) {
+                  modified = true;
+                  return false;
+                }
+              }
+              if (pr.repo_name && pr.repo_name.toLowerCase() !== cleanRepoName) {
+                modified = true;
+                return false;
+              }
+            }
+            return true;
+          });
+
           // Security scrub: strip any legacy plaintext from prs.json
-          for (const pr of list) {
+          for (const pr of sanitizedList) {
+            if (pr.repo_name !== repoName && cleanRepoName !== "local") {
+              pr.repo_name = repoName;
+              modified = true;
+            }
             if (Array.isArray(pr.files)) {
               for (const f of pr.files) {
                 if (
@@ -137,9 +305,9 @@ export class PRsService {
             }
           }
           if (modified) {
-            this.saveRepoPRs(repoName, list);
+            this.saveRepoPRs(repoName, sanitizedList);
           }
-          return list;
+          return sanitizedList;
         }
       } catch (e) {
         console.error(`Erro ao carregar prs para ${repoName}:`, e);
@@ -169,13 +337,183 @@ export class PRsService {
   ) {
     const cfg = loadConfig();
     const activeRepo = cfg.active_repo;
-    const repoName = targetRepoQuery || activeRepo?.name || "local";
+    const isAll = (targetRepoQuery || "").toLowerCase() === "all";
+    const repoName = isAll ? "all" : (targetRepoQuery || activeRepo?.name || "local");
     const login = userLogin || cfg.user?.login || "local_user";
-    let allPRs = this.loadRepoPRs(repoName);
 
-    const matchedRepo = cfg.repos?.find((r: any) => r.name === repoName);
-    const targetRepoObj =
-      (activeRepo?.name === repoName ? activeRepo : matchedRepo) || activeRepo;
+    const allRepos = this.getAllLocalRepos();
+    const repoOpenCounts: Record<string, number> = {};
+
+    // Coleta contagens de abertos para todos os repositórios locais
+    for (const r of allRepos) {
+      const rPRs = this.loadRepoPRs(r.name);
+      const openCount = rPRs.filter((p: any) => {
+        const s = (p.status || "").toLowerCase();
+        return s === "open" || s === "in_review";
+      }).length;
+      repoOpenCounts[r.name] = openCount;
+    }
+
+    if (isAll) {
+      // 1. Visão Central Unificada ("Todos os Repositórios")
+      const combinedAll: any[] = [];
+      for (const r of allRepos) {
+        const rPRs = this.loadRepoPRs(r.name).map((p: any) => ({
+          ...p,
+          repo_name: p.repo_name || r.name,
+        }));
+        combinedAll.push(...rPRs);
+
+        // Fetch direct commit revisions for this repo (limit 15)
+        try {
+          const gitCommits = await getGitLog(r.dir, 15);
+          const existingHashes = new Set(
+            rPRs.map((p: any) => String(p.commit_hash || p.github_number || p.id)),
+          );
+          const existingTitles = new Set(
+            rPRs.map((p: any) => (p.title || "").trim().toLowerCase()),
+          );
+          for (const c of gitCommits) {
+            if (
+              existingHashes.has(c.hash) ||
+              existingHashes.has(c.shortHash) ||
+              existingTitles.has((c.message || "").trim().toLowerCase())
+            ) {
+              continue;
+            }
+            combinedAll.push({
+              id: `${r.name}-${c.shortHash}`,
+              short_id: c.shortHash,
+              commit_hash: c.hash,
+              head_sha: c.hash,
+              repo_name: r.name,
+              title: c.message,
+              description: `Revisão oficial comitada diretamente na branch main de ${r.name} em ${c.date}`,
+              branch: "main",
+              target_branch: "main",
+              status: "MERGED",
+              created_at: c.date,
+              merged_at: c.date,
+              author: c.author
+                ? c.author.startsWith("@")
+                  ? c.author
+                  : `@${c.author}`
+                : "Git Committer",
+              approvals: [
+                {
+                  user: "Oficial (main)",
+                  role: "Sistema Git",
+                  timestamp: c.date,
+                  commit_hash: c.hash,
+                  status: "APPROVED",
+                },
+              ],
+              type: c.message.startsWith("feat")
+                ? "feat"
+                : c.message.startsWith("fix")
+                  ? "fix"
+                  : "docs",
+              layer: `Versão Oficial (${r.name})`,
+              domain: "",
+              is_direct_commit: true,
+              files: [],
+            });
+          }
+        } catch {}
+      }
+
+      combinedAll.sort((a: any, b: any) => {
+        const tA = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const tB = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return tB - tA;
+      });
+
+      const countAll = combinedAll.length;
+      const countOpen = combinedAll.filter((p: any) => {
+        const s = (p.status || "").toLowerCase();
+        return s === "open" || s === "in_review";
+      }).length;
+      const countMerged = combinedAll.filter(
+        (p: any) => (p.status || "").toLowerCase() === "merged",
+      ).length;
+      const countClosed = combinedAll.filter(
+        (p: any) => (p.status || "").toLowerCase() === "closed",
+      ).length;
+
+      const activeStatus = (paginationOptions?.status || "all").toLowerCase();
+      const searchQuery = (paginationOptions?.search || "").toLowerCase().trim();
+
+      const filteredList = combinedAll.filter((pr: any) => {
+        const statusLower = (pr.status || "").toLowerCase();
+        const matchesStatus =
+          activeStatus === "all" ||
+          (activeStatus === "open" &&
+            (statusLower === "open" || statusLower === "in_review")) ||
+          (activeStatus === "merged" && statusLower === "merged") ||
+          (activeStatus === "closed" && statusLower === "closed");
+
+        const matchesSearch =
+          !searchQuery ||
+          (pr.title && pr.title.toLowerCase().includes(searchQuery)) ||
+          (pr.author && pr.author.toLowerCase().includes(searchQuery)) ||
+          (pr.description &&
+            pr.description.toLowerCase().includes(searchQuery)) ||
+          (pr.repo_name && pr.repo_name.toLowerCase().includes(searchQuery)) ||
+          String(pr.id).includes(searchQuery);
+
+        return matchesStatus && matchesSearch;
+      });
+
+      const page = Math.max(1, paginationOptions?.page || 1);
+      const limit = Math.max(1, paginationOptions?.limit || 15);
+      const total = filteredList.length;
+      const totalPages = Math.max(1, Math.ceil(total / limit));
+      const startIndex = (page - 1) * limit;
+      const pageItems = filteredList.slice(startIndex, startIndex + limit);
+
+      const sanitizedPageItems = await Promise.all(
+        pageItems.map(async (p: any) => {
+          const itemRepo = p.repo_name || "local";
+          const govRules = this.getGovernanceRules(itemRepo);
+          const rawFiles = Array.isArray(p.files) ? p.files : [];
+          return {
+            ...p,
+            files: rawFiles,
+            total_files_count: rawFiles.length,
+            has_more_files: rawFiles.length > 50,
+            min_approvals: p.min_approvals || govRules.min_approvals,
+            is_solo_mode: govRules.is_solo,
+          };
+        }),
+      );
+
+      return {
+        repo: activeRepo,
+        repo_name: "all",
+        prs: sanitizedPageItems,
+        count: sanitizedPageItems.length,
+        total,
+        page,
+        limit,
+        total_pages: totalPages,
+        counts: {
+          all: countAll,
+          open: countOpen,
+          merged: countMerged,
+          closed: countClosed,
+        },
+        repoOpenCounts,
+        governance: {
+          min_approvals: 1,
+          is_solo_mode: false,
+          anti_self_approval: false,
+          reviewers: cfg.governance?.reviewers || [],
+        },
+      };
+    }
+
+    let allPRs = this.loadRepoPRs(repoName);
+    const targetRepoObj = this.resolveTargetRepoObj(repoName, cfg);
 
     // Auto-sync remote GitHub Pull Requests if authenticated and target matches active or matched remote repo
     const now = Date.now();
@@ -187,7 +525,8 @@ export class PRsService {
       cfg.authenticated &&
       cfg.token &&
       targetRepoObj?.full_name &&
-      !targetRepoObj?.is_local
+      !targetRepoObj?.is_local &&
+      targetRepoObj.name.toLowerCase() === repoName.toLowerCase()
     ) {
       this.lastGitHubSyncTime[repoName] = now;
       try {
@@ -198,6 +537,20 @@ export class PRsService {
         if (ghRes.statusCode === 200 && Array.isArray(ghRes.data)) {
           let modified = false;
           for (const ghPR of ghRes.data) {
+            // Garante que o PR do GitHub realmente pertence a este repositório
+            if (
+              ghPR.base?.repo?.name &&
+              ghPR.base.repo.name.toLowerCase() !== repoName.toLowerCase()
+            ) {
+              continue;
+            }
+            if (
+              ghPR.html_url &&
+              !ghPR.html_url.toLowerCase().includes(`/${repoName.toLowerCase()}/`)
+            ) {
+              continue;
+            }
+
             const existingIdx = allPRs.findIndex(
               (p: any) =>
                 (p.github_number && p.github_number === ghPR.number) ||
@@ -529,6 +882,7 @@ export class PRsService {
         merged: countMerged,
         closed: countClosed,
       },
+      repoOpenCounts,
       governance: {
         min_approvals: govRules.min_approvals,
         is_solo_mode: govRules.is_solo,
@@ -549,14 +903,18 @@ export class PRsService {
     const login = userLogin || cfg.user?.login || "local_user";
 
     let pr: any = null;
+    let effectiveRepo = repoName || cfg.active_repo?.name || "local";
     if (prId) {
-      const prs = this.loadRepoPRs(repoName);
-      pr = prs.find((p: any) => String(p.id) === String(prId));
+      const foundData = this.findPRAcrossRepos(prId, repoName);
+      if (foundData) {
+        pr = foundData.pr;
+        effectiveRepo = foundData.repoName;
+      }
     }
 
     const branchOrHead = commitHash || pr?.head_sha || pr?.branch || "HEAD";
     const clearance = await prSecurityService.resolveDocClearance(
-      repoName,
+      effectiveRepo,
       login,
       filePath,
       branchOrHead,
@@ -581,17 +939,17 @@ export class PRsService {
       const baseRef = pr.base_sha || pr.target_branch || "main";
       const headRef = pr.head_sha || pr.branch || branchOrHead;
       oldContent = await prSecurityService
-        .readPlainAtRef(repoName, baseRef, filePath, login)
+        .readPlainAtRef(effectiveRepo, baseRef, filePath, login)
         .catch(() => "");
       newContent = await prSecurityService
-        .readPlainAtRef(repoName, headRef, filePath, login)
+        .readPlainAtRef(effectiveRepo, headRef, filePath, login)
         .catch(() => "");
     } else if (commitHash) {
       newContent = await prSecurityService
-        .readPlainAtRef(repoName, commitHash, filePath, login)
+        .readPlainAtRef(effectiveRepo, commitHash, filePath, login)
         .catch(() => "");
       oldContent = await prSecurityService
-        .readPlainAtRef(repoName, `${commitHash}~1`, filePath, login)
+        .readPlainAtRef(effectiveRepo, `${commitHash}~1`, filePath, login)
         .catch(() => "");
     }
 
@@ -615,15 +973,16 @@ export class PRsService {
   ) {
     const cfg = loadConfig();
     const login = userLogin || cfg.user?.login || "local_user";
-    const prs = this.loadRepoPRs(repoName);
-    const pr = prs.find((p: any) => String(p.id) === String(prId));
+    const foundData = this.findPRAcrossRepos(prId, repoName);
 
-    if (!pr) {
+    if (!foundData) {
       throw new Error(`PR #${prId} não encontrado.`);
     }
 
+    const { pr, repoName: effectiveRepo } = foundData;
+
     const clearance = await prSecurityService.resolveDocClearance(
-      repoName,
+      effectiveRepo,
       login,
       filePath,
       pr.branch,
@@ -635,7 +994,7 @@ export class PRsService {
     }
 
     const content = await prSecurityService.readPlainAtRef(
-      repoName,
+      effectiveRepo,
       pr.branch,
       filePath,
       login,
@@ -1377,24 +1736,16 @@ DIRETRIZES OBRIGATÓRIAS:
       | { approver?: string; role?: string; comment?: string; repo?: string },
   ) {
     const cfg = loadConfig();
-    const repoName =
-      (payloadOrApprover &&
-        typeof payloadOrApprover === "object" &&
-        (payloadOrApprover as any).repo) ||
-      cfg.active_repo?.name ||
-      "local";
-    let prs = this.loadRepoPRs(repoName);
-    let target = prs.find((p: any) => String(p.id) === String(prId));
-
-    if (!target && repoName !== "local") {
-      const fallbackPRs = this.loadRepoPRs("local");
-      target = fallbackPRs.find((p: any) => String(p.id) === String(prId));
-      if (target) prs = fallbackPRs;
-    }
-
-    if (!target) {
+    const passedRepo =
+      payloadOrApprover &&
+      typeof payloadOrApprover === "object" &&
+      (payloadOrApprover as any).repo;
+    const foundData = this.findPRAcrossRepos(prId, passedRepo);
+    if (!foundData) {
       throw new Error(`PR #${prId} não encontrado.`);
     }
+    const { pr: target, repoName } = foundData;
+    let prs = foundData.prs;
 
     if (target.status === "MERGED") {
       throw new Error(`PR #${prId} já está aprovado e mesclado.`);
@@ -1737,19 +2088,12 @@ DIRETRIZES OBRIGATÓRIAS:
 
   async mergePR(prId: number | string, repoNameParam?: string) {
     const cfg = loadConfig();
-    const repoName = repoNameParam || cfg.active_repo?.name || "local";
-    let prs = this.loadRepoPRs(repoName);
-    let target = prs.find((p: any) => String(p.id) === String(prId));
-
-    if (!target && repoName !== "local") {
-      const fallbackPRs = this.loadRepoPRs("local");
-      target = fallbackPRs.find((p: any) => String(p.id) === String(prId));
-      if (target) prs = fallbackPRs;
-    }
-
-    if (!target) {
+    const foundData = this.findPRAcrossRepos(prId, repoNameParam);
+    if (!foundData) {
       throw new Error(`PR #${prId} não encontrado.`);
     }
+    const { pr: target, repoName } = foundData;
+    let prs = foundData.prs;
 
     if (target.status === "MERGED") {
       throw new Error(`PR #${prId} já foi mesclado anteriormente.`);
@@ -1840,19 +2184,12 @@ DIRETRIZES OBRIGATÓRIAS:
     repoNameParam?: string,
   ) {
     const cfg = loadConfig();
-    const repoName = repoNameParam || cfg.active_repo?.name || "local";
-    let prs = this.loadRepoPRs(repoName);
-    let target = prs.find((p: any) => String(p.id) === String(prId));
-
-    if (!target && repoName !== "local") {
-      const fallbackPRs = this.loadRepoPRs("local");
-      target = fallbackPRs.find((p: any) => String(p.id) === String(prId));
-      if (target) prs = fallbackPRs;
-    }
-
-    if (!target) {
+    const foundData = this.findPRAcrossRepos(prId, repoNameParam);
+    if (!foundData) {
       throw new Error(`PR #${prId} não encontrado.`);
     }
+    const { pr: target, repoName } = foundData;
+    let prs = foundData.prs;
 
     target.status = "CLOSED";
     target.closed_at = new Date().toISOString();
@@ -1908,22 +2245,23 @@ DIRETRIZES OBRIGATÓRIAS:
   }) {
     const cfg = loadConfig();
     const activeRepo = cfg.active_repo;
-    const repoName = payload.repo || activeRepo?.name || "local";
-    const repoDir = this.getRepoDir(repoName);
+    let repoName = payload.repo || activeRepo?.name || "local";
 
     let targetHash = payload.commit_hash;
     let targetTitle = "";
 
-    if (!targetHash && payload.id) {
-      const prs = this.loadRepoPRs(repoName);
-      const pr = prs.find((p: any) => String(p.id) === String(payload.id));
-      if (pr) {
-        targetHash = pr.commit_hash || String(pr.id);
-        targetTitle = pr.title || "";
-      } else {
+    if (payload.id) {
+      const foundData = this.findPRAcrossRepos(payload.id, payload.repo);
+      if (foundData) {
+        repoName = foundData.repoName;
+        targetHash = foundData.pr.commit_hash || String(foundData.pr.id);
+        targetTitle = foundData.pr.title || "";
+      } else if (!targetHash) {
         targetHash = String(payload.id);
       }
     }
+
+    const repoDir = this.getRepoDir(repoName);
 
     if (!targetHash) {
       throw new Error(
