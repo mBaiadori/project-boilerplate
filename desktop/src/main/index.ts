@@ -257,6 +257,14 @@ ipcMain.handle('desktop:get-session-token', async (event) => {
   return null;
 });
 
+// Abre links externos no navegador padrão do sistema de forma segura
+ipcMain.handle('desktop:open-external', async (event, url: string) => {
+  validateIpcSender(event);
+  if (url && (url.startsWith('https://') || url.startsWith('http://'))) {
+    await shell.openExternal(url);
+  }
+});
+
 // Inicialização do ciclo de vida do Electron
 app.whenReady().then(async () => {
   const port = await startEmbeddedServer();

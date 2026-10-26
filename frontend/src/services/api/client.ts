@@ -1,7 +1,8 @@
 export interface UpdaterStatusEvent {
-  status: 'checking' | 'available' | 'up-to-date' | 'downloaded' | 'error';
+  status: 'checking' | 'available' | 'available-manual' | 'up-to-date' | 'downloaded' | 'error';
   version?: string;
   releaseDate?: string;
+  downloadUrl?: string;
   error?: string;
 }
 
@@ -20,6 +21,7 @@ interface DesktopBridge {
   decrypt?: (encryptedBase64: string) => Promise<string>;
   checkForUpdates?: () => Promise<{ status: string; updateInfo?: unknown; error?: string }>;
   quitAndInstallUpdate?: () => Promise<void>;
+  openExternal?: (url: string) => Promise<void>;
   onUpdaterStatus?: (callback: (data: UpdaterStatusEvent) => void) => () => void;
   onUpdaterProgress?: (callback: (progress: UpdaterProgressEvent) => void) => () => void;
 }

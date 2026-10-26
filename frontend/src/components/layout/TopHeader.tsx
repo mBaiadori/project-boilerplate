@@ -63,6 +63,7 @@ export const TopHeader: React.FC<TopHeaderProps> = React.memo(
       status: string;
       version?: string;
       percent?: number;
+      downloadUrl?: string;
     } | null>(null);
 
     React.useEffect(() => {
@@ -72,6 +73,8 @@ export const TopHeader: React.FC<TopHeaderProps> = React.memo(
       const unsubStatus = bridge.onUpdaterStatus((data) => {
         if (data.status === "available") {
           setUpdateInfo((prev) => ({ ...prev, status: "available", version: data.version }));
+        } else if (data.status === "available-manual") {
+          setUpdateInfo({ status: "available-manual", version: data.version, downloadUrl: data.downloadUrl });
         } else if (data.status === "downloaded") {
           setUpdateInfo((prev) => ({ ...prev, status: "downloaded", version: data.version }));
         }
@@ -306,6 +309,29 @@ export const TopHeader: React.FC<TopHeaderProps> = React.memo(
               style={{ color: "var(--md-sys-color-primary, #1a73e8)" }}
             />
           </IconButton>
+
+          {updateInfo?.status === "available-manual" && (
+            <Button
+              id="btn-download-update"
+              variant="primary"
+              size="sm"
+              leftIcon={<CloudDownload size={15} />}
+              style={{
+                backgroundColor: "#2563eb",
+                color: "#ffffff",
+                borderColor: "#1d4ed8",
+                animation: "pulse 2s infinite",
+              }}
+              onClick={() => {
+                if (updateInfo.downloadUrl) {
+                  window.desktopBridge?.openExternal?.(updateInfo.downloadUrl);
+                }
+              }}
+              title="Clique para baixar a nova versão do Context OS"
+            >
+              Baixar Atualização {updateInfo.version ? `(v${updateInfo.version})` : ""}
+            </Button>
+          )}
 
           {updateInfo?.status === "downloaded" && (
             <Button
