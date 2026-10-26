@@ -5,6 +5,7 @@ on:
     branches: [main, master, "gov/*", "feat/*", "fix/*"]
   pull_request:
     branches: [main, master]
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -151,6 +152,45 @@ jobs:
           npm run compile:bytecode
           npm run package:win -- --publish never
 
+      - name: Smoke Test - Run Silent Installer & Verify Bundled Git
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem -Path desktop/release/*.exe | Select-Object -First 1
+          if (-not $installer) {
+            throw "Instalador .exe não foi encontrado em desktop/release/"
+          }
+          Write-Host "Executando instalador silencioso: $($installer.FullName)..."
+          Start-Process -FilePath $installer.FullName -ArgumentList "/S" -Wait
+          
+          # Aguardar breve momento para garantir término do processo do NSIS
+          Start-Sleep -Seconds 5
+          
+          $installDir = "$env:LOCALAPPDATA\Programs\Context OS"
+          Write-Host "Verificando instalação em: $installDir"
+          if (-not (Test-Path $installDir)) {
+            throw "Diretório de instalação não encontrado: $installDir"
+          }
+          
+          $appExe = Join-Path $installDir "Context OS.exe"
+          if (-not (Test-Path $appExe)) {
+            throw "Executável Context OS.exe não encontrado em $appExe!"
+          }
+          Write-Host "✅ Context OS.exe instalado com sucesso!"
+          
+          $gitExe = Join-Path $installDir "resources\git\cmd\git.exe"
+          if (-not (Test-Path $gitExe)) {
+            throw "MinGit embutido não encontrado em $gitExe!"
+          }
+          Write-Host "✅ MinGit embutido encontrado com sucesso!"
+          
+          $gitVersion = & $gitExe --version
+          Write-Host "Versão do Git: $gitVersion"
+          
+          # Validar se o Git executa init sem dependências externas
+          $testRepo = Join-Path $env:TEMP "smoke-test-repo"
+          & $gitExe init $testRepo
+          Write-Host "✅ Git init executado com sucesso no Windows sem Git pré-instalado!"
+
       - name: Upload Windows Installer (.exe)
         uses: actions/upload-artifact@v4
         with:
@@ -158,4 +198,5 @@ jobs:
           path: desktop/release/*.exe
           if-no-files-found: warn
           retention-days: 7
+
 

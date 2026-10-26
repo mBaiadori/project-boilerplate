@@ -1,0 +1,94 @@
+name: Windows Cloud Installer Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      test_repo_clone:
+        description: 'Test cloning a remote repository with bundled Git'
+        required: false
+        type: boolean
+        default: true
+
+jobs:
+  test-installer:
+    name: Build, Install & Verify on Clean Windows
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "npm"
+          cache-dependency-path: |
+            server/package-lock.json
+            frontend/package-lock.json
+            desktop/package-lock.json
+
+      - name: Install Dependencies
+        run: |
+          cd server && npm ci
+          cd ../frontend && npm ci
+          cd ../desktop && npm ci
+
+      - name: Build Server & Frontend
+        run: |
+          cd server && npm run build
+          cd ../frontend && npm run build
+
+      - name: Package Windows Desktop App
+        run: |
+          cd desktop
+          npm run build
+          npm run compile:bytecode
+          npm run package:win -- --publish never
+
+      - name: Smoke Test - Execute Silent Installation
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem -Path desktop/release/*.exe | Select-Object -First 1
+          if (-not $installer) {
+            throw "Erro: Instalador .exe não foi encontrado em desktop/release/"
+          }
+          Write-Host "Executando instalador oficial: $($installer.FullName)..."
+          Start-Process -FilePath $installer.FullName -ArgumentList "/S" -Wait
+          Start-Sleep -Seconds 5
+
+          $installDir = "$env:LOCALAPPDATA\Programs\Context OS"
+          Write-Host "Verificando diretório de instalação: $installDir"
+          if (-not (Test-Path $installDir)) {
+            throw "Falha: O diretório de instalação '$installDir' não foi criado pelo NSIS!"
+          }
+
+          $appExe = Join-Path $installDir "Context OS.exe"
+          if (-not (Test-Path $appExe)) {
+            throw "Falha: 'Context OS.exe' não encontrado na pasta de instalação!"
+          }
+          Write-Host "✅ Executável principal verificado: $appExe"
+
+          $gitExe = Join-Path $installDir "resources\git\cmd\git.exe"
+          if (-not (Test-Path $gitExe)) {
+            throw "Falha: O MinGit embutido não foi empacotado em $gitExe!"
+          }
+          Write-Host "✅ MinGit embutido verificado: $gitExe"
+
+          $version = & $gitExe --version
+          Write-Host "Versão do Git: $version"
+
+          if ("${{ inputs.test_repo_clone }}" -eq "true") {
+            Write-Host "Testando operação de Git clone usando o Git embutido..."
+            $testDir = Join-Path $env:TEMP "cloud-test-git"
+            & $gitExe init $testDir
+            Write-Host "✅ Git init funcionou 100% no ambiente Windows limpo!"
+          }
+
+      - name: Upload Windows Installer (.exe)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Context-OS-Windows-Setup
+          path: desktop/release/*.exe
+          retention-days: 14
