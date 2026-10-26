@@ -42,6 +42,8 @@ async function compileProjectBytecode() {
       external: [
         'fsevents',
         'pino-pretty',
+        '@napi-rs/keyring',
+        '@napi-rs/keyring-*',
       ],
     });
 
