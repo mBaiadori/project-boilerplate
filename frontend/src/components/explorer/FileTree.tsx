@@ -173,7 +173,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
 
   const canCreateRootRepo = useMemo(() => {
     if (!activeOrg) return true;
-    if (activeOrg.role === "admin" || (activeOrg as any).is_owner) return true;
+    if (activeOrg.role === "admin" || activeOrg.is_owner) return true;
     if (
       user?.login &&
       activeOrg.login.toLowerCase() === user.login.toLowerCase()
@@ -255,8 +255,8 @@ export const FileTree: React.FC<FileTreeProps> = ({
         } else {
           showToast(`Repositório ${r.name} baixado com sucesso!`, "info");
         }
-      } catch (err: any) {
-        showToast(err.message || "Erro ao clonar repositório", "warning");
+      } catch (err) {
+        showToast((err as Error)?.message || "Erro ao clonar repositório", "warning");
       } finally {
         setLoadingRepos((prev) => ({ ...prev, [r.name]: false }));
       }

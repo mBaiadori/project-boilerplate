@@ -32,7 +32,7 @@ export const DeleteRepoModal: React.FC<DeleteRepoModalProps> = ({
   const { user } = useAuth();
   const isOrgAdmin = Boolean(
     activeOrg?.role === "admin" ||
-    (activeOrg as any)?.is_owner ||
+    activeOrg?.is_owner ||
     (user?.login && activeOrg?.login && activeOrg.login.toLowerCase() === user.login.toLowerCase())
   );
   const isAdmin = Boolean(repo?.permissions?.admin ?? (repo?.is_owner || repo?.is_local || isOrgAdmin));

@@ -63,7 +63,7 @@ export class GovernanceService {
     return {};
   }
 
-  public writeProjectConfig(repoName: string | undefined, data: any): void {
+  public writeProjectConfig(repoName: string | undefined, data: unknown): void {
     const p = this.getProjectConfigPath(repoName);
     try {
       writeJsonAtomic(p, data, 2);

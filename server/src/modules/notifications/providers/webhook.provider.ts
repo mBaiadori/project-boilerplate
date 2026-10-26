@@ -26,7 +26,7 @@ export class WebhookProvider {
     const isDiscord = url.includes('discord.com/api/webhooks');
     const isSlack = url.includes('slack.com') || url.includes('hooks.slack.com');
 
-    let bodyData: any;
+    let bodyData: Record<string, unknown>;
 
     if (isDiscord) {
       const colorDecimal = payload.statusColor

@@ -96,7 +96,7 @@ export function setGitExecutionHook(hook: GitExecutionHook | null): void {
  * Localiza o executável do Git, priorizando o MinGit embutido no pacote do Electron (Windows)
  */
 export function resolveGitBinary(): string {
-  const resourcesDir = process.env.CONTEXT_OS_RESOURCES || (process as any).resourcesPath;
+  const resourcesDir = process.env.CONTEXT_OS_RESOURCES || (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath;
   if (resourcesDir) {
     const candidates = [
       path.join(resourcesDir, "git", "cmd", "git.exe"),
@@ -202,7 +202,7 @@ export function executeGitCommandWithProgress(
       });
     });
 
-    child.on("error", (err: any) => {
+    child.on("error", (err: NodeJS.ErrnoException) => {
       clearTimeout(timer);
       const isMissingGit = err.code === "ENOENT" || err.message?.includes("ENOENT");
       const errorMsg = isMissingGit

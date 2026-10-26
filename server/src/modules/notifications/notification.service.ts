@@ -208,7 +208,7 @@ export class NotificationService {
   public async sendTestNotification(
     repoName?: string,
     targetEmail?: string
-  ): Promise<{ success: boolean; message: string; details: any }> {
+  ): Promise<{ success: boolean; message: string; details: unknown }> {
     const { config } = this.getNotificationConfig(repoName);
     const effectiveRepo = repoName || 'projeto-atual';
 

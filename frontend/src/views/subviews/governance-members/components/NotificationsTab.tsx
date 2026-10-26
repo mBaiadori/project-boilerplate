@@ -291,7 +291,7 @@ export const NotificationsTab: React.FC<NotificationsTabProps> = ({ repoName, is
                     ...config,
                     channels: {
                       ...config.channels,
-                      email: { ...config.channels?.email, provider: e.target.value as any },
+                      email: { ...config.channels?.email, provider: e.target.value as 'resend' | 'sendgrid' | 'smtp' },
                     },
                   })
                 }

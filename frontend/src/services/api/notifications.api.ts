@@ -82,7 +82,7 @@ export const notificationsApi = {
   async sendTestNotification(
     repo?: string,
     email?: string
-  ): Promise<ApiResponse<{ success: boolean; message: string; details?: any; error?: string }>> {
+  ): Promise<ApiResponse<{ success: boolean; message: string; details?: unknown; error?: string }>> {
     const res = await fetch('/api/notifications/test', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

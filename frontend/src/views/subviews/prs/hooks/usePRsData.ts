@@ -223,7 +223,7 @@ export function usePRsData() {
         } else if (contextRepoName !== "all") {
           const openCount =
             res.counts?.open ??
-            contextPrs.filter((p: any) => {
+            contextPrs.filter((p) => {
               const s = (p.status || "").toLowerCase();
               return s === "open" || s === "in_review";
             }).length;
