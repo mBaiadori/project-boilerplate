@@ -59,6 +59,35 @@ export const TopHeader: React.FC<TopHeaderProps> = React.memo(
     };
 
     const [avatarError, setAvatarError] = React.useState(false);
+    const [updateInfo, setUpdateInfo] = React.useState<{
+      status: string;
+      version?: string;
+      percent?: number;
+    } | null>(null);
+
+    React.useEffect(() => {
+      const bridge = window.desktopBridge;
+      if (!bridge?.onUpdaterStatus) return;
+
+      const unsubStatus = bridge.onUpdaterStatus((data) => {
+        if (data.status === "available") {
+          setUpdateInfo((prev) => ({ ...prev, status: "available", version: data.version }));
+        } else if (data.status === "downloaded") {
+          setUpdateInfo((prev) => ({ ...prev, status: "downloaded", version: data.version }));
+        }
+      });
+
+      const unsubProgress = bridge.onUpdaterProgress?.((prog) => {
+        setUpdateInfo((prev) =>
+          prev ? { ...prev, percent: prog.percent } : { status: "available", percent: prog.percent },
+        );
+      });
+
+      return () => {
+        unsubStatus();
+        unsubProgress?.();
+      };
+    }, []);
 
     return (
       <header className="dashboard-navbar" style={{ position: "relative" }}>
@@ -277,6 +306,32 @@ export const TopHeader: React.FC<TopHeaderProps> = React.memo(
               style={{ color: "var(--md-sys-color-primary, #1a73e8)" }}
             />
           </IconButton>
+
+          {updateInfo?.status === "downloaded" && (
+            <Button
+              id="btn-apply-update"
+              variant="primary"
+              size="sm"
+              leftIcon={<CloudDownload size={15} />}
+              style={{
+                backgroundColor: "#10b981",
+                color: "#ffffff",
+                borderColor: "#059669",
+                animation: "pulse 2s infinite",
+              }}
+              onClick={() => window.desktopBridge?.quitAndInstallUpdate?.()}
+              title="Clique para reiniciar e aplicar a nova versão"
+            >
+              Reiniciar para Atualizar {updateInfo.version ? `(v${updateInfo.version})` : ""}
+            </Button>
+          )}
+
+          {updateInfo?.status === "available" && (
+            <Badge variant="info">
+              Baixando v{updateInfo.version || ""}
+              {updateInfo.percent !== undefined ? ` (${updateInfo.percent}%)` : ""}
+            </Badge>
+          )}
 
           <Button
             id="btn-global-ai-copilot"
