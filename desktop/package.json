@@ -20,7 +20,7 @@
   },
   "dependencies": {
     "@napi-rs/keyring": "^2.1.0",
-    "bytenode": "^1.5.5",
+    "bytenode": "^2.1.0",
     "electron-updater": "^6.3.9"
   },
   "devDependencies": {
