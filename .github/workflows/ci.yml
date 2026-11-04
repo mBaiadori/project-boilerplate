@@ -192,7 +192,7 @@ jobs:
           Write-Host "✅ Git init executado com sucesso no Windows sem Git pré-instalado!"
 
       - name: Upload Windows Installer (.exe)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: context-os-windows-installer
           path: desktop/release/*.exe
